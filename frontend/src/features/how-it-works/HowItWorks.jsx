@@ -1,16 +1,16 @@
-import React, { useState } from 'react';
-import { 
-  Building2, 
-  Store, 
-  ArrowRight, 
-  CheckCircle2, 
-  ShieldCheck, 
-  TrendingUp, 
-  Package, 
-  Truck, 
-  CreditCard, 
-  Search, 
-  ClipboardCheck, 
+import React, { useState, useEffect } from 'react';
+import {
+  Building2,
+  Store,
+  ArrowRight,
+  CheckCircle2,
+  ShieldCheck,
+  TrendingUp,
+  Package,
+  Truck,
+  CreditCard,
+  Search,
+  ClipboardCheck,
   ChevronDown,
   ChevronUp,
   FileText,
@@ -18,26 +18,43 @@ import {
   Star,
   Users,
   Wallet,
+  Tag,
   Zap,
   BarChart3,
   Layers
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { ROUTES } from '../../constants/routes';
+import VendorContactModal from '../../components/shared/VendorContactModal';
 
-const StepCard = ({ number, title, desc, icon: Icon, color = "primary" }) => (
-  <div className="group bg-white p-8 rounded-[2rem] border border-gray-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-500 relative overflow-hidden">
-    <div className={`absolute top-0 right-0 w-24 h-24 ${color === 'primary' ? 'bg-primary/5' : 'bg-accent-orange/5'} rounded-full translate-x-1/2 -translate-y-1/2`}></div>
-    <div className="flex flex-col h-full relative z-10">
-      <div className="flex items-center justify-between mb-8">
-        <div className={`w-14 h-14 rounded-2xl ${color === 'primary' ? 'bg-primary/5 text-primary' : 'bg-accent-orange/5 text-accent-orange'} flex items-center justify-center transition-transform group-hover:scale-110`}>
-          <Icon size={28} />
-        </div>
-        <span className="text-4xl font-black text-gray-100 group-hover:text-gray-200 transition-colors">{number}</span>
+const StepCard = ({ number, title, desc, icon: Icon, image, color = "primary" }) => (
+  <div className="group bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-500 flex flex-col h-full relative overflow-hidden">
+    {/* Background Decorative Element */}
+    <div className={`absolute -top-10 -right-10 w-32 h-32 ${color === 'primary' ? 'bg-primary/5' : 'bg-accent-orange/5'} rounded-full blur-3xl group-hover:bg-opacity-20 transition-all`}></div>
+
+    {/* Header Row: Number + Title */}
+    <div className="flex items-center gap-4 mb-8 relative z-10">
+      <div className="w-10 h-10 rounded-full bg-accent-orange text-deep-purple flex items-center justify-center text-[13px] font-black shadow-lg shadow-purple-200/50">
+        {number}
       </div>
-      <h4 className="text-xl font-bold text-text-primary mb-4">{title}</h4>
-      <p className="text-sm text-text-secondary leading-relaxed font-normal">{desc}</p>
+      <h4 className="text-[17px] font-semibold text-deep-purple leading-tight">{title}</h4>
     </div>
+
+    {/* Center Row: Big Image Container */}
+    <div className="flex-1 flex items-center justify-center mb-8 bg-gray-50/50 rounded-[2rem] p-6 relative z-10 overflow-hidden min-h-[180px]">
+      {image ? (
+        <img src={image} alt={title} className="w-full h-auto max-h-[140px] object-contain transform group-hover:scale-110 transition-transform duration-700" />
+      ) : (
+        <div className={`w-16 h-16 rounded-2xl ${color === 'primary' ? 'bg-primary/5 text-primary' : 'bg-accent-orange/5 text-accent-orange'} flex items-center justify-center transition-transform group-hover:scale-110`}>
+          <Icon size={32} />
+        </div>
+      )}
+    </div>
+
+    {/* Bottom Row: Description */}
+    <p className="text-[13px] text-text-secondary leading-relaxed font-normal text-center px-2 relative z-10">
+      {desc}
+    </p>
   </div>
 );
 
@@ -47,7 +64,7 @@ const FeatureItem = ({ icon: Icon, title, desc, colorClass }) => (
       <Icon size={22} />
     </div>
     <div>
-      <h5 className="text-sm font-bold text-text-primary mb-1">{title}</h5>
+      <h5 className="text-sm font-semibold text-text-primary mb-1">{title}</h5>
       <p className="text-[11px] text-text-secondary leading-relaxed font-normal">{desc}</p>
     </div>
   </div>
@@ -55,11 +72,11 @@ const FeatureItem = ({ icon: Icon, title, desc, colorClass }) => (
 
 const FAQItem = ({ question, answer, isOpen, onClick }) => (
   <div className="border border-gray-100 rounded-2xl overflow-hidden mb-4 transition-all">
-    <button 
+    <button
       onClick={onClick}
       className={`w-full flex items-center justify-between p-6 text-left transition-colors ${isOpen ? 'bg-gray-50' : 'bg-white hover:bg-gray-50'}`}
     >
-      <span className="font-semibold text-[#0f2f5f]">{question}</span>
+      <span className="font-medium text-deep-purple">{question}</span>
       {isOpen ? <ChevronUp size={20} className="text-primary" /> : <ChevronDown size={20} className="text-gray-400" />}
     </button>
     {isOpen && (
@@ -73,53 +90,101 @@ const FAQItem = ({ question, answer, isOpen, onClick }) => (
 const HowItWorks = () => {
   const [activeTab, setActiveTab] = useState('school');
   const [openFAQ, setOpenFAQ] = useState(0);
+  const [showStickyCTA, setShowStickyCTA] = useState(false);
+  const [isVendorModalOpen, setIsVendorModalOpen] = useState(false);
   const navigate = useNavigate();
 
-  const faqs = [
+  useEffect(() => {
+    const handleScroll = () => {
+      // Show after scrolling past the hero section (around 600px)
+      if (window.scrollY > 600) {
+        setShowStickyCTA(true);
+      } else {
+        setShowStickyCTA(false);
+      }
+    };
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  const schoolFaqs = [
     {
-      question: "Is there any registration fee for vendors?",
-      answer: "No, joining School E-Mart as a vendor is completely free. We follow a performance-based model where we only succeed when you succeed."
+      question: "How to check the status of my order on schoolemart.com?",
+      answer: "Login to schoolemart.com with your credentials and click on the 'My Orders' tab to check order details. If your order has been shipped by the vendor, you can click on the 'Track' tab on schoolemart.com to track your order in real-time."
     },
     {
-      question: "How long does it take to get paid?",
-      answer: "Once the school confirms delivery and quality satisfaction, payments are processed within 3-5 business days directly into your registered wallet."
+      question: "How to check if schoolemart.com delivers to my pincode?",
+      answer: "To check pincode serviceability on schoolemart.com, go to any product page. You can enter your locality's pincode and click 'Verify' to check if schoolemart.com provides delivery services in your area."
     },
     {
-      question: "What types of products can I sell?",
-      answer: "You can sell anything related to educational institutions - from uniforms and books to laboratory equipment, furniture, and smart learning technology."
+      question: "What if the committed delivery time for my schoolemart.com order is over?",
+      answer: "We try our best to have your schoolemart.com order delivered on or before the promise date. If delayed, our team contacts the vendor to expedite delivery. You may also reach out to schoolemart.com for updates. During this period, you can also cancel the order on schoolemart.com and request a full refund to your source account."
     },
     {
-      question: "How are vendors verified?",
-      answer: "Every vendor undergoes a strict 4-step verification process including business registration check, manufacturing capacity audit, and quality certification review."
+      question: "How do I cancel my order on schoolemart.com?",
+      answer: "You can cancel your schoolemart.com order by logging into 'My Account'. Please note that orders on schoolemart.com can only be cancelled before they are 'packed' by the vendor."
+    },
+    {
+      question: "I just cancelled my order on schoolemart.com, when will I receive the refund?",
+      answer: "Once an order is cancelled on schoolemart.com, the amount should reflect in your source account within 7-10 business days. If the timeframe is over, please reach out to schoolemart.com support via 'Contact Admin' in your account."
+    },
+    {
+      question: "What are the cancellation timelines on schoolemart.com?",
+      answer: "You can cancel your schoolemart.com order before it is packed by the vendor without any charges. If you cancel after it is packed, charges for payment gateway, shipping (if already shipped), and associated GST will apply on schoolemart.com."
     }
   ];
 
+  const vendorFaqs = [
+    {
+      question: "Who can sell on schoolemart.com?",
+      answer: "Any vendor who wants to deliver products to schools can sell on schoolemart.com. schoolemart.com is an online platform for business-to-school sales. schoolemart.com helps local vendors sell to local schools. For example, a furniture vendor from Delhi can sell to schools in Delhi using schoolemart.com."
+    },
+    {
+      question: "How to register as a vendor on schoolemart.com?",
+      answer: "You can register on schoolemart.com as a vendor very easily. Just click on \"Sell with us\" on schoolemart.com and follow the simple steps to complete your registration."
+    },
+    {
+      question: "What documents are needed to register on schoolemart.com?",
+      answer: "To register on schoolemart.com, you will need to provide these documents: Address Proof, GST Certificate, Business PAN card, and a Cancelled Cheque."
+    },
+    {
+      question: "Is there a fee for listing products on schoolemart.com?",
+      answer: "No, schoolemart.com does not charge any fee for listing your products. You can list your products on schoolemart.com for free."
+    },
+    {
+      question: "When will I get payment for my orders on schoolemart.com?",
+      answer: "After your order is delivered on schoolemart.com, you will get your payment within 5 business days in your bank account."
+    }
+  ];
+
+  const faqs = activeTab === 'school' ? schoolFaqs : vendorFaqs;
+
   return (
     <div className="w-full bg-[#fcfcfd] text-text-primary">
-      
+
       {/* 1. Hero Section */}
-      <section className="relative pt-20 pb-32 overflow-hidden bg-white">
+      <section className="relative pt-16 pb-20 overflow-hidden bg-white">
         <div className="absolute top-0 right-0 w-1/2 h-full bg-primary/5 -skew-x-12 translate-x-1/4"></div>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 lg:gap-24 items-center">
             <div>
-              <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-primary/5 text-primary text-[11px] font-bold uppercase tracking-widest rounded-full mb-8">
-                <Zap size={14} className="text-accent-orange" /> 
+              <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-primary/5 text-primary text-[11px] font-semibold uppercase tracking-widest rounded-full mb-8">
+                <Zap size={14} className="text-accent-orange" />
                 Simplified Procurement
               </div>
-              <h1 className="text-4xl lg:text-6xl font-bold text-primary leading-[1.15] mb-6 tracking-tight">
-                How Procurement <br/>Works for <br/>
-                <span className="text-accent-orange">Schools</span> & <span className="text-accent-green">Vendors</span>
+              <h1 className="text-4xl lg:text-6xl font-semibold text-primary leading-[1.15] mb-6 tracking-tight">
+                How to Buy and <br />Sell on <br />
+                <span className="text-accent-orange">School</span> E-Mart
               </h1>
               <p className="text-lg text-text-secondary mb-10 leading-relaxed max-w-md font-normal">
-                One marketplace. Two journeys. Seamless institutional buying and selling rebuilt for the digital age.
+                One platform for schools to buy and vendors to sell. It is easy, fast, and secure for everyone.
               </p>
-              
+
               {/* Persona Switcher */}
               <div className="flex p-1.5 bg-gray-100 rounded-3xl w-fit">
-                <button 
+                <button
                   onClick={() => setActiveTab('school')}
-                  className={`flex items-center gap-3 px-8 py-4 rounded-2xl transition-all duration-300 font-bold text-sm ${activeTab === 'school' ? 'bg-white text-primary shadow-xl scale-105' : 'text-text-secondary hover:text-primary'}`}
+                  className={`flex items-center gap-3 px-8 py-4 rounded-2xl transition-all duration-300 font-semibold text-sm ${activeTab === 'school' ? 'bg-white text-primary shadow-xl scale-105' : 'text-text-secondary hover:text-primary'}`}
                 >
                   <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${activeTab === 'school' ? 'bg-primary/10 text-primary' : 'bg-gray-200 text-gray-400'}`}>
                     <Building2 size={18} />
@@ -129,9 +194,9 @@ const HowItWorks = () => {
                     <div className="text-[10px] opacity-60 font-medium">Buying Made Simple</div>
                   </div>
                 </button>
-                <button 
+                <button
                   onClick={() => setActiveTab('vendor')}
-                  className={`flex items-center gap-3 px-8 py-4 rounded-2xl transition-all duration-300 font-bold text-sm ${activeTab === 'vendor' ? 'bg-white text-primary shadow-xl scale-105' : 'text-text-secondary hover:text-primary'}`}
+                  className={`flex items-center gap-3 px-8 py-4 rounded-2xl transition-all duration-300 font-semibold text-sm ${activeTab === 'vendor' ? 'bg-white text-primary shadow-xl scale-105' : 'text-text-secondary hover:text-primary'}`}
                 >
                   <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${activeTab === 'vendor' ? 'bg-accent-orange/10 text-accent-orange' : 'bg-gray-200 text-gray-400'}`}>
                     <Store size={18} />
@@ -143,76 +208,156 @@ const HowItWorks = () => {
                 </button>
               </div>
             </div>
-            
+
             {/* Hero Visual - Balanced Size */}
             <div className="relative">
-               <div className="w-full relative group transform lg:translate-x-4">
-                  <img 
-                    src="/assets/How_works_hero.png" 
-                    alt="Marketplace Workflow" 
-                    className="w-full h-auto object-contain transform group-hover:scale-[1.03] transition-transform duration-700"
-                  />
-                  {/* Subtle Floating Decorative Elements */}
-                  <div className="absolute top-[12%] right-[8%] p-4 bg-white/40 backdrop-blur-xl rounded-2xl shadow-2xl animate-float border border-white/50 z-20">
-                    <ShieldCheck size={28} className="text-accent-green" />
-                  </div>
-                  <div className="absolute bottom-[18%] left-[2%] p-4 bg-white/40 backdrop-blur-xl rounded-2xl shadow-2xl animate-float border border-white/50 z-20" style={{ animationDelay: '1.2s' }}>
-                    <Truck size={28} className="text-primary" />
-                  </div>
-               </div>
+              <div className="w-full relative group transform lg:translate-x-4">
+                <img
+                  src="/assets/How_works_hero.png"
+                  alt="Marketplace Workflow"
+                  className="w-full h-auto object-contain transform group-hover:scale-[1.03] transition-transform duration-700"
+                />
+                {/* Subtle Floating Decorative Elements */}
+                <div className="absolute top-[12%] right-[8%] p-4 bg-white/40 backdrop-blur-xl rounded-2xl shadow-2xl animate-float border border-white/50 z-20">
+                  <ShieldCheck size={28} className="text-accent-green" />
+                </div>
+                <div className="absolute bottom-[18%] left-[2%] p-4 bg-white/40 backdrop-blur-xl rounded-2xl shadow-2xl animate-float border border-white/50 z-20" style={{ animationDelay: '1.2s' }}>
+                  <Truck size={28} className="text-primary" />
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </section>
 
       {/* 2. Interactive Journey Section */}
-      <section className="py-32 bg-[#fcfcfd]">
+      <section className="py-12 bg-[#fcfcfd]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-24">
             <div className={`text-[11px] font-bold uppercase tracking-[0.3em] mb-4 ${activeTab === 'school' ? 'text-primary' : 'text-accent-orange'}`}>
               Your Journey as a {activeTab === 'school' ? 'School' : 'Vendor'}
             </div>
-            <h2 className="text-4xl md:text-5xl font-bold text-primary tracking-tight">
-              {activeTab === 'school' ? '4 Simple Steps to Smarter Procurement' : 'Grow Your Business with School E-Mart'}
+            <h2 className="text-4xl md:text-5xl font-medium text-primary tracking-tight">
+              {activeTab === 'school' ? '6 Easy Steps for Schools' : '6 Easy Steps for Vendors'}
             </h2>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 relative">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 relative">
             {activeTab === 'school' ? (
               <>
-                <StepCard number="01" icon={Search} title="Post Requirement" desc="Tell us what you need. Upload your requirement list or create a detailed RFQ in minutes." />
-                <StepCard number="02" icon={FileText} title="Receive Quotes" desc="Get competitive quotes from verified manufacturers and vendors across India instantly." />
-                <StepCard number="03" icon={ClipboardCheck} title="Compare & Approve" desc="Compare pricing, quality ratings, and delivery timelines. Choose the best fit for your budget." />
-                <StepCard number="04" icon={Truck} title="Delivery & Tracking" desc="Track your institutional order in real-time and get it delivered directly to your campus." />
+                <StepCard number="01" image="/assets/how_works_schools/create_account.png" title="Create Account" desc="Create your school account on School E-Mart easily to start buying quality products for your institution." />
+                <StepCard number="02" image="/assets/how_works_schools/browse.png" title="Browse and Select" desc="Browse thousands of products from verified vendors. Check ratings and read reviews before you make a choice." />
+                <StepCard number="03" image="/assets/how_works_schools/buy_pay.png" title="Buy and Pay Securely" desc="Purchase products and make payments directly to the platform. Your money is safe in our secured nodal account." />
+                <StepCard number="04" image="/assets/how_works_schools/order_delivery.png" title="Order and Delivery" desc="Vendors process your order and deliver it directly to your school campus within the promised time." />
+                <StepCard number="05" image="/assets/how_works_schools/check.png" title="Check and Confirm" desc="Verify the products at the time of delivery. If everything is right and undamaged, confirm the delivery on SSM." />
+                <StepCard number="06" image="/assets/how_works_schools/return.png" title="Payment and Returns" desc="We pay the vendor only after your confirmation. Easy returns if the product is damaged or wrong." />
               </>
             ) : (
               <>
-                <StepCard number="01" color="orange" icon={BadgeCheck} title="Register" desc="Complete your vendor profile with necessary business credentials and get verified." />
-                <StepCard number="02" color="orange" icon={Layers} title="Build Catalogue" desc="List your high-quality products and set your competitive bulk pricing for institutions." />
-                <StepCard number="03" color="orange" icon={Zap} title="Receive Orders" desc="Get instant notifications when schools across India place orders or request quotations." />
-                <StepCard number="04" color="orange" icon={Wallet} title="Get Paid" desc="Fulfill orders through our logistics partners and receive secure payments directly to your wallet." />
+                <StepCard number="01" color="orange" image="/assets/how_it_works_vendors/register_seller.png" title="Register as Vendor" desc="Register on School E-Mart easily and start selling your products to schools online." />
+                <StepCard number="02" color="orange" image="/assets/how_it_works_vendors/build_catalogue.png" title="Build Your Catalogue" desc="Once your account is ready, list your products and create your online shop easily." />
+                <StepCard number="03" color="orange" image="/assets/how_it_works_vendors/schools_buy.png" title="Schools buy your Products" desc="Schools can see your product reviews, ratings, and buy from you by paying on the platform." />
+                <StepCard number="04" color="orange" image="/assets/how_it_works_vendors/order_alerts.png" title="Get Order Alerts" desc="We will send you an email for every new order. You can manage everything from your Vendor Dashboard." />
+                <StepCard number="05" color="orange" image="/assets/how_it_works_vendors/pack_deliver.png" title="Pack and Deliver" desc="After getting a new order, simply pack your products and deliver them to the school." />
+                <StepCard number="06" color="orange" image="/assets/how_it_works_vendors/receive_payments.png" title="Receive Payments" desc="After delivery, upload proof of delivery. Your money will be sent to your bank account within 5 days." />
               </>
             )}
-            {/* Progress Connectors (Desktop) */}
-            <div className="hidden lg:block absolute top-1/2 left-0 w-full px-24 -z-10">
-               <div className="flex justify-between">
-                 {[1,2,3].map(i => <div key={i} className="w-12 h-0.5 bg-gray-100 border-t border-dashed"></div>)}
-               </div>
-            </div>
           </div>
         </div>
       </section>
 
+      {/* 2.5 Pricing Section (Vendor Only) */}
+      {activeTab === 'vendor' && (
+        <section className="py-10 bg-white border-y border-gray-100">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="text-center mb-20">
+              <div className="text-accent-orange text-[11px] font-bold uppercase tracking-[0.3em] mb-4">Pricing & Fees</div>
+              <h2 className="text-3xl md:text-4xl font-medium text-primary tracking-tight">Transparent Selling, Better Earnings</h2>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-start">
+              {/* Fee Breakdown */}
+              <div className="space-y-10">
+                <div>
+                  <h3 className="text-2xl font-semibold text-primary mb-6">What are the fees?</h3>
+                  <p className="text-sm text-text-secondary leading-relaxed mb-8">
+                    Once an order is successfully delivered, we make small deductions from the price to cover platform costs. No hidden charges.
+                  </p>
+                </div>
+
+                <div className="space-y-6">
+                  {[
+                    { title: "Selling Fee (Commission)", desc: "A small percentage of the item price. This fee depends on the type of product you sell.", icon: Tag, bg: 'bg-blue-50', color: 'text-primary' },
+                    { title: "Collection Fee", desc: "A fixed 3% fee on the total price (Selling Price + Shipping).", icon: Wallet, bg: 'bg-orange-50', color: 'text-accent-orange' },
+                    { title: "GST", desc: "Government tax (18%) is applied on the platform fees only.", icon: ShieldCheck, bg: 'bg-green-50', color: 'text-accent-green' }
+                  ].map((fee, i) => (
+                    <div key={i} className="flex gap-5 p-6 bg-gray-50 rounded-[2rem] border border-gray-100 group hover:bg-white hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
+                      <div className={`w-14 h-14 ${fee.bg} ${fee.color} rounded-2xl flex items-center justify-center shrink-0 shadow-sm group-hover:scale-110 transition-transform`}>
+                        <fee.icon size={24} />
+                      </div>
+                      <div>
+                        <h4 className="font-semibold text-text-primary mb-2">{fee.title}</h4>
+                        <p className="text-xs text-text-secondary leading-relaxed font-normal">{fee.desc}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Cost Calculation Example */}
+              <div className="bg-primary rounded-[3rem] p-10 md:p-14 text-white shadow-2xl relative overflow-hidden group">
+                <div className="absolute top-0 right-0 w-80 h-80 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl group-hover:bg-white/10 transition-colors"></div>
+                <div className="relative z-10">
+                  <h3 className="text-2xl font-semibold mb-4">Example: How much you get</h3>
+                  <p className="text-white/60 text-sm mb-12 font-normal leading-relaxed">Let's see what you earn if you sell a "Table & Chair" set for ₹1,000:</p>
+
+                  <div className="space-y-5">
+                    <div className="flex justify-between py-4 border-b border-white/10">
+                      <span className="text-sm opacity-60">Product Price</span>
+                      <span className="text-base font-medium tracking-wide">₹ 1,000.00</span>
+                    </div>
+                    <div className="flex justify-between py-4 border-b border-white/10">
+                      <span className="text-sm opacity-60">Selling Fee (0% for all categories)</span>
+                      <span className="text-base font-medium tracking-wide text-white/40">- ₹ 0.00</span>
+                    </div>
+                    <div className="flex justify-between py-4 border-b border-white/10">
+                      <span className="text-sm opacity-60">Collection Fee (3%)</span>
+                      <span className="text-base font-medium tracking-wide">- ₹ 30.00</span>
+                    </div>
+                    <div className="flex justify-between py-4 border-b border-white/10">
+                      <span className="text-sm opacity-60">GST on Fees (18%)</span>
+                      <span className="text-base font-medium tracking-wide">- ₹ 5.40</span>
+                    </div>
+
+                    <div className="mt-10 p-8 bg-white/5 rounded-3xl border border-white/10 flex flex-col md:flex-row items-center justify-between gap-4">
+                      <div className="text-center md:text-left">
+                        <div className="text-[10px] font-semibold uppercase tracking-widest text-accent-orange mb-1">Settlement Value</div>
+                        <div className="text-sm opacity-60 font-normal">Amount credited to your bank</div>
+                      </div>
+                      <div className="text-3xl font-black text-accent-orange tracking-tight">₹ 964.60</div>
+                    </div>
+                  </div>
+
+                  <p className="mt-8 text-[11px] opacity-40 italic text-center font-normal">
+                    *This is an example. Final amount depends on your product category and price.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
+
       {/* 3. Features Section */}
-      <section className="py-32 bg-white">
+      <section className="py-12 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-24">
-            <h2 className="text-3xl md:text-4xl font-bold text-primary mb-6">
+            <h2 className="text-3xl md:text-4xl font-medium text-primary mb-6">
               Why {activeTab === 'school' ? 'Schools Love' : 'Vendors Choose'} School E-Mart
             </h2>
             <div className="w-20 h-1 bg-accent-orange mx-auto rounded-full"></div>
           </div>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             {activeTab === 'school' ? (
               <>
@@ -237,78 +382,47 @@ const HowItWorks = () => {
         </div>
       </section>
 
-      {/* 4. Infographic Section (Placeholder) */}
-      <section className="py-32 bg-gray-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <div className="max-w-4xl mx-auto bg-white p-12 md:p-24 rounded-[4rem] shadow-sm border border-gray-100">
-             <h2 className="text-3xl font-bold text-primary mb-12">Institutional Procurement Workflow</h2>
-             <div className="relative flex flex-col md:flex-row items-center justify-between gap-8 py-10">
-                {/* Visual Flow Connector */}
-                <div className="hidden md:block absolute top-1/2 left-0 w-full h-0.5 bg-gray-100 -translate-y-1/2 -z-10"></div>
-                
-                {[
-                  { label: 'Need Identified', icon: Search },
-                  { label: 'RFQ Posted', icon: FileText },
-                  { label: 'Quotes Submitted', icon: TrendingUp },
-                  { label: 'Evaluation', icon: ClipboardCheck },
-                  { label: 'Order Placed', icon: Package },
-                  { label: 'Delivered', icon: Truck },
-                ].map((item, i) => (
-                  <div key={i} className="flex flex-col items-center gap-4 relative z-10">
-                    <div className="w-16 h-16 bg-white border-2 border-gray-50 rounded-2xl shadow-md flex items-center justify-center text-primary transition-all hover:border-accent-orange hover:text-accent-orange">
-                      <item.icon size={24} />
-                    </div>
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-text-secondary">{item.label}</span>
-                  </div>
-                ))}
-             </div>
-             <p className="mt-16 text-text-secondary text-sm font-normal max-w-2xl mx-auto leading-relaxed">
-               A digital-first procurement process designed for transparency, efficiency and complete accountability at every level of the institution.
-             </p>
-          </div>
-        </div>
-      </section>
 
       {/* 6. Shared Trust Section */}
-      <section className="py-24 bg-primary text-white overflow-hidden relative">
+      <section className="py-12 bg-primary text-white overflow-hidden relative">
         <div className="absolute top-0 left-0 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-5"></div>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-12 text-center">
             <div>
-              <div className="text-5xl font-bold mb-4">500<span className="text-accent-orange">+</span></div>
-              <div className="text-xs font-bold uppercase tracking-widest opacity-60">Schools Trust Us</div>
+              <div className="text-5xl font-semibold mb-4">500<span className="text-accent-orange">+</span></div>
+              <div className="text-xs font-semibold uppercase tracking-widest opacity-60">Schools Trust Us</div>
             </div>
             <div>
-              <div className="text-5xl font-bold mb-4">1,200<span className="text-accent-green">+</span></div>
-              <div className="text-xs font-bold uppercase tracking-widest opacity-60">Verified Vendors</div>
+              <div className="text-5xl font-semibold mb-4">1,200<span className="text-accent-green">+</span></div>
+              <div className="text-xs font-semibold uppercase tracking-widest opacity-60">Verified Vendors</div>
             </div>
             <div>
-              <div className="text-5xl font-bold mb-4">50K<span className="text-accent-orange">+</span></div>
-              <div className="text-xs font-bold uppercase tracking-widest opacity-60">Products Listed</div>
+              <div className="text-5xl font-semibold mb-4">50K<span className="text-accent-orange">+</span></div>
+              <div className="text-xs font-semibold uppercase tracking-widest opacity-60">Products Listed</div>
             </div>
             <div>
-              <div className="text-5xl font-bold mb-4">95<span className="text-accent-green">%</span></div>
-              <div className="text-xs font-bold uppercase tracking-widest opacity-60">Repeat Procurement</div>
+              <div className="text-5xl font-semibold mb-4">95<span className="text-accent-green">%</span></div>
+              <div className="text-xs font-semibold uppercase tracking-widest opacity-60">Repeat Procurement</div>
             </div>
           </div>
         </div>
       </section>
 
       {/* 7. FAQ Section */}
-      <section className="py-32 bg-white">
+      <section className="py-12 bg-white">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-20">
-            <h2 className="text-4xl font-bold text-primary mb-6 tracking-tight">Frequently Asked Questions</h2>
+            <h2 className="text-4xl font-medium text-primary mb-6 tracking-tight">Frequently Asked Questions</h2>
             <p className="text-text-secondary font-normal">Everything you need to know about the School E-Mart ecosystem.</p>
           </div>
-          
+
           <div className="space-y-4">
             {faqs.map((faq, idx) => (
-              <FAQItem 
-                key={idx} 
-                question={faq.question} 
-                answer={faq.answer} 
-                isOpen={openFAQ === idx} 
+              <FAQItem
+                key={idx}
+                question={faq.question}
+                answer={faq.answer}
+                isOpen={openFAQ === idx}
                 onClick={() => setOpenFAQ(openFAQ === idx ? -1 : idx)}
               />
             ))}
@@ -317,33 +431,47 @@ const HowItWorks = () => {
       </section>
 
       {/* Final CTA */}
-      <section className="py-24 bg-white px-4">
+      <section className="py-10 bg-white px-4">
         <div className="max-w-7xl mx-auto bg-gray-50 rounded-[4rem] p-12 md:p-24 text-center border border-gray-100 shadow-sm overflow-hidden relative">
-           <div className="absolute top-0 right-0 w-96 h-96 bg-primary/5 rounded-full translate-x-1/2 -translate-y-1/2 blur-3xl"></div>
-           <div className="relative z-10">
-              <h2 className="text-4xl md:text-5xl font-bold text-primary mb-10 tracking-tight">Ready to get started?</h2>
-              <p className="text-text-secondary mb-12 max-w-xl mx-auto font-normal">
-                Join thousands of schools and vendors already growing with School E-Mart. Free onboarding for verified educational partners.
+          <div className="absolute top-0 right-0 w-96 h-96 bg-primary/5 rounded-full translate-x-1/2 -translate-y-1/2 blur-3xl"></div>
+          <div className="relative z-10">
+            <h2 className="text-4xl md:text-5xl font-medium text-primary mb-10 tracking-tight">Ready to get started?</h2>
+            <p className="text-text-secondary mb-12 max-w-xl mx-auto font-normal">
+              Join thousands of schools and vendors already growing with School E-Mart. Free onboarding for verified educational partners.
+            </p>
+            <div className="flex flex-col sm:flex-row justify-center gap-6">
+              <button
+                onClick={() => navigate(ROUTES.REGISTER)}
+                className="px-12 py-5 bg-accent-orange text-deep-purple rounded-2xl font-semibold hover:shadow-2xl hover:bg-accent-gold transition-all active:scale-95 text-lg"
+              >
+                Register Your School
+              </button>
+              <button
+                onClick={() => setIsVendorModalOpen(true)}
+                className="px-12 py-5 border-2 border-primary text-primary rounded-2xl font-semibold hover:shadow-lg transition-all active:scale-95 text-lg"
+              >
+                Register Your Business
+              </button>
+            </div>
+
+            {/* Login Option */}
+            <div className="mt-12 pt-8 border-t border-gray-200/60">
+              <p className="text-text-secondary text-sm font-normal">
+                Already a registered partner?
+                <button
+                  onClick={() => navigate(ROUTES.LOGIN)}
+                  className="ml-2 text-primary font-semibold hover:underline transition-all"
+                >
+                  Login here
+                </button>
               </p>
-              <div className="flex flex-col sm:flex-row justify-center gap-6">
-                <button 
-                  onClick={() => navigate(ROUTES.REGISTER)}
-                  className="px-12 py-5 bg-primary text-white rounded-2xl font-bold hover:shadow-2xl hover:bg-blue-800 transition-all active:scale-95 text-lg"
-                >
-                  Register Your School
-                </button>
-                <button 
-                  onClick={() => navigate(ROUTES.REGISTER)}
-                  className="px-12 py-5 bg-accent-green text-white rounded-2xl font-bold hover:shadow-2xl hover:bg-green-700 transition-all active:scale-95 text-lg"
-                >
-                  Become a Vendor
-                </button>
-              </div>
-           </div>
+            </div>
+          </div>
         </div>
       </section>
 
-      <style dangerouslySetInnerHTML={{ __html: `
+      <style dangerouslySetInnerHTML={{
+        __html: `
         @keyframes float {
           0%, 100% { transform: translateY(0px); }
           50% { transform: translateY(-15px); }
@@ -353,6 +481,34 @@ const HowItWorks = () => {
         }
       `}} />
 
+      {/* Floating Sticky CTA */}
+      <div className={`fixed bottom-8 left-1/2 -translate-x-1/2 z-50 transition-all duration-500 transform ${showStickyCTA ? 'translate-y-0 opacity-100' : 'translate-y-20 opacity-0'} w-[calc(100%-2rem)] max-w-fit`}>
+        <div className="bg-white/70 backdrop-blur-xl border border-white shadow-[0_20px_50px_rgba(0,0,0,0.15)] rounded-full p-2 flex items-center gap-3 pr-4">
+          <div className="flex gap-2 p-1">
+            <button
+              onClick={() => navigate(ROUTES.REGISTER)}
+              className="px-8 py-3 bg-accent-orange text-deep-purple rounded-full text-[15px] font-semibold hover:shadow-lg hover:scale-105 transition-all whitespace-nowrap active:scale-95"
+            >
+              Register School
+            </button>
+            <button
+              onClick={() => setIsVendorModalOpen(true)}
+              className="px-8 py-3 border border-primary text-primary rounded-full text-[15px] font-semibold hover:bg-primary/5 transition-all whitespace-nowrap active:scale-95"
+            >
+              Register Business
+            </button>
+          </div>
+          <div className="hidden md:flex flex-col items-start pr-4 border-l border-gray-200 pl-4">
+            <span className="text-[9px] font-black uppercase tracking-tighter text-primary">Join 500+ Institutions</span>
+            <span className="text-[10px] text-text-secondary font-medium whitespace-nowrap">Start your journey today</span>
+          </div>
+        </div>
+      </div>
+
+      <VendorContactModal 
+        isOpen={isVendorModalOpen} 
+        onClose={() => setIsVendorModalOpen(false)} 
+      />
     </div>
   );
 };

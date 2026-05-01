@@ -1,10 +1,20 @@
 export const ROUTES = {
   // Public
   HOME: '/',
+  MARKETPLACE: '/home',
   LOGIN: '/login',
   REGISTER: '/register',
   ABOUT: '/about',
   HOW_IT_WORKS: '/how-it-works',
+  CATEGORY: '/category/:slug',
+  SCHOOL_FAQ: '/school-faq',
+  HELP_CENTER: '/help-center',
+  TRACK_ORDER: '/track-order',
+  REFUND_POLICY: '/refund-policy',
+  SHOP_BY_GRADE: '/shop-by-grade',
+  MY_SCHOOL: '/my-school',
+  TERMS: '/terms-conditions',
+  PRIVACY: '/privacy-policy',
   
   // Protected
   DASHBOARD: '/dashboard',

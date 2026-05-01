@@ -8,18 +8,40 @@ import { ROUTES } from '../../constants/routes';
  * Using local assets from /public/assets
  */
 const BANNER_INVENTORY = {
-  main: [
+  parent: [
     {
-      id: 'main_1',
+      id: 'p_1',
       mode: 'creative',
       image: '/assets/Hero_promo_banner.png',
-      link: ROUTES.SHOP,
+      link: '#',
     },
     {
-      id: 'main_2',
+      id: 'p_2',
       mode: 'creative',
       image: '/assets/Hero_promo_banner_2.png',
-      link: ROUTES.SHOP,
+      link: '#',
+    }
+  ],
+  school: [
+    {
+      id: 's_1',
+      mode: 'template',
+      image: 'https://images.unsplash.com/photo-1523050335392-9bef867a4975?auto=format&fit=crop&q=80&w=1200',
+      title: 'Institutional Bulk Procurement',
+      subtitle: 'Get direct factory-to-school pricing on furniture, uniforms, and tech.',
+      badge: 'B2B Exclusive',
+      ctaText: 'Get Bulk Quote',
+      link: '#',
+    },
+    {
+      id: 's_2',
+      mode: 'template',
+      image: 'https://images.unsplash.com/photo-1562774053-701939374585?auto=format&fit=crop&q=80&w=1200',
+      title: 'Modern Lab & STEM Setup',
+      subtitle: 'Upgrade your school infrastructure with state-of-the-art equipment.',
+      badge: 'New Launch',
+      ctaText: 'Explore Setup',
+      link: '#',
     }
   ],
   side: [
@@ -38,15 +60,26 @@ const BANNER_INVENTORY = {
   ]
 };
 
-const categories = [
-  { name: 'Furniture', image: '/assets/furniture.png', bgColor: 'bg-[#FFF9F0]' },
-  { name: 'Books', image: '/assets/books.png', bgColor: 'bg-[#EBF7FF]' },
-  { name: 'Uniforms', image: '/assets/uniforms.png', bgColor: 'bg-[#FFF3F3]' },
-  { name: 'Stationery', image: '/assets/stationary.png', bgColor: 'bg-[#FFFBF0]' },
-  { name: 'Technology', image: '/assets/technology.png', bgColor: 'bg-[#F2FFF4]' },
-  { name: 'Toys & Sports', image: '/assets/toys_and_sports.png', bgColor: 'bg-[#F3F2FF]' },
-  { name: 'Lab & Science', image: '/assets/lab_and_science.png', bgColor: 'bg-[#EFFFFD]' },
-  { name: 'Transport', image: '/assets/transport.png', bgColor: 'bg-[#FFF4EB]' },
+const parentCategories = [
+  { name: 'Kits', image: '/assets/lab_and_science.png' },
+  { name: 'Books', image: '/assets/books.png' },
+  { name: 'Uniforms', image: '/assets/uniforms.png' },
+  { name: 'Stationery', image: '/assets/stationary.png' },
+  { name: 'Bags', image: '/assets/transport.png' },
+  { name: 'Sports', image: '/assets/toys_and_sports.png' },
+  { name: 'Shoes', image: '/assets/uniforms.png' },
+  { name: 'Art', image: '/assets/toys_and_sports.png' },
+];
+
+const schoolCategories = [
+  { name: 'Furniture', image: '/assets/furniture.png' },
+  { name: 'Lab Equip', image: '/assets/lab_and_science.png' },
+  { name: 'Bulk Books', image: '/assets/books.png' },
+  { name: 'Bulk Uniforms', image: '/assets/uniforms.png' },
+  { name: 'IT Tech', image: '/assets/technology.png' },
+  { name: 'Sports Infra', image: '/assets/toys_and_sports.png' },
+  { name: 'Smart Class', image: '/assets/electronics.png' },
+  { name: 'Security', image: '/assets/safety.png' },
 ];
 
 const PromoBanner = ({ banner, className = '' }) => {
@@ -61,19 +94,19 @@ const PromoBanner = ({ banner, className = '' }) => {
       <img 
         src={banner.image} 
         alt={banner.title || 'Promotion'} 
-        className="max-w-full max-h-full object-contain transition-transform duration-1000 group-hover:scale-[1.01]"
+        className={`${isTemplate ? 'w-full h-full object-cover' : 'max-w-full max-h-full object-contain'} transition-transform duration-1000 group-hover:scale-[1.05]`}
       />
       {isTemplate && (
-        <div className="absolute inset-0 bg-gradient-to-r from-black/60 to-transparent flex items-center px-12">
+        <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/30 to-transparent flex items-center px-12">
           <div className="max-w-md">
             {banner.badge && (
-              <span className="inline-block px-3 py-1 bg-accent-orange text-white text-[10px] font-bold uppercase rounded mb-4">
+              <span className="inline-block px-3 py-1 bg-primary text-white text-[10px] font-bold uppercase rounded mb-4">
                 {banner.badge}
               </span>
             )}
-            <h2 className="text-3xl font-semibold text-white mb-4 leading-tight">{banner.title}</h2>
-            <p className="text-white/80 text-sm mb-6">{banner.subtitle}</p>
-            <button className="px-6 py-2 bg-white text-primary rounded-lg font-medium text-sm hover:bg-gray-100 transition-colors">
+            <h2 className="text-4xl font-bold text-white mb-4 leading-tight">{banner.title}</h2>
+            <p className="text-white/90 text-[15px] mb-8 leading-relaxed">{banner.subtitle}</p>
+            <button className="px-8 py-3 bg-white text-primary rounded-xl font-semibold text-sm hover:bg-gray-100 transition-all shadow-lg active:scale-95">
               {banner.ctaText || 'Shop Now'}
             </button>
           </div>
@@ -83,38 +116,40 @@ const PromoBanner = ({ banner, className = '' }) => {
   );
 };
 
-const Hero = () => {
+const Hero = ({ role = 'parent' }) => {
   const [activeSlide, setActiveSlide] = useState(0);
+  const currentMainBanners = BANNER_INVENTORY[role] || BANNER_INVENTORY.parent;
+  const categories = role === 'school' ? schoolCategories : parentCategories;
 
   useEffect(() => {
-    if (BANNER_INVENTORY.main.length <= 1) return;
+    if (currentMainBanners.length <= 1) return;
     const timer = setInterval(() => {
-      setActiveSlide((prev) => (prev + 1) % BANNER_INVENTORY.main.length);
+      setActiveSlide((prev) => (prev + 1) % currentMainBanners.length);
     }, 5000);
     return () => clearInterval(timer);
-  }, []);
+  }, [currentMainBanners]);
 
   return (
-    <section className="py-6">
+    <section className="py-6 bg-[#fafbff]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         
         {/* Banner Inventory Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 mb-10">
-          <div className="lg:col-span-8 relative rounded-3xl overflow-hidden min-h-[440px] shadow-sm bg-white">
-            {BANNER_INVENTORY.main.map((banner, idx) => (
+          <div className="lg:col-span-8 relative rounded-[2.5rem] overflow-hidden min-h-[460px] shadow-sm bg-white border border-gray-100">
+            {currentMainBanners.map((banner, idx) => (
               <div 
                 key={banner.id}
-                className={`absolute inset-0 transition-opacity duration-700 ${idx === activeSlide ? 'opacity-100 z-10' : 'opacity-0 z-0'}`}
+                className={`absolute inset-0 transition-opacity duration-1000 ${idx === activeSlide ? 'opacity-100 z-10' : 'opacity-0 z-0'}`}
               >
                 <PromoBanner banner={banner} />
               </div>
             ))}
-            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 flex gap-2">
-              {BANNER_INVENTORY.main.map((_, idx) => (
+            <div className="absolute bottom-8 left-12 z-20 flex gap-2">
+              {currentMainBanners.map((_, idx) => (
                 <button 
                   key={idx}
                   onClick={(e) => { e.stopPropagation(); setActiveSlide(idx); }}
-                  className={`h-1.5 rounded-full transition-all duration-500 shadow-sm ${idx === activeSlide ? 'w-8 bg-white' : 'w-2 bg-white/40 hover:bg-white/60'}`}
+                  className={`h-1.5 rounded-full transition-all duration-500 ${idx === activeSlide ? 'w-10 bg-primary' : 'w-2 bg-black/20 hover:bg-black/40'}`}
                 />
               ))}
             </div>
@@ -122,29 +157,29 @@ const Hero = () => {
 
           <div className="lg:col-span-4 flex flex-col gap-5">
             {BANNER_INVENTORY.side.map((banner) => (
-              <div key={banner.id} className="flex-1 rounded-3xl overflow-hidden shadow-sm min-h-[210px] bg-white">
+              <div key={banner.id} className="flex-1 rounded-[2.5rem] overflow-hidden shadow-sm min-h-[220px] bg-white border border-gray-100">
                 <PromoBanner banner={banner} />
               </div>
             ))}
           </div>
         </div>
 
-        {/* REFINED Category Navigation (Visual Icons) */}
-        <div className="bg-white border border-gray-100 rounded-3xl p-8 shadow-[0_10px_40px_rgba(0,0,0,0.02)]">
-          <div className="flex items-center justify-between overflow-x-auto no-scrollbar gap-8">
+        {/* REFINED Category Navigation */}
+        <div className="bg-white border border-gray-100 rounded-[2.5rem] p-8 shadow-sm">
+          <div className="flex items-center justify-between overflow-x-auto no-scrollbar gap-10">
             {categories.map((cat, idx) => (
               <div 
                 key={idx}
-                className="flex flex-col items-center gap-4 min-w-[100px] group cursor-pointer"
+                className="flex flex-col items-center gap-4 min-w-[90px] group cursor-pointer"
               >
-                <div className="w-20 h-20 flex items-center justify-center transition-transform duration-300 group-hover:scale-110">
+                <div className="w-16 h-16 flex items-center justify-center transition-transform duration-300 group-hover:scale-110">
                   <img 
                     src={cat.image} 
                     alt={cat.name} 
-                    className="w-full h-full object-contain transition-transform duration-500 group-hover:rotate-3"
+                    className="w-full h-full object-contain transition-transform duration-500 group-hover:rotate-6"
                   />
                 </div>
-                <span className="text-[13px] font-medium text-text-primary tracking-tight transition-colors group-hover:text-primary">
+                <span className="text-[13px] font-medium text-text-primary tracking-tight transition-colors group-hover:text-primary whitespace-nowrap">
                   {cat.name}
                 </span>
               </div>

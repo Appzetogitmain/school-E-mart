@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Search, User, Menu, X, Tag, Store, Zap, UserPlus } from 'lucide-react';
 import { ROUTES } from '../../constants/routes';
 import { useNavigate, NavLink, Link } from 'react-router-dom';
+import VendorContactModal from './VendorContactModal';
 
 const categories = [
   'Furniture', 'Teaching & Learning', 'Books', 'Toys & Sports', 
@@ -12,6 +13,7 @@ const categories = [
 const Header = () => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isVendorModalOpen, setIsVendorModalOpen] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -57,40 +59,22 @@ const Header = () => {
 
           {/* 3. Right Section (Conversion Focused) */}
           <div className="hidden md:flex items-center space-x-7">
-            <NavLink 
-              to="#" 
-              className="flex items-center gap-2 text-[13px] font-medium text-text-secondary hover:text-accent-orange transition-all duration-300 py-2"
+            <button 
+              onClick={() => setIsVendorModalOpen(true)}
+              className="flex items-center gap-2 text-[13px] font-normal text-text-secondary hover:text-accent-orange transition-all duration-300 py-2"
             >
               <Store size={18} className="text-primary/70" />
               Sell with Us
-            </NavLink>
-            
-            <NavLink 
-              to="#" 
-              className="flex items-center gap-2 text-[13px] font-medium text-text-secondary hover:text-accent-orange transition-all duration-300 py-2"
-            >
-              <Tag size={18} className="text-primary/70" />
-              Deals
-            </NavLink>
+            </button>
             
             {/* Primary CTA: Register (Prominent & Green) */}
             <NavLink 
               to={ROUTES.REGISTER} 
-              className="flex items-center gap-2 px-7 py-2.5 bg-accent-green text-white rounded-full text-[13px] font-medium hover:bg-green-700 hover:shadow-[0_8px_20px_-6px_rgba(22,163,74,0.4)] transition-all duration-300 active:scale-95 shadow-md"
+              className="flex items-center gap-2 px-7 py-2.5 bg-accent-orange text-deep-purple rounded-full text-[13px] font-medium hover:bg-accent-gold hover:shadow-[0_8px_20px_-6px_rgba(244,180,0,0.4)] transition-all duration-300 active:scale-95 shadow-md"
             >
               <UserPlus size={18} />
               Register
             </NavLink>
-            
-            <div className="h-8 w-[1px] bg-gray-100"></div>
-
-            {/* Profile/Login Icon */}
-            <button 
-              onClick={() => navigate(ROUTES.LOGIN)}
-              className="h-10 w-10 rounded-full bg-gray-50 border border-gray-100 flex items-center justify-center text-text-secondary hover:bg-primary hover:text-white hover:border-primary hover:shadow-md transition-all duration-300"
-            >
-              <User size={20} />
-            </button>
           </div>
 
           {/* Mobile Toggle */}
@@ -115,8 +99,8 @@ const Header = () => {
                   key={category}
                   to={`/category/${category.toLowerCase().replace(/ & /g, '-').replace(/ /g, '-')}`}
                   className={({ isActive }) => `
-                    text-[13px] font-medium transition-all duration-300 relative py-3 cursor-pointer
-                    ${isActive ? 'text-accent-orange' : 'text-text-secondary hover:text-accent-orange'}
+                    text-[13px] font-normal transition-all duration-300 relative py-3 cursor-pointer
+                    ${isActive ? 'text-accent-orange' : 'text-text-primary hover:text-accent-orange'}
                     after:content-[''] after:absolute after:bottom-0 after:left-0 after:h-[2px] 
                     after:bg-accent-orange after:transition-all after:duration-300 
                     ${isActive ? 'after:w-full' : 'after:w-0 hover:after:w-full'}
@@ -144,28 +128,35 @@ const Header = () => {
             </div>
             
             <div className="grid grid-cols-1 gap-3">
-              <NavLink to={ROUTES.REGISTER} className="flex items-center justify-between p-5 bg-green-50 rounded-xl font-semibold text-accent-green border border-green-100">
+              <NavLink to={ROUTES.REGISTER} className="flex items-center justify-between p-5 bg-accent-orange rounded-xl font-medium text-deep-purple border border-accent-gold">
                 <div className="flex items-center gap-3"><UserPlus size={22} /> Join School E-Mart</div>
               </NavLink>
-              <NavLink to="#" className="flex items-center justify-between p-4 bg-gray-50 rounded-xl font-medium text-text-primary">
+              <button 
+                onClick={() => {
+                  setIsMobileMenuOpen(false);
+                  setIsVendorModalOpen(true);
+                }} 
+                className="flex items-center justify-between p-4 bg-gray-50 rounded-xl font-medium text-text-primary"
+              >
                 <div className="flex items-center gap-3"><Store size={20} className="text-primary" /> Sell with Us</div>
-              </NavLink>
-              <NavLink to="#" className="flex items-center justify-between p-4 bg-gray-50 rounded-xl font-medium text-text-primary">
-                <div className="flex items-center gap-3"><Tag size={20} className="text-primary" /> Today's Deals</div>
-              </NavLink>
+              </button>
             </div>
 
             <div className="pt-4">
               <h5 className="text-[11px] font-semibold text-gray-400 uppercase tracking-[0.2em] mb-4">Categories</h5>
               <div className="grid grid-cols-2 gap-3">
                 {categories.map((cat) => (
-                  <Link key={cat} to="#" className="text-sm font-medium text-text-secondary hover:text-primary py-2">{cat}</Link>
+                  <Link key={cat} to="#" className="text-sm font-medium text-text-primary hover:text-accent-orange py-2">{cat}</Link>
                 ))}
               </div>
             </div>
           </div>
         </div>
       )}
+      <VendorContactModal 
+        isOpen={isVendorModalOpen} 
+        onClose={() => setIsVendorModalOpen(false)} 
+      />
     </header>
   );
 };
