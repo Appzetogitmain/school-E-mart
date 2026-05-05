@@ -1,4 +1,4 @@
-import React, { Suspense, lazy } from 'react';
+import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { ProtectedRoute, RoleRoute } from './ProtectedRoute';
 import { ROLES } from '../constants/roles';
@@ -6,47 +6,45 @@ import { ROUTES } from '../constants/routes';
 import MainLayout from '../layouts/MainLayout';
 import LandingLayout from '../layouts/LandingLayout';
 
-// Landing & Main Pages
-const Home = lazy(() => import('../features/home/Home'));
-const MarketplaceHome = lazy(() => import('../features/home/MarketplaceHome'));
-const About = lazy(() => import('../features/about/About'));
-const HowItWorks = lazy(() => import('../features/how-it-works/HowItWorks'));
-const CategoryPage = lazy(() => import('../features/products/CategoryPage'));
-const SchoolFAQ = lazy(() => import('../features/faq/SchoolFAQ'));
-const HelpCenter = lazy(() => import('../features/help/HelpCenter'));
-const TrackOrder = lazy(() => import('../features/orders/TrackOrder'));
-const GradeProductsPage = lazy(() => import('../features/products/GradeProductsPage.jsx'));
-const MySchool = lazy(() => import('../features/parent/MySchool'));
-const TermsAndConditions = lazy(() => import('../features/legal/TermsAndConditions'));
-const PrivacyPolicy = lazy(() => import('../features/legal/PrivacyPolicy'));
-const RefundPolicy = lazy(() => import('../features/legal/RefundPolicy'));
+// Lazy Load Components
+const Home = React.lazy(() => import('../features/home/Home'));
+const MarketplaceHome = React.lazy(() => import('../features/home/MarketplaceHome'));
+const About = React.lazy(() => import('../features/about/About'));
+const HowItWorks = React.lazy(() => import('../features/how-it-works/HowItWorks'));
+const CategoryPage = React.lazy(() => import('../features/products/CategoryPage'));
+const SchoolFAQ = React.lazy(() => import('../features/faq/SchoolFAQ'));
+const HelpCenter = React.lazy(() => import('../features/help/HelpCenter'));
+const TrackOrder = React.lazy(() => import('../features/orders/TrackOrder'));
+const GradeProductsPage = React.lazy(() => import('../features/products/GradeProductsPage.jsx'));
+const MySchool = React.lazy(() => import('../features/parent/MySchool'));
+const TermsAndConditions = React.lazy(() => import('../features/legal/TermsAndConditions'));
+const PrivacyPolicy = React.lazy(() => import('../features/legal/PrivacyPolicy'));
+const RefundPolicy = React.lazy(() => import('../features/legal/RefundPolicy'));
 
-const AuthPage = lazy(() => import('../features/auth/AuthPage'));
+const AuthPage = React.lazy(() => import('../features/auth/AuthPage'));
 
 // Mobile App Components
-import AppLayout from '../app/layouts/AppLayout';
-const AppAuthPage = lazy(() => import('../app/features/auth/AppAuthPage'));
-const ParentHome = lazy(() => import('../app/features/parent/ParentHome'));
-const AppCategoryPage = lazy(() => import('../app/features/parent/CategoryPage'));
-const SubcategoryPage = lazy(() => import('../app/features/parent/SubcategoryPage'));
-const MySchoolPage = lazy(() => import('../app/features/parent/MySchoolPage'));
-const OrderHistoryPage = lazy(() => import('../app/features/parent/OrderHistoryPage'));
-const SelectGradePage = lazy(() => import('../app/features/parent/SelectGradePage'));
-const ParentGradeProductsPage = lazy(() => import('../app/features/parent/GradeProductsPage'));
-const ProductDetailsPage = lazy(() => import('../app/features/parent/ProductDetailsPage'));
-const CartPage = lazy(() => import('../app/features/parent/CartPage'));
-const EditProfilePage = lazy(() => import('../app/features/parent/EditProfilePage'));
-const WishlistPage = lazy(() => import('../app/features/parent/WishlistPage'));
-const ContactUsPage = lazy(() => import('../app/features/parent/ContactUsPage'));
-const AboutUsPage = lazy(() => import('../app/features/parent/AboutUsPage'));
-const ReferEarnPage = lazy(() => import('../app/features/parent/ReferEarnPage'));
-const WalletPage = lazy(() => import('../app/features/parent/WalletPage'));
+const AppLayout = React.lazy(() => import('../app/layouts/AppLayout'));
+const AppAuthPage = React.lazy(() => import('../app/features/auth/AppAuthPage'));
+const ParentHome = React.lazy(() => import('../app/features/parent/ParentHome'));
+const AppCategoryPage = React.lazy(() => import('../app/features/parent/CategoryPage'));
+const SubcategoryPage = React.lazy(() => import('../app/features/parent/SubcategoryPage'));
+const MySchoolPage = React.lazy(() => import('../app/features/parent/MySchoolPage'));
+const OrderHistoryPage = React.lazy(() => import('../app/features/parent/OrderHistoryPage'));
+const SelectGradePage = React.lazy(() => import('../app/features/parent/SelectGradePage'));
+const ParentGradeProductsPage = React.lazy(() => import('../app/features/parent/GradeProductsPage'));
+const ProductDetailsPage = React.lazy(() => import('../app/features/parent/ProductDetailsPage'));
+const CartPage = React.lazy(() => import('../app/features/parent/CartPage'));
+const EditProfilePage = React.lazy(() => import('../app/features/parent/EditProfilePage'));
+const WishlistPage = React.lazy(() => import('../app/features/parent/WishlistPage'));
+const ContactUsPage = React.lazy(() => import('../app/features/parent/ContactUsPage'));
+const AboutUsPage = React.lazy(() => import('../app/features/parent/AboutUsPage'));
+const ReferEarnPage = React.lazy(() => import('../app/features/parent/ReferEarnPage'));
+const WalletPage = React.lazy(() => import('../app/features/parent/WalletPage'));
 
-// Loading Fallback
-const PageLoader = () => (
-  <div className="min-h-screen bg-[#F8F7FF] flex flex-col items-center justify-center p-6 text-center font-outfit">
-    <div className="w-16 h-16 border-4 border-primary/20 border-t-primary rounded-full animate-spin mb-4"></div>
-    <p className="text-deep-purple font-bold text-sm">Loading...</p>
+const LoadingFallback = () => (
+  <div className="flex items-center justify-center min-h-screen bg-gray-50/50">
+    <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
   </div>
 );
 
@@ -54,7 +52,7 @@ const Dashboard = () => <div className="p-10"><h1>Dashboard</h1><p>Welcome back!
 
 const AppRoutes = () => {
   return (
-    <Suspense fallback={<PageLoader />}>
+    <React.Suspense fallback={<LoadingFallback />}>
       <Routes>
         {/* Landing Page Route */}
         <Route element={<LandingLayout />}>
@@ -121,7 +119,7 @@ const AppRoutes = () => {
         {/* 404 Route */}
         <Route path="*" element={<div>Page Not Found</div>} />
       </Routes>
-    </Suspense>
+    </React.Suspense>
   );
 };
 

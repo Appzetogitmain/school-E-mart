@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext';
 import {
   ArrowLeft, Copy, Share2,
   Users, Gift, ShoppingBag,
@@ -9,18 +8,21 @@ import {
 
 const ReferEarnPage = () => {
   const navigate = useNavigate();
-  const { isGuest } = useAuth();
+  // We'll mock the auth state for now or use localStorage
+  const [isGuest] = useState(() => {
+    const saved = localStorage.getItem('childInfo');
+    return !saved;
+  });
+
   const [showCopyToast, setShowCopyToast] = useState(false);
 
-  // Generate or retrieve unique referral code (Only for non-guests)
+  // Generate or retrieve unique referral code
   const [referralCode] = useState(() => {
     if (isGuest) return null;
     const saved = localStorage.getItem('referral_code');
-    // Re-generate if no code or if old code contains letters (only want EMART + 4 numbers)
     const isValid = saved && /^EMART\d{4}$/.test(saved);
     if (isValid) return saved;
-    
-    // Generate new: EMART + 4 random numbers
+
     const digits = '0123456789';
     let code = 'EMART';
     for (let i = 0; i < 4; i++) {
@@ -35,57 +37,55 @@ const ReferEarnPage = () => {
     totalEarnings: "1,250",
     monthlyEarnings: "450",
     successfulReferrals: 12,
-    pendingReferrals: 3
+    pendingReferrals: 5
   };
 
   const handleCopyCode = () => {
+    if (!referral.code) return;
     navigator.clipboard.writeText(referral.code);
     setShowCopyToast(true);
     setTimeout(() => setShowCopyToast(false), 2000);
   };
 
-  const handleShare = async () => {
-    const shareData = {
-      title: 'School E-Mart Referral',
-      text: `Join me on School E-Mart and get exclusive rewards on your first school kit! Use my code: ${referral.code}`,
-      url: 'https://schoolemart.app/join'
-    };
+  const handleShare = () => {
+    if (!referral.code) return;
+    const shareMessage = `Hey! Join School E-Mart using my code ${referral.code} and get amazing rewards on your first school order! Download now: https://schoolemart.com/app`;
 
-    try {
-      if (navigator.share) {
-        await navigator.share(shareData);
-      } else {
-        handleCopyCode(); // Fallback to copy if share API not available
-      }
-    } catch (err) {
-      console.log('Error sharing:', err);
+    if (navigator.share) {
+      navigator.share({
+        title: 'Refer & Earn - School E-Mart',
+        text: shareMessage,
+        url: 'https://schoolemart.com/app',
+      }).catch(console.error);
+    } else {
+      handleCopyCode();
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#F8F7FF] pb-32 font-outfit relative overflow-x-hidden">
+    <div className="min-h-screen bg-[#F8F7FF] pb-32 font-outfit relative">
       {/* Toast Notification */}
       {showCopyToast && (
-        <div className="fixed top-12 left-1/2 -translate-x-1/2 z-[100] animate-in fade-in slide-in-from-top duration-300">
-          <div className="bg-black/90 text-white px-6 py-2.5 rounded-full shadow-2xl flex items-center gap-2 backdrop-blur-md border border-white/10">
+        <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[100] animate-in fade-in zoom-in slide-in-from-top-4 duration-300">
+          <div className="bg-deep-purple text-white px-6 py-2.5 rounded-full shadow-2xl flex items-center gap-2 border border-white/10">
             <CheckCircle2 size={16} className="text-green-400" />
-            <span className="text-xs font-bold">Referral code copied!</span>
+            <span className="text-xs font-bold">Copied to clipboard</span>
           </div>
         </div>
       )}
 
       {/* Header */}
-      <div className="fixed top-0 left-0 right-0 bg-white/80 backdrop-blur-xl border-b border-gray-100 z-50 px-6 py-4 flex items-center gap-4">
+      <div className="fixed top-0 left-0 right-0 bg-deep-purple z-50 px-6 pt-10 pb-5 flex items-center gap-4 shadow-xl shadow-primary/10 rounded-b-[2rem]">
         <button
           onClick={() => navigate(-1)}
-          className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-deep-purple active:scale-90 transition-all"
+          className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white active:scale-90 transition-all shrink-0"
         >
           <ArrowLeft size={20} />
         </button>
-        <h1 className="text-lg font-black text-deep-purple">Refer & Earn</h1>
+        <h1 className="text-xl font-black text-white tracking-tight">Refer & Earn</h1>
       </div>
 
-      <div className="pt-20 px-6 space-y-8">
+      <div className="pt-32 px-6 space-y-8">
         {/* Hero Section */}
         <section className="relative bg-gradient-to-br from-primary to-[#8C75FF] rounded-[2.5rem] p-8 text-white overflow-hidden shadow-xl shadow-primary/20 animate-in fade-in zoom-in duration-500">
           <div className="absolute top-0 right-0 w-48 h-48 bg-white/10 rounded-full -mr-24 -mt-24 blur-3xl"></div>
@@ -111,7 +111,7 @@ const ReferEarnPage = () => {
               <p className="text-gray-400 text-xs font-medium mb-8 leading-relaxed max-w-[200px] mx-auto">
                 Login now to generate your unique referral code and start inviting friends.
               </p>
-              <button 
+              <button
                 onClick={() => navigate('/user/login')}
                 className="w-full py-4 bg-primary text-white rounded-2xl text-sm font-bold shadow-lg shadow-primary/20 active:scale-95 transition-all flex items-center justify-center gap-3"
               >
@@ -124,7 +124,7 @@ const ReferEarnPage = () => {
                 <p className="text-[10px] font-black text-gray-300 uppercase tracking-[0.2em]">Your Referral Code</p>
                 <div className="flex items-center justify-center gap-3">
                   <span className="text-4xl font-black text-deep-purple tracking-tight">{referral.code}</span>
-                  <button 
+                  <button
                     onClick={handleCopyCode}
                     className="w-10 h-10 rounded-xl bg-primary/5 flex items-center justify-center text-primary active:scale-90 transition-all"
                   >
@@ -132,8 +132,8 @@ const ReferEarnPage = () => {
                   </button>
                 </div>
               </div>
-              
-              <button 
+
+              <button
                 onClick={handleShare}
                 className="w-full py-5 bg-primary text-white rounded-2xl text-sm font-medium shadow-lg shadow-primary/20 active:scale-95 transition-all flex items-center justify-center gap-3"
               >
@@ -144,9 +144,9 @@ const ReferEarnPage = () => {
         </section>
 
         {/* Earnings Summary */}
-        <section className="space-y-4 animate-in slide-in-from-bottom-4 duration-700 delay-100">
-          <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-1">Your Earnings</h3>
-          <div className="bg-golden-yellow/10 rounded-[2.5rem] p-8 border border-golden-yellow/20 flex justify-between items-center relative overflow-hidden">
+        <section>
+          <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-1 mb-4">Your Earnings</h3>
+          <div className="bg-gradient-to-br from-[#FFFBEB] to-[#FEF3C7] rounded-[2rem] p-6 border border-golden-yellow/20 flex items-center justify-between relative overflow-hidden">
             <div className="absolute top-0 right-0 w-32 h-32 bg-golden-yellow/5 rounded-full -mr-16 -mt-16 blur-2xl"></div>
             <div>
               <p className="text-[10px] font-black text-golden-yellow uppercase tracking-widest mb-1">This Month</p>
@@ -154,67 +154,65 @@ const ReferEarnPage = () => {
             </div>
             <div className="w-px h-12 bg-golden-yellow/20"></div>
             <div className="text-right">
-              <p className="text-[10px] font-black text-golden-yellow uppercase tracking-widest mb-1">Total Earned</p>
+              <p className="text-[10px] font-black text-primary uppercase tracking-widest mb-1">Total Earned</p>
               <p className="text-2xl font-black text-primary">₹{isGuest ? '0' : referral.totalEarnings}</p>
             </div>
           </div>
         </section>
 
         {/* How it Works */}
-        <section className="space-y-6 animate-in slide-in-from-bottom-4 duration-700 delay-200">
-          <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-1">How it Works</h3>
-          <div className="space-y-8 relative pl-4">
-            <div className="absolute left-6 top-2 bottom-2 w-0.5 bg-gray-100"></div>
-
-            <div className="flex items-start gap-6 relative z-10">
-              <div className="w-12 h-12 rounded-2xl bg-white shadow-md flex items-center justify-center text-primary border border-gray-50 shrink-0">
-                <Share2 size={20} />
+        <section>
+          <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-1 mb-4">How it Works</h3>
+          <div className="bg-white rounded-[2.5rem] p-8 shadow-sm border border-gray-100 space-y-8">
+            <div className="flex items-start gap-5">
+              <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                <Share2 size={18} />
               </div>
               <div>
-                <h4 className="text-sm font-black text-deep-purple mb-1">Invite Friends</h4>
-                <p className="text-[11px] text-gray-400 font-medium leading-relaxed">Share your unique referral link with your friends and family.</p>
+                <h4 className="text-sm font-bold text-deep-purple">Invite Friends</h4>
+                <p className="text-xs text-gray-400 font-medium leading-relaxed mt-1">Share your referral link with friends via WhatsApp or social media.</p>
               </div>
             </div>
 
-            <div className="flex items-start gap-6 relative z-10">
-              <div className="w-12 h-12 rounded-2xl bg-white shadow-md flex items-center justify-center text-primary border border-gray-100 shrink-0">
-                <ShoppingBag size={20} />
+            <div className="flex items-start gap-5">
+              <div className="w-10 h-10 rounded-xl bg-golden-yellow/10 flex items-center justify-center text-golden-yellow shrink-0">
+                <ShoppingBag size={18} />
               </div>
               <div>
-                <h4 className="text-sm font-black text-deep-purple mb-1">Friend Orders</h4>
-                <p className="text-[11px] text-gray-400 font-medium leading-relaxed">Your friend signs up and places their very first order on the app.</p>
+                <h4 className="text-sm font-bold text-deep-purple">They Place Order</h4>
+                <p className="text-xs text-gray-400 font-medium leading-relaxed mt-1">When your friend signs up and completes their first school order.</p>
               </div>
             </div>
 
-            <div className="flex items-start gap-6 relative z-10">
-              <div className="w-12 h-12 rounded-2xl bg-golden-yellow/20 shadow-md flex items-center justify-center text-golden-yellow border border-golden-yellow/10 shrink-0">
-                <Sparkles size={20} />
+            <div className="flex items-start gap-5">
+              <div className="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center text-green-600 shrink-0">
+                <Sparkles size={18} />
               </div>
               <div>
-                <h4 className="text-sm font-black text-deep-purple mb-1">You Both Earn</h4>
-                <p className="text-[11px] text-gray-400 font-medium leading-relaxed">Both you and your friend get instant rewards added to your wallets!</p>
+                <h4 className="text-sm font-bold text-deep-purple">Both Earn Rewards</h4>
+                <p className="text-xs text-gray-400 font-medium leading-relaxed mt-1">You both get rewards instantly added to your wallet for next purchase.</p>
               </div>
             </div>
           </div>
         </section>
 
         {/* Referral Stats */}
-        <section className="space-y-4 animate-in slide-in-from-bottom-4 duration-700 delay-300 pb-12">
-          <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-1">Your Referrals</h3>
-          <div className="bg-white rounded-[2rem] p-6 shadow-sm border border-gray-100 grid grid-cols-2 gap-4">
-            <div className="p-4 bg-green-50/50 rounded-2xl border border-green-100">
-              <div className="flex items-center gap-2 text-green-600 mb-2">
-                <CheckCircle2 size={14} />
-                <span className="text-[10px] font-black uppercase tracking-widest">Successful</span>
+        <section>
+          <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-1 mb-4">Your Referrals</h3>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100 text-center">
+              <div className="w-10 h-10 bg-green-50 rounded-xl flex items-center justify-center mx-auto mb-3">
+                <CheckCircle2 size={20} className="text-green-500" />
               </div>
-              <p className="text-2xl font-black text-deep-purple">{referral.successfulReferrals}</p>
+              <p className="text-2xl font-black text-deep-purple">{isGuest ? '0' : referral.successfulReferrals}</p>
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter mt-1">Successful</p>
             </div>
-            <div className="p-4 bg-orange-50/50 rounded-2xl border border-orange-100">
-              <div className="flex items-center gap-2 text-orange-600 mb-2">
-                <Clock size={14} />
-                <span className="text-[10px] font-black uppercase tracking-widest">Pending</span>
+            <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100 text-center">
+              <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center mx-auto mb-3">
+                <Clock size={20} className="text-blue-500" />
               </div>
-              <p className="text-2xl font-black text-deep-purple">{referral.pendingReferrals}</p>
+              <p className="text-2xl font-black text-deep-purple">{isGuest ? '0' : referral.pendingReferrals}</p>
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter mt-1">Pending</p>
             </div>
           </div>
         </section>

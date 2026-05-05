@@ -5,16 +5,12 @@ import {
   ShieldCheck, Truck, ShoppingCart, Minus, Plus 
 } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
-import { useAuth } from '../../context/AuthContext';
 import QuantitySelector from '../../components/QuantitySelector';
-import LoginPromptSheet from '../../components/LoginPromptSheet';
 
 const CartPage = () => {
   const navigate = useNavigate();
   const { cartItems, updateQuantity, removeFromCart, totalQuantity } = useCart();
-  const { isGuest } = useAuth();
   const [showRemoveToast, setShowRemoveToast] = useState(false);
-  const [showLoginPrompt, setShowLoginPrompt] = useState(false);
 
   const subtotal = cartItems.reduce((sum, item) => {
     const price = typeof item.price === 'string' 
@@ -31,14 +27,6 @@ const CartPage = () => {
     removeFromCart(id);
     setShowRemoveToast(true);
     setTimeout(() => setShowRemoveToast(false), 2000);
-  };
-
-  const handleCheckout = () => {
-    if (isGuest) {
-      setShowLoginPrompt(true);
-      return;
-    }
-    navigate('/user/checkout');
   };
 
   if (cartItems.length === 0) {
@@ -72,15 +60,6 @@ const CartPage = () => {
           </div>
         </div>
       )}
-
-      {/* Login Prompt */}
-      <LoginPromptSheet 
-        isOpen={showLoginPrompt}
-        onClose={() => setShowLoginPrompt(false)}
-        title="Login Required"
-        message="Please login to continue with your order and delivery details"
-        redirectPath="/user/checkout"
-      />
 
       {/* Header */}
       <div className="fixed top-0 left-0 right-0 bg-white/80 backdrop-blur-xl border-b border-gray-100 z-50 px-6 py-4 flex items-center gap-4">
@@ -168,7 +147,7 @@ const CartPage = () => {
       {/* Sticky Bottom Actions */}
       <div className="fixed bottom-20 left-0 right-0 p-6 bg-white/80 backdrop-blur-xl border-t border-gray-100 z-40">
         <button 
-          onClick={handleCheckout}
+          onClick={() => navigate('/user/checkout')}
           className="w-full py-4 bg-primary text-white rounded-2xl text-sm font-black shadow-lg shadow-primary/20 active:scale-95 transition-all flex items-center justify-center gap-3"
         >
           Proceed to Checkout

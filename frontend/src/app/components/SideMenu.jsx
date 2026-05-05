@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   User, Edit2, Heart, School, 
@@ -6,20 +6,14 @@ import {
   Wallet, Phone, Info, X, ChevronDown,
   LogOut
 } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
-import LoginPromptSheet from './LoginPromptSheet';
 
 const SideMenu = ({ isOpen, onClose, user = { name: "priya", phone: "+917999942772" } }) => {
   const navigate = useNavigate();
-  const { isGuest, logout } = useAuth();
-  const [showPrompt, setShowPrompt] = useState(false);
-  const [promptConfig, setPromptConfig] = useState({});
-
   const menuItems = [
-    { icon: <Edit2 size={20} />, label: "Edit Profile", to: "/user/edit-profile", restricted: true },
-    { icon: <Heart size={20} />, label: "Wishlist", to: "/user/wishlist", restricted: true },
+    { icon: <Edit2 size={20} />, label: "Edit Profile", to: "/user/edit-profile" },
+    { icon: <Heart size={20} />, label: "Wishlist", to: "/user/wishlist" },
     { icon: <School size={20} />, label: "My School", to: "/user/my-school" },
-    { icon: <ShoppingBag size={20} />, label: "My Orders", to: "/user/orders", restricted: true },
+    { icon: <ShoppingBag size={20} />, label: "My Orders", to: "/user/orders" },
     { icon: <Search size={20} />, label: "My Products", to: "/user/products" },
     { icon: <UserPlus size={20} />, label: "Refer & Earn", to: "/user/refer" },
     { icon: <Wallet size={20} />, label: "Wallet", to: "/user/wallet" },
@@ -29,21 +23,11 @@ const SideMenu = ({ isOpen, onClose, user = { name: "priya", phone: "+9179999427
   ];
 
   const handleNavigation = (item) => {
-    if (isGuest && (item.label === 'My School' || item.restricted || item.label === 'Wallet')) {
-      setPromptConfig({
-        title: "Login Required",
-        message: item.label === 'My School' 
-          ? "Login to view school-specific products and recommendations"
-          : `Please login to access ${item.label}`,
-        redirectPath: item.to
-      });
-      setShowPrompt(true);
-      return;
-    }
-
     onClose();
     if (item.action === 'logout') {
-      logout();
+      localStorage.removeItem('childInfo');
+      localStorage.removeItem('wishlist');
+      // You might also want to clear cart or other tokens here
     }
     if (item.to) navigate(item.to);
   };
@@ -121,12 +105,6 @@ const SideMenu = ({ isOpen, onClose, user = { name: "priya", phone: "+9179999427
           </p>
         </div>
       </div>
-
-      <LoginPromptSheet 
-        isOpen={showPrompt} 
-        onClose={() => setShowPrompt(false)} 
-        {...promptConfig}
-      />
     </>
   );
 };

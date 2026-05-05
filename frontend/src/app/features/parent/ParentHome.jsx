@@ -50,6 +50,7 @@ const ParentHome = () => {
       id: 1,
       name: "Complete Class 2 Kit",
       price: "₹4,299",
+      originalPrice: "₹5,499",
       image: "https://images.unsplash.com/photo-1503919545889-aef636e10ad4?q=80&w=300&h=400&fit=crop",
       badge: "School Recommended"
     },
@@ -57,6 +58,7 @@ const ParentHome = () => {
       id: 2,
       name: "Winter Uniform Bundle",
       price: "₹1,850",
+      originalPrice: "₹2,450",
       image: "https://images.unsplash.com/photo-1516627145497-ae6968895b74?q=80&w=300&h=400&fit=crop",
       badge: "Winter Essential"
     }
@@ -71,10 +73,10 @@ const ParentHome = () => {
   ];
 
   const products = [
-    { id: 1, name: "Oxford English Grammar", price: "₹450", image: "https://images.unsplash.com/photo-1544947950-fa07a98d237f?q=80&w=200&h=200&fit=crop", type: "Book" },
-    { id: 2, name: "Formal School Shoes", price: "₹899", image: "https://images.unsplash.com/photo-1549298916-b41d501d3772?q=80&w=200&h=200&fit=crop", type: "Shoes" },
-    { id: 3, name: "Math Geometry Box", price: "₹240", image: "https://images.unsplash.com/photo-1634045550273-db9897ca800c?q=80&w=200&h=200&fit=crop", type: "Stationery" },
-    { id: 4, name: "Cotton School Socks", price: "₹120", image: "https://images.unsplash.com/photo-1582966271819-755813ec3b90?q=80&w=200&h=200&fit=crop", type: "Uniform" },
+    { id: 1, name: "Oxford English Grammar", price: "₹450", originalPrice: "₹599", image: "https://images.unsplash.com/photo-1544947950-fa07a98d237f?q=80&w=200&h=200&fit=crop", type: "Book" },
+    { id: 2, name: "Formal School Shoes", price: "₹899", originalPrice: "₹1,299", image: "https://images.unsplash.com/photo-1549298916-b41d501d3772?q=80&w=200&h=200&fit=crop", type: "Shoes" },
+    { id: 3, name: "Math Geometry Box", price: "₹240", originalPrice: "₹350", image: "https://images.unsplash.com/photo-1634045550273-db9897ca800c?q=80&w=200&h=200&fit=crop", type: "Stationery" },
+    { id: 4, name: "Cotton School Socks", price: "₹120", originalPrice: "₹199", image: "https://images.unsplash.com/photo-1582966271819-755813ec3b90?q=80&w=200&h=200&fit=crop", type: "Uniform" },
   ];
 
   // 7. Essential Products (Grid)
@@ -129,20 +131,22 @@ const ParentHome = () => {
               <Link 
                 key={kit.id} 
                 to={`/user/product/${kit.id}`}
-                className="min-w-[280px] bg-white rounded-[2.5rem] overflow-hidden shadow-xl shadow-gray-200/40 group active:scale-95 transition-all border border-gray-50 block"
+                className="min-w-[280px] bg-white rounded-[2.5rem] overflow-hidden shadow-xl shadow-gray-200/40 group active:scale-95 transition-all border border-gray-100 block"
               >
                 <div className="h-48 relative">
                   <img src={kit.image} alt={kit.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
-                  <div className="absolute top-4 left-4 px-3 py-1.5 bg-[#ef4444] text-white rounded-full text-[10px] font-semibold uppercase tracking-wider flex items-center gap-1.5 shadow-sm">
-                    SAVE ₹250
-                  </div>
+                  {kit.originalPrice && (
+                    <div className="absolute top-4 left-4 px-3 py-1.5 bg-[#ef4444] text-white rounded-full text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 shadow-sm">
+                      {Math.round(((parseFloat(kit.originalPrice.replace(/[^\d.]/g, '')) - parseFloat(kit.price.replace(/[^\d.]/g, ''))) / parseFloat(kit.originalPrice.replace(/[^\d.]/g, ''))) * 100)}% OFF
+                    </div>
+                  )}
                 </div>
                 <div className="p-5">
                   <h3 className="font-bold text-deep-purple text-base mb-1">{kit.name}</h3>
                   <p className="text-[10px] text-gray-400 font-medium mb-4">Everything your child needs for Class 2</p>
                   <div className="flex items-center justify-between">
                     <div className="flex flex-col">
-                      <span className="text-[11px] text-gray-400 line-through leading-none">₹4,499</span>
+                      <span className="text-[11px] text-gray-400 line-through leading-none">{kit.originalPrice}</span>
                       <span className="text-primary font-bold text-lg">{kit.price}</span>
                     </div>
                     <button 
@@ -228,9 +232,9 @@ const ParentHome = () => {
           </div>
           <div className="grid grid-cols-2 gap-3">
             {[
-              { id: 201, name: "Summer Polo Shirt", price: "₹350", image: "https://images.unsplash.com/photo-1596755094514-f87e34085b2c?q=80&w=200&h=200&fit=crop" },
-              { id: 202, name: "Daily Cotton Trousers", price: "₹550", image: "https://images.unsplash.com/photo-1594633312681-425c7b97ccd1?q=80&w=200&h=200&fit=crop" },
-              { id: 203, name: "White Sports Uniform", price: "₹450", image: "https://images.unsplash.com/photo-1591336373305-5850a990a5a0?q=80&w=200&h=200&fit=crop" }
+              { id: 201, name: "Summer Polo Shirt", price: "₹350", originalPrice: "₹499", image: "https://images.unsplash.com/photo-1596755094514-f87e34085b2c?q=80&w=200&h=200&fit=crop" },
+              { id: 202, name: "Daily Cotton Trousers", price: "₹550", originalPrice: "₹799", image: "https://images.unsplash.com/photo-1594633312681-425c7b97ccd1?q=80&w=200&h=200&fit=crop" },
+              { id: 203, name: "White Sports Uniform", price: "₹450", originalPrice: "₹650", image: "https://images.unsplash.com/photo-1591336373305-5850a990a5a0?q=80&w=200&h=200&fit=crop" }
             ].map((product) => renderProductCard(product))}
           </div>
         </div>
@@ -243,8 +247,8 @@ const ParentHome = () => {
           </div>
           <div className="grid grid-cols-2 gap-3">
             {[
-              { id: 301, name: "Advanced Drawing Set", price: "₹280", image: "https://images.unsplash.com/photo-1513364776144-60967b0f800f?q=80&w=200&h=200&fit=crop" },
-              { id: 302, name: "Premium Pen Pack", price: "₹120", image: "https://images.unsplash.com/photo-1585336139118-132f08535091?q=80&w=200&h=200&fit=crop" },
+              { id: 301, name: "Advanced Drawing Set", price: "₹280", originalPrice: "₹399", image: "https://images.unsplash.com/photo-1513364776144-60967b0f800f?q=80&w=200&h=200&fit=crop" },
+              { id: 302, name: "Premium Pen Pack", price: "₹120", originalPrice: "₹180", image: "https://images.unsplash.com/photo-1585336139118-132f08535091?q=80&w=200&h=200&fit=crop" },
             ].map((product) => renderProductCard(product))}
           </div>
         </div>

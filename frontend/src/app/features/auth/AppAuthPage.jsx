@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext';
 import {
   User, School, Phone, Mail, Lock,
   ArrowRight, ChevronLeft, ChevronDown, CheckCircle2,
@@ -9,15 +8,6 @@ import {
 
 const AppAuthPage = () => {
   const navigate = useNavigate();
-  const { isLoggedIn, isGuest, login, setGuestMode } = useAuth();
-
-  useEffect(() => {
-    // If already logged in or specifically in guest mode, go home
-    // But only if we don't have a redirect_after_login pending
-    if ((isLoggedIn || isGuest) && !sessionStorage.getItem('redirect_after_login')) {
-      navigate('/user/home');
-    }
-  }, [isLoggedIn, isGuest, navigate]);
 
   // Splash States
   const [showSplash, setShowSplash] = useState(true);
@@ -61,32 +51,7 @@ const AppAuthPage = () => {
 
   const handleNext = (data) => {
     setError('');
-    // If it's a login and we just finished verification (step 3), complete setup immediately
-    if (isLogin && step === 3) {
-      handleComplete(data || { 
-        name: "Priya Damodaran", 
-        school: "St. Xavier's High School", 
-        grade: "Class 2" 
-      });
-    } else {
-      setStep(step + 1);
-    }
-  };
-
-  const handleComplete = (userData) => {
-    login(userData);
-    const redirectPath = sessionStorage.getItem('redirect_after_login');
-    if (redirectPath) {
-      sessionStorage.removeItem('redirect_after_login');
-      navigate(redirectPath);
-    } else {
-      navigate('/user/home');
-    }
-  };
-
-  const handleSkip = () => {
-    setGuestMode();
-    navigate('/user/home');
+    setStep(step + 1);
   };
 
   const renderStep = () => {
@@ -94,7 +59,7 @@ const AppAuthPage = () => {
       case 1: return <RoleSelection onSelect={handleRoleSelect} />;
       case 2: return <ContactInput role={role} isLogin={isLogin} onNext={handleNext} onError={setError} error={error} />;
       case 3: return <Verification role={role} isLogin={isLogin} onNext={handleNext} onError={setError} error={error} />;
-      case 4: return <FinalRegistration role={role} onComplete={handleComplete} onError={setError} error={error} />;
+      case 4: return <FinalRegistration role={role} onComplete={() => navigate('/user/home')} onError={setError} error={error} />;
       default: return <RoleSelection onSelect={handleRoleSelect} />;
     }
   };
@@ -146,7 +111,7 @@ const AppAuthPage = () => {
         </div>
 
         <button
-          onClick={handleSkip}
+          onClick={() => navigate('/user/home')}
           className="absolute top-6 right-6 z-30 px-3 py-1.5 bg-white/10 backdrop-blur-md rounded-full text-white text-[10px] font-semibold uppercase tracking-widest border border-white/20 hover:bg-white/20 transition-all active:scale-95"
         >
           Skip

@@ -1,29 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Search, ChevronDown, Bell, User, Package,
   ArrowRight, Filter, Grid, Layout, Star
 } from 'lucide-react';
 import AppHeader from '../../components/AppHeader';
-import SideMenu from '../../components/SideMenu';
 import ProductCard from '../../components/ProductCard';
 
 const CategoryPage = () => {
   const [scrolled, setScrolled] = useState(false);
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [childInfo, setChildInfo] = useState(() => {
-    const saved = localStorage.getItem('childInfo');
-    return saved ? JSON.parse(saved) : null;
-  });
-
-  useEffect(() => {
-    const handleUpdate = () => {
-      const saved = localStorage.getItem('childInfo');
-      if (saved) setChildInfo(JSON.parse(saved));
-    };
-    window.addEventListener('storage', handleUpdate);
-    return () => window.removeEventListener('storage', handleUpdate);
-  }, []);
 
   const handleScroll = (e) => {
     const scrollPos = e.target.scrollTop;
@@ -54,16 +39,7 @@ const CategoryPage = () => {
 
   return (
     <>
-      <SideMenu 
-        isOpen={isMenuOpen} 
-        onClose={() => setIsMenuOpen(false)} 
-        user={childInfo} 
-      />
-      <AppHeader 
-        scrolled={scrolled} 
-        onMenuClick={() => setIsMenuOpen(true)} 
-        childInfo={childInfo}
-      />
+      <AppHeader scrolled={scrolled} />
       <div
         onScroll={handleScroll}
         className="flex flex-col h-full bg-white pb-32 overflow-y-auto font-outfit"

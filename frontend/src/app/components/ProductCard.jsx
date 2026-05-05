@@ -34,6 +34,15 @@ const ProductCard = ({ product, showBuyNow = true }) => {
     ? (typeof product.originalPrice === 'string' ? product.originalPrice : `₹${product.originalPrice}`)
     : null;
 
+  const calculateDiscount = () => {
+    const p = typeof product.price === 'string' ? parseFloat(product.price.replace(/[^\d.]/g, '')) : product.price;
+    const op = typeof product.originalPrice === 'string' ? parseFloat(product.originalPrice.replace(/[^\d.]/g, '')) : product.originalPrice;
+    if (!p || !op || op <= p) return null;
+    return Math.round(((op - p) / op) * 100);
+  };
+
+  const discount = calculateDiscount();
+
   return (
     <div className="relative group/card">
       {/* Toast Notification */}
@@ -53,7 +62,7 @@ const ProductCard = ({ product, showBuyNow = true }) => {
         {/* Image & Actions */}
         <div className="relative aspect-square bg-gray-50/50 p-4">
           <div className="absolute top-3 left-3 bg-[#ef4444] text-white text-[9px] font-black px-2 py-1 rounded-lg z-10 shadow-sm">
-            SALE
+            {discount ? `${discount}% OFF` : 'SALE'}
           </div>
           <button 
             onClick={(e) => {
