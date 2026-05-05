@@ -54,22 +54,40 @@ body {
   box-sizing: border-box;
 }
 
-/* Custom Scrollbar for a premium feel */
-::-webkit-scrollbar {
-  width: 8px;
+/* Hide scrollbar utility */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none !important;
+}
+.scrollbar-hide {
+  -ms-overflow-style: none !important;
+  scrollbar-width: none !important;
 }
 
-::-webkit-scrollbar-track {
-  background: #f1f1f1;
+/* Shine Animation utility */
+@keyframes shine {
+  0% { left: -100%; }
+  20% { left: 100%; }
+  100% { left: 100%; }
 }
-
-::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 10px;
+.animate-shine {
+  position: relative;
+  overflow: hidden;
 }
-
-::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+.animate-shine::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 50%;
+  height: 100%;
+  background: linear-gradient(
+    to right,
+    transparent,
+    rgba(255, 255, 255, 0.3),
+    transparent
+  );
+  transform: skewX(-25deg);
+  animation: shine 3s infinite;
 }
 
 @utility no-scrollbar {
