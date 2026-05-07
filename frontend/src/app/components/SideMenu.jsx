@@ -6,28 +6,43 @@ import {
   Wallet, Phone, Info, X, ChevronDown,
   LogOut
 } from 'lucide-react';
-
-const SideMenu = ({ isOpen, onClose, user = { name: "priya", phone: "+917999942772" } }) => {
+import AuthPrompt from './AuthPrompt';
+const SideMenu = ({ isOpen, onClose, user: propUser }) => {
   const navigate = useNavigate();
+  const [isAuthPromptOpen, setIsAuthPromptOpen] = React.useState(false);
+
+  const isGuest = !localStorage.getItem('childInfo');
+  
+  const user = propUser || (isGuest ? null : JSON.parse(localStorage.getItem('childInfo')));
+
   const menuItems = [
-    { icon: <Edit2 size={20} />, label: "Edit Profile", to: "/user/edit-profile" },
-    { icon: <Heart size={20} />, label: "Wishlist", to: "/user/wishlist" },
-    { icon: <School size={20} />, label: "My School", to: "/user/my-school" },
-    { icon: <ShoppingBag size={20} />, label: "My Orders", to: "/user/orders" },
+    { icon: <Edit2 size={20} />, label: "Edit Profile", to: "/user/edit-profile", protected: true },
+    { icon: <Heart size={20} />, label: "Wishlist", to: "/user/wishlist", protected: true },
+    { icon: <School size={20} />, label: "My School", to: "/user/my-school", protected: true },
+    { icon: <ShoppingBag size={20} />, label: "My Orders", to: "/user/orders", protected: true },
     { icon: <Search size={20} />, label: "My Products", to: "/user/products" },
-    { icon: <UserPlus size={20} />, label: "Refer & Earn", to: "/user/refer" },
-    { icon: <Wallet size={20} />, label: "Wallet", to: "/user/wallet" },
+    { icon: <UserPlus size={20} />, label: "Refer & Earn", to: "/user/refer", protected: true },
+    { icon: <Wallet size={20} />, label: "Wallet", to: "/user/wallet", protected: true },
     { icon: <Phone size={20} />, label: "Contact us", to: "/user/contact" },
     { icon: <Info size={20} />, label: "About Us", to: "/user/about" },
-    { icon: <LogOut size={20} />, label: "Sign Out", to: "/user/login", action: 'logout' },
+    { 
+      icon: <LogOut size={20} />, 
+      label: isGuest ? "Sign In" : "Sign Out", 
+      to: "/user/login", 
+      action: isGuest ? 'login' : 'logout' 
+    },
   ];
 
   const handleNavigation = (item) => {
+    if (item.protected && isGuest) {
+      setIsAuthPromptOpen(true);
+      return;
+    }
+
     onClose();
     if (item.action === 'logout') {
       localStorage.removeItem('childInfo');
       localStorage.removeItem('wishlist');
-      // You might also want to clear cart or other tokens here
     }
     if (item.to) navigate(item.to);
   };
@@ -54,7 +69,7 @@ const SideMenu = ({ isOpen, onClose, user = { name: "priya", phone: "+9179999427
           
           {/* Profile Picture Placeholder */}
           <div className="w-20 h-20 bg-white rounded-[1.8rem] flex items-center justify-center mb-4 shadow-lg overflow-hidden border-2 border-white">
-            {user.photo ? (
+            {user?.photo ? (
               <img src={user.photo} alt={user.name} className="w-full h-full object-cover" />
             ) : (
               <User size={48} className="text-gray-400" />
@@ -62,10 +77,12 @@ const SideMenu = ({ isOpen, onClose, user = { name: "priya", phone: "+9179999427
           </div>
           
           {/* User Info */}
-          <h2 className="text-white text-xl font-medium mb-1 flex items-center gap-1">
-            {user.name} <ChevronDown size={18} className="opacity-70" />
+          <h2 className="text-white text-xl font-bold tracking-tight">
+            {isGuest ? "Guest User" : (user?.phone || user?.name || "Parent")}
           </h2>
-          <p className="text-white/70 text-[10px] font-bold uppercase tracking-widest">{user.grade}</p>
+          {isGuest && (
+            <p className="text-white/60 text-[10px] font-bold uppercase tracking-widest mt-1">Limited Access</p>
+          )}
         </div>
         
         {/* Menu Items List */}
@@ -74,14 +91,14 @@ const SideMenu = ({ isOpen, onClose, user = { name: "priya", phone: "+9179999427
             <button 
               key={index}
               onClick={() => handleNavigation(item)}
-              className={`w-full flex items-center gap-4 px-6 py-3.5 hover:bg-gray-50 active:bg-gray-100 transition-all group border-l-4 border-transparent hover:border-primary ${item.action === 'logout' ? 'text-red-500' : ''}`}
+              className={`w-full flex items-center gap-4 px-6 py-3.5 hover:bg-gray-50 active:bg-gray-100 transition-all group border-l-4 border-transparent hover:border-primary ${item.action === 'logout' ? 'text-red-500' : ''} ${item.action === 'login' ? 'text-primary' : ''}`}
               style={{ 
                 animation: isOpen ? `slideIn 0.3s ease-out ${index * 0.05}s forwards` : 'none',
                 opacity: 0,
                 transform: 'translateX(-20px)'
               }}
             >
-              <div className="text-primary group-hover:scale-110 transition-transform duration-300">
+              <div className={`${item.action === 'login' ? 'text-primary' : 'text-primary'} group-hover:scale-110 transition-transform duration-300`}>
                 {item.icon}
               </div>
               <span className="text-gray-700 text-[15px] font-medium tracking-tight">{item.label}</span>
@@ -104,6 +121,13 @@ const SideMenu = ({ isOpen, onClose, user = { name: "priya", phone: "+9179999427
             School E-Mart v1.0.4
           </p>
         </div>
+
+        <AuthPrompt 
+          isOpen={isAuthPromptOpen} 
+          onClose={() => setIsAuthPromptOpen(false)} 
+          title="Account Login Required"
+          message="Please login to manage your profile, view order history, and access exclusive member benefits."
+        />
       </div>
     </>
   );

@@ -3,10 +3,30 @@ import { useNavigate, Link } from 'react-router-dom';
 import { Heart, ArrowLeft, ShoppingCart, Sparkles } from 'lucide-react';
 import { useWishlist } from '../../context/WishlistContext';
 import ProductCard from '../../components/ProductCard';
+import LoginRequired from '../../components/LoginRequired';
 
 const WishlistPage = () => {
   const navigate = useNavigate();
   const { wishlistItems, totalWishlistItems } = useWishlist();
+
+  const isGuest = !localStorage.getItem('childInfo');
+
+  if (isGuest) {
+    return (
+      <div className="min-h-screen bg-[#F8F7FF] flex items-center justify-center font-outfit">
+        <LoginRequired 
+          title="Save Your Favorites"
+          message="Login to save items you love to your wishlist and sync them across all your devices."
+        />
+        <AuthPrompt 
+          isOpen={true} 
+          onClose={() => navigate('/user/home')} 
+          title="Save Your Favorites"
+          message="Login to build your wishlist and keep track of products you love."
+        />
+      </div>
+    );
+  }
 
   if (wishlistItems.length === 0) {
     return (
@@ -43,6 +63,11 @@ const WishlistPage = () => {
         </div>
         <Link to="/user/cart" className="w-10 h-10 rounded-full bg-primary/5 flex items-center justify-center text-primary active:scale-90 transition-all relative">
           <ShoppingCart size={20} />
+          {totalWishlistItems > 0 && (
+            <span className="absolute -top-1 -right-1 w-4 h-4 bg-primary text-white text-[8px] font-bold rounded-full flex items-center justify-center">
+              {totalWishlistItems}
+            </span>
+          )}
         </Link>
       </div>
 

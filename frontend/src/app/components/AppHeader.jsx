@@ -1,28 +1,35 @@
 import React, { useState } from 'react';
-import { ChevronDown, Bell, User, Package, Search, Filter, Menu } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { ChevronDown, Bell, User, Package, Search, Filter, Menu } from 'lucide-react';
+import AuthPrompt from './AuthPrompt';
 
 const AppHeader = ({ showSearch = true, scrolled = false, onMenuClick, childInfo: propChildInfo }) => {
   const navigate = useNavigate();
+  const [isAuthPromptOpen, setIsAuthPromptOpen] = useState(false);
   const [internalChildInfo, setInternalChildInfo] = useState(() => {
     const saved = localStorage.getItem('childInfo');
-    return saved ? JSON.parse(saved) : {
-      name: "Priya Damodaran",
-      school: "St. Xavier's High School",
-      grade: "Class 2"
-    };
+    return saved ? JSON.parse(saved) : null;
   });
 
   React.useEffect(() => {
     const handleUpdate = () => {
       const saved = localStorage.getItem('childInfo');
-      if (saved) setInternalChildInfo(JSON.parse(saved));
+      setInternalChildInfo(saved ? JSON.parse(saved) : null);
     };
     window.addEventListener('storage', handleUpdate);
     return () => window.removeEventListener('storage', handleUpdate);
   }, []);
 
   const childInfo = propChildInfo || internalChildInfo;
+  const isGuest = !childInfo;
+
+  const handleMySchoolClick = () => {
+    if (isGuest) {
+      setIsAuthPromptOpen(true);
+    } else {
+      navigate('/user/my-school');
+    }
+  };
 
   return (
     <div className={`fixed top-0 left-0 right-0 z-50 bg-gradient-to-br from-deep-purple via-deep-purple to-[#4c489d] px-6 pt-6 rounded-b-[2rem] shadow-xl border-b border-white/10 transition-all duration-300 ease-in-out ${scrolled ? 'pb-2' : 'pb-3'}`}>
@@ -83,43 +90,46 @@ const AppHeader = ({ showSearch = true, scrolled = false, onMenuClick, childInfo
           <span className="text-[16px] font-medium text-white tracking-tight">SCHOOL E-MART</span>
         </div>
         <div className="flex items-center gap-2">
-          <button className="w-9 h-9 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center text-white relative active:scale-90 transition-all border border-white/10">
+          <button 
+            onClick={() => navigate("/user/notifications")}
+            className="w-9 h-9 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center text-white relative active:scale-90 transition-all border border-white/10"
+          >
             <Bell size={18} />
             <span className="absolute top-2 right-2 w-1.5 h-1.5 bg-yellow-400 rounded-full border border-deep-purple"></span>
           </button>
         </div>
       </div>
 
-      {/* Profile & School Section: FULLY Persistent */}
-      <div className={`flex flex-col gap-4 relative z-10 transition-all duration-300 ${scrolled ? 'mb-2' : 'mb-5'}`}>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 text-white/90">
-            <Package size={14} className="text-primary" />
-            <span className="text-[12px] font-medium truncate max-w-[200px]">{childInfo.school}</span>
-          </div>
-
-          <button
-            onClick={() => navigate('/user/my-school')}
-            className="bg-black border border-[#ffc107] text-[#ffc107] text-[10px] font-bold px-4 py-1.5 rounded-full animate-shine shadow-lg shadow-black/20 active:scale-95 transition-all"
-          >
-            MY SCHOOL
-          </button>
-        </div>
-
+      {/* Streamlined Search & School Actions */}
+      <div className={`flex items-center gap-4 relative z-10 transition-all duration-300 ${scrolled ? 'mb-2' : 'mb-5'}`}>
         {showSearch && (
-          <div className={`relative group transition-all duration-300 ease-in-out ${scrolled ? 'opacity-0 h-0 overflow-hidden pointer-events-none mt-[-16px]' : 'opacity-100 h-[44px] mt-0'}`}>
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-primary transition-colors" size={16} />
+          <div className="flex-1 relative group">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-primary transition-colors" size={14} />
             <input
               type="text"
-              placeholder="Search by category..."
-              className="w-full pl-11 pr-11 py-2.5 bg-gray-50 border-none rounded-xl text-xs focus:ring-2 focus:ring-primary/10 focus:bg-white transition-all outline-none font-medium"
+              placeholder="Search items..."
+              className="w-full pl-10 pr-10 py-2.5 bg-gray-50 border-none rounded-xl text-[11px] focus:ring-2 focus:ring-primary/10 focus:bg-white transition-all outline-none font-bold placeholder:text-gray-400"
             />
             <button className="absolute right-4 top-1/2 -translate-y-1/2 text-primary">
-              <Filter size={16} />
+              <Filter size={14} />
             </button>
           </div>
         )}
+
+        <button
+          onClick={handleMySchoolClick}
+          className="shrink-0 bg-black border border-[#ffc107] text-[#ffc107] text-[10px] font-black px-4 py-2.5 rounded-xl animate-shine shadow-lg shadow-black/20 active:scale-95 transition-all uppercase tracking-tight"
+        >
+          MY SCHOOL
+        </button>
       </div>
+
+      <AuthPrompt 
+        isOpen={isAuthPromptOpen} 
+        onClose={() => setIsAuthPromptOpen(false)} 
+        title="View Your School Store"
+        message="Login to see products specially curated for your child's school and class."
+      />
     </div>
   );
 };

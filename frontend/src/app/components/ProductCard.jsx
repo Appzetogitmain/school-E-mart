@@ -1,23 +1,40 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Star, ShoppingCart, Minus, Plus, ShieldCheck, Heart } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { useWishlist } from '../context/WishlistContext';
-import { useState } from 'react';
+import AuthPrompt from './AuthPrompt';
 
 const ProductCard = ({ product, showBuyNow = true }) => {
   const { addToCart, updateQuantity, getProductQuantity } = useCart();
   const { toggleWishlist, isInWishlist } = useWishlist();
   const [showToast, setShowToast] = useState(false);
+  const [isAuthPromptOpen, setIsAuthPromptOpen] = useState(false);
   const isWishlisted = isInWishlist(product.id);
   const quantity = getProductQuantity(product.id);
+
+  const isGuest = !localStorage.getItem('childInfo');
 
   const handleAdd = (e) => {
     e.preventDefault();
     e.stopPropagation();
+    if (isGuest) {
+      setIsAuthPromptOpen(true);
+      return;
+    }
     addToCart(product);
     setShowToast(true);
     setTimeout(() => setShowToast(false), 2000);
+  };
+
+  const handleWishlist = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (isGuest) {
+      setIsAuthPromptOpen(true);
+      return;
+    }
+    toggleWishlist(product);
   };
 
   const handleUpdate = (e, delta) => {
@@ -65,11 +82,7 @@ const ProductCard = ({ product, showBuyNow = true }) => {
             {discount ? `${discount}% OFF` : 'SALE'}
           </div>
           <button 
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              toggleWishlist(product);
-            }}
+            onClick={handleWishlist}
             className={`absolute top-3 right-3 w-8 h-8 rounded-full bg-white/80 backdrop-blur-md flex items-center justify-center transition-all z-20 shadow-sm active:scale-75 ${isWishlisted ? 'text-red-500' : 'text-gray-300 hover:text-red-400'}`}
           >
             <Heart size={16} fill={isWishlisted ? "currentColor" : "none"} />
@@ -134,6 +147,13 @@ const ProductCard = ({ product, showBuyNow = true }) => {
           </div>
         </div>
       </Link>
+
+      <AuthPrompt 
+        isOpen={isAuthPromptOpen} 
+        onClose={() => setIsAuthPromptOpen(false)} 
+        title="Join the Club!"
+        message="Login to save items, build your cart, and enjoy a personalized shopping experience."
+      />
     </div>
   );
 };

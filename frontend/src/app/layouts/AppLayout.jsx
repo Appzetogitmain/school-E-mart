@@ -6,13 +6,13 @@ import { useCart } from '../context/CartContext';
 const AppLayout = () => {
   const { totalQuantity } = useCart();
   const location = useLocation();
-  const isAuthPage = location.pathname.includes('/login');
+  const isAuthPage = location.pathname.includes('/user/login') || location.pathname.includes('/user/signup');
   const isProductDetailPage = location.pathname.includes('/user/product/');
 
   return (
     <div className="max-w-md mx-auto h-[100dvh] bg-gray-50 shadow-2xl relative overflow-hidden flex flex-col font-outfit">
       {/* Dynamic Content Area */}
-      <div className={`flex-1 ${isAuthPage ? 'overflow-hidden' : 'overflow-y-auto'} ${(!isAuthPage && !isProductDetailPage) ? 'pb-20' : ''}`}>
+      <div className={`flex-1 overflow-y-auto ${(!isAuthPage && !isProductDetailPage) ? 'pb-20' : ''}`}>
         <Outlet />
       </div>
 

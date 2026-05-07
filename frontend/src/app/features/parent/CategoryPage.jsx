@@ -46,7 +46,7 @@ const CategoryPage = () => {
       >
         <div className="h-[170px] shrink-0"></div>
         {/* 3. Main Categories Grid (3-Column) */}
-        <div className="px-6 mt-22">
+        <div className="px-6 mt-4">
           <div className="grid grid-cols-3 gap-y-6">
             {mainCategories.map((cat) => (
               <Link
@@ -73,8 +73,8 @@ const CategoryPage = () => {
 
           <div className="space-y-4">
             {shopByGrade.map((item) => (
-              <Link 
-                key={item.grade} 
+              <Link
+                key={item.grade}
                 to={`/user/select-grade?group=${encodeURIComponent(item.grade)}`}
                 className="bg-white rounded-3xl overflow-hidden border border-gray-100 shadow-sm flex h-24 active:scale-[0.98] transition-all block"
               >

@@ -41,6 +41,12 @@ const ContactUsPage = React.lazy(() => import('../app/features/parent/ContactUsP
 const AboutUsPage = React.lazy(() => import('../app/features/parent/AboutUsPage'));
 const ReferEarnPage = React.lazy(() => import('../app/features/parent/ReferEarnPage'));
 const WalletPage = React.lazy(() => import('../app/features/parent/WalletPage'));
+const CheckoutPage = React.lazy(() => import('../app/features/parent/CheckoutPage'));
+const OrderSuccessPage = React.lazy(() => import('../app/features/parent/OrderSuccessPage'));
+const OrderTrackingPage = React.lazy(() => import('../app/features/parent/OrderTrackingPage'));
+const NotificationsPage = React.lazy(() => import('../app/features/parent/NotificationsPage'));
+const ProfileSetupPage = React.lazy(() => import('../app/features/parent/ProfileSetupPage'));
+const KitDetailsPage = React.lazy(() => import('../app/features/parent/KitDetailsPage'));
 
 const LoadingFallback = () => (
   <div className="flex items-center justify-center min-h-screen bg-gray-50/50">
@@ -98,17 +104,23 @@ const AppRoutes = () => {
         <Route path="/user" element={<AppLayout />}>
           <Route index element={<Navigate to="home" replace />} />
           <Route path="login" element={<AppAuthPage />} />
+          <Route path="signup" element={<ProfileSetupPage />} />
           <Route path="home" element={<ParentHome />} />
           <Route path="categories" element={<AppCategoryPage />} />
           <Route path="my-school" element={<MySchoolPage />} />
           <Route path="category/:categoryId" element={<SubcategoryPage />} />
+          <Route path="checkout" element={<CheckoutPage />} />
+          <Route path="order-success" element={<OrderSuccessPage />} />
+          <Route path="track-order/:orderId" element={<OrderTrackingPage />} />
           <Route path="orders" element={<OrderHistoryPage />} />
           <Route path="select-grade" element={<SelectGradePage />} />
           <Route path="products" element={<ParentGradeProductsPage />} />
           <Route path="product/:productId" element={<ProductDetailsPage />} />
+          <Route path="kit/:kitId" element={<KitDetailsPage />} />
           <Route path="cart" element={<CartPage />} />
           <Route path="edit-profile" element={<EditProfilePage />} />
           <Route path="wishlist" element={<WishlistPage />} />
+          <Route path="notifications" element={<NotificationsPage />} />
           <Route path="contact" element={<ContactUsPage />} />
           <Route path="about" element={<AboutUsPage />} />
           <Route path="refer" element={<ReferEarnPage />} />

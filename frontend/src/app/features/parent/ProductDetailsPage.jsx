@@ -11,6 +11,8 @@ import PolicyFeature from '../../components/PolicyFeature';
 import QuantitySelector from '../../components/QuantitySelector';
 import { useCart } from '../../context/CartContext';
 
+import AuthPrompt from '../../components/AuthPrompt';
+
 const ProductDetailsPage = () => {
   const { productId } = useParams();
   const navigate = useNavigate();
@@ -18,7 +20,10 @@ const ProductDetailsPage = () => {
   const [activeImage, setActiveImage] = useState(0);
   const [selectedSize, setSelectedSize] = useState('28');
   const [isWishlisted, setIsWishlisted] = useState(false);
+  const [isAuthPromptOpen, setIsAuthPromptOpen] = useState(false);
   const cartQuantity = getProductQuantity(productId);
+
+  const isGuest = !localStorage.getItem('childInfo');
 
   const product = {
     id: productId,
@@ -53,12 +58,20 @@ const ProductDetailsPage = () => {
   const [showToast, setShowToast] = useState(false);
 
   const handleAddToCart = () => {
+    if (isGuest) {
+      setIsAuthPromptOpen(true);
+      return;
+    }
     addToCart(product);
     setShowToast(true);
     setTimeout(() => setShowToast(false), 3000);
   };
 
   const handleBuyNow = () => {
+    if (isGuest) {
+      setIsAuthPromptOpen(true);
+      return;
+    }
     navigate('/user/checkout');
   };
 
@@ -272,6 +285,12 @@ const ProductDetailsPage = () => {
           Buy Now
         </button>
       </div>
+      <AuthPrompt 
+        isOpen={isAuthPromptOpen} 
+        onClose={() => setIsAuthPromptOpen(false)} 
+        title="Add to Your Collection"
+        message="Login to add items to your cart and enjoy a seamless checkout experience."
+      />
     </div>
   );
 };

@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   Home, Search, ShoppingBag, User,
   ChevronDown, Bell, Sparkles, Package,
@@ -13,8 +13,10 @@ import ProductCard from '../../components/ProductCard';
 import SectionHeader from '../../components/SectionHeader';
 import CategoryStory from '../../components/CategoryStory';
 import { useDraggableScroll } from '../../hooks/useDraggableScroll';
+import AuthPrompt from '../../components/AuthPrompt';
 
 const ParentHome = () => {
+  const navigate = useNavigate();
   const notifRef = useDraggableScroll();
   const kitsRef = useDraggableScroll();
   const catsRef = useDraggableScroll();
@@ -22,16 +24,20 @@ const ParentHome = () => {
   const reelsRef = useDraggableScroll();
   const [scrolled, setScrolled] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isAuthPromptOpen, setIsAuthPromptOpen] = useState(false);
   const [childInfo, setChildInfo] = useState(() => {
     const saved = localStorage.getItem('childInfo');
     return saved ? JSON.parse(saved) : {
-      name: "Priya Damodaran",
-      school: "St. Xavier's High School",
-      grade: "Class 2"
+      name: "Guest",
+      school: "Explore Schools",
+      grade: "Select Grade",
+      phone: ""
     };
   });
 
-  React.useEffect(() => {
+  const isGuest = !localStorage.getItem('childInfo');
+
+  useEffect(() => {
     const handleUpdate = () => {
       const saved = localStorage.getItem('childInfo');
       if (saved) setChildInfo(JSON.parse(saved));
@@ -79,31 +85,38 @@ const ParentHome = () => {
     { id: 4, name: "Cotton School Socks", price: "₹120", originalPrice: "₹199", image: "https://images.unsplash.com/photo-1582966271819-755813ec3b90?q=80&w=200&h=200&fit=crop", type: "Uniform" },
   ];
 
-  // 7. Essential Products (Grid)
+  const handleBuyKit = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (isGuest) {
+      setIsAuthPromptOpen(true);
+      return;
+    }
+    // Logic for buy kit
+  };
+
   const renderProductCard = (product) => (
     <ProductCard key={product.id} product={product} />
   );
 
   return (
     <>
-      <SideMenu 
-        isOpen={isMenuOpen} 
-        onClose={() => setIsMenuOpen(false)} 
-        user={childInfo} 
+      <SideMenu
+        isOpen={isMenuOpen}
+        onClose={() => setIsMenuOpen(false)}
+        user={childInfo}
       />
-      <AppHeader 
-        scrolled={scrolled} 
-        onMenuClick={() => setIsMenuOpen(true)} 
+      <AppHeader
+        scrolled={scrolled}
+        onMenuClick={() => setIsMenuOpen(true)}
         childInfo={childInfo}
       />
       <div
         onScroll={handleScroll}
         className="flex flex-col h-full bg-gray-50/50 pb-40 overflow-y-auto font-outfit"
       >
-        {/* Header Spacer */}
         <div className="h-[170px] shrink-0"></div>
-        {/* 2. Notification Section */}
-        <div className="mt-22">
+        <div className="mt-4">
           <div ref={notifRef} className="flex gap-4 overflow-x-auto px-6 pb-2 scrollbar-hide select-none active:cursor-grabbing">
             {[
               { id: 1, text: "New session starts from 15th June. Order your kits early!", icon: <Sparkles size={16} className="text-accent-gold shrink-0" />, color: "bg-accent-gold/10 border-accent-gold/20" },
@@ -119,41 +132,30 @@ const ParentHome = () => {
           </div>
         </div>
 
-        {/* 3. Recommended Kits (Primary) */}
         <div className="mt-8">
-          <SectionHeader 
-            title="Recommended Kits" 
+          <SectionHeader
+            title="Recommended Kits"
             onViewAll={() => navigate('/user/products')}
           />
-
           <div ref={kitsRef} className="flex gap-4 overflow-x-auto px-6 pb-4 scrollbar-hide select-none active:cursor-grabbing">
             {kits.map((kit) => (
-              <Link 
-                key={kit.id} 
-                to={`/user/product/${kit.id}`}
+              <Link
+                key={kit.id}
+                to={`/user/kit/${kit.id}`}
                 className="min-w-[280px] bg-white rounded-[2.5rem] overflow-hidden shadow-xl shadow-gray-200/40 group active:scale-95 transition-all border border-gray-100 block"
               >
                 <div className="h-48 relative">
                   <img src={kit.image} alt={kit.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
-                  {kit.originalPrice && (
-                    <div className="absolute top-4 left-4 px-3 py-1.5 bg-[#ef4444] text-white rounded-full text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 shadow-sm">
-                      {Math.round(((parseFloat(kit.originalPrice.replace(/[^\d.]/g, '')) - parseFloat(kit.price.replace(/[^\d.]/g, ''))) / parseFloat(kit.originalPrice.replace(/[^\d.]/g, ''))) * 100)}% OFF
-                    </div>
-                  )}
                 </div>
                 <div className="p-5">
                   <h3 className="font-bold text-deep-purple text-base mb-1">{kit.name}</h3>
                   <p className="text-[10px] text-gray-400 font-medium mb-4">Everything your child needs for Class 2</p>
                   <div className="flex items-center justify-between">
                     <div className="flex flex-col">
-                      <span className="text-[11px] text-gray-400 line-through leading-none">{kit.originalPrice}</span>
                       <span className="text-primary font-bold text-lg">{kit.price}</span>
                     </div>
-                    <button 
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                      }}
+                    <button
+                      onClick={handleBuyKit}
                       className="px-5 py-2.5 bg-[#ffc107] text-black rounded-xl text-xs font-bold shadow-lg shadow-yellow-100 flex items-center gap-2 active:scale-90 transition-all relative z-10"
                     >
                       Buy Now
@@ -165,43 +167,26 @@ const ParentHome = () => {
           </div>
         </div>
 
-        {/* 4. Categories (Circular 'Story' Style) */}
         <div className="mt-8">
           <SectionHeader title="Categories" />
           <div className="flex gap-5 overflow-x-auto px-6 pb-2 scrollbar-hide">
             {categories.map((cat) => (
-              <CategoryStory 
-                key={cat.name} 
-                name={cat.name} 
-                image={cat.image} 
+              <CategoryStory
+                key={cat.name}
+                name={cat.name}
+                image={cat.image}
                 to={`/user/category/${cat.name.toLowerCase()}`}
               />
             ))}
           </div>
         </div>
 
-        {/* 5. Banner Carousel (16:9 Premium) */}
         <div className="mt-10 relative z-10 min-h-[190px]">
           <div className="flex gap-4 overflow-x-auto px-6 pb-4 snap-x snap-mandatory scrollbar-hide">
             {[
-              {
-                id: 1,
-                title: "Modern Uniforms",
-                subtitle: "Premium quality for your child",
-                image: "/assets/category_banner1.png"
-              },
-              {
-                id: 2,
-                title: "Institutional Quality",
-                subtitle: "Trusted by top schools",
-                image: "/assets/category_banner2.png"
-              },
-              {
-                id: 3,
-                title: "Science & Lab Setup",
-                subtitle: "Advanced learning tools",
-                image: "/assets/category_banner3.png"
-              }
+              { id: 1, title: "Modern Uniforms", image: "/assets/category_banner1.png" },
+              { id: 2, title: "Institutional Quality", image: "/assets/category_banner2.png" },
+              { id: 3, title: "Science & Lab Setup", image: "/assets/category_banner3.png" }
             ].map((banner) => (
               <div key={banner.id} className="min-w-[300px] h-[180px] rounded-2xl relative overflow-hidden snap-center flex-shrink-0 bg-primary/5 shadow-md border border-gray-100">
                 <img src={banner.image} alt={banner.title} className="absolute inset-0 w-full h-full object-cover" />
@@ -210,13 +195,10 @@ const ParentHome = () => {
           </div>
         </div>
 
-
-
-        {/* 7. Essential Products (Grid) */}
         <div className="mt-10 px-6 pb-6">
-          <SectionHeader 
-            title="Essential Products" 
-            onViewAll={() => navigate('/user/products')} 
+          <SectionHeader
+            title="Essential Products"
+            onViewAll={() => navigate('/user/products')}
             className="px-0"
           />
           <div className="grid grid-cols-2 gap-4">
@@ -224,7 +206,6 @@ const ParentHome = () => {
           </div>
         </div>
 
-        {/* 8. Category Highlights: Uniforms */}
         <div className="mt-4 px-6">
           <h2 className="text-lg font-semibold text-deep-purple mb-4">Uniforms</h2>
           <div className="rounded-2xl h-36 overflow-hidden relative mb-4 shadow-md border border-gray-100">
@@ -233,13 +214,11 @@ const ParentHome = () => {
           <div className="grid grid-cols-2 gap-3">
             {[
               { id: 201, name: "Summer Polo Shirt", price: "₹350", originalPrice: "₹499", image: "https://images.unsplash.com/photo-1596755094514-f87e34085b2c?q=80&w=200&h=200&fit=crop" },
-              { id: 202, name: "Daily Cotton Trousers", price: "₹550", originalPrice: "₹799", image: "https://images.unsplash.com/photo-1594633312681-425c7b97ccd1?q=80&w=200&h=200&fit=crop" },
-              { id: 203, name: "White Sports Uniform", price: "₹450", originalPrice: "₹650", image: "https://images.unsplash.com/photo-1591336373305-5850a990a5a0?q=80&w=200&h=200&fit=crop" }
+              { id: 202, name: "Daily Cotton Trousers", price: "₹550", originalPrice: "₹799", image: "https://images.unsplash.com/photo-1594633312681-425c7b97ccd1?q=80&w=200&h=200&fit=crop" }
             ].map((product) => renderProductCard(product))}
           </div>
         </div>
 
-        {/* 9. Category Highlights: Stationery */}
         <div className="mt-8 px-6 pb-12">
           <h2 className="text-lg font-semibold text-deep-purple mb-4">Stationery</h2>
           <div className="rounded-2xl h-36 overflow-hidden relative mb-4 shadow-md border border-gray-100">
@@ -253,41 +232,23 @@ const ParentHome = () => {
           </div>
         </div>
 
-        {/* 10. Marketing Reels Section */}
         <div className="px-6 pb-8">
           <div className="flex items-center justify-between mb-5">
             <div>
               <h2 className="text-lg font-semibold text-deep-purple">Watch & Explore</h2>
-              <p className="text-[10px] text-gray-400 font-medium">See how School E-Mart transforms learning</p>
             </div>
             <button className="text-primary text-xs font-bold">Watch All</button>
           </div>
-
           <div ref={reelsRef} className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide">
             {[
               { id: 1, title: "Smart Kit Unboxing", views: "12k", thumb: "https://images.unsplash.com/photo-1503676260728-1c00da094a0b?q=80&w=300&h=533&fit=crop" },
-              { id: 2, title: "Uniform Quality Test", views: "8.5k", thumb: "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?q=80&w=300&h=533&fit=crop" },
-              { id: 3, title: "Stationery for Class 2", views: "15k", thumb: "https://images.unsplash.com/photo-1456735190827-d1262f71b8a3?q=80&w=300&h=533&fit=crop" }
+              { id: 2, title: "Uniform Quality Test", views: "8.5k", thumb: "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?q=80&w=300&h=533&fit=crop" }
             ].map((reel) => (
               <div key={reel.id} className="min-w-[160px] h-[280px] rounded-[2rem] overflow-hidden relative group active:scale-95 transition-all shadow-lg border border-white/20">
                 <img src={reel.thumb} alt={reel.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/20"></div>
-
-                {/* Play Button */}
                 <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="w-12 h-12 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center border border-white/30 group-hover:scale-110 transition-transform">
-                    <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center text-primary shadow-lg pl-0.5">
-                      <Play size={16} fill="currentColor" />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Reel Info */}
-                <div className="absolute bottom-4 left-4 right-4">
-                  <h3 className="text-white text-[11px] font-bold mb-1 leading-tight">{reel.title}</h3>
-                  <div className="flex items-center gap-1.5">
-                    <div className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse"></div>
-                    <span className="text-white/70 text-[9px] font-medium">{reel.views} views</span>
+                  <div className="w-12 h-12 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center border border-white/30">
+                    <Play size={16} fill="currentColor" />
                   </div>
                 </div>
               </div>
@@ -295,6 +256,13 @@ const ParentHome = () => {
           </div>
         </div>
       </div>
+
+      <AuthPrompt 
+        isOpen={isAuthPromptOpen} 
+        onClose={() => setIsAuthPromptOpen(false)} 
+        title="Complete Your Kit"
+        message="Login to add these recommended school kits to your cart and ensure your child is session-ready!"
+      />
     </>
   );
 };
