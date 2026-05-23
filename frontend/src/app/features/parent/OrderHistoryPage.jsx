@@ -124,7 +124,7 @@ const OrderHistoryPage = () => {
         onScroll={handleScroll}
         className="flex flex-col h-full bg-[#f8f5f2] pb-32 font-outfit overflow-y-auto"
       >
-        <div className="h-[170px] shrink-0"></div>
+        <div className="h-[140px] shrink-0"></div>
 
         {isGuest ? (
           <div className="px-6 mt-6">

@@ -44,7 +44,7 @@ const CategoryPage = () => {
         onScroll={handleScroll}
         className="flex flex-col h-full bg-white pb-32 overflow-y-auto font-outfit"
       >
-        <div className="h-[170px] shrink-0"></div>
+        <div className="h-[140px] shrink-0"></div>
         {/* 3. Main Categories Grid (3-Column) */}
         <div className="px-6 mt-4">
           <div className="grid grid-cols-3 gap-y-6">
