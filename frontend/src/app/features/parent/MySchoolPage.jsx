@@ -98,7 +98,7 @@ const MySchoolPage = () => {
         onScroll={handleScroll}
         className="flex flex-col h-full bg-white pb-32 font-outfit overflow-y-auto"
       >
-        <div className="h-[170px] shrink-0"></div>
+        <div className="h-[140px] shrink-0"></div>
         
         {isGuest ? (
           <LoginRequired 

@@ -5,7 +5,7 @@ import {
   ChevronDown, Bell, Sparkles, Package,
   Shirt, Book, PenTool, Footprints,
   ArrowRight, Star, ShoppingCart, Filter, Play,
-  Grid, Layout
+  Grid, Layout, CheckCircle2, BookOpen, Check
 } from 'lucide-react';
 import AppHeader from '../../components/AppHeader';
 import SideMenu from '../../components/SideMenu';
@@ -14,6 +14,8 @@ import SectionHeader from '../../components/SectionHeader';
 import CategoryStory from '../../components/CategoryStory';
 import { useDraggableScroll } from '../../hooks/useDraggableScroll';
 import AuthPrompt from '../../components/AuthPrompt';
+import RecentUpdates from './RecentUpdates';
+import QuickActions from './QuickActions';
 
 const ParentHome = () => {
   const navigate = useNavigate();
@@ -110,12 +112,57 @@ const ParentHome = () => {
         scrolled={scrolled}
         onMenuClick={() => setIsMenuOpen(true)}
         childInfo={childInfo}
+        transparentAtTop={true}
       />
       <div
         onScroll={handleScroll}
-        className="flex flex-col h-full bg-gray-50/50 pb-40 overflow-y-auto font-outfit"
+        className="flex flex-col h-full bg-gray-50/50 pb-40 overflow-y-auto overflow-x-hidden w-full font-outfit"
       >
-        <div className="h-[170px] shrink-0"></div>
+        {/* Flat Purple Header Background Block */}
+        <div className="bg-gradient-to-b from-[#3B248C] to-[#5B3FD6] h-[160px] w-full relative shrink-0">
+          {/* Soft Premium Warm Accent Glows */}
+          <div className="absolute top-0 right-0 w-48 h-48 bg-[#FFC933]/15 rounded-full -mr-16 -mt-16 blur-3xl pointer-events-none"></div>
+          <div className="absolute bottom-0 left-0 w-32 h-32 bg-white/5 rounded-full -ml-16 -mb-16 blur-2xl pointer-events-none"></div>
+        </div>
+
+        {/* Today at a Glance Overlapping Section (Narrower and floating halfway) */}
+        <div className="relative z-10 -mt-10 mx-5 sm:mx-6 bg-white rounded-2xl p-5 shadow-lg border border-gray-100/50">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-base font-extrabold text-deep-purple">Today at a Glance</h2>
+            <button className="text-primary text-xs font-bold hover:underline">View all</button>
+          </div>
+          <div className="grid grid-cols-2 gap-3.5">
+            {/* Attendance Status Card */}
+            <div className="bg-white border border-gray-100 rounded-2xl p-3 flex items-center gap-3 shadow-[0_2px_8px_rgba(0,0,0,0.02)] hover:shadow-md transition-all duration-300">
+              {/* Double Ring Green Checkmark Badge */}
+              <div className="w-9 h-9 rounded-full bg-[#EBFBF0] flex items-center justify-center shrink-0">
+                <div className="w-[26px] h-[26px] rounded-full bg-[#34A853] flex items-center justify-center text-white shadow-sm">
+                  <Check size={12} strokeWidth={3.5} />
+                </div>
+              </div>
+              <div className="min-w-0 flex flex-col justify-center">
+                <p className="text-[11px] font-semibold text-gray-500 leading-none">Attendance</p>
+                <p className="text-[13px] font-black text-[#34A853] leading-none mt-1.5 truncate">Present</p>
+                <p className="text-[9px] font-medium text-gray-400 leading-none mt-1 truncate">Marked at 09:15 a.m.</p>
+              </div>
+            </div>
+
+            {/* Homework Summary Card */}
+            <div className="bg-white border border-gray-100 rounded-2xl p-3 flex items-center gap-3 shadow-[0_2px_8px_rgba(0,0,0,0.02)] hover:shadow-md transition-all duration-300">
+              {/* Double Ring Orange Book Badge */}
+              <div className="w-9 h-9 rounded-full bg-[#FFF6ED] flex items-center justify-center shrink-0">
+                <div className="w-[26px] h-[26px] rounded-full bg-[#F2994A] flex items-center justify-center text-white shadow-sm">
+                  <BookOpen size={12} strokeWidth={2.5} />
+                </div>
+              </div>
+              <div className="min-w-0 flex flex-col justify-center">
+                <p className="text-[11px] font-semibold text-gray-500 leading-none">Homework</p>
+                <p className="text-[13px] font-black text-[#F2994A] leading-none mt-1.5 truncate">2 Pending</p>
+                <p className="text-[9px] font-medium text-gray-400 leading-none mt-1 truncate">Due Tomorrow</p>
+              </div>
+            </div>
+          </div>
+        </div>
         <div className="mt-4">
           <div ref={notifRef} className="flex gap-4 overflow-x-auto px-6 pb-2 scrollbar-hide select-none active:cursor-grabbing">
             {[
@@ -131,6 +178,12 @@ const ParentHome = () => {
             ))}
           </div>
         </div>
+
+        {/* Timeline-style Recent Updates Section */}
+        <RecentUpdates />
+
+        {/* Quick Actions Grid Section */}
+        <QuickActions />
 
         <div className="mt-8">
           <SectionHeader
@@ -257,9 +310,9 @@ const ParentHome = () => {
         </div>
       </div>
 
-      <AuthPrompt 
-        isOpen={isAuthPromptOpen} 
-        onClose={() => setIsAuthPromptOpen(false)} 
+      <AuthPrompt
+        isOpen={isAuthPromptOpen}
+        onClose={() => setIsAuthPromptOpen(false)}
         title="Complete Your Kit"
         message="Login to add these recommended school kits to your cart and ensure your child is session-ready!"
       />

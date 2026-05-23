@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronDown, Bell, User, Package, Search, Filter, Menu } from 'lucide-react';
+import { ChevronDown, Bell, User, Package, Search, Filter, Menu, Hash, GraduationCap } from 'lucide-react';
 import AuthPrompt from './AuthPrompt';
 
-const AppHeader = ({ showSearch = true, scrolled = false, onMenuClick, childInfo: propChildInfo }) => {
+const AppHeader = ({ showSearch = true, scrolled = false, onMenuClick, childInfo: propChildInfo, transparentAtTop = false }) => {
   const navigate = useNavigate();
   const [isAuthPromptOpen, setIsAuthPromptOpen] = useState(false);
   const [internalChildInfo, setInternalChildInfo] = useState(() => {
@@ -32,10 +32,20 @@ const AppHeader = ({ showSearch = true, scrolled = false, onMenuClick, childInfo
   };
 
   return (
-    <div className={`fixed top-0 left-0 right-0 z-50 bg-gradient-to-br from-deep-purple via-deep-purple to-[#4c489d] px-6 pt-6 rounded-b-[2rem] shadow-xl border-b border-white/10 transition-all duration-300 ease-in-out ${scrolled ? 'pb-2' : 'pb-3'}`}>
-      {/* Premium Gradient Glow */}
-      <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -mr-32 -mt-32 blur-3xl overflow-hidden"></div>
-      <div className="absolute bottom-0 left-0 w-32 h-32 bg-primary/10 rounded-full -ml-16 -mb-16 blur-2xl overflow-hidden"></div>
+    <div className={`fixed top-0 left-0 right-0 z-50 px-6 pt-8 pb-9 transition-all duration-300 ease-in-out border-b border-white/10 ${
+      transparentAtTop 
+        ? scrolled 
+          ? "bg-gradient-to-b from-[#3B248C] to-[#5B3FD6] shadow-xl" 
+          : "bg-transparent border-b-transparent shadow-none"
+        : "bg-gradient-to-b from-[#3B248C] to-[#5B3FD6] shadow-xl"
+    }`}>
+      {/* Soft Premium Warm Accent Glows */}
+      {(!transparentAtTop || scrolled) && (
+        <>
+          <div className="absolute top-0 right-0 w-48 h-48 bg-[#FFC933]/15 rounded-full -mr-16 -mt-16 blur-3xl pointer-events-none"></div>
+          <div className="absolute bottom-0 left-0 w-32 h-32 bg-white/5 rounded-full -ml-16 -mb-16 blur-2xl pointer-events-none"></div>
+        </>
+      )}
 
       <style>
         {`
@@ -67,61 +77,61 @@ const AppHeader = ({ showSearch = true, scrolled = false, onMenuClick, childInfo
         `}
       </style>
 
-      {/* Brand Header: Logo and Actions */}
-      <div className="flex items-center justify-between mb-5 relative z-10">
-        <div className="flex items-center gap-3">
+      {/* Top Row: Brand Profile, Child Info, and Notifications */}
+      <div className="flex items-center justify-between relative z-10">
+        {/* Left Side: Avatar Button and Child Details */}
+        <div className="flex items-center gap-4">
+          {/* Stylized Rounded-Square Student Profile Avatar Button: clicking opens side menu */}
           <button 
             onClick={onMenuClick}
-            className="w-8 h-8 -ml-2 flex items-center justify-center text-white active:scale-90 transition-all"
+            className="w-13 h-13 rounded-2xl bg-white/10 border border-white/25 shadow-[0_4px_12px_rgba(0,0,0,0.15)] flex items-center justify-center overflow-hidden backdrop-blur-lg hover:bg-white/15 active:scale-95 transition-all outline-none relative group animate-shine shrink-0"
+            aria-label="Open profile menu"
           >
-            <Menu size={20} />
+            {/* Inner premium golden-white gradient ring overlay */}
+            <div className="absolute inset-[2px] rounded-[14px] bg-gradient-to-tr from-[#FFC933]/20 to-white/10 pointer-events-none"></div>
+            <User className="w-6 h-6 text-white/90 drop-shadow-[0_2px_4px_rgba(0,0,0,0.2)]" />
           </button>
-          <div className="w-10 h-10 bg-white rounded-xl overflow-hidden flex items-center justify-center shadow-lg shadow-black/20 border border-white/20">
-            <img
-              src="/assets/logo.jpeg"
-              alt="School E-Mart"
-              className="w-full h-full object-cover"
-              onError={(e) => {
-                e.target.style.display = 'none';
-                e.target.parentElement.innerHTML = '<div class="w-full h-full bg-yellow-400 flex items-center justify-center text-deep-purple font-black text-xs">SE</div>';
-              }}
-            />
+
+          {/* Child Metadata Text */}
+          <div className="flex flex-col gap-2 text-white">
+            <h1 className="text-[19px] font-black tracking-tight leading-none text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.15)]">
+              {!childInfo || childInfo.name === "Guest" ? "Student Name" : childInfo.name}
+            </h1>
+            
+            <div className="flex items-center gap-2 text-[12px] leading-none">
+              {/* Class glass badge */}
+              <span className="bg-white/15 px-2 py-0.5 rounded-md border border-white/10 font-bold text-white/95 drop-shadow-[0_1px_2px_rgba(0,0,0,0.1)]">
+                {!childInfo || childInfo.grade === "Select Grade" ? "Class & Section" : childInfo.grade}
+              </span>
+              {/* Roll No glass badge */}
+              <span className="bg-white/10 px-2 py-0.5 rounded-md border border-white/5 font-semibold text-white/80 flex items-center gap-1">
+                <Hash size={10} className="text-white/60" />
+                {!childInfo || !childInfo.rollNo ? "Roll Number" : childInfo.rollNo}
+              </span>
+            </div>
+            
+            <p className="text-[11px] font-bold text-white/70 flex items-center gap-1.5 leading-none drop-shadow-[0_1px_2px_rgba(0,0,0,0.05)] mt-0.5">
+              <GraduationCap size={14} className="text-[#FFC933] shrink-0" />
+              <span className="truncate max-w-[150px]">{!childInfo || childInfo.school === "Explore Schools" ? "School Name" : childInfo.school}</span>
+            </p>
           </div>
-          <span className="text-[16px] font-medium text-white tracking-tight">SCHOOL E-MART</span>
         </div>
+
+        {/* Right Side: Notification Icon with Unread Badge */}
         <div className="flex items-center gap-2">
           <button 
             onClick={() => navigate("/user/notifications")}
-            className="w-9 h-9 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center text-white relative active:scale-90 transition-all border border-white/10"
+            className="w-11 h-11 rounded-2xl bg-white/10 backdrop-blur-lg flex items-center justify-center text-white relative active:scale-90 hover:bg-white/15 transition-all border border-white/20 shadow-[0_4px_12px_rgba(0,0,0,0.1)] shrink-0"
+            aria-label="View notifications"
           >
-            <Bell size={18} />
-            <span className="absolute top-2 right-2 w-1.5 h-1.5 bg-yellow-400 rounded-full border border-deep-purple"></span>
+            <Bell size={19} className="drop-shadow-[0_1px_2px_rgba(0,0,0,0.15)]" />
+            {/* Premium Glowing Dot with Pulsing Ring */}
+            <span className="absolute top-2 right-2 flex h-2.5 w-2.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#FF3B30] opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#FF3B30] border border-white/25"></span>
+            </span>
           </button>
         </div>
-      </div>
-
-      {/* Streamlined Search & School Actions */}
-      <div className={`flex items-center gap-4 relative z-10 transition-all duration-300 ${scrolled ? 'mb-2' : 'mb-5'}`}>
-        {showSearch && (
-          <div className="flex-1 relative group">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-primary transition-colors" size={14} />
-            <input
-              type="text"
-              placeholder="Search items..."
-              className="w-full pl-10 pr-10 py-2.5 bg-gray-50 border-none rounded-xl text-[11px] focus:ring-2 focus:ring-primary/10 focus:bg-white transition-all outline-none font-bold placeholder:text-gray-400"
-            />
-            <button className="absolute right-4 top-1/2 -translate-y-1/2 text-primary">
-              <Filter size={14} />
-            </button>
-          </div>
-        )}
-
-        <button
-          onClick={handleMySchoolClick}
-          className="shrink-0 bg-black border border-[#ffc107] text-[#ffc107] text-[10px] font-black px-4 py-2.5 rounded-xl animate-shine shadow-lg shadow-black/20 active:scale-95 transition-all uppercase tracking-tight"
-        >
-          MY SCHOOL
-        </button>
       </div>
 
       <AuthPrompt 

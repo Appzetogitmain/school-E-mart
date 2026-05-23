@@ -25,6 +25,7 @@ const AuthPage = React.lazy(() => import('../features/auth/AuthPage'));
 
 // Mobile App Components
 const AppLayout = React.lazy(() => import('../app/layouts/AppLayout'));
+const SchoolLayout = React.lazy(() => import('../app/layouts/SchoolLayout'));
 const AppAuthPage = React.lazy(() => import('../app/features/auth/AppAuthPage'));
 const ParentHome = React.lazy(() => import('../app/features/parent/ParentHome'));
 const AppCategoryPage = React.lazy(() => import('../app/features/parent/CategoryPage'));
@@ -47,6 +48,30 @@ const OrderTrackingPage = React.lazy(() => import('../app/features/parent/OrderT
 const NotificationsPage = React.lazy(() => import('../app/features/parent/NotificationsPage'));
 const ProfileSetupPage = React.lazy(() => import('../app/features/parent/ProfileSetupPage'));
 const KitDetailsPage = React.lazy(() => import('../app/features/parent/KitDetailsPage'));
+const ParentAttendance = React.lazy(() => import('../app/features/parent/ParentAttendance'));
+const ParentHomework = React.lazy(() => import('../app/features/parent/ParentHomework'));
+const ParentDiary = React.lazy(() => import('../app/features/parent/ParentDiary'));
+const ParentNotices = React.lazy(() => import('../app/features/parent/ParentNotices'));
+const ParentCalendar = React.lazy(() => import('../app/features/parent/ParentCalendar'));
+const ParentPhonebook = React.lazy(() => import('../app/features/parent/ParentPhonebook'));
+const SchoolHome = React.lazy(() => import('../app/features/school/SchoolHome'));
+const SchoolGradePage = React.lazy(() => import('../app/features/school/SchoolGradePage'));
+const SchoolCategoryPage = React.lazy(() => import('../app/features/school/SchoolCategoryPage'));
+const SchoolCartPage = React.lazy(() => import('../app/features/school/SchoolCartPage'));
+const SchoolEditProfilePage = React.lazy(() => import('../app/features/school/SchoolEditProfilePage'));
+const SchoolWishlistPage = React.lazy(() => import('../app/features/school/SchoolWishlistPage'));
+const SchoolMySchoolPage = React.lazy(() => import('../app/features/school/SchoolMySchoolPage'));
+const SchoolSubcategoryPage = React.lazy(() => import('../app/features/school/SchoolSubcategoryPage'));
+const SchoolNotificationsPage = React.lazy(() => import('../app/features/school/SchoolNotificationsPage'));
+const SchoolOrderHistoryPage = React.lazy(() => import('../app/features/school/SchoolOrderHistoryPage'));
+const SchoolProductsPage = React.lazy(() => import('../app/features/school/SchoolProductsPage'));
+const SchoolReferEarnPage = React.lazy(() => import('../app/features/school/SchoolReferEarnPage'));
+const SchoolPartnerPage = React.lazy(() => import('../app/features/school/SchoolPartnerPage'));
+const SchoolWalletPage = React.lazy(() => import('../app/features/school/SchoolWalletPage'));
+const SchoolContactUsPage = React.lazy(() => import('../app/features/school/SchoolContactUsPage'));
+const SchoolAboutUsPage = React.lazy(() => import('../app/features/school/SchoolAboutUsPage'));
+const SchoolCheckoutPage = React.lazy(() => import('../app/features/school/SchoolCheckoutPage'));
+const SchoolKitDetailsPage = React.lazy(() => import('../app/features/school/SchoolKitDetailsPage'));
 
 const LoadingFallback = () => (
   <div className="flex items-center justify-center min-h-screen bg-gray-50/50">
@@ -125,7 +150,36 @@ const AppRoutes = () => {
           <Route path="about" element={<AboutUsPage />} />
           <Route path="refer" element={<ReferEarnPage />} />
           <Route path="wallet" element={<WalletPage />} />
+          <Route path="attendance" element={<ParentAttendance />} />
+          <Route path="homework" element={<ParentHomework />} />
+          <Route path="diary" element={<ParentDiary />} />
+          <Route path="notices" element={<ParentNotices />} />
+          <Route path="calendar" element={<ParentCalendar />} />
+          <Route path="phonebook" element={<ParentPhonebook />} />
           <Route path="profile" element={<div className="p-10 text-center"><h1 className="text-xl font-bold">Profile</h1><p className="text-gray-400">Coming Soon</p></div>} />
+        </Route>
+
+        <Route path="/school" element={<SchoolLayout />}>
+          <Route index element={<Navigate to="home" replace />} />
+          <Route path="home" element={<SchoolHome />} />
+          <Route path="grade" element={<SchoolGradePage />} />
+          <Route path="categories" element={<SchoolCategoryPage />} />
+          <Route path="cart" element={<SchoolCartPage />} />
+          <Route path="edit-profile" element={<SchoolEditProfilePage />} />
+          <Route path="wishlist" element={<SchoolWishlistPage />} />
+          <Route path="my-school" element={<SchoolMySchoolPage />} />
+          <Route path="orders" element={<SchoolOrderHistoryPage />} />
+          <Route path="category/:categoryName" element={<SchoolSubcategoryPage />} />
+          <Route path="notifications" element={<SchoolNotificationsPage />} />
+          <Route path="products" element={<SchoolProductsPage />} />
+          <Route path="refer" element={<SchoolReferEarnPage />} />
+          <Route path="partner" element={<SchoolPartnerPage />} />
+          <Route path="wallet" element={<SchoolWalletPage />} />
+          <Route path="contact" element={<SchoolContactUsPage />} />
+          <Route path="about" element={<SchoolAboutUsPage />} />
+          <Route path="checkout" element={<SchoolCheckoutPage />} />
+          <Route path="kit/:kitId" element={<SchoolKitDetailsPage />} />
+          <Route path="login" element={<AppAuthPage />} />
         </Route>
 
         {/* 404 Route */}

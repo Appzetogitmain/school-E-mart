@@ -59,6 +59,7 @@ const AppAuthPage = () => {
       // Step 3 is OTP Verification
       const mockUser = {
         name: role === 'parent' ? "Priya Damodaran" : "School Admin",
+        role: role,
         phone: role === 'parent' ? contactValue : "",
         email: role === 'school' ? contactValue : "",
         school: role === 'parent' ? "St. Xavier's High School" : "School Management",
@@ -66,7 +67,7 @@ const AppAuthPage = () => {
         progress: { completed: 12, total: 18 }
       };
       localStorage.setItem('childInfo', JSON.stringify(mockUser));
-      navigate('/user/home');
+      navigate(role === "school" ? "/school/home" : "/user/home");
       return;
     }
     setStep(step + 1);
