@@ -1,7 +1,19 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ChevronRight, Check, BookOpen, Megaphone, MessageSquare } from 'lucide-react';
 
 const RecentUpdates = ({ updates = [] }) => {
+  const navigate = useNavigate();
+
+  const handleUpdateClick = (type) => {
+    if (type === 'attendance') {
+      navigate('/user/attendance');
+    } else if (type === 'homework') {
+      navigate('/user/homework');
+    } else if (type === 'notice' || type === 'message') {
+      navigate('/user/diary');
+    }
+  };
   // Safe generic API-ready fallback placeholders to strictly comply with "no fake data" rule
   const placeholderUpdates = [
     {
@@ -66,7 +78,10 @@ const RecentUpdates = ({ updates = [] }) => {
               <span className={`absolute -left-[23px] w-2.5 h-2.5 rounded-full ${update.dotColor} border-2 border-white shadow-sm z-10`}></span>
 
               {/* Card Container */}
-              <div className="flex-1 bg-white border border-gray-100 rounded-2xl p-3 flex items-center justify-between shadow-[0_2px_8px_rgba(0,0,0,0.02)] hover:shadow-md hover:border-gray-200/80 active:scale-[0.99] transition-all duration-300 cursor-pointer">
+              <div 
+                onClick={() => handleUpdateClick(update.type)}
+                className="flex-1 bg-white border border-gray-100 rounded-2xl p-3 flex items-center justify-between shadow-[0_2px_8px_rgba(0,0,0,0.02)] hover:shadow-md hover:border-gray-200/80 active:scale-[0.99] transition-all duration-300 cursor-pointer"
+              >
                 <div className="flex items-center gap-3">
                   {/* Icon Badge */}
                   <div className={`w-9 h-9 rounded-full ${update.iconBg} flex items-center justify-center text-white shrink-0 shadow-sm`}>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   ChevronLeft, 
   ChevronRight, 
@@ -21,9 +22,8 @@ import {
   BookOpen,
   Info
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
 import AppHeader from '../../components/AppHeader';
-import SideMenu from '../../components/SideMenu';
+import LoginRequired from '../../components/LoginRequired';
 
 const ParentDiary = () => {
   const navigate = useNavigate();
@@ -302,14 +302,30 @@ const ParentDiary = () => {
 
   const categoryOptions = ['All Categories', 'Messages', 'Notices', 'Events', 'Circulars', 'Homework', 'Gallery'];
 
+  const isGuest = !localStorage.getItem('childInfo');
+
+  if (isGuest) {
+    return (
+      <>
+        <AppHeader
+          scrolled={scrolled}
+          onMenuClick={() => setIsMenuOpen(true)}
+          childInfo={null}
+          transparentAtTop={false}
+        />
+        <div className="flex flex-col h-full bg-white pb-32 font-outfit overflow-y-auto">
+          <div className="h-[140px] shrink-0"></div>
+          <LoginRequired 
+            title="Digital Diary Protected"
+            message="Please login to view your child's daily homework updates, circulars, remarks and direct notices."
+          />
+        </div>
+      </>
+    );
+  }
+
   return (
     <>
-      {/* Dynamic Global Side Navigation Menu */}
-      <SideMenu
-        isOpen={isMenuOpen}
-        onClose={() => setIsMenuOpen(false)}
-        user={childInfo}
-      />
 
       {/* Dynamic Global Header Component */}
       <AppHeader

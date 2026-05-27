@@ -5,17 +5,25 @@ import {
   BookOpen, 
   CalendarCheck, 
   Calendar, 
-  Contact 
+  GraduationCap 
 } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 
 const AppLayout = () => {
   const { totalQuantity } = useCart();
   const location = useLocation();
+  const scrollContainerRef = React.useRef(null);
   
-  // Exclude bottom nav on login, signup, and storefront product detail pages
+  // Exclude bottom nav on login, signup, storefront product detail pages, and reels page
   const isAuthPage = location.pathname.includes('/user/login') || location.pathname.includes('/user/signup');
-  const isProductDetailPage = location.pathname.includes('/user/product/');
+  const isProductDetailPage = location.pathname.includes('/user/product/') || location.pathname.includes('/user/reels');
+
+  // Automatically scroll to the top of the container on route navigation
+  React.useEffect(() => {
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTop = 0;
+    }
+  }, [location.pathname]);
 
   // Determine active states for high-fidelity tab styling
   const getTabStyle = (path) => {
@@ -28,7 +36,10 @@ const AppLayout = () => {
   return (
     <div className="max-w-md mx-auto h-[100dvh] bg-gray-50 shadow-2xl relative overflow-hidden flex flex-col font-outfit w-full">
       {/* Dynamic Content Area */}
-      <div className={`flex-1 overflow-y-auto overflow-x-hidden w-full ${(!isAuthPage && !isProductDetailPage) ? 'pb-24' : ''}`}>
+      <div 
+        ref={scrollContainerRef}
+        className={`flex-1 overflow-y-auto overflow-x-hidden w-full ${(!isAuthPage && !isProductDetailPage) ? 'pb-24' : ''}`}
+      >
         <Outlet />
       </div>
 
@@ -77,12 +88,12 @@ const AppLayout = () => {
               inactiveColor="text-[#F2994A]"
             />
 
-            {/* 5. Phonebook Tab */}
+            {/* 5. Learning Tab */}
             <BottomNavItem 
-              to="/user/phonebook" 
-              active={getTabStyle('/user/phonebook')}
-              icon={<Contact size={19} />} 
-              label="Phonebook"
+              to="/user/learning-hub" 
+              active={getTabStyle('/user/learning-hub')}
+              icon={<GraduationCap size={19} />} 
+              label="Learning"
               activeColor="text-[#E04F5F]"
               inactiveColor="text-[#E04F5F]"
             />

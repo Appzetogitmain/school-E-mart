@@ -6,7 +6,6 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import AppHeader from '../../components/AppHeader';
-import SideMenu from '../../components/SideMenu';
 import LoginRequired from '../../components/LoginRequired';
 import AuthPrompt from '../../components/AuthPrompt';
 
@@ -110,12 +109,7 @@ const OrderHistoryPage = () => {
 
   return (
     <>
-      <SideMenu
-        isOpen={isMenuOpen}
-        onClose={() => setIsMenuOpen(false)}
-        user={childInfo}
-      />
-      <AppHeader
+            <AppHeader
         scrolled={scrolled}
         onMenuClick={() => setIsMenuOpen(true)}
         childInfo={childInfo}

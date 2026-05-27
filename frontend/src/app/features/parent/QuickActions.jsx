@@ -1,9 +1,10 @@
 import React from 'react';
-import { UserCheck, BookOpen, FileText, Megaphone, Calendar, Phone } from 'lucide-react';
+import { UserCheck, BookOpen, FileText, Megaphone, Calendar, Phone, Lock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const QuickActions = () => {
   const navigate = useNavigate();
+  const isGuest = !localStorage.getItem('childInfo');
   const actions = [
     {
       id: 'attendance',
@@ -42,6 +43,35 @@ const QuickActions = () => {
       bg: 'bg-[#E6F4F1]',
     }
   ];
+
+  if (isGuest) {
+    return (
+      <div className="px-6 -mt-10 relative z-10 font-outfit">
+        {/* Guest Inline Login Card */}
+        <div className="bg-white border border-gray-100/60 rounded-3xl p-6 shadow-[0_4px_20px_rgba(0,0,0,0.015)] text-center flex flex-col items-center gap-4 animate-in fade-in zoom-in duration-300">
+          <div className="w-full text-left">
+            <h2 className="text-base font-extrabold text-[#3B248C]">My Class</h2>
+          </div>
+          
+          <div className="w-14 h-14 bg-[#5B3FD6]/5 rounded-2xl flex items-center justify-center text-[#5B3FD6] shrink-0 relative border border-[#5B3FD6]/10 mt-2">
+            <Lock size={24} />
+          </div>
+          <div>
+            <h3 className="text-xs font-black text-[#3B248C] uppercase tracking-widest mb-1.5">Class Portal Locked</h3>
+            <p className="text-[11px] font-semibold text-gray-400 max-w-[240px] mx-auto leading-relaxed">
+              Login to view your child's attendance, homework, diary entries, calendar, and contacts.
+            </p>
+          </div>
+          <button
+            onClick={() => navigate('/user/login')}
+            className="mt-1 px-5 py-3 bg-[#5B3FD6] text-white rounded-xl text-xs font-black shadow-lg shadow-[#5B3FD6]/20 active:scale-95 transition-all w-full max-w-[180px] uppercase tracking-widest"
+          >
+            Login Now
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="px-6 mt-6 font-outfit">

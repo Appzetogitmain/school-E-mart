@@ -37,6 +37,7 @@ const ParentGradeProductsPage = React.lazy(() => import('../app/features/parent/
 const ProductDetailsPage = React.lazy(() => import('../app/features/parent/ProductDetailsPage'));
 const CartPage = React.lazy(() => import('../app/features/parent/CartPage'));
 const EditProfilePage = React.lazy(() => import('../app/features/parent/EditProfilePage'));
+const ProfilePage = React.lazy(() => import('../app/features/parent/ProfilePage'));
 const WishlistPage = React.lazy(() => import('../app/features/parent/WishlistPage'));
 const ContactUsPage = React.lazy(() => import('../app/features/parent/ContactUsPage'));
 const AboutUsPage = React.lazy(() => import('../app/features/parent/AboutUsPage'));
@@ -54,6 +55,8 @@ const ParentDiary = React.lazy(() => import('../app/features/parent/ParentDiary'
 const ParentNotices = React.lazy(() => import('../app/features/parent/ParentNotices'));
 const ParentCalendar = React.lazy(() => import('../app/features/parent/ParentCalendar'));
 const ParentPhonebook = React.lazy(() => import('../app/features/parent/ParentPhonebook'));
+const ParentReels = React.lazy(() => import('../app/features/parent/ParentReels'));
+const ParentLearningHubAll = React.lazy(() => import('../app/features/parent/ParentLearningHubAll'));
 const SchoolHome = React.lazy(() => import('../app/features/school/SchoolHome'));
 const SchoolGradePage = React.lazy(() => import('../app/features/school/SchoolGradePage'));
 const SchoolCategoryPage = React.lazy(() => import('../app/features/school/SchoolCategoryPage'));
@@ -156,7 +159,9 @@ const AppRoutes = () => {
           <Route path="notices" element={<ParentNotices />} />
           <Route path="calendar" element={<ParentCalendar />} />
           <Route path="phonebook" element={<ParentPhonebook />} />
-          <Route path="profile" element={<div className="p-10 text-center"><h1 className="text-xl font-bold">Profile</h1><p className="text-gray-400">Coming Soon</p></div>} />
+          <Route path="reels" element={<ParentReels />} />
+          <Route path="learning-hub" element={<ParentLearningHubAll />} />
+          <Route path="profile" element={<ProfilePage />} />
         </Route>
 
         <Route path="/school" element={<SchoolLayout />}>

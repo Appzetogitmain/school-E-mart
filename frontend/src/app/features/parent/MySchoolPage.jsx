@@ -7,7 +7,6 @@ import {
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import AppHeader from '../../components/AppHeader';
-import SideMenu from '../../components/SideMenu';
 import SectionHeader from '../../components/SectionHeader';
 import ProductCard from '../../components/ProductCard';
 import { useDraggableScroll } from '../../hooks/useDraggableScroll';
@@ -84,12 +83,7 @@ const MySchoolPage = () => {
 
   return (
     <>
-      <SideMenu
-        isOpen={isMenuOpen}
-        onClose={() => setIsMenuOpen(false)}
-        user={childInfo}
-      />
-      <AppHeader
+            <AppHeader
         scrolled={scrolled}
         onMenuClick={() => setIsMenuOpen(true)}
         childInfo={childInfo}

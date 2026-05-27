@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  ChevronLeft, User, Building2, 
+import {
+  ChevronLeft, User, Building2,
   GraduationCap, Phone, ArrowRight,
-  Sparkles, ChevronDown 
+  Sparkles, ChevronDown
 } from 'lucide-react';
 
 const ProfileSetupPage = () => {
@@ -20,6 +20,7 @@ const ProfileSetupPage = () => {
 
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
+  const [isGradeDropdownOpen, setIsGradeDropdownOpen] = useState(false);
 
   useEffect(() => {
     // Auto-focus on first input (Mobile)
@@ -34,8 +35,8 @@ const ProfileSetupPage = () => {
   ];
 
   const grades = [
-    'Nursery', 'KG 1', 'KG 2', 'Class 1', 'Class 2', 
-    'Class 3', 'Class 4', 'Class 5', 'Class 6', 
+    'Nursery', 'KG 1', 'KG 2', 'Class 1', 'Class 2',
+    'Class 3', 'Class 4', 'Class 5', 'Class 6',
     'Class 7', 'Class 8', 'Class 9', 'Class 10'
   ];
 
@@ -58,28 +59,28 @@ const ProfileSetupPage = () => {
     const newErrors = {};
     if (!formData.phone || formData.phone.length !== 10) newErrors.phone = "Valid 10-digit mobile is required";
     if (!formData.studentName.trim()) newErrors.studentName = "Student name is required";
-    if (!formData.schoolId) newErrors.schoolId = "Please select a school";
     if (!formData.grade) newErrors.grade = "Please select a grade";
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  const isFormValid = formData.phone.length === 10 && formData.studentName && formData.schoolId && formData.grade;
+  const isFormValid = formData.phone.length === 10 && formData.studentName && formData.grade;
 
   const handleSubmit = (e) => {
     e?.preventDefault();
     if (!validate()) return;
 
     setLoading(true);
-    
+
     const userData = {
       phone: formData.phone,
       children: [
         {
           name: formData.studentName,
-          schoolId: formData.schoolId,
-          school: schools.find(s => s.id === formData.schoolId)?.name,
-          grade: formData.grade
+          schoolId: 'explore-schools',
+          school: 'Explore Schools',
+          grade: formData.grade,
+          schoolRefNo: formData.schoolRefNo
         }
       ]
     };
@@ -98,29 +99,17 @@ const ProfileSetupPage = () => {
   return (
     <div className="min-h-screen bg-white flex flex-col font-outfit relative">
       {/* Header */}
-      <div className="px-6 py-5 flex items-center gap-4 bg-white/80 backdrop-blur-md sticky top-0 z-50">
-        <button 
+      <div className="px-6 py-5 flex items-center gap-4 bg-white/80 backdrop-blur-md sticky top-0 z-50 border-b border-gray-100/50">
+        <button
           onClick={() => navigate(-1)}
-          className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-deep-purple active:scale-90 transition-all"
+          className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-deep-purple active:scale-90 transition-all shrink-0"
         >
           <ChevronLeft size={20} />
         </button>
-        <div className="flex items-center gap-2 px-3 py-1.5 bg-primary/5 rounded-full">
-          <Sparkles size={12} className="text-primary" />
-          <span className="text-[10px] font-black text-primary uppercase tracking-[0.2em]">Parent Signup</span>
-        </div>
+        <h1 className="text-base font-black text-deep-purple">Create Account</h1>
       </div>
 
       <div className="flex-1 px-6 pt-6 pb-40">
-        {/* Title Section */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-black text-deep-purple tracking-tight mb-2">
-            Create Account
-          </h1>
-          <p className="text-gray-400 text-sm font-medium leading-relaxed">
-            Join School E-Mart for personalized school essentials
-          </p>
-        </div>
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-5">
@@ -156,28 +145,10 @@ const ProfileSetupPage = () => {
             </div>
             {errors.studentName && <p className="text-[9px] font-bold text-red-500 ml-1">{errors.studentName}</p>}
           </div>
-
-          {/* Select School */}
-          <div className="space-y-1.5">
-            <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.15em] ml-1">Select School</label>
-            <div className="relative group">
-              <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-primary transition-colors" size={18} />
-              <select
-                value={formData.schoolId}
-                onChange={(e) => handleInputChange('schoolId', e.target.value)}
-                className="w-full pl-12 pr-10 py-4 bg-gray-50 border-2 border-transparent rounded-[14px] text-sm font-bold text-deep-purple outline-none focus:border-primary/10 focus:bg-white focus:shadow-xl focus:shadow-primary/5 transition-all appearance-none"
-              >
-                <option value="" disabled>Select your school</option>
-                {schools.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </select>
-              <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={18} />
-            </div>
-          </div>
-
           {/* School Ref No (Optional) */}
           <div className="space-y-1.5">
             <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.15em] ml-1">
-              School Ref No <span className="text-[8px] opacity-60 lowercase font-medium">(Optional)</span>
+              School Ref No
             </label>
             <div className="relative group">
               <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-primary transition-colors font-bold text-sm">#</div>
@@ -194,25 +165,62 @@ const ProfileSetupPage = () => {
           {/* Grade / Class */}
           <div className="space-y-1.5">
             <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.15em] ml-1">Select Grade / Class</label>
-            <div className="relative group">
-              <GraduationCap className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-primary transition-colors" size={18} />
-              <select
-                value={formData.grade}
-                onChange={(e) => handleInputChange('grade', e.target.value)}
-                className="w-full pl-12 pr-10 py-4 bg-gray-50 border-2 border-transparent rounded-[14px] text-sm font-bold text-deep-purple outline-none focus:border-primary/10 focus:bg-white focus:shadow-xl focus:shadow-primary/5 transition-all appearance-none"
+            <div className="relative">
+              <GraduationCap className={`absolute left-4 top-1/2 -translate-y-1/2 transition-colors z-10 ${isGradeDropdownOpen ? 'text-primary' : 'text-gray-400'}`} size={18} />
+              <button
+                type="button"
+                onClick={() => setIsGradeDropdownOpen(!isGradeDropdownOpen)}
+                className={`w-full pl-12 pr-10 py-4 bg-gray-50 border-2 rounded-[14px] text-sm font-bold outline-none transition-all text-left flex items-center justify-between relative ${
+                  isGradeDropdownOpen 
+                    ? 'border-primary/20 bg-white shadow-xl shadow-primary/5 text-deep-purple' 
+                    : 'border-transparent text-deep-purple'
+                }`}
               >
-                <option value="" disabled>Select class</option>
-                {grades.map(g => <option key={g} value={g}>{g}</option>)}
-              </select>
-              <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={18} />
+                <span className={formData.grade ? 'text-deep-purple' : 'text-gray-400 font-medium'}>
+                  {formData.grade || "Select class"}
+                </span>
+              </button>
+              <ChevronDown className={`absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none transition-transform duration-300 z-10 ${isGradeDropdownOpen ? 'rotate-180 text-primary' : ''}`} size={18} />
+              
+              {isGradeDropdownOpen && (
+                <>
+                  {/* Click outside backdrop to close */}
+                  <div 
+                    className="fixed inset-0 z-40 bg-transparent" 
+                    onClick={() => setIsGradeDropdownOpen(false)}
+                  />
+                  {/* Dropdown Options - Opens upwards to prevent cutoff */}
+                  <div className="absolute left-0 right-0 bottom-full mb-2 bg-white border border-gray-100 rounded-2xl shadow-2xl z-50 max-h-48 overflow-y-auto animate-in fade-in slide-in-from-bottom-2 duration-200">
+                    <div className="py-2">
+                      {grades.map(g => (
+                        <button
+                          key={g}
+                          type="button"
+                          onClick={() => {
+                            handleInputChange('grade', g);
+                            setIsGradeDropdownOpen(false);
+                          }}
+                          className={`w-full text-left px-5 py-3 text-xs font-bold transition-all hover:bg-primary/5 active:bg-primary/10 ${
+                            formData.grade === g 
+                              ? 'text-primary bg-primary/5 font-black' 
+                              : 'text-deep-purple font-bold'
+                          }`}
+                        >
+                          {g}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           </div>
 
           {/* Already have an account? Login */}
           <div className="text-center pt-4">
             <p className="text-gray-400 text-sm font-medium">
-              Already have an account? 
-              <button 
+              Already have an account?
+              <button
                 type="button"
                 onClick={() => navigate('/user/login')}
                 className="ml-2 text-primary font-black hover:underline"

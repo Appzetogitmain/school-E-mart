@@ -19,7 +19,7 @@ import {
   ArrowUpDown
 } from 'lucide-react';
 import AppHeader from '../../components/AppHeader';
-import SideMenu from '../../components/SideMenu';
+import LoginRequired from '../../components/LoginRequired';
 
 const ParentPhonebook = () => {
   // Header Scroll and SideMenu States
@@ -257,15 +257,32 @@ const ParentPhonebook = () => {
     setTimeout(() => setCopiedField(null), 2000);
   };
 
+  const isGuest = !localStorage.getItem('childInfo');
+
+  if (isGuest) {
+    return (
+      <>
+        <AppHeader
+          scrolled={scrolled}
+          onMenuClick={() => setIsMenuOpen(true)}
+          childInfo={null}
+          transparentAtTop={false}
+        />
+        <div className="flex flex-col h-full bg-white pb-32 font-outfit overflow-y-auto">
+          <div className="h-[140px] shrink-0"></div>
+          <LoginRequired 
+            title="Phonebook Protected"
+            message="Please login to view school contacts, coordinate with class teachers, or reach support helpdesk."
+          />
+        </div>
+      </>
+    );
+  }
+
   return (
     <>
       {/* Side menu navigation drawer */}
-      <SideMenu
-        isOpen={isMenuOpen}
-        onClose={() => setIsMenuOpen(false)}
-        user={childInfo}
-      />
-
+      
       {/* Global AppHeader */}
       <AppHeader
         scrolled={scrolled}

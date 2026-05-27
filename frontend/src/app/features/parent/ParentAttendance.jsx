@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import AppHeader from '../../components/AppHeader';
-import SideMenu from '../../components/SideMenu';
+import LoginRequired from '../../components/LoginRequired';
 
 // Deterministic attendance status generator
 const getAttendanceStatus = (year, month, day) => {
@@ -242,14 +242,31 @@ const ParentAttendance = () => {
     'July', 'August', 'September', 'October', 'November', 'December'
   ];
 
+  const isGuest = !localStorage.getItem('childInfo');
+
+  if (isGuest) {
+    return (
+      <>
+        <AppHeader
+          scrolled={scrolled}
+          onMenuClick={() => setIsMenuOpen(true)}
+          childInfo={null}
+          transparentAtTop={false}
+        />
+        <div className="flex flex-col h-full bg-white pb-32 font-outfit overflow-y-auto">
+          <div className="h-[140px] shrink-0"></div>
+          <LoginRequired 
+            title="Attendance Protected"
+            message="Please login to view your child's daily class attendance logs and performance summary."
+          />
+        </div>
+      </>
+    );
+  }
+
   return (
     <>
-      <SideMenu
-        isOpen={isMenuOpen}
-        onClose={() => setIsMenuOpen(false)}
-        user={childInfo}
-      />
-      <AppHeader
+            <AppHeader
         scrolled={scrolled}
         onMenuClick={() => setIsMenuOpen(true)}
         childInfo={childInfo}

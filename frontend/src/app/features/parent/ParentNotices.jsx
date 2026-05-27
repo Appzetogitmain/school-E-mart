@@ -23,7 +23,7 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import AppHeader from '../../components/AppHeader';
-import SideMenu from '../../components/SideMenu';
+import LoginRequired from '../../components/LoginRequired';
 
 const ParentNotices = () => {
   const navigate = useNavigate();
@@ -232,15 +232,32 @@ const ParentNotices = () => {
     return notices.filter(n => n.isImportantSpotlight || n.type === 'urgent');
   }, [notices]);
 
+  const isGuest = !localStorage.getItem('childInfo');
+
+  if (isGuest) {
+    return (
+      <>
+        <AppHeader
+          scrolled={scrolled}
+          onMenuClick={() => setIsMenuOpen(true)}
+          childInfo={null}
+          transparentAtTop={false}
+        />
+        <div className="flex flex-col h-full bg-white pb-32 font-outfit overflow-y-auto">
+          <div className="h-[140px] shrink-0"></div>
+          <LoginRequired 
+            title="Notices Protected"
+            message="Please login to view school announcements, urgent notice spotlight alerts and department updates."
+          />
+        </div>
+      </>
+    );
+  }
+
   return (
     <>
       {/* Dynamic Global Side Drawer Navigation */}
-      <SideMenu
-        isOpen={isMenuOpen}
-        onClose={() => setIsMenuOpen(false)}
-        user={childInfo}
-      />
-
+      
       {/* Dynamic Global Custom Header */}
       <AppHeader
         scrolled={scrolled}

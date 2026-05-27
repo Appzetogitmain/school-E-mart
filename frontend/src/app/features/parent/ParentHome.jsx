@@ -8,7 +8,6 @@ import {
   Grid, Layout, CheckCircle2, BookOpen, Check
 } from 'lucide-react';
 import AppHeader from '../../components/AppHeader';
-import SideMenu from '../../components/SideMenu';
 import ProductCard from '../../components/ProductCard';
 import SectionHeader from '../../components/SectionHeader';
 import CategoryStory from '../../components/CategoryStory';
@@ -16,6 +15,7 @@ import { useDraggableScroll } from '../../hooks/useDraggableScroll';
 import AuthPrompt from '../../components/AuthPrompt';
 import RecentUpdates from './RecentUpdates';
 import QuickActions from './QuickActions';
+import ParentLearningHub from './ParentLearningHub';
 
 const ParentHome = () => {
   const navigate = useNavigate();
@@ -103,12 +103,7 @@ const ParentHome = () => {
 
   return (
     <>
-      <SideMenu
-        isOpen={isMenuOpen}
-        onClose={() => setIsMenuOpen(false)}
-        user={childInfo}
-      />
-      <AppHeader
+            <AppHeader
         scrolled={scrolled}
         onMenuClick={() => setIsMenuOpen(true)}
         childInfo={childInfo}
@@ -126,99 +121,112 @@ const ParentHome = () => {
         </div>
 
         {/* Today at a Glance Overlapping Section (Narrower and floating halfway) */}
-        <div className="relative z-10 -mt-10 mx-5 sm:mx-6 bg-white rounded-2xl p-5 shadow-lg border border-gray-100/50">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-base font-extrabold text-deep-purple">Today at a Glance</h2>
-            <button className="text-primary text-xs font-bold hover:underline">View all</button>
-          </div>
-          <div className="grid grid-cols-2 gap-3.5">
-            {/* Attendance Status Card */}
-            <div className="bg-white border border-gray-100 rounded-2xl p-3 flex items-center gap-3 shadow-[0_2px_8px_rgba(0,0,0,0.02)] hover:shadow-md transition-all duration-300">
-              {/* Double Ring Green Checkmark Badge */}
-              <div className="w-9 h-9 rounded-full bg-[#EBFBF0] flex items-center justify-center shrink-0">
-                <div className="w-[26px] h-[26px] rounded-full bg-[#34A853] flex items-center justify-center text-white shadow-sm">
-                  <Check size={12} strokeWidth={3.5} />
+        {!isGuest && (
+          <div className="relative z-10 -mt-10 mx-5 sm:mx-6 bg-white rounded-2xl p-5 shadow-lg border border-gray-100/50">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-base font-extrabold text-deep-purple">Today at a Glance</h2>
+            </div>
+            <div className="grid grid-cols-2 gap-3.5">
+              {/* Attendance Status Card */}
+              <div className="bg-white border border-gray-100 rounded-2xl p-3 flex items-center gap-3 shadow-[0_2px_8px_rgba(0,0,0,0.02)] hover:shadow-md transition-all duration-300">
+                {/* Double Ring Green Checkmark Badge */}
+                <div className="w-9 h-9 rounded-full bg-[#EBFBF0] flex items-center justify-center shrink-0">
+                  <div className="w-[26px] h-[26px] rounded-full bg-[#34A853] flex items-center justify-center text-white shadow-sm">
+                    <Check size={12} strokeWidth={3.5} />
+                  </div>
+                </div>
+                <div className="min-w-0 flex flex-col justify-center">
+                  <p className="text-[11px] font-semibold text-gray-500 leading-none">Attendance</p>
+                  <p className="text-[13px] font-black text-[#34A853] leading-none mt-1.5 truncate">Present</p>
+                  <p className="text-[9px] font-medium text-gray-400 leading-none mt-1 truncate">Marked at 09:15 a.m.</p>
                 </div>
               </div>
-              <div className="min-w-0 flex flex-col justify-center">
-                <p className="text-[11px] font-semibold text-gray-500 leading-none">Attendance</p>
-                <p className="text-[13px] font-black text-[#34A853] leading-none mt-1.5 truncate">Present</p>
-                <p className="text-[9px] font-medium text-gray-400 leading-none mt-1 truncate">Marked at 09:15 a.m.</p>
-              </div>
-            </div>
 
-            {/* Homework Summary Card */}
-            <div className="bg-white border border-gray-100 rounded-2xl p-3 flex items-center gap-3 shadow-[0_2px_8px_rgba(0,0,0,0.02)] hover:shadow-md transition-all duration-300">
-              {/* Double Ring Orange Book Badge */}
-              <div className="w-9 h-9 rounded-full bg-[#FFF6ED] flex items-center justify-center shrink-0">
-                <div className="w-[26px] h-[26px] rounded-full bg-[#F2994A] flex items-center justify-center text-white shadow-sm">
-                  <BookOpen size={12} strokeWidth={2.5} />
+              {/* Homework Summary Card */}
+              <div className="bg-white border border-gray-100 rounded-2xl p-3 flex items-center gap-3 shadow-[0_2px_8px_rgba(0,0,0,0.02)] hover:shadow-md transition-all duration-300">
+                {/* Double Ring Orange Book Badge */}
+                <div className="w-9 h-9 rounded-full bg-[#FFF6ED] flex items-center justify-center shrink-0">
+                  <div className="w-[26px] h-[26px] rounded-full bg-[#F2994A] flex items-center justify-center text-white shadow-sm">
+                    <BookOpen size={12} strokeWidth={2.5} />
+                  </div>
                 </div>
-              </div>
-              <div className="min-w-0 flex flex-col justify-center">
-                <p className="text-[11px] font-semibold text-gray-500 leading-none">Homework</p>
-                <p className="text-[13px] font-black text-[#F2994A] leading-none mt-1.5 truncate">2 Pending</p>
-                <p className="text-[9px] font-medium text-gray-400 leading-none mt-1 truncate">Due Tomorrow</p>
+                <div className="min-w-0 flex flex-col justify-center">
+                  <p className="text-[11px] font-semibold text-gray-500 leading-none">Homework</p>
+                  <p className="text-[13px] font-black text-[#F2994A] leading-none mt-1.5 truncate">2 Pending</p>
+                  <p className="text-[9px] font-medium text-gray-400 leading-none mt-1 truncate">Due Tomorrow</p>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-        <div className="mt-4">
-          <div ref={notifRef} className="flex gap-4 overflow-x-auto px-6 pb-2 scrollbar-hide select-none active:cursor-grabbing">
-            {[
-              { id: 1, text: "New session starts from 15th June. Order your kits early!", icon: <Sparkles size={16} className="text-accent-gold shrink-0" />, color: "bg-accent-gold/10 border-accent-gold/20" },
-              { id: 2, text: "Winter uniform guidelines updated. Check categories.", icon: <Bell size={16} className="text-primary shrink-0" />, color: "bg-primary/10 border-primary/20" }
-            ].map((notif) => (
-              <div key={notif.id} className={`min-w-[280px] ${notif.color} border px-4 py-3 rounded-2xl flex items-center gap-3 active:scale-95 transition-all`}>
-                {notif.icon}
-                <p className="text-[11px] font-semibold text-deep-purple leading-tight">
-                  {notif.text}
-                </p>
-              </div>
-            ))}
+        )}
+
+        {!isGuest && (
+          <div className="mt-4">
+            <div ref={notifRef} className="flex gap-4 overflow-x-auto px-6 pb-2 scrollbar-hide select-none active:cursor-grabbing">
+              {[
+                { id: 1, text: "New session starts from 15th June. Order your kits early!", icon: <Sparkles size={16} className="text-accent-gold shrink-0" />, color: "bg-accent-gold/10 border-accent-gold/20" },
+                { id: 2, text: "Winter uniform guidelines updated. Check categories.", icon: <Bell size={16} className="text-primary shrink-0" />, color: "bg-primary/10 border-primary/20" }
+              ].map((notif) => (
+                <button 
+                  key={notif.id} 
+                  onClick={() => navigate('/user/notifications')}
+                  className={`min-w-[280px] ${notif.color} border px-4 py-3 rounded-2xl flex items-center gap-3 active:scale-95 transition-all cursor-pointer text-left`}
+                >
+                  {notif.icon}
+                  <p className="text-[11px] font-semibold text-deep-purple leading-tight">
+                    {notif.text}
+                  </p>
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Timeline-style Recent Updates Section */}
-        <RecentUpdates />
+        {!isGuest && <RecentUpdates />}
 
         {/* Quick Actions Grid Section */}
         <QuickActions />
 
-        <div className="mt-8">
-          <SectionHeader
-            title="Recommended Kits"
-            onViewAll={() => navigate('/user/products')}
-          />
-          <div ref={kitsRef} className="flex gap-4 overflow-x-auto px-6 pb-4 scrollbar-hide select-none active:cursor-grabbing">
-            {kits.map((kit) => (
-              <Link
-                key={kit.id}
-                to={`/user/kit/${kit.id}`}
-                className="min-w-[280px] bg-white rounded-[2.5rem] overflow-hidden shadow-xl shadow-gray-200/40 group active:scale-95 transition-all border border-gray-100 block"
-              >
-                <div className="h-48 relative">
-                  <img src={kit.image} alt={kit.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
-                </div>
-                <div className="p-5">
-                  <h3 className="font-bold text-deep-purple text-base mb-1">{kit.name}</h3>
-                  <p className="text-[10px] text-gray-400 font-medium mb-4">Everything your child needs for Class 2</p>
-                  <div className="flex items-center justify-between">
-                    <div className="flex flex-col">
-                      <span className="text-primary font-bold text-lg">{kit.price}</span>
-                    </div>
-                    <button
-                      onClick={handleBuyKit}
-                      className="px-5 py-2.5 bg-[#ffc107] text-black rounded-xl text-xs font-bold shadow-lg shadow-yellow-100 flex items-center gap-2 active:scale-90 transition-all relative z-10"
-                    >
-                      Buy Now
-                    </button>
+        {/* Learning Hub Section */}
+        <ParentLearningHub />
+
+        {!isGuest && (
+          <div className="mt-8">
+            <SectionHeader
+              title="Recommended Kits"
+              onViewAll={() => navigate('/user/products')}
+            />
+            <div ref={kitsRef} className="flex gap-4 overflow-x-auto px-6 pb-4 scrollbar-hide select-none active:cursor-grabbing">
+              {kits.map((kit) => (
+                <Link
+                  key={kit.id}
+                  to={`/user/kit/${kit.id}`}
+                  className="min-w-[280px] bg-white rounded-[2.5rem] overflow-hidden shadow-xl shadow-gray-200/40 group active:scale-95 transition-all border border-gray-100 block"
+                >
+                  <div className="h-48 relative">
+                    <img src={kit.image} alt={kit.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
                   </div>
-                </div>
-              </Link>
-            ))}
+                  <div className="p-5">
+                    <h3 className="font-bold text-deep-purple text-base mb-1">{kit.name}</h3>
+                    <p className="text-[10px] text-gray-400 font-medium mb-4">Everything your child needs for Class 2</p>
+                    <div className="flex items-center justify-between">
+                      <div className="flex flex-col">
+                        <span className="text-primary font-bold text-lg">{kit.price}</span>
+                      </div>
+                      <button
+                        onClick={handleBuyKit}
+                        className="px-5 py-2.5 bg-[#ffc107] text-black rounded-xl text-xs font-bold shadow-lg shadow-yellow-100 flex items-center gap-2 active:scale-90 transition-all relative z-10"
+                      >
+                        Buy Now
+                      </button>
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
         <div className="mt-8">
           <SectionHeader title="Categories" />
@@ -248,13 +256,12 @@ const ParentHome = () => {
           </div>
         </div>
 
-        <div className="mt-10 px-6 pb-6">
+        <div className="mt-10 pb-6">
           <SectionHeader
             title="Essential Products"
             onViewAll={() => navigate('/user/products')}
-            className="px-0"
           />
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-4 px-6">
             {products.map((product) => renderProductCard(product))}
           </div>
         </div>
@@ -290,14 +297,23 @@ const ParentHome = () => {
             <div>
               <h2 className="text-lg font-semibold text-deep-purple">Watch & Explore</h2>
             </div>
-            <button className="text-primary text-xs font-bold">Watch All</button>
+            <button 
+              onClick={() => navigate('/user/reels')}
+              className="text-primary text-xs font-bold cursor-pointer active:scale-95 transition-transform"
+            >
+              Watch All
+            </button>
           </div>
           <div ref={reelsRef} className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide">
             {[
               { id: 1, title: "Smart Kit Unboxing", views: "12k", thumb: "https://images.unsplash.com/photo-1503676260728-1c00da094a0b?q=80&w=300&h=533&fit=crop" },
               { id: 2, title: "Uniform Quality Test", views: "8.5k", thumb: "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?q=80&w=300&h=533&fit=crop" }
             ].map((reel) => (
-              <div key={reel.id} className="min-w-[160px] h-[280px] rounded-[2rem] overflow-hidden relative group active:scale-95 transition-all shadow-lg border border-white/20">
+              <div 
+                key={reel.id} 
+                onClick={() => navigate('/user/reels')}
+                className="min-w-[160px] h-[280px] rounded-[2rem] overflow-hidden relative group active:scale-95 transition-all shadow-lg border border-white/20 cursor-pointer"
+              >
                 <img src={reel.thumb} alt={reel.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
                 <div className="absolute inset-0 flex items-center justify-center">
                   <div className="w-12 h-12 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center border border-white/30">

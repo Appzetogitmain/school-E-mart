@@ -265,39 +265,6 @@ const ParentHomeworkDetails = ({ homework, onClose }) => {
               Chapter: <span className="text-gray-500 font-bold">Fractions and Decimals</span>
             </p>
           </div>
-
-          <button
-            onClick={() => alert('Opening digital textbook reader...')}
-            className="px-3 py-2 bg-white border border-gray-100 rounded-xl flex items-center gap-1.5 text-[10px] font-black text-[#6A47DE] hover:border-gray-200 active:scale-95 transition-all shrink-0 shadow-sm"
-          >
-            <BookOpen size={11} />
-            <span>View Chapter</span>
-          </button>
-        </div>
-
-        {/* 7. Reminder Section */}
-        <div className="bg-white border border-gray-100 rounded-3xl p-5 shadow-sm flex items-center justify-between gap-4">
-          <div className="min-w-0">
-            <h4 className="text-xs font-black text-gray-800 uppercase tracking-wider mb-2">
-              Reminder
-            </h4>
-            <div className="flex items-center gap-2 text-[11px] text-gray-500 font-semibold leading-snug">
-              <Bell size={13} className="text-[#6A47DE] shrink-0" />
-              <span>A reminder will be sent 1 day before the due date.</span>
-            </div>
-          </div>
-
-          <button
-            onClick={handleSetReminder}
-            disabled={reminderSet}
-            className={`px-3 py-2 border rounded-xl flex items-center gap-1.5 text-[10px] font-black active:scale-95 transition-all shrink-0 shadow-sm ${reminderSet
-                ? 'bg-[#EBFBF0] border-[#34A853]/10 text-[#34A853]'
-                : 'bg-white border-gray-100 text-[#6A47DE] hover:border-gray-200'
-              }`}
-          >
-            {reminderSet ? <Check size={11} /> : <Bell size={11} />}
-            <span>{reminderSet ? 'Reminder Set' : 'Set Reminder'}</span>
-          </button>
         </div>
 
         {/* 8. Parental Connect Info Card */}

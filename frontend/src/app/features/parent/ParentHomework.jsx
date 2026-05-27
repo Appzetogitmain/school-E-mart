@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import AppHeader from '../../components/AppHeader';
 import ParentHomeworkDetails from './ParentHomeworkDetails';
+import LoginRequired from '../../components/LoginRequired';
 
 const ParentHomework = () => {
   const [activeTab, setActiveTab] = useState('Pending');
@@ -95,6 +96,28 @@ const ParentHomework = () => {
       tabType: 'Pending'
     }
   ];
+
+  const isGuest = !localStorage.getItem('childInfo');
+
+  if (isGuest) {
+    return (
+      <div className="max-w-md mx-auto h-[100dvh] relative overflow-hidden flex flex-col font-outfit w-full bg-white">
+        <AppHeader
+          scrolled={scrolled}
+          onMenuClick={() => setIsMenuOpen(true)}
+          childInfo={null}
+          transparentAtTop={false}
+        />
+        <div className="flex flex-col h-full bg-gray-50/50 pb-40 overflow-y-auto overflow-x-hidden w-full font-outfit">
+          <div className="h-[140px] shrink-0"></div>
+          <LoginRequired 
+            title="Homework Protected"
+            message="Please login to view your child's pending assignments, homework details, and submission portal."
+          />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -334,13 +357,13 @@ const ParentHomework = () => {
 
 
         </div>
+        {selectedHomework && (
+          <ParentHomeworkDetails 
+            homework={selectedHomework}
+            onClose={() => setSelectedHomework(null)}
+          />
+        )}
       </div>
-      {selectedHomework && (
-        <ParentHomeworkDetails 
-          homework={selectedHomework}
-          onClose={() => setSelectedHomework(null)}
-        />
-      )}
     </>
   );
 };

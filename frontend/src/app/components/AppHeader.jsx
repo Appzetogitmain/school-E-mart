@@ -21,7 +21,18 @@ const AppHeader = ({ showSearch = true, scrolled = false, onMenuClick, childInfo
   }, []);
 
   const childInfo = propChildInfo || internalChildInfo;
-  const isGuest = !childInfo;
+  const isGuest = !childInfo || childInfo.name === "Guest" || !localStorage.getItem('childInfo');
+
+  const getInitials = (name) => {
+    if (isGuest) return "G";
+    if (!name || name === "Guest") return "S";
+    return name
+      .split(' ')
+      .map(n => n[0])
+      .slice(0, 2)
+      .join('')
+      .toUpperCase();
+  };
 
   const handleMySchoolClick = () => {
     if (isGuest) {
@@ -77,59 +88,64 @@ const AppHeader = ({ showSearch = true, scrolled = false, onMenuClick, childInfo
         `}
       </style>
 
-      {/* Top Row: Brand Profile, Child Info, and Notifications */}
+      {/* Top Row: Brand Profile, Child Info, and Settings */}
       <div className="flex items-center justify-between relative z-10">
-        {/* Left Side: Avatar Button and Child Details */}
-        <div className="flex items-center gap-4">
-          {/* Stylized Rounded-Square Student Profile Avatar Button: clicking opens side menu */}
+        {/* Left Side: Avatar & Child Metadata Block */}
+        <div className="flex items-center gap-3.5">
+          {/* Stylized Rounded-Square Student Profile Avatar Button */}
           <button 
-            onClick={onMenuClick}
+            onClick={() => navigate('/user/profile')}
             className="w-13 h-13 rounded-2xl bg-white/10 border border-white/25 shadow-[0_4px_12px_rgba(0,0,0,0.15)] flex items-center justify-center overflow-hidden backdrop-blur-lg hover:bg-white/15 active:scale-95 transition-all outline-none relative group animate-shine shrink-0"
             aria-label="Open profile menu"
           >
             {/* Inner premium golden-white gradient ring overlay */}
             <div className="absolute inset-[2px] rounded-[14px] bg-gradient-to-tr from-[#FFC933]/20 to-white/10 pointer-events-none"></div>
-            <User className="w-6 h-6 text-white/90 drop-shadow-[0_2px_4px_rgba(0,0,0,0.2)]" />
+            <span className="text-white text-base font-black tracking-wider drop-shadow-[0_2px_4px_rgba(0,0,0,0.2)]">
+              {getInitials(childInfo?.name)}
+            </span>
           </button>
 
           {/* Child Metadata Text */}
-          <div className="flex flex-col gap-2 text-white">
+          <div className="flex flex-col gap-1.5 text-white">
             <h1 className="text-[19px] font-black tracking-tight leading-none text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.15)]">
-              {!childInfo || childInfo.name === "Guest" ? "Student Name" : childInfo.name}
+              {isGuest ? "Guest" : childInfo.name}
             </h1>
             
-            <div className="flex items-center gap-2 text-[12px] leading-none">
-              {/* Class glass badge */}
-              <span className="bg-white/15 px-2 py-0.5 rounded-md border border-white/10 font-bold text-white/95 drop-shadow-[0_1px_2px_rgba(0,0,0,0.1)]">
-                {!childInfo || childInfo.grade === "Select Grade" ? "Class & Section" : childInfo.grade}
-              </span>
-              {/* Roll No glass badge */}
-              <span className="bg-white/10 px-2 py-0.5 rounded-md border border-white/5 font-semibold text-white/80 flex items-center gap-1">
-                <Hash size={10} className="text-white/60" />
-                {!childInfo || !childInfo.rollNo ? "Roll Number" : childInfo.rollNo}
-              </span>
-            </div>
-            
-            <p className="text-[11px] font-bold text-white/70 flex items-center gap-1.5 leading-none drop-shadow-[0_1px_2px_rgba(0,0,0,0.05)] mt-0.5">
-              <GraduationCap size={14} className="text-[#FFC933] shrink-0" />
-              <span className="truncate max-w-[150px]">{!childInfo || childInfo.school === "Explore Schools" ? "School Name" : childInfo.school}</span>
-            </p>
+            {isGuest ? (
+              <p className="text-[12px] font-bold text-white/80 leading-none drop-shadow-[0_1px_2px_rgba(0,0,0,0.05)] mt-0.5">
+                Welcome to School E-Mart
+              </p>
+            ) : (
+              <>
+                <div className="flex items-center gap-2 text-[12px] leading-none mt-0.5">
+                  {/* Class glass badge */}
+                  <span className="bg-white/15 px-2 py-0.5 rounded-md border border-white/10 font-bold text-white/95 drop-shadow-[0_1px_2px_rgba(0,0,0,0.1)]">
+                    {childInfo.grade === "Select Grade" ? "Class & Section" : childInfo.grade}
+                  </span>
+                  {/* Roll No glass badge */}
+                  <span className="bg-white/10 px-2 py-0.5 rounded-md border border-white/5 font-semibold text-white/80 flex items-center gap-1">
+                    <Hash size={10} className="text-white/60" />
+                    {!childInfo.rollNo ? "Roll Number" : childInfo.rollNo}
+                  </span>
+                </div>
+                
+                <p className="text-[11px] font-bold text-white/70 flex items-center gap-1.5 leading-none drop-shadow-[0_1px_2px_rgba(0,0,0,0.05)] mt-1">
+                  <GraduationCap size={14} className="text-[#FFC933] shrink-0" />
+                  <span className="truncate max-w-[150px]">{childInfo.school}</span>
+                </p>
+              </>
+            )}
           </div>
         </div>
 
-        {/* Right Side: Notification Icon with Unread Badge */}
+        {/* Right Side: Profile Settings Button */}
         <div className="flex items-center gap-2">
           <button 
-            onClick={() => navigate("/user/notifications")}
+            onClick={() => navigate("/user/profile")}
             className="w-11 h-11 rounded-2xl bg-white/10 backdrop-blur-lg flex items-center justify-center text-white relative active:scale-90 hover:bg-white/15 transition-all border border-white/20 shadow-[0_4px_12px_rgba(0,0,0,0.1)] shrink-0"
-            aria-label="View notifications"
+            aria-label="View profile"
           >
-            <Bell size={19} className="drop-shadow-[0_1px_2px_rgba(0,0,0,0.15)]" />
-            {/* Premium Glowing Dot with Pulsing Ring */}
-            <span className="absolute top-2 right-2 flex h-2.5 w-2.5">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#FF3B30] opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#FF3B30] border border-white/25"></span>
-            </span>
+            <User size={19} className="drop-shadow-[0_1px_2px_rgba(0,0,0,0.15)]" />
           </button>
         </div>
       </div>
