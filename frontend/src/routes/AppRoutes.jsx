@@ -43,6 +43,8 @@ const ContactUsPage = React.lazy(() => import('../app/features/parent/ContactUsP
 const AboutUsPage = React.lazy(() => import('../app/features/parent/AboutUsPage'));
 const ReferEarnPage = React.lazy(() => import('../app/features/parent/ReferEarnPage'));
 const WalletPage = React.lazy(() => import('../app/features/parent/WalletPage'));
+const ParentTermsAndConditions = React.lazy(() => import('../app/features/parent/TermsAndConditions'));
+const ParentPrivacyPolicy = React.lazy(() => import('../app/features/parent/PrivacyPolicy'));
 const CheckoutPage = React.lazy(() => import('../app/features/parent/CheckoutPage'));
 const OrderSuccessPage = React.lazy(() => import('../app/features/parent/OrderSuccessPage'));
 const OrderTrackingPage = React.lazy(() => import('../app/features/parent/OrderTrackingPage'));
@@ -162,6 +164,8 @@ const AppRoutes = () => {
           <Route path="reels" element={<ParentReels />} />
           <Route path="learning-hub" element={<ParentLearningHubAll />} />
           <Route path="profile" element={<ProfilePage />} />
+          <Route path="terms" element={<ParentTermsAndConditions />} />
+          <Route path="privacy" element={<ParentPrivacyPolicy />} />
         </Route>
 
         <Route path="/school" element={<SchoolLayout />}>

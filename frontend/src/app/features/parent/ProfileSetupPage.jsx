@@ -170,23 +170,22 @@ const ProfileSetupPage = () => {
               <button
                 type="button"
                 onClick={() => setIsGradeDropdownOpen(!isGradeDropdownOpen)}
-                className={`w-full pl-12 pr-10 py-4 bg-gray-50 border-2 rounded-[14px] text-sm font-bold outline-none transition-all text-left flex items-center justify-between relative ${
-                  isGradeDropdownOpen 
-                    ? 'border-primary/20 bg-white shadow-xl shadow-primary/5 text-deep-purple' 
+                className={`w-full pl-12 pr-10 py-4 bg-gray-50 border-2 rounded-[14px] text-sm font-bold outline-none transition-all text-left flex items-center justify-between relative ${isGradeDropdownOpen
+                    ? 'border-primary/20 bg-white shadow-xl shadow-primary/5 text-deep-purple'
                     : 'border-transparent text-deep-purple'
-                }`}
+                  }`}
               >
                 <span className={formData.grade ? 'text-deep-purple' : 'text-gray-400 font-medium'}>
                   {formData.grade || "Select class"}
                 </span>
               </button>
               <ChevronDown className={`absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none transition-transform duration-300 z-10 ${isGradeDropdownOpen ? 'rotate-180 text-primary' : ''}`} size={18} />
-              
+
               {isGradeDropdownOpen && (
                 <>
                   {/* Click outside backdrop to close */}
-                  <div 
-                    className="fixed inset-0 z-40 bg-transparent" 
+                  <div
+                    className="fixed inset-0 z-40 bg-transparent"
                     onClick={() => setIsGradeDropdownOpen(false)}
                   />
                   {/* Dropdown Options - Opens upwards to prevent cutoff */}
@@ -200,11 +199,10 @@ const ProfileSetupPage = () => {
                             handleInputChange('grade', g);
                             setIsGradeDropdownOpen(false);
                           }}
-                          className={`w-full text-left px-5 py-3 text-xs font-bold transition-all hover:bg-primary/5 active:bg-primary/10 ${
-                            formData.grade === g 
-                              ? 'text-primary bg-primary/5 font-black' 
+                          className={`w-full text-left px-5 py-3 text-xs font-bold transition-all hover:bg-primary/5 active:bg-primary/10 ${formData.grade === g
+                              ? 'text-primary bg-primary/5 font-black'
                               : 'text-deep-purple font-bold'
-                          }`}
+                            }`}
                         >
                           {g}
                         </button>
@@ -217,7 +215,7 @@ const ProfileSetupPage = () => {
           </div>
 
           {/* Already have an account? Login */}
-          <div className="text-center pt-4">
+          <div className="text-center pt-4 space-y-6">
             <p className="text-gray-400 text-sm font-medium">
               Already have an account?
               <button
@@ -227,6 +225,25 @@ const ProfileSetupPage = () => {
               >
                 Login
               </button>
+            </p>
+            <p className="text-[11px] font-semibold text-gray-400/90 leading-relaxed px-4 mt-6">
+              By signing up, you accept the{" "}
+              <button
+                type="button"
+                onClick={() => navigate('/user/terms')}
+                className="text-primary font-bold hover:underline inline"
+              >
+                Terms & Conditions
+              </button>{" "}
+              and{" "}
+              <button
+                type="button"
+                onClick={() => navigate('/user/privacy')}
+                className="text-primary font-bold hover:underline inline"
+              >
+                Privacy Policy
+              </button>
+              .
             </p>
           </div>
         </form>
