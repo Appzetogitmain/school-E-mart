@@ -6,13 +6,11 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import SchoolHeader from '../../components/SchoolHeader';
-import SchoolSideMenu from '../../components/SchoolSideMenu';
 import AuthPrompt from '../../components/AuthPrompt';
 
 const SchoolOrderHistoryPage = () => {
   const navigate = useNavigate();
   const [scrolled, setScrolled] = useState(false);
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const isGuest = !localStorage.getItem('childInfo');
   const [isAuthPromptOpen, setIsAuthPromptOpen] = useState(false);
   const [schoolInfo, setSchoolInfo] = useState(() => {
@@ -58,10 +56,9 @@ const SchoolOrderHistoryPage = () => {
 
   return (
     <>
-      <SchoolSideMenu isOpen={isMenuOpen} onClose={() => setIsMenuOpen(false)} user={schoolInfo} />
-      <SchoolHeader scrolled={scrolled} onMenuClick={() => setIsMenuOpen(true)} childInfo={schoolInfo} />
+      <SchoolHeader scrolled={scrolled} childInfo={schoolInfo} />
       <div onScroll={handleScroll} className="flex flex-col h-full bg-[#f8f5f2] pb-32 font-outfit overflow-y-auto">
-        <div className="h-[170px] shrink-0"></div>
+        <div className="h-[185px] shrink-0"></div>
 
         <div className="px-6 mt-6 relative z-20">
           <div className="mb-6">

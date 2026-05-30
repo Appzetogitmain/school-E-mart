@@ -41,7 +41,7 @@ const SchoolCartPage = () => {
           Your institutional cart is empty. Start adding bulk supplies for your school.
         </p>
         <Link 
-          to="/school/home"
+          to="/school/admin"
           className="w-full py-4 bg-primary text-white rounded-2xl text-sm font-black shadow-lg shadow-primary/20 active:scale-95 transition-all"
         >
           Explore Supplies

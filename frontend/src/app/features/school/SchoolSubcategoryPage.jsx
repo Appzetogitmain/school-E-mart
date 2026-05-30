@@ -5,13 +5,11 @@ import {
   ChevronRight, Filter, Building2, Package, Sparkles
 } from 'lucide-react';
 import SchoolHeader from '../../components/SchoolHeader';
-import SchoolSideMenu from '../../components/SchoolSideMenu';
 
 const SchoolSubcategoryPage = () => {
   const { categoryName } = useParams();
   const navigate = useNavigate();
   const [activeSub, setActiveSub] = useState('All');
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const schoolInfo = { name: "Adarsh Public School", code: "APS-1024" };
 
   // Mock Data for Subcategories
@@ -64,10 +62,8 @@ const SchoolSubcategoryPage = () => {
 
   return (
     <div className="flex flex-col h-full bg-white font-outfit">
-      <SchoolSideMenu isOpen={isMenuOpen} onClose={() => setIsMenuOpen(false)} user={schoolInfo} />
       <SchoolHeader 
         showSearch={true} 
-        onMenuClick={() => setIsMenuOpen(true)} 
         childInfo={schoolInfo} 
       />
 

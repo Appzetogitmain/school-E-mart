@@ -27,6 +27,7 @@ const AuthPage = React.lazy(() => import('../features/auth/AuthPage'));
 const AppLayout = React.lazy(() => import('../app/layouts/AppLayout'));
 const SchoolLayout = React.lazy(() => import('../app/layouts/SchoolLayout'));
 const AppAuthPage = React.lazy(() => import('../app/features/auth/AppAuthPage'));
+const SchoolAuthPage = React.lazy(() => import('../app/features/auth/SchoolAuthPage'));
 const ParentHome = React.lazy(() => import('../app/features/parent/ParentHome'));
 const AppCategoryPage = React.lazy(() => import('../app/features/parent/CategoryPage'));
 const SubcategoryPage = React.lazy(() => import('../app/features/parent/SubcategoryPage'));
@@ -77,6 +78,44 @@ const SchoolContactUsPage = React.lazy(() => import('../app/features/school/Scho
 const SchoolAboutUsPage = React.lazy(() => import('../app/features/school/SchoolAboutUsPage'));
 const SchoolCheckoutPage = React.lazy(() => import('../app/features/school/SchoolCheckoutPage'));
 const SchoolKitDetailsPage = React.lazy(() => import('../app/features/school/SchoolKitDetailsPage'));
+const SchoolSendNotice = React.lazy(() => import('../app/features/school/SchoolSendNotice'));
+const SchoolCreateEvent = React.lazy(() => import('../app/features/school/SchoolCreateEvent'));
+const SchoolCreateKit = React.lazy(() => import('../app/features/school/SchoolCreateKit'));
+const SchoolCreateRequest = React.lazy(() => import('../app/features/school/SchoolCreateRequest'));
+const SchoolDraftRequests = React.lazy(() => import('../app/features/school/SchoolDraftRequests'));
+const SchoolTeacherApprovals = React.lazy(() => import('../app/features/school/SchoolTeacherApprovals'));
+const SchoolMorePage = React.lazy(() => import('../app/features/school/SchoolMorePage'));
+const SchoolStudentsPage = React.lazy(() => import('../app/features/school/SchoolStudentsPage'));
+const SchoolVendorsPage = React.lazy(() => import('../app/features/school/SchoolVendorsPage'));
+const SchoolQuotationsPage = React.lazy(() => import('../app/features/school/SchoolQuotationsPage'));
+const SchoolKitsPage = React.lazy(() => import('../app/features/school/SchoolKitsPage'));
+const SchoolChangePasswordPage = React.lazy(() => import('../app/features/school/SchoolChangePasswordPage'));
+
+
+// Teacher App Components
+const TeacherLayout = React.lazy(() => import('../app/layouts/TeacherLayout'));
+const TeacherDashboard = React.lazy(() => import('../app/features/teacher/TeacherDashboard'));
+const TeacherAttendance = React.lazy(() => import('../app/features/teacher/TeacherAttendance'));
+const TeacherHomework = React.lazy(() => import('../app/features/teacher/TeacherHomework'));
+const TeacherDiary = React.lazy(() => import('../app/features/teacher/TeacherDiary'));
+const TeacherManageStudents = React.lazy(() => import('../app/features/teacher/TeacherManageStudents'));
+const TeacherBulkAddStudents = React.lazy(() => import('../app/features/teacher/TeacherBulkAddStudents'));
+const TeacherProfile = React.lazy(() => import('../app/features/teacher/TeacherProfile'));
+const TeacherNotifications = React.lazy(() => import('../app/features/teacher/TeacherNotifications'));
+
+// Vendor Panel Components
+const VendorLayout = React.lazy(() => import('../layouts/VendorLayout'));
+const VendorDashboard = React.lazy(() => import('../features/vendor/VendorDashboard'));
+const VendorLogin = React.lazy(() => import('../features/vendor/VendorLogin'));
+const VendorOrders = React.lazy(() => import('../features/vendor/VendorOrders'));
+const VendorQuotations = React.lazy(() => import('../features/vendor/VendorQuotations'));
+const VendorProducts = React.lazy(() => import('../features/vendor/VendorProducts'));
+const VendorStock = React.lazy(() => import('../features/vendor/VendorStock'));
+const VendorReturns = React.lazy(() => import('../features/vendor/VendorReturns'));
+const VendorMoneyRequests = React.lazy(() => import('../features/vendor/VendorMoneyRequests'));
+const VendorPaymentHistory = React.lazy(() => import('../features/vendor/VendorPaymentHistory'));
+const VendorProfile = React.lazy(() => import('../features/vendor/VendorProfile'));
+
 
 const LoadingFallback = () => (
   <div className="flex items-center justify-center min-h-screen bg-gray-50/50">
@@ -113,6 +152,7 @@ const AppRoutes = () => {
         
         <Route path={ROUTES.LOGIN} element={<AuthPage />} />
         <Route path={ROUTES.REGISTER} element={<AuthPage />} />
+        <Route path={ROUTES.VENDOR.LOGIN} element={<VendorLogin />} />
         <Route element={<ProtectedRoute />}>
           <Route path={ROUTES.DASHBOARD} element={<Dashboard />} />
           
@@ -122,7 +162,23 @@ const AppRoutes = () => {
           </Route>
 
           <Route element={<RoleRoute allowedRoles={[ROLES.VENDOR]} />}>
-            <Route path={`${ROUTES.VENDOR.ROOT}/*`} element={<div>Vendor Portal</div>} />
+            <Route path={ROUTES.VENDOR.ROOT} element={<VendorLayout />}>
+              <Route index element={<Navigate to="dashboard" replace />} />
+              <Route path="dashboard" element={<VendorDashboard />} />
+              <Route path="orders" element={<VendorOrders />} />
+              <Route path="quotations" element={<VendorQuotations />} />
+              <Route path="products" element={<VendorProducts />} />
+              <Route path="catalog" element={<div>Catalog Page</div>} />
+              <Route path="price-stock" element={<VendorStock />} />
+              <Route path="payments" element={<VendorMoneyRequests />} />
+              <Route path="wallet" element={<VendorPaymentHistory />} />
+              <Route path="returns" element={<VendorReturns />} />
+              <Route path="profile" element={<VendorProfile />} />
+              <Route path="announcements" element={<div>Announcements Page</div>} />
+              <Route path="reports" element={<div>Reports Page</div>} />
+              <Route path="settings" element={<div>Settings Page</div>} />
+              <Route path="help-support" element={<div>Help & Support Page</div>} />
+            </Route>
           </Route>
 
           <Route element={<RoleRoute allowedRoles={[ROLES.ADMIN]} />}>
@@ -169,12 +225,24 @@ const AppRoutes = () => {
         </Route>
 
         <Route path="/school" element={<SchoolLayout />}>
-          <Route index element={<Navigate to="home" replace />} />
-          <Route path="home" element={<SchoolHome />} />
+          <Route index element={<Navigate to="admin" replace />} />
+          <Route path="admin" element={<SchoolHome />} />
+          <Route path="send-notice" element={<SchoolSendNotice />} />
+          <Route path="create-event" element={<SchoolCreateEvent />} />
+          <Route path="create-kit" element={<SchoolCreateKit />} />
+          <Route path="create-request" element={<SchoolCreateRequest />} />
+          <Route path="draft-requests" element={<SchoolDraftRequests />} />
+          <Route path="teacher-approvals" element={<SchoolTeacherApprovals />} />
+          <Route path="more" element={<SchoolMorePage />} />
+          <Route path="students" element={<SchoolStudentsPage />} />
+          <Route path="vendors" element={<SchoolVendorsPage />} />
+          <Route path="quotations" element={<SchoolQuotationsPage />} />
+          <Route path="kits" element={<SchoolKitsPage />} />
           <Route path="grade" element={<SchoolGradePage />} />
           <Route path="categories" element={<SchoolCategoryPage />} />
           <Route path="cart" element={<SchoolCartPage />} />
           <Route path="edit-profile" element={<SchoolEditProfilePage />} />
+          <Route path="change-password" element={<SchoolChangePasswordPage />} />
           <Route path="wishlist" element={<SchoolWishlistPage />} />
           <Route path="my-school" element={<SchoolMySchoolPage />} />
           <Route path="orders" element={<SchoolOrderHistoryPage />} />
@@ -188,7 +256,20 @@ const AppRoutes = () => {
           <Route path="about" element={<SchoolAboutUsPage />} />
           <Route path="checkout" element={<SchoolCheckoutPage />} />
           <Route path="kit/:kitId" element={<SchoolKitDetailsPage />} />
-          <Route path="login" element={<AppAuthPage />} />
+          <Route path="login" element={<SchoolAuthPage />} />
+          <Route path="signup" element={<SchoolAuthPage />} />
+        </Route>
+
+        <Route path="/school/teacher" element={<TeacherLayout />}>
+          <Route index element={<Navigate to="dashboard" replace />} />
+          <Route path="dashboard" element={<TeacherDashboard />} />
+          <Route path="students" element={<TeacherManageStudents />} />
+          <Route path="students/bulk" element={<TeacherBulkAddStudents />} />
+          <Route path="attendance" element={<TeacherAttendance />} />
+          <Route path="homework" element={<TeacherHomework />} />
+          <Route path="diary" element={<TeacherDiary />} />
+          <Route path="profile" element={<TeacherProfile />} />
+          <Route path="notifications" element={<TeacherNotifications />} />
         </Route>
 
         {/* 404 Route */}

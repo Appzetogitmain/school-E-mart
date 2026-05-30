@@ -31,6 +31,7 @@ export const ROUTES = {
   // Vendor Portal
   VENDOR: {
     ROOT: '/vendor',
+    LOGIN: '/vendor/login',
     PROFILE: '/vendor/profile',
     PRODUCTS: '/vendor/products',
     QUOTATIONS: '/vendor/quotations',

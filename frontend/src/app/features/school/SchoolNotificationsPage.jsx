@@ -7,11 +7,9 @@ import {
   Quote, ShieldCheck
 } from 'lucide-react';
 import SchoolHeader from '../../components/SchoolHeader';
-import SchoolSideMenu from '../../components/SchoolSideMenu';
 
 const SchoolNotificationsPage = () => {
   const navigate = useNavigate();
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const schoolInfo = { name: "Adarsh Public School", code: "APS-1024" };
 
   // Mock Data for Schools
@@ -88,14 +86,12 @@ const SchoolNotificationsPage = () => {
 
   return (
     <div className="flex flex-col h-full bg-[#f8f5f2] font-outfit">
-      <SchoolSideMenu isOpen={isMenuOpen} onClose={() => setIsMenuOpen(false)} user={schoolInfo} />
       <SchoolHeader 
         showSearch={true} 
-        onMenuClick={() => setIsMenuOpen(true)} 
         childInfo={schoolInfo} 
       />
 
-      <div className="flex-1 overflow-y-auto pt-40 pb-32 px-6">
+      <div className="flex-1 overflow-y-auto pt-48 pb-32 px-6">
         <div className="flex items-center justify-between mb-8">
           <div>
             <p className="text-[10px] font-black text-primary uppercase tracking-[0.2em] mb-1">Stay Updated</p>

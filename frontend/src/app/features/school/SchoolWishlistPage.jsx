@@ -5,12 +5,10 @@ import {
   Trash2, Building2, Package, Search
 } from 'lucide-react';
 import SchoolHeader from '../../components/SchoolHeader';
-import SchoolSideMenu from '../../components/SchoolSideMenu';
 
 const SchoolWishlistPage = () => {
   const navigate = useNavigate();
   const [scrolled, setScrolled] = useState(false);
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [schoolInfo] = useState(() => {
     const saved = localStorage.getItem('childInfo');
     return saved ? JSON.parse(saved) : { role: 'school' };
@@ -32,10 +30,9 @@ const SchoolWishlistPage = () => {
 
   return (
     <>
-      <SchoolSideMenu isOpen={isMenuOpen} onClose={() => setIsMenuOpen(false)} user={schoolInfo} />
-      <SchoolHeader scrolled={scrolled} onMenuClick={() => setIsMenuOpen(true)} childInfo={schoolInfo} />
+      <SchoolHeader scrolled={scrolled} childInfo={schoolInfo} />
       <div onScroll={handleScroll} className="flex flex-col h-full bg-[#f8f5f2] pb-32 font-outfit overflow-y-auto">
-        <div className="h-[170px] shrink-0"></div>
+        <div className="h-[185px] shrink-0"></div>
 
         <div className="px-6 mt-6">
           <div className="mb-6">
@@ -50,7 +47,7 @@ const SchoolWishlistPage = () => {
               </div>
               <h3 className="text-lg font-black text-deep-purple mb-2">Wishlist is empty</h3>
               <p className="text-gray-400 text-sm max-w-[200px]">Save items you plan to procure for your school later.</p>
-              <button onClick={() => navigate('/school/home')} className="mt-8 px-8 py-3 bg-primary text-white rounded-2xl text-xs font-bold shadow-lg">Start Browsing</button>
+              <button onClick={() => navigate('/school/admin')} className="mt-8 px-8 py-3 bg-primary text-white rounded-2xl text-xs font-bold shadow-lg">Start Browsing</button>
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-4">

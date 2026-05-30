@@ -48,7 +48,7 @@ const SchoolCheckoutPage = () => {
         <h2 className="text-xl font-bold text-deep-purple mb-2">No active bulk procurements</h2>
         <p className="text-gray-400 text-sm mb-8">Add items to your institutional cart to proceed</p>
         <button 
-          onClick={() => navigate('/school/home')}
+          onClick={() => navigate('/school/admin')}
           className="px-8 py-3 bg-primary text-white font-bold rounded-2xl shadow-lg shadow-primary/20"
         >
           Explore Supplies

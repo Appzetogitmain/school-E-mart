@@ -14,8 +14,11 @@ export const ProtectedRoute = () => {
 
 export const RoleRoute = ({ allowedRoles }) => {
   const { user } = useAuthStore();
-  
+
   if (!user || !allowedRoles.includes(user.role)) {
+    if (allowedRoles.includes('vendor')) {
+      return <Navigate to="/vendor/login" replace />;
+    }
     return <Navigate to="/" replace />;
   }
   

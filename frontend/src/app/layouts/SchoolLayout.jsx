@@ -1,12 +1,12 @@
 import React from 'react';
 import { Outlet, NavLink, useLocation } from 'react-router-dom';
-import { Home, Grid, ShoppingCart, GraduationCap, Building2 } from 'lucide-react';
+import { Home, Grid, ShoppingCart, GraduationCap, Building2, MoreHorizontal } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 
 const SchoolLayout = () => {
   const { totalQuantity } = useCart();
   const location = useLocation();
-  const isAuthPage = location.pathname.includes('/school/login');
+  const isAuthPage = location.pathname.includes('/school/login') || location.pathname.includes('/school/signup');
   const isProductDetailPage = location.pathname.includes('/school/product/');
 
   return (
@@ -20,7 +20,7 @@ const SchoolLayout = () => {
       {!isAuthPage && !isProductDetailPage && (
         <nav className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white/80 backdrop-blur-xl border-t border-gray-100 px-6 py-4 z-50">
           <div className="flex items-center justify-between">
-            <NavItem to="/school/home" icon={<Home size={22} />} label="Home" />
+            <NavItem to="/school/admin" icon={<Home size={22} />} label="Home" />
             <NavItem to="/school/grade" icon={<GraduationCap size={26} />} label="Grade" />
             <NavItem to="/school/categories" icon={<Grid size={22} />} label="Supplies" />
             <NavItem
@@ -37,6 +37,7 @@ const SchoolLayout = () => {
               }
               label="Bulk Cart"
             />
+            <NavItem to="/school/more" icon={<MoreHorizontal size={22} />} label="More" />
           </div>
         </nav>
       )}

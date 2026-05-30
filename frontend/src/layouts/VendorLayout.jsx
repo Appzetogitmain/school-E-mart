@@ -1,0 +1,479 @@
+import React, { useState } from 'react';
+import { Outlet, useNavigate, useLocation, Link } from 'react-router-dom';
+import { 
+  LayoutDashboard, ShoppingBag, FileText, Package, BookOpen, 
+  Tag, CreditCard, Wallet, RotateCcw, MessageSquare, Megaphone, 
+  BarChart3, Settings, HelpCircle, ChevronDown, ChevronRight, ChevronLeft,
+  Menu, Bell, User, MoreVertical, CheckCircle2, LogOut, X, ShoppingCart
+} from 'lucide-react';
+import useAuthStore from '../store/useAuthStore';
+
+const VendorLayout = () => {
+  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const [openSubmenu, setOpenSubmenu] = useState(null);
+  const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
+  const [notificationDropdownOpen, setNotificationDropdownOpen] = useState(false);
+  
+  const { user, logout } = useAuthStore();
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
+
+  // Define sidebar menu structure
+  const sidebarItems = [
+    { 
+      label: 'Dashboard', 
+      path: '/vendor/dashboard', 
+      icon: LayoutDashboard 
+    },
+    { 
+      label: 'Orders', 
+      path: '/vendor/orders', 
+      icon: ShoppingBag
+    },
+    { 
+      label: 'Quotations', 
+      path: '/vendor/quotations', 
+      icon: FileText, 
+      badge: 5 
+    },
+    { 
+      label: 'Products', 
+      path: '/vendor/products', 
+      icon: Package
+    },
+    { 
+      label: 'Stock', 
+      path: '/vendor/price-stock', 
+      icon: Tag
+    },
+    { 
+      label: 'Returns', 
+      path: '/vendor/returns', 
+      icon: RotateCcw 
+    },
+    { 
+      label: 'Money Requests', 
+      path: '/vendor/payments', 
+      icon: CreditCard 
+    },
+    { 
+      label: 'Payment History', 
+      path: '/vendor/wallet', 
+      icon: FileText 
+    },
+    { 
+      label: 'Profile', 
+      path: '/vendor/profile', 
+      icon: User 
+    }
+  ];
+
+  const toggleSubmenu = (label) => {
+    if (openSubmenu === label) {
+      setOpenSubmenu(null);
+    } else {
+      setOpenSubmenu(label);
+    }
+  };
+
+  const handleItemClick = (item) => {
+    if (item.hasSubmenu) {
+      if (isCollapsed) {
+        setIsCollapsed(false);
+      }
+      toggleSubmenu(item.label);
+    } else {
+      navigate(item.path);
+      setIsMobileOpen(false);
+    }
+  };
+
+  return (
+    <div className="flex min-h-screen bg-[#F8F9FC] font-sans antialiased text-gray-900">
+      
+      {/* 1. SIDEBAR / SIDE PANEL */}
+      {/* Desktop Sidebar */}
+      <aside 
+        className={`hidden md:flex flex-col shrink-0 transition-all duration-300 ease-in-out bg-[#2E1E6B] text-white shadow-xl ${
+          isCollapsed ? 'w-20' : 'w-[260px]'
+        }`}
+      >
+        {/* Logo Section */}
+        <div className="h-20 flex items-center justify-between px-5 border-b border-white/5 shrink-0">
+          <div className="flex items-center gap-2 overflow-hidden">
+            <div className="w-9 h-9 bg-white rounded-xl flex items-center justify-center shrink-0 shadow-lg shadow-purple-900/30">
+              <ShoppingCart size={18} className="text-[#2E1E6B]" strokeWidth={2.5} />
+            </div>
+            {!isCollapsed && (
+              <div className="flex flex-col leading-tight animate-fade-in">
+                <span className="font-extrabold text-base tracking-tight text-white">School E-MART</span>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-purple-300">Vendor Panel</span>
+              </div>
+            )}
+          </div>
+          
+          <button 
+            onClick={() => setIsCollapsed(!isCollapsed)}
+            className="p-1.5 rounded-lg hover:bg-white/10 transition-colors text-white/60 hover:text-white"
+          >
+            {isCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+          </button>
+        </div>
+
+        {/* Navigation Section */}
+        <nav className="flex-1 py-4 px-3 overflow-y-auto no-scrollbar space-y-1">
+          {sidebarItems.map((item) => {
+            const Icon = item.icon;
+            const isActive = location.pathname === item.path || (item.submenuItems?.some(sub => location.pathname === sub.path));
+            const isSubmenuOpen = openSubmenu === item.label;
+
+            return (
+              <div key={item.label} className="w-full">
+                <button
+                  onClick={() => handleItemClick(item)}
+                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl transition-all duration-200 group text-sm font-medium ${
+                    isActive 
+                      ? 'bg-white/12 text-white font-semibold' 
+                      : 'text-white/70 hover:bg-white/5 hover:text-white'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <Icon size={18} className={`shrink-0 transition-colors duration-200 ${isActive ? 'text-white' : 'text-white/60 group-hover:text-white'}`} />
+                    {!isCollapsed && <span className="truncate">{item.label}</span>}
+                  </div>
+                  
+                  {!isCollapsed && (
+                    <div className="flex items-center gap-2">
+                      {item.badge && (
+                        <span className="bg-[#FF4A55] text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-lg shadow-[#FF4A55]/20 animate-scale-in">
+                          {item.badge}
+                        </span>
+                      )}
+                      {item.hasSubmenu && (
+                        <ChevronDown 
+                          size={14} 
+                          className={`text-white/40 group-hover:text-white transition-transform duration-200 ${isSubmenuOpen ? 'rotate-180' : ''}`} 
+                        />
+                      )}
+                    </div>
+                  )}
+                </button>
+
+                {/* Submenu Dropdown */}
+                {!isCollapsed && item.hasSubmenu && isSubmenuOpen && (
+                  <div className="mt-1 ml-9 space-y-1 border-l border-white/10 pl-3 animate-fade-in">
+                    {item.submenuItems.map((subItem) => {
+                      const isSubActive = location.pathname === subItem.path;
+                      return (
+                        <button
+                          key={subItem.label}
+                          onClick={() => navigate(subItem.path)}
+                          className={`w-full text-left py-1.5 px-3 rounded-lg text-xs transition-colors ${
+                            isSubActive 
+                              ? 'text-white font-semibold' 
+                              : 'text-white/60 hover:text-white hover:bg-white/5'
+                          }`}
+                        >
+                          {subItem.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </nav>
+
+        {/* Sidebar Footer User Section */}
+        <div className="p-4 border-t border-white/5 bg-[#251759]">
+          <div className="flex items-center justify-between overflow-hidden">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-10 h-10 rounded-xl bg-purple-500/20 border border-purple-500/30 flex items-center justify-center text-purple-200 shrink-0">
+                <User size={18} />
+              </div>
+              {!isCollapsed && (
+                <div className="min-w-0 flex flex-col leading-tight animate-fade-in">
+                  <span className="text-sm font-bold text-white truncate">ABC Uniforms</span>
+                  <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-1 mt-0.5">
+                    <CheckCircle2 size={10} className="fill-emerald-400/20 text-emerald-400" />
+                    Verified Vendor
+                  </span>
+                </div>
+              )}
+            </div>
+            
+            {!isCollapsed && (
+              <div className="relative">
+                <button 
+                  onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
+                  className="p-1 rounded-lg text-white/50 hover:text-white hover:bg-white/5 transition-colors"
+                >
+                  <MoreVertical size={16} />
+                </button>
+                
+                {profileDropdownOpen && (
+                  <div className="absolute bottom-12 right-0 w-48 bg-white text-gray-900 rounded-2xl shadow-xl border border-gray-100 p-2 z-50 animate-scale-in">
+                    <button 
+                      onClick={() => { navigate('/vendor/settings'); setProfileDropdownOpen(false); }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold rounded-xl text-gray-700 hover:bg-gray-50 transition-colors"
+                    >
+                      <Settings size={14} /> Settings
+                    </button>
+                    <button 
+                      onClick={handleLogout}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-bold rounded-xl text-red-600 hover:bg-red-50 transition-colors border-t border-gray-100"
+                    >
+                      <LogOut size={14} /> Logout
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </aside>
+
+      {/* Mobile Drawer (Menu for smaller screens) */}
+      {isMobileOpen && (
+        <div className="fixed inset-0 z-50 flex md:hidden bg-black/40 backdrop-blur-sm transition-opacity">
+          <div className="w-[260px] bg-[#2E1E6B] text-white flex flex-col h-full shadow-2xl animate-fade-in">
+            {/* Logo Section */}
+            <div className="h-20 flex items-center justify-between px-5 border-b border-white/5 shrink-0">
+              <div className="flex items-center gap-2">
+                <div className="w-9 h-9 bg-white rounded-xl flex items-center justify-center shadow-lg shadow-purple-900/30">
+                  <ShoppingCart size={18} className="text-[#2E1E6B]" strokeWidth={2.5} />
+                </div>
+                <div className="flex flex-col leading-tight">
+                  <span className="font-extrabold text-base tracking-tight text-white">School E-MART</span>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-purple-300">Vendor Panel</span>
+                </div>
+              </div>
+              
+              <button 
+                onClick={() => setIsMobileOpen(false)}
+                className="p-1.5 rounded-lg hover:bg-white/10 text-white/60 hover:text-white"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Navigation Section */}
+            <nav className="flex-1 py-4 px-3 overflow-y-auto space-y-1">
+              {sidebarItems.map((item) => {
+                const Icon = item.icon;
+                const isActive = location.pathname === item.path || (item.submenuItems?.some(sub => location.pathname === sub.path));
+                const isSubmenuOpen = openSubmenu === item.label;
+
+                return (
+                  <div key={item.label} className="w-full">
+                    <button
+                      onClick={() => handleItemClick(item)}
+                      className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl transition-all duration-200 group text-sm font-medium ${
+                        isActive 
+                          ? 'bg-white/12 text-white font-semibold' 
+                          : 'text-white/70 hover:bg-white/5 hover:text-white'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <Icon size={18} className={`shrink-0 ${isActive ? 'text-white' : 'text-white/60'}`} />
+                        <span>{item.label}</span>
+                      </div>
+                      
+                      <div className="flex items-center gap-2">
+                        {item.badge && (
+                          <span className="bg-[#FF4A55] text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-lg shadow-[#FF4A55]/20">
+                            {item.badge}
+                          </span>
+                        )}
+                        {item.hasSubmenu && (
+                          <ChevronDown 
+                            size={14} 
+                            className={`text-white/40 transition-transform ${isSubmenuOpen ? 'rotate-180' : ''}`} 
+                          />
+                        )}
+                      </div>
+                    </button>
+
+                    {item.hasSubmenu && isSubmenuOpen && (
+                      <div className="mt-1 ml-9 space-y-1 border-l border-white/10 pl-3">
+                        {item.submenuItems.map((subItem) => {
+                          const isSubActive = location.pathname === subItem.path;
+                          return (
+                            <button
+                              key={subItem.label}
+                              onClick={() => { navigate(subItem.path); setIsMobileOpen(false); }}
+                              className={`w-full text-left py-1.5 px-3 rounded-lg text-xs transition-colors ${
+                                isSubActive 
+                                  ? 'text-white font-semibold' 
+                                  : 'text-white/60 hover:text-white hover:bg-white/5'
+                              }`}
+                            >
+                              {subItem.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </nav>
+
+            {/* Sidebar Footer User Section */}
+            <div className="p-4 border-t border-white/5 bg-[#251759]">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-purple-500/20 border border-purple-500/30 flex items-center justify-center text-purple-200">
+                    <User size={18} />
+                  </div>
+                  <div className="flex flex-col leading-tight">
+                    <span className="text-sm font-bold text-white">ABC Uniforms</span>
+                    <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-1 mt-0.5">
+                      <CheckCircle2 size={10} className="fill-emerald-400/20 text-emerald-400" />
+                      Verified Vendor
+                    </span>
+                  </div>
+                </div>
+                
+                <button 
+                  onClick={handleLogout}
+                  className="p-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 transition-colors"
+                >
+                  <LogOut size={16} />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 2. MAIN CONTENT WRAPPER */}
+      <div className="flex-1 flex flex-col min-w-0">
+        
+        {/* Top Header */}
+        <header className="h-20 bg-white border-b border-gray-100 flex items-center px-4 md:px-8 justify-between sticky top-0 z-40">
+          {/* Header Left */}
+          <div className="flex items-center gap-4">
+            <button 
+              onClick={() => setIsMobileOpen(true)}
+              className="p-2 rounded-xl bg-gray-50 border border-gray-100 text-gray-600 hover:bg-gray-100 md:hidden"
+            >
+              <Menu size={20} />
+            </button>
+
+            {/* Navigation links matching the mockup */}
+            <nav className="hidden md:flex items-center gap-6">
+              <Link to="/vendor/orders" className="text-sm font-semibold text-gray-600 hover:text-[#5B3FD6] transition-colors">Orders</Link>
+              <Link to="/vendor/quotations" className="text-sm font-semibold text-gray-600 hover:text-[#5B3FD6] transition-colors">Quotations</Link>
+              <Link to="/vendor/products" className="text-sm font-semibold text-gray-600 hover:text-[#5B3FD6] transition-colors">Products</Link>
+              <Link to="/vendor/reports" className="text-sm font-semibold text-gray-600 hover:text-[#5B3FD6] transition-colors">Reports</Link>
+            </nav>
+          </div>
+
+          {/* Header Right */}
+          <div className="flex items-center gap-4">
+            
+            {/* Notification Bell */}
+            <div className="relative">
+              <button 
+                onClick={() => setNotificationDropdownOpen(!notificationDropdownOpen)}
+                className="w-10 h-10 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-100 hover:text-[#5B3FD6] transition-all relative"
+              >
+                <Bell size={18} />
+                <span className="absolute top-1.5 right-1.5 w-4 h-4 bg-[#FF4A55] text-white text-[9px] font-black rounded-full flex items-center justify-center border border-white shadow-sm">
+                  4
+                </span>
+              </button>
+
+              {notificationDropdownOpen && (
+                <div className="absolute right-0 mt-3 w-80 bg-white rounded-2xl shadow-xl border border-gray-100 p-4 z-50 animate-scale-in">
+                  <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+                    <span className="font-bold text-sm">Notifications</span>
+                    <span className="text-[10px] text-[#5B3FD6] font-bold cursor-pointer hover:underline">Mark all as read</span>
+                  </div>
+                  <div className="mt-3 space-y-3 max-h-60 overflow-y-auto">
+                    {[
+                      { title: 'New Quotation Request', desc: 'Gyan Public School requested a quote for 500 Uniforms.', time: '2 mins ago' },
+                      { title: 'Payment Disbursed', desc: '₹45,200 has been credited to your wallet.', time: '1 hr ago' },
+                      { title: 'Order Dispatched', desc: 'Order ORD-2026-0527 has been successfully shipped.', time: '3 hrs ago' },
+                      { title: 'Stock Alert', desc: 'School Bag (Grey) is running low on stock.', time: '1 day ago' }
+                    ].map((notif, idx) => (
+                      <div key={idx} className="flex gap-2.5 text-left text-xs p-2 hover:bg-gray-50 rounded-xl cursor-pointer transition-colors">
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#5B3FD6] mt-1.5 shrink-0"></span>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-bold text-gray-800 truncate">{notif.title}</p>
+                          <p className="text-gray-500 mt-0.5 line-clamp-2 leading-relaxed">{notif.desc}</p>
+                          <span className="text-[9px] text-gray-400 font-medium block mt-1">{notif.time}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Profile Section */}
+            <div className="relative">
+              <button 
+                onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
+                className="flex items-center gap-3 pl-3 pr-2 py-1.5 bg-gray-50 border border-gray-100 hover:border-gray-200 rounded-xl transition-all"
+              >
+                <div className="w-8 h-8 rounded-full bg-[#5B3FD6] flex items-center justify-center text-white font-extrabold text-xs shadow-md shadow-purple-200 shrink-0">
+                  AK
+                </div>
+                <div className="hidden sm:flex flex-col text-left leading-tight">
+                  <span className="font-bold text-xs text-gray-800">Ankit Kumar</span>
+                  <span className="text-[9px] font-bold text-gray-400">ABC Uniforms</span>
+                </div>
+                <ChevronDown size={14} className="text-gray-400 shrink-0 hidden sm:block" />
+              </button>
+
+              {profileDropdownOpen && (
+                <div className="absolute right-0 mt-3 w-56 bg-white rounded-2xl shadow-xl border border-gray-100 p-2.5 z-50 animate-scale-in">
+                  <div className="px-3 py-2 mb-1 text-xs border-b border-gray-50">
+                    <p className="font-extrabold text-gray-800">Ankit Kumar</p>
+                    <p className="text-[10px] text-gray-400 font-medium mt-0.5">ankit@abcuniforms.com</p>
+                  </div>
+                  <button 
+                    onClick={() => { navigate('/vendor/profile'); setProfileDropdownOpen(false); }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold rounded-xl text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    <User size={14} /> My Profile
+                  </button>
+                  <button 
+                    onClick={() => { navigate('/vendor/settings'); setProfileDropdownOpen(false); }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold rounded-xl text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    <Settings size={14} /> Settings
+                  </button>
+                  <button 
+                    onClick={handleLogout}
+                    className="w-full flex items-center gap-2.5 px-3 py-2.5 text-xs font-bold rounded-xl text-red-600 hover:bg-red-50 transition-colors border-t border-gray-100 mt-1"
+                  >
+                    <LogOut size={14} /> Logout
+                  </button>
+                </div>
+              )}
+            </div>
+
+          </div>
+        </header>
+
+        {/* Page Content area */}
+        <main className="flex-1 p-4 md:p-8 max-w-[1400px] w-full mx-auto animate-fade-in overflow-y-auto">
+          <Outlet />
+        </main>
+      </div>
+
+    </div>
+  );
+};
+
+export default VendorLayout;

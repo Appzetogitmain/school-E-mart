@@ -5,12 +5,10 @@ import {
   ArrowRight, Filter, Grid, Layout, Star, Building2
 } from 'lucide-react';
 import SchoolHeader from '../../components/SchoolHeader';
-import SchoolSideMenu from '../../components/SchoolSideMenu';
 import ProductCard from '../../components/ProductCard';
 
 const SchoolCategoryPage = () => {
   const [scrolled, setScrolled] = useState(false);
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [schoolInfo, setSchoolInfo] = useState(() => {
     const saved = localStorage.getItem('childInfo');
     return saved ? JSON.parse(saved) : { role: 'school' };
@@ -45,21 +43,15 @@ const SchoolCategoryPage = () => {
 
   return (
     <>
-      <SchoolSideMenu 
-        isOpen={isMenuOpen} 
-        onClose={() => setIsMenuOpen(false)} 
-        user={schoolInfo} 
-      />
       <SchoolHeader 
         scrolled={scrolled} 
-        onMenuClick={() => setIsMenuOpen(true)} 
         childInfo={schoolInfo} 
       />
       <div
         onScroll={handleScroll}
         className="flex flex-col h-full bg-white pb-32 overflow-y-auto font-outfit"
       >
-        <div className="h-[170px] shrink-0"></div>
+        <div className="h-[185px] shrink-0"></div>
 
         {/* Institutional Categories Grid */}
         <div className="px-6 mt-4">

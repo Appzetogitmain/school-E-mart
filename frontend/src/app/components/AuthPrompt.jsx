@@ -62,7 +62,10 @@ const AuthPrompt = ({ isOpen, onClose, title = "Join School E-Mart", message = "
 
           <div className="space-y-3">
             <button
-              onClick={() => navigate('/user/login')}
+              onClick={() => {
+                onClose();
+                navigate(window.location.pathname.startsWith('/school') ? '/school/login' : '/user/login');
+              }}
               className="w-full py-4 bg-primary text-white rounded-2xl text-base font-black shadow-xl shadow-primary/30 active:scale-95 transition-all flex items-center justify-center gap-3 tracking-widest uppercase"
             >
               <LogIn size={20} strokeWidth={3} />

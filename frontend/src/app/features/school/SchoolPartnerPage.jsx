@@ -6,11 +6,9 @@ import {
   Building2, Percent, ClipboardCheck, Store
 } from 'lucide-react';
 import SchoolHeader from '../../components/SchoolHeader';
-import SchoolSideMenu from '../../components/SchoolSideMenu';
 
 const SchoolPartnerPage = () => {
   const navigate = useNavigate();
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const schoolInfo = { name: "Adarsh Public School", code: "APS-1024" };
 
   const benefits = [
@@ -55,10 +53,8 @@ const SchoolPartnerPage = () => {
 
   return (
     <div className="flex flex-col h-full bg-white font-outfit overflow-y-auto">
-      <SchoolSideMenu isOpen={isMenuOpen} onClose={() => setIsMenuOpen(false)} user={schoolInfo} />
       <SchoolHeader 
         showSearch={false} 
-        onMenuClick={() => setIsMenuOpen(true)} 
         childInfo={schoolInfo} 
       />
       

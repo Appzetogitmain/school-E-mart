@@ -122,7 +122,7 @@ const SchoolEditProfilePage = () => {
           <div className="w-20 h-20 bg-green-500 rounded-3xl flex items-center justify-center shadow-2xl animate-in zoom-in duration-500">
             <Check size={40} className="text-white" strokeWidth={3} />
           </div>
-          <h2 className="text-xl font-black text-white mt-6">Institutional Profile Updated!</h2>
+          <h2 className="text-xl font-black text-white mt-6">School Profile Updated!</h2>
         </div>
       )}
 
@@ -149,19 +149,19 @@ const SchoolEditProfilePage = () => {
           </div>
           <div className="text-center">
             <h2 className="text-lg font-black text-deep-purple">{formData.fullName}</h2>
-            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-[0.2em]">Institutional Account</p>
+            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-[0.2em]">School Account</p>
           </div>
         </div>
 
         <div className="space-y-5">
           <SectionTitle title="School Admin Details" />
           <InputField label="Contact Person" icon={User} field="fullName" placeholder="Enter name" />
-          <InputField label="Institutional Email" icon={Mail} field="email" type="email" placeholder="admin@school.com" />
+          <InputField label="School Email" icon={Mail} field="email" type="email" placeholder="admin@school.com" />
           <InputField label="Direct Phone" icon={Phone} field="phone" placeholder="+91 XXXXX XXXXX" />
         </div>
 
         <div className="space-y-5 pb-10">
-          <SectionTitle title="Institutional Address" />
+          <SectionTitle title="School Address" />
           <InputField label="School Campus Address" icon={Home} field="address" placeholder="Building, Block, Area" />
           <div className="grid grid-cols-2 gap-4">
             <InputField label="Pin Code" icon={MapPin} field="pinCode" placeholder="XXXXXX" />

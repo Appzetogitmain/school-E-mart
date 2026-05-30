@@ -7,7 +7,6 @@ import {
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import SchoolHeader from '../../components/SchoolHeader';
-import SchoolSideMenu from '../../components/SchoolSideMenu';
 import SectionHeader from '../../components/SectionHeader';
 import ProductCard from '../../components/ProductCard';
 import { useDraggableScroll } from '../../hooks/useDraggableScroll';
@@ -16,7 +15,6 @@ const SchoolMySchoolPage = () => {
   const navigate = useNavigate();
   const kitsRef = useDraggableScroll();
   const [scrolled, setScrolled] = useState(false);
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [schoolInfo] = useState(() => {
     const saved = localStorage.getItem('childInfo');
     return saved ? JSON.parse(saved) : { role: 'school', name: 'School Admin', school: 'School Management', progress: { completed: 85, total: 100 } };
@@ -43,8 +41,7 @@ const SchoolMySchoolPage = () => {
 
   return (
     <>
-      <SchoolSideMenu isOpen={isMenuOpen} onClose={() => setIsMenuOpen(false)} user={schoolInfo} />
-      <SchoolHeader scrolled={scrolled} onMenuClick={() => setIsMenuOpen(true)} childInfo={schoolInfo} />
+      <SchoolHeader scrolled={scrolled} childInfo={schoolInfo} />
       <div onScroll={handleScroll} className="flex flex-col h-full bg-white pb-32 font-outfit overflow-y-auto">
         <div className="h-[170px] shrink-0"></div>
         

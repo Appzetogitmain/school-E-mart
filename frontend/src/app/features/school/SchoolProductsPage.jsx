@@ -36,7 +36,7 @@ const SchoolProductsPage = () => {
       <div className="bg-gradient-to-br from-deep-purple via-deep-purple to-[#4c489d] pt-8 pb-6 px-6 rounded-b-[2.5rem] shadow-xl relative z-10">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-4">
-            <button onClick={() => navigate('/school/home')} className="w-10 h-10 rounded-full bg-white/10 backdrop-blur-md border border-white/10 flex items-center justify-center text-white active:scale-90 transition-all">
+            <button onClick={() => navigate('/school/admin')} className="w-10 h-10 rounded-full bg-white/10 backdrop-blur-md border border-white/10 flex items-center justify-center text-white active:scale-90 transition-all">
               <ArrowLeft size={20} />
             </button>
             <div onClick={() => navigate('/school/grade')} className="flex flex-col cursor-pointer group">
