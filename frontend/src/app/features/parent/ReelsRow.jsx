@@ -1,0 +1,56 @@
+import React from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Play } from 'lucide-react';
+import { useDraggableScroll } from '../../hooks/useDraggableScroll';
+
+const ReelsRow = () => {
+  const navigate = useNavigate();
+  const reelsRef = useDraggableScroll();
+
+  const reels = [
+    { id: 1, title: "Smart Kit Unboxing", views: "12k", thumb: "https://images.unsplash.com/photo-1503676260728-1c00da094a0b?q=80&w=300&h=533&fit=crop" },
+    { id: 2, title: "Uniform Quality Test", views: "8.5k", thumb: "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?q=80&w=300&h=533&fit=crop" }
+  ];
+
+  return (
+    <div className="px-6 pb-8 select-none text-left">
+      <div className="flex items-center justify-between mb-5">
+        <div>
+          <h2 className="text-lg font-semibold text-deep-purple">Watch & Explore</h2>
+        </div>
+        <button 
+          onClick={() => navigate('/user/reels')}
+          className="text-primary text-xs font-bold cursor-pointer active:scale-95 transition-transform"
+        >
+          Watch All
+        </button>
+      </div>
+      
+      <div 
+        ref={reelsRef} 
+        className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide active:cursor-grabbing"
+      >
+        {reels.map((reel) => (
+          <div 
+            key={reel.id} 
+            onClick={() => navigate('/user/reels')}
+            className="min-w-[160px] h-[280px] rounded-[2rem] overflow-hidden relative group active:scale-95 transition-all shadow-lg border border-white/20 cursor-pointer"
+          >
+            <img 
+              src={reel.thumb} 
+              alt={reel.title} 
+              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" 
+            />
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="w-12 h-12 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center border border-white/30">
+                <Play size={16} fill="currentColor" />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+export default ReelsRow;

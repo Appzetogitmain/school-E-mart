@@ -46,5 +46,12 @@ export const ROUTES = {
     CATEGORIES: '/admin/categories',
     ORDERS: '/admin/orders',
     REPORTS: '/admin/reports',
+  },
+  
+  // Super Admin Console
+  SUPER_ADMIN: {
+    ROOT: '/superadmin',
+    LOGIN: '/superadmin/login',
+    DASHBOARD: '/superadmin/dashboard',
   }
 };

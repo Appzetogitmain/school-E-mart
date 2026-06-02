@@ -116,6 +116,31 @@ const VendorMoneyRequests = React.lazy(() => import('../features/vendor/VendorMo
 const VendorPaymentHistory = React.lazy(() => import('../features/vendor/VendorPaymentHistory'));
 const VendorProfile = React.lazy(() => import('../features/vendor/VendorProfile'));
 
+// Super Admin Console Components
+const SuperAdminLogin = React.lazy(() => import('../app/features/superadmin/SuperAdminLogin'));
+const SuperAdminLayout = React.lazy(() => import('../layouts/SuperAdminLayout'));
+const SuperAdminDashboard = React.lazy(() => import('../app/features/superadmin/SuperAdminDashboard'));
+const CategoryManagement = React.lazy(() => import('../app/features/superadmin/CategoryManagement'));
+const HeaderCategoryManagement = React.lazy(() => import('../app/features/superadmin/HeaderCategoryManagement'));
+const ProductListManagement = React.lazy(() => import('../app/features/superadmin/ProductListManagement'));
+const VendorListManagement = React.lazy(() => import('../app/features/superadmin/VendorListManagement'));
+const VendorLocations = React.lazy(() => import('../app/features/superadmin/VendorLocations'));
+const WalletManagement = React.lazy(() => import('../app/features/superadmin/WalletManagement'));
+const WithdrawalsManagement = React.lazy(() => import('../app/features/superadmin/WithdrawalsManagement'));
+const VendorTransactions = React.lazy(() => import('../app/features/superadmin/VendorTransactions'));
+const UserManagement = React.lazy(() => import('../app/features/superadmin/UserManagement'));
+const NotificationManagement = React.lazy(() => import('../app/features/superadmin/NotificationManagement'));
+const FAQManagement = React.lazy(() => import('../app/features/superadmin/FAQManagement'));
+const OrdersListManagement = React.lazy(() => import('../app/features/superadmin/OrdersListManagement'));
+const PromoHomeSections = React.lazy(() => import('../app/features/superadmin/PromoHomeSections'));
+const ReelsManagement = React.lazy(() => import('../app/features/superadmin/ReelsManagement'));
+const LMSManagement = React.lazy(() => import('../app/features/superadmin/LMSManagement'));
+const PromoHomeBanners = React.lazy(() => import('../app/features/superadmin/PromoHomeBanners'));
+const BillingChargesManagement = React.lazy(() => import('../app/features/superadmin/BillingChargesManagement'));
+const AdminProfileManagement = React.lazy(() => import('../app/features/superadmin/AdminProfileManagement'));
+
+
+
 
 const LoadingFallback = () => (
   <div className="flex items-center justify-center min-h-screen bg-gray-50/50">
@@ -153,6 +178,41 @@ const AppRoutes = () => {
         <Route path={ROUTES.LOGIN} element={<AuthPage />} />
         <Route path={ROUTES.REGISTER} element={<AuthPage />} />
         <Route path={ROUTES.VENDOR.LOGIN} element={<VendorLogin />} />
+        <Route path={ROUTES.SUPER_ADMIN.LOGIN} element={<SuperAdminLogin />} />
+        <Route path={ROUTES.SUPER_ADMIN.ROOT} element={<SuperAdminLayout />}>
+          <Route index element={<Navigate to="dashboard" replace />} />
+          <Route path="dashboard" element={<SuperAdminDashboard />} />
+          <Route path="category" element={<CategoryManagement />} />
+          <Route path="header-category" element={<HeaderCategoryManagement />} />
+          <Route path="product-list" element={<ProductListManagement />} />
+          <Route path="vendor-list" element={<VendorListManagement />} />
+          <Route path="vendor-location" element={<VendorLocations />} />
+
+
+
+          <Route path="wallet" element={<WalletManagement />} />
+          <Route path="withdrawals" element={<WithdrawalsManagement />} />
+          <Route path="vendor-transactions" element={<VendorTransactions />} />
+
+          <Route path="users" element={<UserManagement />} />
+          <Route path="notifications" element={<NotificationManagement />} />
+          <Route path="faq" element={<FAQManagement />} />
+          <Route path="orders" element={<OrdersListManagement />} />
+          <Route path="orders-pending" element={<div className="p-6 bg-white rounded-3xl border border-gray-200 shadow-sm leading-relaxed"><h1 className="text-xl font-black text-gray-900 font-sans">Pending Orders</h1><p className="text-sm text-gray-500 mt-2 font-sans">Re-route or dispatch pending order batches awaiting vendor approval.</p></div>} />
+          <Route path="orders-received" element={<div className="p-6 bg-white rounded-3xl border border-gray-200 shadow-sm leading-relaxed"><h1 className="text-xl font-black text-gray-900 font-sans">Received Orders</h1><p className="text-sm text-gray-500 mt-2 font-sans">Monitor freshly submitted customer orders and verify payment links.</p></div>} />
+          <Route path="orders-processed" element={<div className="p-6 bg-white rounded-3xl border border-gray-200 shadow-sm leading-relaxed"><h1 className="text-xl font-black text-gray-900 font-sans">Processed Orders</h1><p className="text-sm text-gray-500 mt-2 font-sans">Track orders currently being packaged and processed by vendor hubs.</p></div>} />
+          <Route path="orders-shipped" element={<div className="p-6 bg-white rounded-3xl border border-gray-200 shadow-sm leading-relaxed"><h1 className="text-xl font-black text-gray-900 font-sans">Shipped Orders</h1><p className="text-sm text-gray-500 mt-2 font-sans">Monitor courier assignments and track active transit status.</p></div>} />
+          <Route path="orders-out-for-delivery" element={<div className="p-6 bg-white rounded-3xl border border-gray-200 shadow-sm leading-relaxed"><h1 className="text-xl font-black text-gray-900 font-sans">Out For Delivery</h1><p className="text-sm text-gray-500 mt-2 font-sans">Track orders currently in the last mile delivery phase with couriers.</p></div>} />
+          <Route path="orders-delivered" element={<div className="p-6 bg-white rounded-3xl border border-gray-200 shadow-sm leading-relaxed"><h1 className="text-xl font-black text-gray-900 font-sans">Delivered Orders</h1><p className="text-sm text-gray-500 mt-2 font-sans">View completed orders, receipt sheets, and customer sign-offs.</p></div>} />
+          <Route path="orders-cancelled" element={<div className="p-6 bg-white rounded-3xl border border-gray-200 shadow-sm leading-relaxed"><h1 className="text-xl font-black text-gray-900 font-sans">Cancelled Orders</h1><p className="text-sm text-gray-500 mt-2 font-sans">Review order cancellations and system-wide refund statuses.</p></div>} />
+          <Route path="orders-returned" element={<div className="p-6 bg-white rounded-3xl border border-gray-200 shadow-sm leading-relaxed"><h1 className="text-xl font-black text-gray-900 font-sans">Returned Items</h1><p className="text-sm text-gray-500 mt-2 font-sans">Process store returns, replacements, and merchant stock corrections.</p></div>} />
+          <Route path="promo-home-section" element={<PromoHomeSections />} />
+          <Route path="reels" element={<ReelsManagement />} />
+          <Route path="lms" element={<LMSManagement />} />
+          <Route path="promo-home-banners" element={<PromoHomeBanners />} />
+          <Route path="setting-billing-charges" element={<BillingChargesManagement />} />
+          <Route path="profile" element={<AdminProfileManagement />} />
+        </Route>
         <Route element={<ProtectedRoute />}>
           <Route path={ROUTES.DASHBOARD} element={<Dashboard />} />
           
