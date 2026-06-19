@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { 
   Bell, GraduationCap, Users, Clock, ArrowRight, 
   Calendar, BookOpen, FileText, CheckSquare, Plus,
-  ChevronDown, UserCheck, MessageSquare, PlusCircle
+  ChevronDown, UserCheck, MessageSquare, PlusCircle, FileCheck
 } from 'lucide-react';
 
 const TeacherDashboard = () => {
@@ -265,6 +265,12 @@ const TeacherDashboard = () => {
             icon={<BookOpen size={20} />} 
             label="Add Homework" 
             onClick={() => navigate('/school/teacher/homework')}
+          />
+          <QuickActionButton 
+            color="bg-rose-50 text-rose-500 hover:bg-rose-100/50" 
+            icon={<FileCheck size={20} />} 
+            label="Check Homework" 
+            onClick={() => navigate('/school/teacher/homework/check')}
           />
           <QuickActionButton 
             color="bg-amber-50 text-amber-500 hover:bg-amber-100/50" 

@@ -34,6 +34,7 @@ const ProductDetailsPage = () => {
     category: "Uniforms",
     rating: 4.8,
     reviews: 124,
+    image: "https://images.unsplash.com/photo-1596755094514-f87e34085b2c?q=80&w=600&h=800&fit=crop",
     description: "High-quality, breathable cotton shirt designed for all-day school comfort. Features reinforced stitching and easy-iron fabric.",
     images: [
       "https://images.unsplash.com/photo-1596755094514-f87e34085b2c?q=80&w=600&h=800&fit=crop",
@@ -269,14 +270,12 @@ const ProductDetailsPage = () => {
             <ShoppingCart size={18} /> Add to Cart
           </button>
         ) : (
-          <div className="flex-1">
-            <QuantitySelector 
-              className="h-full py-3"
-              quantity={cartQuantity} 
-              onIncrease={() => updateQuantity(productId, 1)} 
-              onDecrease={() => updateQuantity(productId, -1)} 
-            />
-          </div>
+          <button 
+            onClick={() => navigate('/user/cart')}
+            className="flex-1 py-4 bg-[#34A853] hover:bg-[#2c8e47] text-white rounded-2xl text-xs font-black shadow-lg shadow-green-500/20 active:scale-95 transition-all flex items-center justify-center gap-2 animate-in fade-in zoom-in duration-300"
+          >
+            <ShoppingCart size={18} /> View Cart
+          </button>
         )}
         <button 
           onClick={handleBuyNow}

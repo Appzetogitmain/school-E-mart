@@ -13,13 +13,13 @@ export const WishlistProvider = ({ children }) => {
   }, [wishlistItems]);
 
   const addToWishlist = (product) => {
-    if (!wishlistItems.find(item => item.id === product.id)) {
+    if (!wishlistItems.find(item => String(item.id) === String(product.id))) {
       setWishlistItems(prev => [...prev, product]);
     }
   };
 
   const removeFromWishlist = (productId) => {
-    setWishlistItems(prev => prev.filter(item => item.id !== productId));
+    setWishlistItems(prev => prev.filter(item => String(item.id) !== String(productId)));
   };
 
   const toggleWishlist = (product) => {
@@ -31,7 +31,7 @@ export const WishlistProvider = ({ children }) => {
   };
 
   const isInWishlist = (productId) => {
-    return wishlistItems.some(item => item.id === productId);
+    return wishlistItems.some(item => String(item.id) === String(productId));
   };
 
   return (
