@@ -112,12 +112,7 @@ const CheckoutPage = () => {
               </div>
             </div>
 
-            <button className="w-full p-4 rounded-2xl border-2 border-dashed border-gray-200 flex items-center justify-center gap-3 active:bg-gray-50 transition-all group">
-              <div className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 group-active:scale-90 transition-all">
-                <MapPin size={20} />
-              </div>
-              <span className="text-sm font-bold text-deep-purple">Update Precise Location on Map</span>
-            </button>
+
           </div>
         </div>
 

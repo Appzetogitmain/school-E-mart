@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronDown, Bell, User, Package, Search, Filter, Menu, Hash, GraduationCap } from 'lucide-react';
+import { ChevronDown, Bell, Package, Search, Filter, Menu, Hash, GraduationCap } from 'lucide-react';
 import AuthPrompt from './AuthPrompt';
 
 const AppHeader = ({ showSearch = true, scrolled = false, onMenuClick, childInfo: propChildInfo, transparentAtTop = false }) => {
@@ -95,14 +95,16 @@ const AppHeader = ({ showSearch = true, scrolled = false, onMenuClick, childInfo
           {/* Stylized Rounded-Square Student Profile Avatar Button */}
           <button 
             onClick={() => navigate('/user/profile')}
-            className="w-13 h-13 rounded-2xl bg-white/10 border border-white/25 shadow-[0_4px_12px_rgba(0,0,0,0.15)] flex items-center justify-center overflow-hidden backdrop-blur-lg hover:bg-white/15 active:scale-95 transition-all outline-none relative group animate-shine shrink-0"
+            className="w-16 h-16 rounded-2xl bg-white p-1.5 border border-white/20 shadow-[0_4px_12px_rgba(0,0,0,0.15)] flex items-center justify-center overflow-hidden hover:bg-white/95 active:scale-95 transition-all outline-none relative group animate-shine shrink-0"
             aria-label="Open profile menu"
           >
             {/* Inner premium golden-white gradient ring overlay */}
-            <div className="absolute inset-[2px] rounded-[14px] bg-gradient-to-tr from-[#FFC933]/20 to-white/10 pointer-events-none"></div>
-            <span className="text-white text-base font-black tracking-wider drop-shadow-[0_2px_4px_rgba(0,0,0,0.2)]">
-              {getInitials(childInfo?.name)}
-            </span>
+            <div className="absolute inset-[2px] rounded-[14px] bg-gradient-to-tr from-[#FFC933]/15 to-transparent pointer-events-none z-20"></div>
+            <img 
+              src="/assets/school_logo.webp" 
+              alt="School Logo" 
+              className="w-full h-full object-contain relative z-10" 
+            />
           </button>
 
           {/* Child Metadata Text */}
@@ -138,16 +140,7 @@ const AppHeader = ({ showSearch = true, scrolled = false, onMenuClick, childInfo
           </div>
         </div>
 
-        {/* Right Side: Profile Settings Button */}
-        <div className="flex items-center gap-2">
-          <button 
-            onClick={() => navigate("/user/profile")}
-            className="w-11 h-11 rounded-2xl bg-white/10 backdrop-blur-lg flex items-center justify-center text-white relative active:scale-90 hover:bg-white/15 transition-all border border-white/20 shadow-[0_4px_12px_rgba(0,0,0,0.1)] shrink-0"
-            aria-label="View profile"
-          >
-            <User size={19} className="drop-shadow-[0_1px_2px_rgba(0,0,0,0.15)]" />
-          </button>
-        </div>
+
       </div>
 
       <AuthPrompt 

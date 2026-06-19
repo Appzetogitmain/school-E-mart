@@ -283,6 +283,17 @@ const SchoolHome = () => {
                 <span className="text-[11px] font-black text-center text-deep-purple leading-tight block">Teacher Approvals</span>
               </button>
 
+              {/* Add Class */}
+              <button 
+                onClick={() => navigate('/school/add-class')}
+                className="flex flex-col items-center gap-1.5 active:scale-95 transition-all w-16"
+              >
+                <div className="w-11 h-11 rounded-full bg-[#E5F7FF] text-[#00A3FF] flex items-center justify-center shadow-sm">
+                  <GraduationCap size={16} />
+                </div>
+                <span className="text-[11px] font-black text-center text-deep-purple leading-tight block">Add Class</span>
+              </button>
+
               {/* More */}
               <button 
                 onClick={() => navigate('/school/more')}

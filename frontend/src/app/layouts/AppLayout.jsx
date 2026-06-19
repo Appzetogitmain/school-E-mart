@@ -1,22 +1,27 @@
 import React from 'react';
-import { Outlet, NavLink, useLocation } from 'react-router-dom';
+import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { 
   Home, 
   BookOpen, 
   CalendarCheck, 
-  Calendar, 
-  GraduationCap 
+  User, 
+  GraduationCap,
+  ShoppingCart,
+  ChevronRight
 } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 
 const AppLayout = () => {
   const { totalQuantity } = useCart();
   const location = useLocation();
+  const navigate = useNavigate();
   const scrollContainerRef = React.useRef(null);
   
   // Exclude bottom nav on login, signup, storefront product detail pages, and reels page
   const isAuthPage = location.pathname.includes('/user/login') || location.pathname.includes('/user/signup');
   const isProductDetailPage = location.pathname.includes('/user/product/') || location.pathname.includes('/user/reels');
+  const isCartOrCheckoutPage = location.pathname.includes('/user/cart') || location.pathname.includes('/user/checkout') || location.pathname.includes('/user/order-success');
+  const showCartPill = totalQuantity > 0 && !isAuthPage && !isProductDetailPage && !isCartOrCheckoutPage;
 
   // Automatically scroll to the top of the container on route navigation
   React.useEffect(() => {
@@ -42,6 +47,37 @@ const AppLayout = () => {
       >
         <Outlet />
       </div>
+
+      {/* Floating View Cart Pill */}
+      {showCartPill && (
+        <div className="fixed bottom-20 left-0 right-0 max-w-md px-4 mx-auto z-50 animate-in fade-in slide-in-from-bottom-5 duration-300">
+          <div 
+            onClick={() => navigate('/user/cart')}
+            className="w-full bg-gradient-to-r from-[#3B248C] to-[#5B3FD6] text-white px-5 py-3.5 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.15)] flex items-center justify-between cursor-pointer hover:opacity-95 active:scale-[0.98] transition-all duration-300 border border-white/10"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-white/15 backdrop-blur-md flex items-center justify-center border border-white/25 relative">
+                <ShoppingCart size={16} className="text-[#FFC933]" />
+                <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[9px] font-black w-4.5 h-4.5 rounded-full flex items-center justify-center border border-white/20">
+                  {totalQuantity}
+                </span>
+              </div>
+              <div className="flex flex-col text-left">
+                <span className="text-xs font-black tracking-wide leading-none">View Cart</span>
+                <span className="text-[9px] text-white/70 font-bold tracking-wide mt-1 leading-none">
+                  {totalQuantity} {totalQuantity === 1 ? 'item' : 'items'} added
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[9px] font-black uppercase tracking-widest text-[#FFC933]">Go to Cart</span>
+              <div className="w-5 h-5 rounded-full bg-white/15 flex items-center justify-center border border-white/10">
+                <ChevronRight size={12} className="text-white" />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Persistent Bottom Navigation - Styled exactly like the mockup! */}
       {!isAuthPage && !isProductDetailPage && (
@@ -78,24 +114,22 @@ const AppLayout = () => {
               inactiveColor="text-[#34A853]"
             />
 
-            {/* 4. Calendar Tab */}
-            <BottomNavItem 
-              to="/user/calendar" 
-              active={getTabStyle('/user/calendar')}
-              icon={<Calendar size={19} />} 
-              label="Calendar"
-              activeColor="text-[#F2994A]"
-              inactiveColor="text-[#F2994A]"
-            />
-
-            {/* 5. Learning Tab */}
+            {/* 4. Learning Tab */}
             <BottomNavItem 
               to="/user/learning-hub" 
               active={getTabStyle('/user/learning-hub')}
               icon={<GraduationCap size={19} />} 
               label="Learning"
-              activeColor="text-[#E04F5F]"
               inactiveColor="text-[#E04F5F]"
+            />
+
+            {/* 5. Profile Tab */}
+            <BottomNavItem 
+              to="/user/profile" 
+              active={getTabStyle('/user/profile')}
+              icon={<User size={19} />} 
+              label="Profile"
+              inactiveColor="text-[#9B51E0]"
             />
 
           </div>
