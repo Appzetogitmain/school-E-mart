@@ -40,6 +40,16 @@ const env = {
   RATE_LIMIT_WINDOW_MS: Number(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60_000,
   RATE_LIMIT_MAX: Number(process.env.RATE_LIMIT_MAX) || 100,
   AUTH_RATE_LIMIT_MAX: Number(process.env.AUTH_RATE_LIMIT_MAX) || 20,
+
+  OTP_EXPIRY_MS: parseDurationMs(process.env.OTP_EXPIRY || '10m', 10 * 60_000),
+  OTP_RESEND_COOLDOWN_MS: Number(process.env.OTP_RESEND_COOLDOWN_MS) || 60_000,
+  OTP_MAX_PER_WINDOW: Number(process.env.OTP_MAX_PER_WINDOW) || 5,
+  OTP_WINDOW_MS: Number(process.env.OTP_WINDOW_MS) || 15 * 60_000,
+
+  PASSWORD_RESET_EXPIRY_MS: parseDurationMs(process.env.PASSWORD_RESET_EXPIRY || '24h', 24 * 3_600_000),
+  EMAIL_VERIFICATION_EXPIRY: process.env.EMAIL_VERIFICATION_EXPIRY || '24h',
+
+  FRONTEND_URL: process.env.FRONTEND_URL || 'http://localhost:5173',
 };
 
 const requiredInProduction = [

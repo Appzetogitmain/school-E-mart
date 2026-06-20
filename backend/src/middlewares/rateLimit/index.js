@@ -26,8 +26,15 @@ const authLimiter = createRateLimiter({
   message: 'Too many authentication attempts. Please try again later.',
 });
 
+const otpLimiter = createRateLimiter({
+  windowMs: env.OTP_WINDOW_MS,
+  max: env.OTP_MAX_PER_WINDOW,
+  message: 'Too many OTP requests. Please try again later.',
+});
+
 module.exports = {
   createRateLimiter,
   globalLimiter,
   authLimiter,
+  otpLimiter,
 };

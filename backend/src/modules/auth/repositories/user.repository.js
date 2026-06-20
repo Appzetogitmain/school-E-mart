@@ -13,6 +13,10 @@ const userRepository = {
     return User.findOne({ phone, ...activeUserFilter }).lean();
   },
 
+  findByPhoneAndRole(phone, role) {
+    return User.findOne({ phone, role, ...activeUserFilter }).lean();
+  },
+
   findById(id) {
     return User.findOne({ _id: id, ...activeUserFilter }).lean();
   },
