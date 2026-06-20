@@ -15,8 +15,8 @@ const createRateLimiter = ({
     standardHeaders: true,
     legacyHeaders: false,
     keyGenerator,
-    handler: (_req, res) =>
-      fail(res, message, httpStatus.TOO_MANY_REQUESTS, 'RATE_LIMIT_EXCEEDED'),
+    handler: (req, res) =>
+      fail(res, message, httpStatus.TOO_MANY_REQUESTS, 'RATE_LIMIT_EXCEEDED', null, req),
   });
 
 const globalLimiter = createRateLimiter();

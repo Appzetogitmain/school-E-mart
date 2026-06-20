@@ -1,34 +1,65 @@
+const http = require('http');
 const express = require('express');
+const compression = require('compression');
 const cors = require('cors');
 const helmet = require('helmet');
 const cookieParser = require('cookie-parser');
-const corsConfig = require('./config/cors');
-const securityConfig = require('./config/security');
-const env = require('./config/env');
+const config = require('./config');
 const routes = require('./routes');
-const { globalLimiter } = require('./middlewares/rateLimit');
-const { errorHandler, notFoundHandler } = require('./middlewares/error');
+const middlewares = require('./middlewares');
+const { getHealth } = require('./controllers/health.controller');
+const logger = require('./common/logger');
 
 require('./database/modelRegistry');
 
-const app = express();
+const createApp = () => {
+  const app = express();
 
-app.set('trust proxy', 1);
+  app.disable('x-powered-by');
+  app.set('trust proxy', 1);
 
-app.use(helmet(securityConfig.helmet));
-app.use(cors(corsConfig));
-app.use(globalLimiter);
-app.use(express.json({ limit: '1mb' }));
-app.use(express.urlencoded({ extended: true }));
-app.use(cookieParser());
+  app.use(middlewares.requestId);
+  app.use(helmet(config.security.helmet));
+  app.use(cors(config.cors));
+  app.use(compression(config.security.compression));
+  app.use(middlewares.globalLimiter);
+  app.use(express.json({ limit: '1mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+  app.use(cookieParser());
+  app.use(middlewares.requestLogger);
 
-app.get('/health', (_req, res) => {
-  res.json({ success: true, message: 'Server is healthy' });
-});
+  app.get('/health', getHealth);
+  app.use(config.env.API_PREFIX, routes);
 
-app.use(env.API_PREFIX, routes);
+  app.use(middlewares.notFoundHandler);
+  app.use(middlewares.errorHandler);
 
-app.use(notFoundHandler);
-app.use(errorHandler);
+  return app;
+};
 
-module.exports = app;
+const app = createApp();
+
+const startServer = async () => {
+  const { connectDB } = require('./database/connection');
+
+  await connectDB(config.database.uri);
+
+  const server = http.createServer(app);
+
+  server.listen(config.env.PORT, () => {
+    logger.info('HTTP server started', {
+      port: config.env.PORT,
+      environment: config.env.NODE_ENV,
+      apiPrefix: config.env.API_PREFIX,
+      version: config.app.version,
+    });
+  });
+
+  return server;
+};
+
+module.exports = {
+  app,
+  createApp,
+  startServer,
+};

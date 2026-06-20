@@ -1,5 +1,5 @@
 const tenantContext = require('./tenantContext');
 
-module.exports = {
+module.exports = Object.freeze({
   tenantContext,
-};
+});

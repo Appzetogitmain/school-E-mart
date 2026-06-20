@@ -1,6 +1,11 @@
 const bcrypt = require('bcrypt');
-const crypto = require('crypto');
 const env = require('../config/env');
+const asyncHandler = require('./asyncHandler');
+const ApiFeatures = require('./apiFeatures');
+const date = require('./date');
+const string = require('./string');
+const crypto = require('./crypto');
+const request = require('./request');
 
 const hashPassword = async (plainText) => {
   const hash = await bcrypt.hash(plainText, env.BCRYPT_ROUNDS);
@@ -12,20 +17,16 @@ const verifyPassword = async (plainText, passwordHash) => {
   return bcrypt.compare(plainText, passwordHash);
 };
 
-const hashToken = (token) =>
-  crypto.createHash('sha256').update(token).digest('hex');
+const hashToken = (token) => crypto.sha256(token);
 
 const hashOtp = (otp, phone, purpose) =>
-  crypto
-    .createHmac('sha256', env.OTP_HMAC_SECRET)
-    .update(`${phone}:${purpose}:${otp}`)
-    .digest('hex');
+  crypto.hmacSha256(`${phone}:${purpose}:${otp}`, env.OTP_HMAC_SECRET);
 
-const generateSecureToken = (bytes = 32) => crypto.randomBytes(bytes).toString('hex');
+const generateSecureToken = (bytes = 32) => crypto.randomHex(bytes);
 
 const generateOtp = (length = 4) => {
   const max = 10 ** length;
-  const num = crypto.randomInt(0, max);
+  const num = require('crypto').randomInt(0, max);
   return String(num).padStart(length, '0');
 };
 
@@ -34,6 +35,12 @@ const normalizePhone = (phone) => String(phone || '').replace(/\D/g, '').slice(-
 const normalizeEmail = (email) => String(email || '').trim().toLowerCase();
 
 module.exports = {
+  asyncHandler,
+  ApiFeatures,
+  date,
+  string,
+  crypto,
+  request,
   hashPassword,
   verifyPassword,
   hashToken,

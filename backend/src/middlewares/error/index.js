@@ -1,11 +1,11 @@
 const { AppError } = require('../../common/errors');
 const { fail } = require('../../common/response');
 const logger = require('../../common/logger');
-const { httpStatus, messages } = require('../../constants');
+const { httpStatus, messages, responseCodes } = require('../../constants');
 
 const errorHandler = (err, req, res, _next) => {
   if (err instanceof AppError) {
-    return fail(res, err.message, err.statusCode, err.code, err.errors);
+    return fail(res, err.message, err.statusCode, err.code, err.errors, req);
   }
 
   if (err.name === 'JsonWebTokenError' || err.name === 'TokenExpiredError') {
@@ -13,12 +13,21 @@ const errorHandler = (err, req, res, _next) => {
       res,
       messages.AUTH.INVALID_TOKEN,
       httpStatus.UNAUTHORIZED,
-      'INVALID_TOKEN'
+      responseCodes.INVALID_TOKEN,
+      null,
+      req
     );
   }
 
   if (err.name === 'ValidationError' && err.errors) {
-    return fail(res, err.message, httpStatus.BAD_REQUEST, 'MONGOOSE_VALIDATION_ERROR', err.errors);
+    return fail(
+      res,
+      err.message,
+      httpStatus.BAD_REQUEST,
+      responseCodes.MONGOOSE_VALIDATION_ERROR,
+      err.errors,
+      req
+    );
   }
 
   logger.error('Unhandled error', {
@@ -26,18 +35,28 @@ const errorHandler = (err, req, res, _next) => {
     stack: err.stack,
     path: req.originalUrl,
     method: req.method,
+    requestId: req.requestId,
   });
 
   return fail(
     res,
     messages.COMMON.INTERNAL_ERROR,
     httpStatus.INTERNAL_SERVER_ERROR,
-    'INTERNAL_ERROR'
+    responseCodes.INTERNAL_ERROR,
+    null,
+    req
   );
 };
 
 const notFoundHandler = (req, res) =>
-  fail(res, `Route ${req.method} ${req.originalUrl} not found`, httpStatus.NOT_FOUND, 'ROUTE_NOT_FOUND');
+  fail(
+    res,
+    `Route ${req.method} ${req.originalUrl} not found`,
+    httpStatus.NOT_FOUND,
+    responseCodes.ROUTE_NOT_FOUND,
+    null,
+    req
+  );
 
 module.exports = {
   errorHandler,

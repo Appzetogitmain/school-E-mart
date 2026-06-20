@@ -13,9 +13,16 @@ class AppError extends Error {
 }
 
 class ValidationError extends AppError {
-  constructor(message, errors = null) {
+  constructor(message = 'Validation failed', errors = null) {
     super(message, httpStatus.BAD_REQUEST, 'VALIDATION_ERROR', errors);
     this.name = 'ValidationError';
+  }
+}
+
+class BadRequestError extends AppError {
+  constructor(message = 'Bad request', errors = null, code = 'BAD_REQUEST') {
+    super(message, httpStatus.BAD_REQUEST, code, errors);
+    this.name = 'BadRequestError';
   }
 }
 
@@ -26,10 +33,24 @@ class UnauthorizedError extends AppError {
   }
 }
 
+class AuthenticationError extends UnauthorizedError {
+  constructor(message = 'Authentication required', code = 'AUTHENTICATION_ERROR') {
+    super(message, code);
+    this.name = 'AuthenticationError';
+  }
+}
+
 class ForbiddenError extends AppError {
   constructor(message = 'Forbidden', code = 'FORBIDDEN') {
     super(message, httpStatus.FORBIDDEN, code);
     this.name = 'ForbiddenError';
+  }
+}
+
+class AuthorizationError extends ForbiddenError {
+  constructor(message = 'Forbidden', code = 'AUTHORIZATION_ERROR') {
+    super(message, code);
+    this.name = 'AuthorizationError';
   }
 }
 
@@ -54,12 +75,23 @@ class TooManyRequestsError extends AppError {
   }
 }
 
+class InternalServerError extends AppError {
+  constructor(message = 'An unexpected error occurred', code = 'INTERNAL_ERROR') {
+    super(message, httpStatus.INTERNAL_SERVER_ERROR, code);
+    this.name = 'InternalServerError';
+  }
+}
+
 module.exports = {
   AppError,
   ValidationError,
+  BadRequestError,
   UnauthorizedError,
+  AuthenticationError,
   ForbiddenError,
+  AuthorizationError,
   NotFoundError,
   ConflictError,
   TooManyRequestsError,
+  InternalServerError,
 };
