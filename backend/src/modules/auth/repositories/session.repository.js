@@ -39,6 +39,15 @@ const sessionRepository = {
       .lean();
   },
 
+  findActiveByIdForUser(sessionId, userId) {
+    return AuthSession.findOne({
+      _id: sessionId,
+      userId,
+      revokedAt: null,
+      expiresAt: { $gt: new Date() },
+    }).lean();
+  },
+
   revokeById(sessionId) {
     return AuthSession.findByIdAndUpdate(
       sessionId,

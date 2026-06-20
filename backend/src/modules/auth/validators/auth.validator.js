@@ -80,6 +80,10 @@ const emailVerifySchema = Joi.object({
 
 const emailVerifyRequestSchema = Joi.object({}).default({});
 
+const sessionIdParamSchema = Joi.object({
+  sessionId: schemas.objectId.required(),
+});
+
 module.exports = {
   loginSchema,
   roleLoginSchema,
@@ -99,4 +103,5 @@ module.exports = {
   changePasswordSchema,
   emailVerifySchema,
   emailVerifyRequestSchema,
+  sessionIdParamSchema,
 };

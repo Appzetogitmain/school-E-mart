@@ -122,18 +122,6 @@ const authService = {
     const authContext = await resolveAuthorizationContext(user);
     return mapUserToDto(user, authContext);
   },
-
-  async listSessions(userId, currentJti) {
-    const sessions = await sessionRepository.findActiveByUserId(userId);
-    return sessions.map((session) => ({
-      id: session._id.toString(),
-      device: session.device || {},
-      ipAddress: session.ipAddress,
-      lastSeenAt: session.lastSeenAt,
-      expiresAt: session.expiresAt,
-      current: session.jti === currentJti,
-    }));
-  },
 };
 
 module.exports = authService;

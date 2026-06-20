@@ -2,6 +2,8 @@ const authService = require('../services/auth.service');
 const otpService = require('../services/otp.service');
 const passwordService = require('../services/password.service');
 const emailVerificationService = require('../services/emailVerification.service');
+const sessionService = require('../services/session.service');
+const authorizationService = require('../services/authorization.service');
 const { success } = require('../../../common/response');
 const { toAuthResponseDto } = require('../dto/auth.dto');
 const { messages } = require('../../../constants');
@@ -213,6 +215,57 @@ const authController = {
         getRequestMeta(req)
       );
       return success(res, { alreadyVerified: result.alreadyVerified }, result.message);
+    } catch (error) {
+      return next(error);
+    }
+  },
+
+  listSessions: async (req, res, next) => {
+    try {
+      const sessions = await sessionService.listActiveSessions(req.auth.userId, req.auth.jti);
+      return success(res, { sessions });
+    } catch (error) {
+      return next(error);
+    }
+  },
+
+  revokeSession: async (req, res, next) => {
+    try {
+      const result = await sessionService.revokeSession({
+        userId: req.auth.userId,
+        sessionId: req.params.sessionId,
+        currentSessionId: req.auth.sessionId,
+        currentJti: req.auth.jti,
+        requestMeta: getRequestMeta(req),
+      });
+
+      if (result.revokedCurrent) {
+        clearRefreshCookie(res);
+      }
+
+      return success(res, result, messages.AUTH.SESSION_REVOKED_SUCCESS);
+    } catch (error) {
+      return next(error);
+    }
+  },
+
+  revokeOtherSessions: async (req, res, next) => {
+    try {
+      const result = await sessionService.revokeOtherSessions({
+        userId: req.auth.userId,
+        currentSessionId: req.auth.sessionId,
+        requestMeta: getRequestMeta(req),
+      });
+      return success(res, result, messages.AUTH.SESSIONS_REVOKED_SUCCESS);
+    } catch (error) {
+      return next(error);
+    }
+  },
+
+  getAuthorization: async (req, res, next) => {
+    try {
+      const authorization = await authorizationService.getAuthorizationSnapshot(req.auth.userId);
+      return success(res, { authorization });
     } catch (error) {
       return next(error);
     }

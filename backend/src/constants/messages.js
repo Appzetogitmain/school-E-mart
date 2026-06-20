@@ -30,6 +30,11 @@ module.exports = {
     VERIFICATION_SENT: 'Verification email sent',
     CURRENT_PASSWORD_INVALID: 'Current password is incorrect',
     WEAK_PASSWORD: 'Password does not meet security requirements',
+    SESSION_NOT_FOUND: 'Session not found or already revoked',
+    SESSION_REVOKED_SUCCESS: 'Session revoked successfully',
+    SESSIONS_REVOKED_SUCCESS: 'Other sessions revoked successfully',
+    TENANT_FORBIDDEN: 'Cross-tenant access is not allowed',
+    TENANT_REQUIRED: 'Tenant identifier is required',
   },
   VALIDATION: {
     FAILED: 'Validation failed',

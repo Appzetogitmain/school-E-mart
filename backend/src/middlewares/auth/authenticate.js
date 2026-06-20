@@ -45,6 +45,7 @@ const authenticate = async (req, _res, next) => {
       tenantSchoolId: user.tenantSchoolId?.toString() || null,
       permissions: payload.permissions || [],
       scopes: payload.scopes || [],
+      roleScopes: user.roleScopes || [],
     };
     req.user = user;
 

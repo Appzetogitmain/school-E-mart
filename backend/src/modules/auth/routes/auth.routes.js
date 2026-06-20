@@ -1,7 +1,7 @@
 const express = require('express');
 const authController = require('../controllers/auth.controller');
 const authValidators = require('../validators/auth.validator');
-const { validateBody } = require('../../../middlewares/validation');
+const { validateBody, validateParams } = require('../../../middlewares/validation');
 const { authenticate } = require('../../../middlewares/auth/authenticate');
 const { authLimiter, otpLimiter } = require('../../../middlewares/rateLimit');
 const { ROLES } = require('../../../constants/roles');
@@ -130,5 +130,18 @@ router.post(
   validateBody(authValidators.emailVerifySchema),
   authController.verifyEmail
 );
+
+router.get('/permissions', authenticate, authController.getAuthorization);
+
+router.get('/sessions', authenticate, authController.listSessions);
+
+router.delete(
+  '/sessions/:sessionId',
+  authenticate,
+  validateParams(authValidators.sessionIdParamSchema),
+  authController.revokeSession
+);
+
+router.post('/sessions/revoke-others', authenticate, authController.revokeOtherSessions);
 
 module.exports = router;
