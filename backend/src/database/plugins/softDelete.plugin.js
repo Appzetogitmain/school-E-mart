@@ -28,8 +28,8 @@ module.exports = function softDeletePlugin(schema, options) {
     });
   });
 
-  // Add a softDelete method to the document
-  schema.methods.softDelete = async function (deletedBy = null, reason = null) {
+  // Add a markAsDeleted method to the document
+  schema.methods.markAsDeleted = async function (deletedBy = null, reason = null) {
     this.softDelete.isDeleted = true;
     this.softDelete.deletedAt = new Date();
     this.softDelete.deletedBy = deletedBy;
