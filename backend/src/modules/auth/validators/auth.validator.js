@@ -13,7 +13,9 @@ const roleLoginSchema = (role) =>
     role: Joi.string().valid(role).default(role),
   });
 
-const refreshSchema = Joi.object({}).default({});
+const refreshSchema = Joi.object({
+  refreshToken: Joi.string().trim().min(32).max(128).optional(),
+}).default({});
 
 const logoutSchema = Joi.object({
   revokeAll: Joi.boolean().default(false),

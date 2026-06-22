@@ -25,6 +25,10 @@ const sessionRepository = {
     }).lean();
   },
 
+  findByRefreshHash(refreshTokenHash) {
+    return AuthSession.findOne({ refreshTokenHash }).lean();
+  },
+
   findById(id) {
     return AuthSession.findById(id).lean();
   },

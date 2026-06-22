@@ -37,7 +37,10 @@ const buildEnv = () => ({
   BCRYPT_ROUNDS: Number(process.env.BCRYPT_ROUNDS) || 12,
   OTP_HMAC_SECRET: process.env.OTP_HMAC_SECRET || 'dev-otp-hmac-secret-change-me',
 
-  COOKIE_SECURE: process.env.COOKIE_SECURE === 'true',
+  COOKIE_SECURE:
+    process.env.COOKIE_SECURE !== undefined
+      ? process.env.COOKIE_SECURE === 'true'
+      : (process.env.NODE_ENV || 'development') === 'production',
   COOKIE_SAME_SITE: process.env.COOKIE_SAME_SITE || 'strict',
   REFRESH_COOKIE_NAME: process.env.REFRESH_COOKIE_NAME || 'refreshToken',
 
@@ -83,9 +86,17 @@ const validateEnv = (config) => {
       }
     });
 
-    if (config.JWT_ACCESS_SECRET.startsWith('dev-')) {
-      throw new Error('JWT_ACCESS_SECRET must not use development defaults in production');
-    }
+    const secretKeys = ['JWT_ACCESS_SECRET', 'JWT_REFRESH_SECRET', 'OTP_HMAC_SECRET'];
+    const minSecretLength = 32;
+
+    secretKeys.forEach((key) => {
+      if (config[key].startsWith('dev-')) {
+        throw new Error(`${key} must not use development defaults in production`);
+      }
+      if (config[key].length < minSecretLength) {
+        throw new Error(`${key} must be at least ${minSecretLength} characters in production`);
+      }
+    });
   }
 };
 

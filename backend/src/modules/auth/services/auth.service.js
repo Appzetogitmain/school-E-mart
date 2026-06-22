@@ -3,7 +3,7 @@ const {
   TooManyRequestsError,
 } = require('../../../common/errors');
 const mongoose = require('mongoose');
-const { verifyPassword, normalizeEmail, hashToken } = require('../../../utils');
+const { verifyPassword, normalizeEmail } = require('../../../utils');
 const { messages } = require('../../../constants');
 const authConfig = require('../../../config/auth');
 const userRepository = require('../repositories/user.repository');
@@ -11,10 +11,7 @@ const sessionRepository = require('../repositories/session.repository');
 const auditRepository = require('../repositories/audit.repository');
 const loginAttemptTracker = require('./loginAttempt.service');
 const tokenService = require('./token.service');
-const {
-  issueAuthenticatedSession,
-  resolveAuthorizationContext,
-} = require('./sessionIssue.service');
+const { issueAuthenticatedSession } = require('./sessionIssue.service');
 const { mapUserToDto } = require('../mappers/auth.mapper');
 
 const authService = {
@@ -43,6 +40,7 @@ const authService = {
         actorRole: expectedRole || null,
         ipAddress: requestMeta.ipAddress,
         userAgent: requestMeta.userAgent,
+        correlationId: requestMeta.requestId || null,
         after: { reason: 'invalid_credentials', email: normalizedEmail },
       });
       throw new UnauthorizedError(messages.AUTH.INVALID_CREDENTIALS, 'INVALID_CREDENTIALS');
@@ -63,6 +61,7 @@ const authService = {
         entityId: user._id,
         ipAddress: requestMeta.ipAddress,
         userAgent: requestMeta.userAgent,
+        correlationId: requestMeta.requestId || null,
         after: { reason: 'invalid_password' },
       });
       throw new UnauthorizedError(messages.AUTH.INVALID_CREDENTIALS, 'INVALID_CREDENTIALS');
@@ -73,25 +72,13 @@ const authService = {
   },
 
   async refreshSession(refreshToken, requestMeta = {}) {
-    const incomingHash = hashToken(refreshToken);
-    const existingSession = await sessionRepository.findActiveByRefreshHash(incomingHash);
-    if (!existingSession) {
-      throw new UnauthorizedError(messages.AUTH.INVALID_TOKEN, 'INVALID_REFRESH_TOKEN');
-    }
-
-    const existingUser = await userRepository.findActiveById(existingSession.userId);
-    const authContext = await resolveAuthorizationContext(existingUser);
-
-    const tokens = await tokenService.rotateRefreshToken(refreshToken, {
-      ...requestMeta,
-      authContext: { permissions: authContext.permissions, scopes: authContext.scopes },
-    });
-
-    const user = await userRepository.findActiveById(existingUser._id);
+    const result = await tokenService.rotateRefreshToken(refreshToken, requestMeta);
 
     return {
-      ...tokens,
-      user: mapUserToDto(user, authContext),
+      accessToken: result.accessToken,
+      refreshToken: result.refreshToken,
+      expiresAt: result.expiresAt,
+      user: mapUserToDto(result.user, result.authContext),
       expiresIn: Math.floor(authConfig.accessExpiryMs / 1000),
     };
   },
@@ -119,8 +106,7 @@ const authService = {
     if (!user) {
       throw new UnauthorizedError(messages.AUTH.UNAUTHORIZED);
     }
-    const authContext = await resolveAuthorizationContext(user);
-    return mapUserToDto(user, authContext);
+    return user;
   },
 };
 

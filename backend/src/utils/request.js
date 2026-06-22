@@ -12,6 +12,11 @@ const getRequestMeta = (req) => ({
   userAgent: req.headers['user-agent'] || null,
   method: req.method,
   path: req.originalUrl,
+  device: {
+    app: req.headers['x-client-app'] || 'web',
+    os: req.headers['x-client-os'] || null,
+    model: req.headers['x-client-model'] || null,
+  },
 });
 
 module.exports = {

@@ -17,6 +17,7 @@ const authSessionSchema = new mongoose.Schema({
 
 // Indexes
 authSessionSchema.index({ userId: 1, lastSeenAt: -1 });
+authSessionSchema.index({ refreshTokenHash: 1 }, { unique: true, sparse: true });
 // TTL Index
 authSessionSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 

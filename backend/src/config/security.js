@@ -1,10 +1,6 @@
 const env = require('./env');
 
 module.exports = Object.freeze({
-  cors: Object.freeze({
-    origin: env.CORS_ORIGINS,
-    credentials: true,
-  }),
   helmet: Object.freeze({
     contentSecurityPolicy: env.NODE_ENV === 'production',
     crossOriginEmbedderPolicy: false,

@@ -9,16 +9,7 @@ const { toAuthResponseDto } = require('../dto/auth.dto');
 const { messages } = require('../../../constants');
 const env = require('../../../config/env');
 const security = require('../../../config/security');
-
-const getRequestMeta = (req) => ({
-  ipAddress: req.ip || req.headers['x-forwarded-for'] || null,
-  userAgent: req.headers['user-agent'] || null,
-  device: {
-    app: req.headers['x-client-app'] || 'web',
-    os: req.headers['x-client-os'] || null,
-    model: req.headers['x-client-model'] || null,
-  },
-});
+const { getRequestMeta } = require('../../../utils/request');
 
 const setRefreshCookie = (res, refreshToken, expiresAt) => {
   res.cookie(env.REFRESH_COOKIE_NAME, refreshToken, {
@@ -34,7 +25,7 @@ const clearRefreshCookie = (res) => {
   });
 };
 
-const sendAuthResponse = (res, result, message) => {
+const sendAuthResponse = (res, req, result, message) => {
   setRefreshCookie(res, result.refreshToken, result.expiresAt);
   return success(
     res,
@@ -43,7 +34,9 @@ const sendAuthResponse = (res, result, message) => {
       accessToken: result.accessToken,
       expiresIn: result.expiresIn,
     }),
-    message
+    message,
+    undefined,
+    req
   );
 };
 
@@ -58,7 +51,7 @@ const authController = {
         },
         getRequestMeta(req)
       );
-      return sendAuthResponse(res, result, messages.AUTH.LOGIN_SUCCESS);
+      return sendAuthResponse(res, req, result, messages.AUTH.LOGIN_SUCCESS);
     } catch (error) {
       return next(error);
     }
@@ -69,7 +62,7 @@ const authController = {
       const refreshToken =
         req.cookies?.[env.REFRESH_COOKIE_NAME] || req.body?.refreshToken || null;
       const result = await authService.refreshSession(refreshToken, getRequestMeta(req));
-      return sendAuthResponse(res, result, messages.AUTH.TOKEN_REFRESHED);
+      return sendAuthResponse(res, req, result, messages.AUTH.TOKEN_REFRESHED);
     } catch (error) {
       clearRefreshCookie(res);
       return next(error);
@@ -85,7 +78,7 @@ const authController = {
         revokeAll: req.body.revokeAll,
       });
       clearRefreshCookie(res);
-      return success(res, null, messages.AUTH.LOGOUT_SUCCESS);
+      return success(res, null, messages.AUTH.LOGOUT_SUCCESS, undefined, req);
     } catch (error) {
       return next(error);
     }
@@ -94,7 +87,7 @@ const authController = {
   me: async (req, res, next) => {
     try {
       const user = await authService.getCurrentUser(req.auth.userId);
-      return success(res, { user });
+      return success(res, { user }, undefined, undefined, req);
     } catch (error) {
       return next(error);
     }
@@ -104,7 +97,7 @@ const authController = {
     try {
       const phone = req.body.phone || req.body.mobile;
       const result = await otpService.requestOtp({ phone, purpose }, getRequestMeta(req));
-      return success(res, result, messages.AUTH.OTP_SENT);
+      return success(res, result, messages.AUTH.OTP_SENT, undefined, req);
     } catch (error) {
       return next(error);
     }
@@ -120,7 +113,7 @@ const authController = {
         },
         getRequestMeta(req)
       );
-      return sendAuthResponse(res, result, messages.AUTH.OTP_VERIFIED);
+      return sendAuthResponse(res, req, result, messages.AUTH.OTP_VERIFIED);
     } catch (error) {
       return next(error);
     }
@@ -132,7 +125,7 @@ const authController = {
         { phone: req.body.mobile, otp: req.body.otp, purpose: 'login_parent' },
         getRequestMeta(req)
       );
-      return sendAuthResponse(res, result, messages.AUTH.LOGIN_SUCCESS);
+      return sendAuthResponse(res, req, result, messages.AUTH.LOGIN_SUCCESS);
     } catch (error) {
       return next(error);
     }
@@ -149,7 +142,7 @@ const authController = {
         getRequestMeta(req),
         { issueSession: false }
       );
-      return success(res, result, messages.AUTH.OTP_VERIFIED);
+      return success(res, result, messages.AUTH.OTP_VERIFIED, undefined, req);
     } catch (error) {
       return next(error);
     }
@@ -161,7 +154,7 @@ const authController = {
         { email: req.body.email },
         getRequestMeta(req)
       );
-      return success(res, null, result.message);
+      return success(res, null, result.message, undefined, req);
     } catch (error) {
       return next(error);
     }
@@ -173,7 +166,7 @@ const authController = {
         { token: req.body.token, newPassword: req.body.newPassword },
         getRequestMeta(req)
       );
-      return success(res, null, result.message);
+      return success(res, null, result.message, undefined, req);
     } catch (error) {
       return next(error);
     }
@@ -190,7 +183,7 @@ const authController = {
         },
         getRequestMeta(req)
       );
-      return success(res, null, result.message);
+      return success(res, null, result.message, undefined, req);
     } catch (error) {
       return next(error);
     }
@@ -202,7 +195,7 @@ const authController = {
         req.auth.userId,
         getRequestMeta(req)
       );
-      return success(res, null, result.message);
+      return success(res, null, result.message, undefined, req);
     } catch (error) {
       return next(error);
     }
@@ -214,7 +207,13 @@ const authController = {
         { token: req.body.token },
         getRequestMeta(req)
       );
-      return success(res, { alreadyVerified: result.alreadyVerified }, result.message);
+      return success(
+        res,
+        { alreadyVerified: result.alreadyVerified },
+        result.message,
+        undefined,
+        req
+      );
     } catch (error) {
       return next(error);
     }
@@ -223,7 +222,7 @@ const authController = {
   listSessions: async (req, res, next) => {
     try {
       const sessions = await sessionService.listActiveSessions(req.auth.userId, req.auth.jti);
-      return success(res, { sessions });
+      return success(res, { sessions }, undefined, undefined, req);
     } catch (error) {
       return next(error);
     }
@@ -243,7 +242,7 @@ const authController = {
         clearRefreshCookie(res);
       }
 
-      return success(res, result, messages.AUTH.SESSION_REVOKED_SUCCESS);
+      return success(res, result, messages.AUTH.SESSION_REVOKED_SUCCESS, undefined, req);
     } catch (error) {
       return next(error);
     }
@@ -256,7 +255,7 @@ const authController = {
         currentSessionId: req.auth.sessionId,
         requestMeta: getRequestMeta(req),
       });
-      return success(res, result, messages.AUTH.SESSIONS_REVOKED_SUCCESS);
+      return success(res, result, messages.AUTH.SESSIONS_REVOKED_SUCCESS, undefined, req);
     } catch (error) {
       return next(error);
     }
@@ -265,7 +264,7 @@ const authController = {
   getAuthorization: async (req, res, next) => {
     try {
       const authorization = await authorizationService.getAuthorizationSnapshot(req.auth.userId);
-      return success(res, { authorization });
+      return success(res, { authorization }, undefined, undefined, req);
     } catch (error) {
       return next(error);
     }

@@ -1,6 +1,6 @@
 const rateLimit = require('express-rate-limit');
 const env = require('../../config/env');
-const { httpStatus, messages } = require('../../constants');
+const { httpStatus, messages, responseCodes } = require('../../constants');
 const { fail } = require('../../common/response');
 
 const createRateLimiter = ({
@@ -16,7 +16,7 @@ const createRateLimiter = ({
     legacyHeaders: false,
     keyGenerator,
     handler: (req, res) =>
-      fail(res, message, httpStatus.TOO_MANY_REQUESTS, 'RATE_LIMIT_EXCEEDED', null, req),
+      fail(res, message, httpStatus.TOO_MANY_REQUESTS, responseCodes.RATE_LIMIT_EXCEEDED, null, req),
   });
 
 const globalLimiter = createRateLimiter();

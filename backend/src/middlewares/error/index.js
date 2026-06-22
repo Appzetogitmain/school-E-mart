@@ -30,6 +30,29 @@ const errorHandler = (err, req, res, _next) => {
     );
   }
 
+  if (err.name === 'CastError') {
+    return fail(
+      res,
+      `Invalid ${err.path || 'identifier'}`,
+      httpStatus.BAD_REQUEST,
+      responseCodes.INVALID_OBJECT_ID,
+      null,
+      req
+    );
+  }
+
+  if (err.code === 11000) {
+    const field = Object.keys(err.keyPattern || {})[0] || 'field';
+    return fail(
+      res,
+      `Duplicate value for ${field}`,
+      httpStatus.CONFLICT,
+      responseCodes.DUPLICATE_KEY,
+      null,
+      req
+    );
+  }
+
   logger.error('Unhandled error', {
     message: err.message,
     stack: err.stack,

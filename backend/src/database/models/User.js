@@ -33,7 +33,7 @@ const userSchema = new mongoose.Schema({
   passwordAlgo: { 
     type: String,
     enum: ['argon2id', 'bcrypt'],
-    default: 'argon2id'
+    default: 'bcrypt'
   },
   emailVerifiedAt: { type: Date },
   phoneVerifiedAt: { type: Date },

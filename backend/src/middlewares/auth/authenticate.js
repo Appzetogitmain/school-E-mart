@@ -2,7 +2,10 @@ const { UnauthorizedError, ForbiddenError } = require('../../common/errors');
 const { verifyAccessToken } = require('../../common/tokens');
 const sessionRepository = require('../../modules/auth/repositories/session.repository');
 const userRepository = require('../../modules/auth/repositories/user.repository');
+const { assertAccountEligible } = require('../../modules/auth/services/authorizationContext.service');
 const { messages } = require('../../constants');
+
+const SESSION_TOUCH_INTERVAL_MS = 5 * 60 * 1000;
 
 const extractBearerToken = (req) => {
   const header = req.headers.authorization;
@@ -36,6 +39,8 @@ const authenticate = async (req, _res, next) => {
       throw new ForbiddenError(messages.AUTH.ACCOUNT_INACTIVE, 'ACCOUNT_INACTIVE');
     }
 
+    await assertAccountEligible(user);
+
     req.auth = {
       userId: user._id.toString(),
       jti: payload.jti,
@@ -49,7 +54,11 @@ const authenticate = async (req, _res, next) => {
     };
     req.user = user;
 
-    await sessionRepository.touch(session._id);
+    const lastSeenAt = session.lastSeenAt ? new Date(session.lastSeenAt).getTime() : 0;
+    if (Date.now() - lastSeenAt > SESSION_TOUCH_INTERVAL_MS) {
+      await sessionRepository.touch(session._id);
+    }
+
     return next();
   } catch (error) {
     return next(error);

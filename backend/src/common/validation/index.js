@@ -1,5 +1,6 @@
 const Joi = require('joi');
 const { ValidationError } = require('../errors');
+const { ALL_ROLES } = require('../../constants/roles');
 
 const validate = (schema, source = 'body') => (req, _res, next) => {
   const data = req[source];
@@ -55,7 +56,7 @@ const schemas = {
 
   objectId: Joi.string().trim().pattern(/^[a-fA-F0-9]{24}$/),
 
-  role: Joi.string().valid('parent', 'school', 'teacher', 'vendor', 'admin'),
+  role: Joi.string().valid(...ALL_ROLES),
 };
 
 module.exports = {

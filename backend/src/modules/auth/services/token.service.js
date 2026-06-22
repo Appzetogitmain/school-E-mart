@@ -4,8 +4,13 @@ const { signAccessToken } = require('../../../common/tokens');
 const { hashToken } = require('../../../utils');
 const sessionRepository = require('../repositories/session.repository');
 const userRepository = require('../repositories/user.repository');
+const auditRepository = require('../repositories/audit.repository');
 const { UnauthorizedError } = require('../../../common/errors');
 const { messages } = require('../../../constants');
+const {
+  assertAccountEligible,
+  resolveAuthorizationContext,
+} = require('./authorizationContext.service');
 
 const buildTokenPayload = (user, sessionJti, permissions = [], scopes = []) => ({
   sub: user._id.toString(),
@@ -52,9 +57,28 @@ const tokenService = {
     }
 
     const incomingHash = hashToken(refreshToken);
-    const session = await sessionRepository.findActiveByRefreshHash(incomingHash);
+    const session = await sessionRepository.findByRefreshHash(incomingHash);
 
     if (!session) {
+      throw new UnauthorizedError(messages.AUTH.INVALID_TOKEN, 'INVALID_REFRESH_TOKEN');
+    }
+
+    if (session.revokedAt) {
+      await sessionRepository.revokeAllForUser(session.userId);
+      await auditRepository.log({
+        actorUserId: session.userId,
+        action: 'auth.refresh.reuse_detected',
+        entityType: 'AuthSession',
+        entityId: session._id,
+        ipAddress: meta.ipAddress || null,
+        userAgent: meta.userAgent || null,
+        correlationId: meta.requestId || null,
+        after: { revokedSessionId: session._id.toString() },
+      });
+      throw new UnauthorizedError(messages.AUTH.REFRESH_TOKEN_REUSE, 'REFRESH_TOKEN_REUSE');
+    }
+
+    if (session.expiresAt <= new Date()) {
       throw new UnauthorizedError(messages.AUTH.INVALID_TOKEN, 'INVALID_REFRESH_TOKEN');
     }
 
@@ -64,10 +88,23 @@ const tokenService = {
       throw new UnauthorizedError(messages.AUTH.UNAUTHORIZED);
     }
 
+    await assertAccountEligible(user);
+
+    const authContext = await resolveAuthorizationContext(user);
+
     await sessionRepository.revokeById(session._id);
 
-    const { permissions = [], scopes = [] } = meta.authContext || {};
-    return this.createSessionTokens(user, { permissions, scopes }, meta);
+    const tokens = await this.createSessionTokens(
+      user,
+      { permissions: authContext.permissions, scopes: authContext.scopes },
+      meta
+    );
+
+    return {
+      ...tokens,
+      user,
+      authContext,
+    };
   },
 };
 
