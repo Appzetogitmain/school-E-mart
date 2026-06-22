@@ -18,13 +18,12 @@ module.exports = function softDeletePlugin(schema, options) {
   // Exclude soft-deleted docs from standard queries unless options.includeDeleted is true
   const queryHooks = ['find', 'findOne', 'findOneAndUpdate', 'update', 'updateOne', 'updateMany', 'count', 'countDocuments'];
   
-  queryHooks.forEach(hook => {
-    schema.pre(hook, function (next) {
+  queryHooks.forEach((hook) => {
+    schema.pre(hook, function excludeSoftDeleted() {
       if (this.options && this.options.includeDeleted === true) {
-        return next();
+        return;
       }
       this.where({ 'softDelete.isDeleted': { $ne: true } });
-      next();
     });
   });
 

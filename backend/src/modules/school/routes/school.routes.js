@@ -1,0 +1,370 @@
+const express = require('express');
+const { Joi } = require('../../../common/validation');
+const schoolController = require('../controllers/school.controller');
+const validators = require('../validators/school.validator');
+const { validateBody, validateParams, validateQuery } = require('../../../middlewares/validation');
+const { protectedRoute } = require('../../../middlewares/auth/guards');
+const { PERMISSIONS } = require('../../../constants/permissions');
+const { ROLES } = require('../../../constants/roles');
+const { resolveSchool } = require('../middlewares/resolveSchool');
+
+const router = express.Router();
+
+const superAdminOnly = protectedRoute({ roles: [ROLES.SUPER_ADMIN], scopes: ['*'] });
+const schoolAdmin = protectedRoute({
+  roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN],
+  permissions: [PERMISSIONS.SCHOOLS_READ],
+  tenant: { requireTenantId: false },
+});
+const schoolWrite = protectedRoute({
+  roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN],
+  permissions: [PERMISSIONS.SCHOOLS_WRITE],
+  tenant: { requireTenantId: false },
+});
+const teacherRead = protectedRoute({
+  roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN, ROLES.TEACHER],
+  permissions: [PERMISSIONS.STUDENTS_READ],
+  tenant: { requireTenantId: false },
+});
+const teacherWrite = protectedRoute({
+  roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN, ROLES.TEACHER],
+  permissions: [PERMISSIONS.ATTENDANCE_WRITE],
+  tenant: { requireTenantId: false },
+});
+
+router.get(
+  '/',
+  ...superAdminOnly,
+  validateQuery(validators.paginationQuery),
+  schoolController.listSchools
+);
+router.post('/', ...superAdminOnly, validateBody(validators.createSchoolSchema), schoolController.createSchool);
+
+router.get(
+  '/:schoolId',
+  ...schoolAdmin,
+  resolveSchool(),
+  schoolController.getSchool
+);
+router.patch(
+  '/:schoolId',
+  ...schoolWrite,
+  resolveSchool(),
+  validateBody(validators.updateSchoolSchema),
+  schoolController.updateSchool
+);
+router.delete(
+  '/:schoolId',
+  ...superAdminOnly,
+  resolveSchool(),
+  schoolController.deleteSchool
+);
+
+router.post(
+  '/:schoolId/teachers',
+  ...protectedRoute({ roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN], permissions: [PERMISSIONS.TEACHERS_WRITE] }),
+  resolveSchool(),
+  validateBody(validators.createTeacherSchema),
+  schoolController.createTeacher
+);
+router.get(
+  '/:schoolId/teachers',
+  ...protectedRoute({ roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN], permissions: [PERMISSIONS.TEACHERS_READ] }),
+  resolveSchool(),
+  validateQuery(validators.paginationQuery),
+  schoolController.listTeachers
+);
+router.get(
+  '/:schoolId/teachers/:teacherId',
+  ...protectedRoute({ roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN], permissions: [PERMISSIONS.TEACHERS_READ] }),
+  resolveSchool(),
+  validateParams(validators.teacherIdParam),
+  schoolController.getTeacher
+);
+router.patch(
+  '/:schoolId/teachers/:teacherId',
+  ...protectedRoute({ roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN], permissions: [PERMISSIONS.TEACHERS_WRITE] }),
+  resolveSchool(),
+  validateParams(validators.teacherIdParam),
+  validateBody(validators.updateTeacherSchema),
+  schoolController.updateTeacher
+);
+router.patch(
+  '/:schoolId/teachers/:teacherId/status',
+  ...protectedRoute({ roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN], permissions: [PERMISSIONS.TEACHERS_WRITE] }),
+  resolveSchool(),
+  validateParams(validators.teacherIdParam),
+  validateBody(validators.teacherStatusSchema),
+  schoolController.setTeacherStatus
+);
+
+router.get(
+  '/:schoolId/classes',
+  ...protectedRoute({ roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN, ROLES.TEACHER], permissions: [PERMISSIONS.CLASSES_READ] }),
+  resolveSchool(),
+  schoolController.listClasses
+);
+router.post(
+  '/:schoolId/classes',
+  ...protectedRoute({ roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN], permissions: [PERMISSIONS.CLASSES_WRITE] }),
+  resolveSchool(),
+  validateBody(validators.createClassSchema),
+  schoolController.createClass
+);
+router.patch(
+  '/:schoolId/classes/:classGrade',
+  ...protectedRoute({ roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN], permissions: [PERMISSIONS.CLASSES_WRITE] }),
+  resolveSchool(),
+  validateParams(validators.classGradeParam),
+  validateBody(validators.updateClassSchema),
+  schoolController.updateClass
+);
+router.delete(
+  '/:schoolId/classes/:classGrade',
+  ...protectedRoute({ roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN], permissions: [PERMISSIONS.CLASSES_WRITE] }),
+  resolveSchool(),
+  validateParams(validators.classGradeParam),
+  schoolController.deleteClass
+);
+router.post(
+  '/:schoolId/classes/:classGrade/class-teacher',
+  ...protectedRoute({ roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN], permissions: [PERMISSIONS.CLASSES_WRITE] }),
+  resolveSchool(),
+  validateParams(validators.classGradeParam),
+  validateBody(validators.assignClassTeacherSchema),
+  schoolController.assignClassTeacher
+);
+
+router.get(
+  '/:schoolId/classes/:classGrade/sections',
+  ...protectedRoute({ roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN, ROLES.TEACHER], permissions: [PERMISSIONS.CLASSES_READ] }),
+  resolveSchool(),
+  validateParams(validators.classGradeParam),
+  schoolController.listSections
+);
+router.post(
+  '/:schoolId/classes/:classGrade/sections',
+  ...protectedRoute({ roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN], permissions: [PERMISSIONS.CLASSES_WRITE] }),
+  resolveSchool(),
+  validateParams(validators.classGradeParam),
+  validateBody(validators.createSectionSchema),
+  schoolController.createSection
+);
+router.patch(
+  '/:schoolId/classes/:classGrade/sections/:section',
+  ...protectedRoute({ roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN], permissions: [PERMISSIONS.CLASSES_WRITE] }),
+  resolveSchool(),
+  validateParams(validators.sectionParam),
+  validateBody(validators.updateSectionSchema),
+  schoolController.updateSection
+);
+router.delete(
+  '/:schoolId/classes/:classGrade/sections/:section',
+  ...protectedRoute({ roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN], permissions: [PERMISSIONS.CLASSES_WRITE] }),
+  resolveSchool(),
+  validateParams(validators.sectionParam),
+  schoolController.deleteSection
+);
+router.post(
+  '/:schoolId/classes/:classGrade/sections/:section/students',
+  ...protectedRoute({ roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN], permissions: [PERMISSIONS.STUDENTS_WRITE] }),
+  resolveSchool(),
+  validateParams(validators.sectionParam),
+  validateBody(validators.assignStudentsSchema),
+  schoolController.assignStudentsToSection
+);
+
+router.post(
+  '/:schoolId/students',
+  ...protectedRoute({ roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN], permissions: [PERMISSIONS.STUDENTS_WRITE] }),
+  resolveSchool(),
+  validateBody(validators.createStudentSchema),
+  schoolController.registerStudent
+);
+router.get(
+  '/:schoolId/students',
+  ...teacherRead,
+  resolveSchool(),
+  validateQuery(validators.paginationQuery),
+  schoolController.listStudents
+);
+router.get(
+  '/:schoolId/students/:studentId',
+  ...teacherRead,
+  resolveSchool(),
+  validateParams(validators.studentIdParam),
+  schoolController.getStudent
+);
+router.patch(
+  '/:schoolId/students/:studentId',
+  ...protectedRoute({ roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN], permissions: [PERMISSIONS.STUDENTS_WRITE] }),
+  resolveSchool(),
+  validateParams(validators.studentIdParam),
+  validateBody(validators.updateStudentSchema),
+  schoolController.updateStudent
+);
+router.post(
+  '/:schoolId/students/:studentId/transfer',
+  ...protectedRoute({ roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN], permissions: [PERMISSIONS.STUDENTS_WRITE] }),
+  resolveSchool(),
+  validateParams(validators.studentIdParam),
+  validateBody(validators.transferStudentSchema),
+  schoolController.transferStudent
+);
+router.patch(
+  '/:schoolId/students/:studentId/status',
+  ...protectedRoute({ roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN], permissions: [PERMISSIONS.STUDENTS_WRITE] }),
+  resolveSchool(),
+  validateParams(validators.studentIdParam),
+  validateBody(validators.studentStatusSchema),
+  schoolController.updateStudentStatus
+);
+router.delete(
+  '/:schoolId/students/:studentId',
+  ...protectedRoute({ roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN], permissions: [PERMISSIONS.STUDENTS_WRITE] }),
+  resolveSchool(),
+  validateParams(validators.studentIdParam),
+  schoolController.deleteStudent
+);
+
+router.get(
+  '/:schoolId/subjects',
+  ...protectedRoute({ roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN, ROLES.TEACHER], permissions: [PERMISSIONS.CLASSES_READ] }),
+  resolveSchool(),
+  validateQuery(validators.paginationQuery),
+  schoolController.listSubjects
+);
+router.post(
+  '/:schoolId/subjects',
+  ...protectedRoute({ roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN], permissions: [PERMISSIONS.CLASSES_WRITE] }),
+  resolveSchool(),
+  validateBody(validators.subjectSchema),
+  schoolController.createSubject
+);
+router.patch(
+  '/:schoolId/subjects/:code',
+  ...protectedRoute({ roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN], permissions: [PERMISSIONS.CLASSES_WRITE] }),
+  resolveSchool(),
+  validateParams(validators.subjectCodeParam),
+  validateBody(validators.updateSubjectSchema),
+  schoolController.updateSubject
+);
+router.delete(
+  '/:schoolId/subjects/:code',
+  ...protectedRoute({ roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN], permissions: [PERMISSIONS.CLASSES_WRITE] }),
+  resolveSchool(),
+  validateParams(validators.subjectCodeParam),
+  schoolController.deleteSubject
+);
+router.post(
+  '/:schoolId/subjects/assign',
+  ...protectedRoute({ roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN], permissions: [PERMISSIONS.CLASSES_WRITE] }),
+  resolveSchool(),
+  validateBody(validators.assignSubjectSchema),
+  schoolController.assignSubject
+);
+
+router.post(
+  '/:schoolId/attendance',
+  ...teacherWrite,
+  resolveSchool(),
+  validateBody(validators.markAttendanceSchema),
+  schoolController.markAttendance
+);
+router.patch(
+  '/:schoolId/attendance/:attendanceId',
+  ...teacherWrite,
+  resolveSchool(),
+  validateParams(validators.attendanceIdParam),
+  validateBody(validators.updateAttendanceSchema),
+  schoolController.updateAttendance
+);
+router.get(
+  '/:schoolId/attendance/daily',
+  ...protectedRoute({ roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN, ROLES.TEACHER], permissions: [PERMISSIONS.ATTENDANCE_READ] }),
+  resolveSchool(),
+  validateQuery(
+    Joi.object({
+      date: Joi.date().required(),
+      classGrade: Joi.string().trim().optional(),
+      section: Joi.string().trim().optional(),
+    })
+  ),
+  schoolController.getDailyAttendance
+);
+router.get(
+  '/:schoolId/attendance/history',
+  ...protectedRoute({ roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN, ROLES.TEACHER], permissions: [PERMISSIONS.ATTENDANCE_READ] }),
+  resolveSchool(),
+  validateQuery(validators.attendanceQuerySchema),
+  schoolController.getAttendanceHistory
+);
+router.get(
+  '/:schoolId/attendance/summary/monthly',
+  ...protectedRoute({ roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN, ROLES.TEACHER], permissions: [PERMISSIONS.ATTENDANCE_READ] }),
+  resolveSchool(),
+  validateQuery(validators.monthlyAttendanceQuerySchema),
+  schoolController.getMonthlyAttendanceSummary
+);
+
+router.post(
+  '/:schoolId/timetable',
+  ...protectedRoute({ roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN], permissions: [PERMISSIONS.TIMETABLE_WRITE] }),
+  resolveSchool(),
+  validateBody(validators.timetableSlotSchema),
+  schoolController.createTimetableSlot
+);
+router.get(
+  '/:schoolId/timetable',
+  ...protectedRoute({ roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN, ROLES.TEACHER], permissions: [PERMISSIONS.TIMETABLE_READ] }),
+  resolveSchool(),
+  validateQuery(validators.timetableQuerySchema),
+  schoolController.listTimetable
+);
+router.get(
+  '/:schoolId/timetable/class',
+  ...protectedRoute({ roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN, ROLES.TEACHER], permissions: [PERMISSIONS.TIMETABLE_READ] }),
+  resolveSchool(),
+  validateQuery(validators.timetableQuerySchema),
+  schoolController.getClassTimetable
+);
+router.get(
+  '/:schoolId/timetable/teacher',
+  ...protectedRoute({ roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN, ROLES.TEACHER], permissions: [PERMISSIONS.TIMETABLE_READ] }),
+  resolveSchool(),
+  validateQuery(validators.timetableQuerySchema),
+  schoolController.getTeacherTimetable
+);
+router.patch(
+  '/:schoolId/timetable/:slotId',
+  ...protectedRoute({ roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN], permissions: [PERMISSIONS.TIMETABLE_WRITE] }),
+  resolveSchool(),
+  validateParams(validators.slotIdParam),
+  validateBody(
+    validators.timetableSlotSchema.fork(
+      [
+        'academicYear',
+        'classGrade',
+        'section',
+        'dayOfWeek',
+        'periodNumber',
+        'startTime',
+        'endTime',
+        'subjectCode',
+        'teacherProfileId',
+        'room',
+      ],
+      (schema) => schema.optional()
+    )
+  ),
+  schoolController.updateTimetableSlot
+);
+router.delete(
+  '/:schoolId/timetable/:slotId',
+  ...protectedRoute({ roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN], permissions: [PERMISSIONS.TIMETABLE_WRITE] }),
+  resolveSchool(),
+  validateParams(validators.slotIdParam),
+  schoolController.deleteTimetableSlot
+);
+
+module.exports = router;

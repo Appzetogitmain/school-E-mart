@@ -18,7 +18,7 @@ module.exports = function auditPlugin(schema, options) {
   });
 
   // Pre-save hook to update timestamps and version
-  schema.pre('save', function (next) {
+  schema.pre('save', function updateAuditOnSave() {
     if (this.isNew) {
       this.audit.createdAt = this.audit.createdAt || new Date();
       this.audit.version = 1;
@@ -28,20 +28,18 @@ module.exports = function auditPlugin(schema, options) {
         this.audit.version = (this.audit.version || 0) + 1;
       }
     }
-    next();
   });
 
   // Update hooks (findOneAndUpdate, updateOne, updateMany)
   const updateHooks = ['findOneAndUpdate', 'updateOne', 'updateMany'];
-  updateHooks.forEach(hook => {
-    schema.pre(hook, function (next) {
+  updateHooks.forEach((hook) => {
+    schema.pre(hook, function updateAuditOnUpdate() {
       const update = this.getUpdate();
       if (update && !update.$set) update.$set = {};
       if (update && !update.$inc) update.$inc = {};
-      
+
       update.$set['audit.updatedAt'] = new Date();
       update.$inc['audit.version'] = 1;
-      next();
     });
   });
 };
