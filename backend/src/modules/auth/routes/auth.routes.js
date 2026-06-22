@@ -2,7 +2,7 @@ const express = require('express');
 const authController = require('../controllers/auth.controller');
 const authValidators = require('../validators/auth.validator');
 const { validateBody, validateParams } = require('../../../middlewares/validation');
-const { authenticate } = require('../../../middlewares/auth/authenticate');
+const { protectedRoute } = require('../../../middlewares/auth/guards');
 const { authLimiter, otpLimiter } = require('../../../middlewares/rateLimit');
 const { ROLES } = require('../../../constants/roles');
 
@@ -52,12 +52,12 @@ router.post(
 
 router.post(
   '/logout',
-  authenticate,
+  ...protectedRoute(),
   validateBody(authValidators.logoutSchema),
   authController.logout
 );
 
-router.get('/me', authenticate, authController.me);
+router.get('/me', ...protectedRoute(), authController.me);
 
 router.post(
   '/parent/otp/request',
@@ -110,7 +110,7 @@ router.post(
 
 router.post(
   '/change-password',
-  authenticate,
+  ...protectedRoute(),
   authLimiter,
   validateBody(authValidators.changePasswordSchema),
   authController.changePassword
@@ -118,7 +118,7 @@ router.post(
 
 router.post(
   '/email/verify/request',
-  authenticate,
+  ...protectedRoute(),
   authLimiter,
   validateBody(authValidators.emailVerifyRequestSchema),
   authController.sendEmailVerification
@@ -131,17 +131,17 @@ router.post(
   authController.verifyEmail
 );
 
-router.get('/permissions', authenticate, authController.getAuthorization);
+router.get('/permissions', ...protectedRoute(), authController.getAuthorization);
 
-router.get('/sessions', authenticate, authController.listSessions);
+router.get('/sessions', ...protectedRoute(), authController.listSessions);
 
 router.delete(
   '/sessions/:sessionId',
-  authenticate,
+  ...protectedRoute(),
   validateParams(authValidators.sessionIdParamSchema),
   authController.revokeSession
 );
 
-router.post('/sessions/revoke-others', authenticate, authController.revokeOtherSessions);
+router.post('/sessions/revoke-others', ...protectedRoute(), authController.revokeOtherSessions);
 
 module.exports = router;

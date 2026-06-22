@@ -69,6 +69,13 @@ const buildEnv = () => ({
   REQUEST_ID_HEADER: process.env.REQUEST_ID_HEADER || 'x-request-id',
 
   SHUTDOWN_TIMEOUT_MS: Number(process.env.SHUTDOWN_TIMEOUT_MS) || 10_000,
+
+  REDIS_URL: process.env.REDIS_URL || null,
+  REDIS_KEY_PREFIX: process.env.REDIS_KEY_PREFIX || 'school-emart:',
+
+  OUTBOX_WORKER_ENABLED: process.env.OUTBOX_WORKER_ENABLED === 'true',
+  OUTBOX_POLL_INTERVAL_MS: Number(process.env.OUTBOX_POLL_INTERVAL_MS) || 5000,
+  OUTBOX_BATCH_SIZE: Number(process.env.OUTBOX_BATCH_SIZE) || 20,
 });
 
 const validateEnv = (config) => {

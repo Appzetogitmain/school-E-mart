@@ -7,6 +7,7 @@ const logger = require('./logger');
 const cors = require('./cors');
 const security = require('./security');
 const rateLimit = require('./rateLimit');
+const integrations = require('./integrations');
 
 module.exports = Object.freeze({
   env,
@@ -18,4 +19,5 @@ module.exports = Object.freeze({
   cors,
   security,
   rateLimit,
+  integrations,
 });

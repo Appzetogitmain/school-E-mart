@@ -19,8 +19,8 @@ const authService = {
     const normalizedEmail = normalizeEmail(email);
     const lockKey = normalizedEmail;
 
-    if (loginAttemptTracker.isLocked(lockKey, requestMeta.ipAddress)) {
-      const remainingMs = loginAttemptTracker.getRemainingLockMs(lockKey, requestMeta.ipAddress);
+    if (await loginAttemptTracker.isLocked(lockKey, requestMeta.ipAddress)) {
+      const remainingMs = await loginAttemptTracker.getRemainingLockMs(lockKey, requestMeta.ipAddress);
       throw new TooManyRequestsError(
         `${messages.AUTH.ACCOUNT_LOCKED}. Try again in ${Math.ceil(remainingMs / 60000)} minutes.`,
         'ACCOUNT_LOCKED'
@@ -32,7 +32,7 @@ const authService = {
       : await userRepository.findByEmail(normalizedEmail);
 
     if (!user || !user.passwordHash) {
-      loginAttemptTracker.recordFailure(lockKey, requestMeta.ipAddress);
+      await loginAttemptTracker.recordFailure(lockKey, requestMeta.ipAddress);
       await auditRepository.log({
         action: 'auth.login.failed',
         entityType: 'User',
@@ -52,7 +52,7 @@ const authService = {
 
     const passwordValid = await verifyPassword(password, user.passwordHash);
     if (!passwordValid) {
-      loginAttemptTracker.recordFailure(lockKey, requestMeta.ipAddress);
+      await loginAttemptTracker.recordFailure(lockKey, requestMeta.ipAddress);
       await auditRepository.log({
         actorUserId: user._id,
         actorRole: user.role,
@@ -67,7 +67,7 @@ const authService = {
       throw new UnauthorizedError(messages.AUTH.INVALID_CREDENTIALS, 'INVALID_CREDENTIALS');
     }
 
-    loginAttemptTracker.reset(lockKey, requestMeta.ipAddress);
+    await loginAttemptTracker.reset(lockKey, requestMeta.ipAddress);
     return issueAuthenticatedSession(user, requestMeta, 'auth.login.success');
   },
 

@@ -7,6 +7,7 @@ const {
 } = require('../../../common/errors');
 const { generateOtp, hashOtp, normalizePhone } = require('../../../utils');
 const { messages, roles } = require('../../../constants');
+const { getStateStore } = require('../../../common/stateStore');
 const smsService = require('../../../common/sms');
 const otpRepository = require('../repositories/otp.repository');
 const userRepository = require('../repositories/user.repository');
@@ -22,7 +23,8 @@ const OTP_PURPOSE_CONFIG = {
   password_reset: { length: 6, requiresUser: true, role: null },
 };
 
-const resendCooldowns = new Map();
+const COOLDOWN_KEY_PREFIX = 'auth:otp-cooldown:';
+const cooldownTtlSeconds = () => Math.max(1, Math.ceil(env.OTP_RESEND_COOLDOWN_MS / 1000));
 
 const otpService = {
   async requestOtp({ phone, purpose }, requestMeta = {}) {
@@ -32,16 +34,20 @@ const otpService = {
       throw new UnauthorizedError(messages.AUTH.OTP_INVALID, 'INVALID_OTP_PURPOSE');
     }
 
-    const cooldownKey = `${normalizedPhone}:${purpose}`;
-    const lastSentAt = resendCooldowns.get(cooldownKey);
-    if (lastSentAt && Date.now() - lastSentAt < env.OTP_RESEND_COOLDOWN_MS) {
-      const waitSeconds = Math.ceil(
-        (env.OTP_RESEND_COOLDOWN_MS - (Date.now() - lastSentAt)) / 1000
-      );
-      throw new TooManyRequestsError(
-        `Please wait ${waitSeconds} seconds before requesting another OTP`,
-        'OTP_RESEND_COOLDOWN'
-      );
+    const store = getStateStore();
+    const cooldownKey = `${COOLDOWN_KEY_PREFIX}${normalizedPhone}:${purpose}`;
+
+    if (await store.exists(cooldownKey)) {
+      const lastSentRaw = await store.get(cooldownKey);
+      const lastSentAt = Number(lastSentRaw || 0);
+      const elapsed = Date.now() - lastSentAt;
+      if (elapsed < env.OTP_RESEND_COOLDOWN_MS) {
+        const waitSeconds = Math.ceil((env.OTP_RESEND_COOLDOWN_MS - elapsed) / 1000);
+        throw new TooManyRequestsError(
+          `Please wait ${waitSeconds} seconds before requesting another OTP`,
+          'OTP_RESEND_COOLDOWN'
+        );
+      }
     }
 
     const windowStart = new Date(Date.now() - env.OTP_WINDOW_MS);
@@ -65,9 +71,10 @@ const otpService = {
           entityId: new mongoose.Types.ObjectId(),
           ipAddress: requestMeta.ipAddress,
           userAgent: requestMeta.userAgent,
+          correlationId: requestMeta.requestId || null,
           after: { phone: normalizedPhone, purpose, reason: 'user_not_found' },
         });
-        resendCooldowns.set(cooldownKey, Date.now());
+        await store.set(cooldownKey, String(Date.now()), cooldownTtlSeconds());
         return { sent: true, expiresIn: Math.floor(env.OTP_EXPIRY_MS / 1000) };
       }
     }
@@ -88,7 +95,7 @@ const otpService = {
     });
 
     await smsService.sendOtp({ phone: normalizedPhone, otp, purpose });
-    resendCooldowns.set(cooldownKey, Date.now());
+    await store.set(cooldownKey, String(Date.now()), cooldownTtlSeconds());
 
     await auditRepository.log({
       action: 'auth.otp.requested',
@@ -96,6 +103,7 @@ const otpService = {
       entityId: new mongoose.Types.ObjectId(),
       ipAddress: requestMeta.ipAddress,
       userAgent: requestMeta.userAgent,
+      correlationId: requestMeta.requestId || null,
       after: { phone: normalizedPhone, purpose },
     });
 
@@ -130,6 +138,7 @@ const otpService = {
         entityId: otpRecord._id,
         ipAddress: requestMeta.ipAddress,
         userAgent: requestMeta.userAgent,
+        correlationId: requestMeta.requestId || null,
         after: { phone: normalizedPhone, purpose },
       });
       throw new UnauthorizedError(messages.AUTH.OTP_INVALID, 'OTP_INVALID');
@@ -143,6 +152,7 @@ const otpService = {
       entityId: otpRecord._id,
       ipAddress: requestMeta.ipAddress,
       userAgent: requestMeta.userAgent,
+      correlationId: requestMeta.requestId || null,
       after: { phone: normalizedPhone, purpose },
     });
 

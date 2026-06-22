@@ -1,9 +1,4 @@
-const express = require('express');
-const { authRoutes } = require('../../modules/auth');
-
-const registerV1Routes = (router) => {
-  router.use('/auth', authRoutes);
-};
+const { registerV1Routes } = require('../moduleRegistry');
 
 module.exports = {
   registerV1Routes,

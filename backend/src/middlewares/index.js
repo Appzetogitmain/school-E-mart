@@ -5,6 +5,7 @@ const { errorHandler, notFoundHandler } = require('./error');
 const { validateBody, validateParams, validateQuery, validateHeaders } = require('./validation');
 const { globalLimiter, authLimiter, otpLimiter, createRateLimiter } = require('./rateLimit');
 const authMiddleware = require('./auth');
+const { requireIdempotencyKey } = require('./idempotency');
 
 module.exports = {
   requestId,
@@ -21,4 +22,5 @@ module.exports = {
   otpLimiter,
   createRateLimiter,
   auth: authMiddleware,
+  requireIdempotencyKey,
 };

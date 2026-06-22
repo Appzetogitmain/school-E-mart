@@ -1,8 +1,4 @@
-const {
-  authenticate,
-  optionalAuthenticate,
-  extractBearerToken,
-} = require('./authenticate');
+const { authenticate, optionalAuthenticate, extractBearerToken } = require('./authenticate');
 const {
   authorizeRoles,
   requirePermissions,
@@ -11,6 +7,7 @@ const {
 } = require('./authorize');
 const { requireTenant, attachTenantFromAuth } = require('./tenant');
 const { requireEmailVerified } = require('./requireEmailVerified');
+const { protectedRoute, optionalAuthRoute } = require('./guards');
 
 module.exports = {
   authenticate,
@@ -23,4 +20,6 @@ module.exports = {
   requireTenant,
   attachTenantFromAuth,
   requireEmailVerified,
+  protectedRoute,
+  optionalAuthRoute,
 };

@@ -1,9 +1,12 @@
 const { startServer } = require('./app');
 const { disconnectDB } = require('./database/connection');
+const { connectStateStore, disconnectStateStore } = require('./common/stateStore');
+const { startOutboxWorker, stopOutboxWorker } = require('./services/outbox');
 const config = require('./config');
 const logger = require('./common/logger');
 
 let server;
+let outboxWorkerTimer;
 let isShuttingDown = false;
 
 const shutdown = async (signal, exitCode = 0) => {
@@ -20,6 +23,8 @@ const shutdown = async (signal, exitCode = 0) => {
   forceExitTimer.unref();
 
   try {
+    stopOutboxWorker(outboxWorkerTimer);
+
     if (server) {
       await new Promise((resolve, reject) => {
         server.close((error) => (error ? reject(error) : resolve()));
@@ -27,6 +32,7 @@ const shutdown = async (signal, exitCode = 0) => {
       logger.info('HTTP server closed');
     }
 
+    await disconnectStateStore();
     await disconnectDB();
     clearTimeout(forceExitTimer);
     process.exit(exitCode);
@@ -63,6 +69,15 @@ const registerProcessHandlers = () => {
 
 const bootstrap = async () => {
   registerProcessHandlers();
+  await connectStateStore();
+
+  if (config.integrations.outbox.workerEnabled) {
+    outboxWorkerTimer = startOutboxWorker({
+      pollIntervalMs: config.integrations.outbox.pollIntervalMs,
+      batchSize: config.integrations.outbox.batchSize,
+    });
+  }
+
   server = await startServer();
 };
 
