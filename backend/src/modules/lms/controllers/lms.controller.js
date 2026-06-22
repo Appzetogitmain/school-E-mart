@@ -1,0 +1,446 @@
+const { success, created, paginated } = require('../../../common/response');
+const asyncHandler = require('../../../utils/asyncHandler');
+const {
+  assertCourseInSchool,
+  assertManageAccess,
+  assertEnrollmentAccess,
+} = require('../policies/lmsAccess.policy');
+const courseService = require('../services/course.service');
+const chapterService = require('../services/chapter.service');
+const lessonService = require('../services/lesson.service');
+const assignmentService = require('../services/assignment.service');
+const quizService = require('../services/quiz.service');
+const progressService = require('../services/progress.service');
+const certificateService = require('../services/certificate.service');
+const noteService = require('../services/note.service');
+const commentService = require('../services/comment.service');
+const bookmarkService = require('../services/bookmark.service');
+
+const withCourse = async (req) => {
+  const course = await assertCourseInSchool(req.schoolId, req.params.courseId);
+  req.lmsCourse = course;
+  return course;
+};
+
+const lmsController = {
+  createCourse: asyncHandler(async (req, res) => {
+    const course = await courseService.createCourse(req.schoolId, req.body);
+    return created(res, { course }, 'Course created successfully', req);
+  }),
+
+  listCourses: asyncHandler(async (req, res) => {
+    const { data, pagination } = await courseService.listCourses(req.schoolId, req.query);
+    return paginated(res, { courses: data }, pagination, 'Courses fetched successfully', req);
+  }),
+
+  getCourse: asyncHandler(async (req, res) => {
+    const course = await courseService.getCourse(req.schoolId, req.params.courseId);
+    return success(res, { course }, 'Course fetched successfully', undefined, req);
+  }),
+
+  updateCourse: asyncHandler(async (req, res) => {
+    const course = await withCourse(req);
+    await assertManageAccess(req, course);
+    const updated = await courseService.updateCourse(req.schoolId, req.params.courseId, req.body);
+    return success(res, { course: updated }, 'Course updated successfully', undefined, req);
+  }),
+
+  deleteCourse: asyncHandler(async (req, res) => {
+    const course = await withCourse(req);
+    await assertManageAccess(req, course);
+    await courseService.deleteCourse(req.schoolId, req.params.courseId, req.auth.userId);
+    return success(res, null, 'Course deleted successfully', undefined, req);
+  }),
+
+  setCourseStatus: asyncHandler(async (req, res) => {
+    const course = await withCourse(req);
+    await assertManageAccess(req, course);
+    const updated = await courseService.setCourseStatus(req.schoolId, req.params.courseId, req.body.status);
+    return success(res, { course: updated }, 'Course status updated successfully', undefined, req);
+  }),
+
+  createChapter: asyncHandler(async (req, res) => {
+    const course = await withCourse(req);
+    await assertManageAccess(req, course);
+    const chapter = await chapterService.createChapter(req.schoolId, req.params.courseId, req.body);
+    return created(res, { chapter }, 'Chapter created successfully', req);
+  }),
+
+  listChapters: asyncHandler(async (req, res) => {
+    const chapters = await chapterService.listChapters(req.schoolId, req.params.courseId);
+    return success(res, { chapters }, 'Chapters fetched successfully', undefined, req);
+  }),
+
+  updateChapter: asyncHandler(async (req, res) => {
+    const course = await withCourse(req);
+    await assertManageAccess(req, course);
+    const chapter = await chapterService.updateChapter(
+      req.schoolId,
+      req.params.courseId,
+      req.params.chapterId,
+      req.body
+    );
+    return success(res, { chapter }, 'Chapter updated successfully', undefined, req);
+  }),
+
+  deleteChapter: asyncHandler(async (req, res) => {
+    const course = await withCourse(req);
+    await assertManageAccess(req, course);
+    await chapterService.deleteChapter(
+      req.schoolId,
+      req.params.courseId,
+      req.params.chapterId,
+      req.auth.userId
+    );
+    return success(res, null, 'Chapter deleted successfully', undefined, req);
+  }),
+
+  reorderChapters: asyncHandler(async (req, res) => {
+    const course = await withCourse(req);
+    await assertManageAccess(req, course);
+    const chapters = await chapterService.reorderChapters(
+      req.schoolId,
+      req.params.courseId,
+      req.body.orderedIds
+    );
+    return success(res, { chapters }, 'Chapters reordered successfully', undefined, req);
+  }),
+
+  createLesson: asyncHandler(async (req, res) => {
+    const course = await withCourse(req);
+    await assertManageAccess(req, course);
+    const lesson = await lessonService.createLesson(req.schoolId, req.params.courseId, req.body);
+    return created(res, { lesson }, 'Lesson created successfully', req);
+  }),
+
+  listLessons: asyncHandler(async (req, res) => {
+    const { data, pagination } = await lessonService.listLessons(req.schoolId, req.params.courseId, req.query);
+    return paginated(res, { lessons: data }, pagination, 'Lessons fetched successfully', req);
+  }),
+
+  getLesson: asyncHandler(async (req, res) => {
+    const lesson = await lessonService.getLesson(req.schoolId, req.params.courseId, req.params.lessonId);
+    return success(res, { lesson }, 'Lesson fetched successfully', undefined, req);
+  }),
+
+  updateLesson: asyncHandler(async (req, res) => {
+    const course = await withCourse(req);
+    await assertManageAccess(req, course);
+    const lesson = await lessonService.updateLesson(
+      req.schoolId,
+      req.params.courseId,
+      req.params.lessonId,
+      req.body
+    );
+    return success(res, { lesson }, 'Lesson updated successfully', undefined, req);
+  }),
+
+  deleteLesson: asyncHandler(async (req, res) => {
+    const course = await withCourse(req);
+    await assertManageAccess(req, course);
+    await lessonService.deleteLesson(
+      req.schoolId,
+      req.params.courseId,
+      req.params.lessonId,
+      req.auth.userId
+    );
+    return success(res, null, 'Lesson deleted successfully', undefined, req);
+  }),
+
+  reorderLessons: asyncHandler(async (req, res) => {
+    const course = await withCourse(req);
+    await assertManageAccess(req, course);
+    const lessons = await lessonService.reorderLessons(req.schoolId, req.params.courseId, req.body.orderedIds);
+    return success(res, { lessons }, 'Lessons reordered successfully', undefined, req);
+  }),
+
+  createAssignment: asyncHandler(async (req, res) => {
+    const course = await withCourse(req);
+    await assertManageAccess(req, course);
+    const assignment = await assignmentService.createAssignment(req.schoolId, req.params.courseId, req.body);
+    return created(res, { assignment }, 'Assignment created successfully', req);
+  }),
+
+  listAssignments: asyncHandler(async (req, res) => {
+    const { data, pagination } = await assignmentService.listAssignments(
+      req.schoolId,
+      req.params.courseId,
+      req.query
+    );
+    return paginated(res, { assignments: data }, pagination, 'Assignments fetched successfully', req);
+  }),
+
+  updateAssignment: asyncHandler(async (req, res) => {
+    const course = await withCourse(req);
+    await assertManageAccess(req, course);
+    const assignment = await assignmentService.updateAssignment(
+      req.schoolId,
+      req.params.courseId,
+      req.params.assignmentId,
+      req.body
+    );
+    return success(res, { assignment }, 'Assignment updated successfully', undefined, req);
+  }),
+
+  deleteAssignment: asyncHandler(async (req, res) => {
+    const course = await withCourse(req);
+    await assertManageAccess(req, course);
+    await assignmentService.deleteAssignment(
+      req.schoolId,
+      req.params.courseId,
+      req.params.assignmentId,
+      req.auth.userId
+    );
+    return success(res, null, 'Assignment deleted successfully', undefined, req);
+  }),
+
+  submitAssignment: asyncHandler(async (req, res) => {
+    await assertEnrollmentAccess(req, req.params.courseId, req.body.studentId);
+    const submission = await assignmentService.submitAssignment(
+      req,
+      req.schoolId,
+      req.params.courseId,
+      req.params.assignmentId,
+      req.body
+    );
+    return success(res, { submission }, 'Assignment submitted successfully', undefined, req);
+  }),
+
+  evaluateSubmission: asyncHandler(async (req, res) => {
+    const course = await withCourse(req);
+    await assertManageAccess(req, course);
+    const submission = await assignmentService.evaluateSubmission(
+      req.schoolId,
+      req.params.courseId,
+      req.params.assignmentId,
+      req.params.submissionId,
+      req.body
+    );
+    return success(res, { submission }, 'Submission evaluated successfully', undefined, req);
+  }),
+
+  listSubmissions: asyncHandler(async (req, res) => {
+    const course = await withCourse(req);
+    await assertManageAccess(req, course);
+    const { data, pagination } = await assignmentService.listSubmissions(
+      req.schoolId,
+      req.params.courseId,
+      req.params.assignmentId,
+      req.query
+    );
+    return paginated(res, { submissions: data }, pagination, 'Submissions fetched successfully', req);
+  }),
+
+  createQuiz: asyncHandler(async (req, res) => {
+    const course = await withCourse(req);
+    await assertManageAccess(req, course);
+    const quiz = await quizService.createQuiz(req.schoolId, req.params.courseId, req.body);
+    return created(res, { quiz }, 'Quiz created successfully', req);
+  }),
+
+  listQuizzes: asyncHandler(async (req, res) => {
+    const { data, pagination } = await quizService.listQuizzes(req.schoolId, req.params.courseId, req.query);
+    return paginated(res, { quizzes: data }, pagination, 'Quizzes fetched successfully', req);
+  }),
+
+  updateQuiz: asyncHandler(async (req, res) => {
+    const course = await withCourse(req);
+    await assertManageAccess(req, course);
+    const quiz = await quizService.updateQuiz(req.schoolId, req.params.courseId, req.params.quizId, req.body);
+    return success(res, { quiz }, 'Quiz updated successfully', undefined, req);
+  }),
+
+  deleteQuiz: asyncHandler(async (req, res) => {
+    const course = await withCourse(req);
+    await assertManageAccess(req, course);
+    await quizService.deleteQuiz(req.schoolId, req.params.courseId, req.params.quizId, req.auth.userId);
+    return success(res, null, 'Quiz deleted successfully', undefined, req);
+  }),
+
+  startQuizAttempt: asyncHandler(async (req, res) => {
+    await assertEnrollmentAccess(req, req.params.courseId, req.body?.studentId);
+    const attempt = await quizService.startAttempt(req, req.schoolId, req.params.courseId, req.params.quizId);
+    return created(res, { attempt }, 'Quiz attempt started', req);
+  }),
+
+  submitQuizAttempt: asyncHandler(async (req, res) => {
+    await assertEnrollmentAccess(req, req.params.courseId, req.body.studentId);
+    const attempt = await quizService.submitAttempt(
+      req,
+      req.schoolId,
+      req.params.courseId,
+      req.params.quizId,
+      req.params.attemptId,
+      req.body.answers
+    );
+    return success(res, { attempt }, 'Quiz submitted successfully', undefined, req);
+  }),
+
+  getQuizAttempts: asyncHandler(async (req, res) => {
+    const { data, pagination } = await quizService.getAttemptHistory(
+      req.schoolId,
+      req.params.courseId,
+      req.params.quizId,
+      req.query
+    );
+    return paginated(res, { attempts: data }, pagination, 'Quiz attempts fetched successfully', req);
+  }),
+
+  enrollStudent: asyncHandler(async (req, res) => {
+    const course = await withCourse(req);
+    await assertManageAccess(req, course);
+    const enrollment = await progressService.enrollStudent(req.schoolId, req.params.courseId, req.body);
+    return created(res, { enrollment }, 'Student enrolled successfully', req);
+  }),
+
+  updateLessonProgress: asyncHandler(async (req, res) => {
+    await assertEnrollmentAccess(req, req.params.courseId, req.body.studentId);
+    const progress = await progressService.updateLessonProgress(
+      req.lmsUserId || req.auth.userId,
+      req.schoolId,
+      req.params.courseId,
+      req.params.lessonId,
+      req.body,
+      req.lmsStudent?._id
+    );
+    return success(res, { progress }, 'Lesson progress updated successfully', undefined, req);
+  }),
+
+  getCourseProgress: asyncHandler(async (req, res) => {
+    await assertEnrollmentAccess(req, req.params.courseId, req.query.studentId);
+    const progress = await progressService.getCourseProgress(
+      req.lmsUserId || req.auth.userId,
+      req.params.courseId
+    );
+    return success(res, { progress }, 'Course progress fetched successfully', undefined, req);
+  }),
+
+  getLearningHistory: asyncHandler(async (req, res) => {
+    const history = await progressService.getLearningHistory(req.auth.userId, req.schoolId, req.query);
+    return success(res, { history }, 'Learning history fetched successfully', undefined, req);
+  }),
+
+  generateCertificate: asyncHandler(async (req, res) => {
+    await assertEnrollmentAccess(req, req.params.courseId, req.body.studentId);
+    const certificate = await certificateService.generateCertificate(
+      req.schoolId,
+      req.params.courseId,
+      req.lmsStudent._id,
+      req.lmsUserId || req.auth.userId
+    );
+    return created(res, { certificate }, 'Certificate issued successfully', req);
+  }),
+
+  listCertificates: asyncHandler(async (req, res) => {
+    const userId = req.auth.role === 'parent' ? req.auth.userId : null;
+    const { data, pagination } = await certificateService.listCertificates(req.schoolId, req.query, userId);
+    return paginated(res, { certificates: data }, pagination, 'Certificates fetched successfully', req);
+  }),
+
+  getCertificate: asyncHandler(async (req, res) => {
+    const certificate = await certificateService.getCertificate(req.schoolId, req.params.certificateId);
+    return success(res, { certificate }, 'Certificate fetched successfully', undefined, req);
+  }),
+
+  createNote: asyncHandler(async (req, res) => {
+    const note = await noteService.createNote(req.auth.userId, req.schoolId, req.body);
+    return created(res, { note }, 'Note created successfully', req);
+  }),
+
+  listNotes: asyncHandler(async (req, res) => {
+    const { data, pagination } = await noteService.listNotes(req.auth.userId, req.schoolId, req.query);
+    return paginated(res, { notes: data }, pagination, 'Notes fetched successfully', req);
+  }),
+
+  updateNote: asyncHandler(async (req, res) => {
+    const note = await noteService.updateNote(req.auth.userId, req.schoolId, req.params.noteId, req.body);
+    return success(res, { note }, 'Note updated successfully', undefined, req);
+  }),
+
+  deleteNote: asyncHandler(async (req, res) => {
+    await noteService.deleteNote(req.auth.userId, req.schoolId, req.params.noteId);
+    return success(res, null, 'Note deleted successfully', undefined, req);
+  }),
+
+  addComment: asyncHandler(async (req, res) => {
+    const comment = await commentService.addComment(
+      req,
+      req.schoolId,
+      req.params.courseId,
+      req.params.lessonId,
+      req.body
+    );
+    return created(res, { comment }, 'Comment added successfully', req);
+  }),
+
+  listComments: asyncHandler(async (req, res) => {
+    const { data, pagination } = await commentService.listComments(
+      req.schoolId,
+      req.params.courseId,
+      req.params.lessonId,
+      req.query
+    );
+    return paginated(res, { comments: data }, pagination, 'Comments fetched successfully', req);
+  }),
+
+  updateComment: asyncHandler(async (req, res) => {
+    const comment = await commentService.updateComment(
+      req,
+      req.schoolId,
+      req.params.courseId,
+      req.params.lessonId,
+      req.params.commentId,
+      req.body
+    );
+    return success(res, { comment }, 'Comment updated successfully', undefined, req);
+  }),
+
+  deleteComment: asyncHandler(async (req, res) => {
+    await commentService.deleteComment(
+      req,
+      req.schoolId,
+      req.params.courseId,
+      req.params.lessonId,
+      req.params.commentId
+    );
+    return success(res, null, 'Comment deleted successfully', undefined, req);
+  }),
+
+  moderateComment: asyncHandler(async (req, res) => {
+    const comment = await commentService.moderateComment(
+      req.schoolId,
+      req.params.courseId,
+      req.params.lessonId,
+      req.params.commentId,
+      req.body.moderationStatus
+    );
+    return success(res, { comment }, 'Comment moderated successfully', undefined, req);
+  }),
+
+  addBookmark: asyncHandler(async (req, res) => {
+    const bookmark = await bookmarkService.addBookmark(req.auth.userId, req.schoolId, req.body);
+    return created(res, { bookmark }, 'Bookmark saved successfully', req);
+  }),
+
+  removeBookmark: asyncHandler(async (req, res) => {
+    await bookmarkService.removeBookmark(
+      req.auth.userId,
+      req.schoolId,
+      req.query.courseId,
+      req.query.lessonId
+    );
+    return success(res, null, 'Bookmark removed successfully', undefined, req);
+  }),
+
+  listBookmarks: asyncHandler(async (req, res) => {
+    const { data, pagination } = await bookmarkService.listBookmarks(req.auth.userId, req.schoolId, req.query);
+    return paginated(res, { bookmarks: data }, pagination, 'Bookmarks fetched successfully', req);
+  }),
+
+  resumeLearning: asyncHandler(async (req, res) => {
+    const resume = await bookmarkService.getResumeLearning(req.auth.userId, req.schoolId);
+    return success(res, { resume }, 'Resume learning fetched successfully', undefined, req);
+  }),
+};
+
+module.exports = lmsController;

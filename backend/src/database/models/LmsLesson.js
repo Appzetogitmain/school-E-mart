@@ -4,9 +4,21 @@ const softDeletePlugin = require('../plugins/softDelete.plugin');
 
 const lmsLessonSchema = new mongoose.Schema({
   courseId: { type: mongoose.Schema.Types.ObjectId, ref: 'LmsCourse', required: true },
+  chapterId: { type: mongoose.Schema.Types.ObjectId, ref: 'LmsChapter' },
   title: { type: String, required: true },
   slug: { type: String, required: true, unique: true },
   description: { type: String },
+  lessonType: {
+    type: String,
+    enum: ['video', 'reading', 'quiz', 'assignment'],
+    default: 'video',
+  },
+  visibility: {
+    type: String,
+    enum: ['visible', 'hidden'],
+    default: 'visible',
+  },
+  contentHtml: { type: String },
   videoId: { type: mongoose.Schema.Types.ObjectId, ref: 'Attachment' },
   durationSec: { type: Number },
   resources: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Attachment' }],
@@ -15,8 +27,8 @@ const lmsLessonSchema = new mongoose.Schema({
     type: String,
     enum: ['draft', 'published'],
     required: true,
-    default: 'draft'
-  }
+    default: 'draft',
+  },
 }, { collection: 'lmsLessons' });
 
 // Plugins
@@ -25,7 +37,7 @@ lmsLessonSchema.plugin(softDeletePlugin);
 
 // Indexes
 // slug is unique
-lmsLessonSchema.index({ courseId: 1, status: 1, displayOrder: 1 });
+lmsLessonSchema.index({ courseId: 1, chapterId: 1, status: 1, displayOrder: 1 });
 // Soft delete compound index
 lmsLessonSchema.index({ 'softDelete.isDeleted': 1, 'audit.updatedAt': -1 });
 
