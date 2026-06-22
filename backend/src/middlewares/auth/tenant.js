@@ -1,5 +1,6 @@
 const { UnauthorizedError, ForbiddenError } = require('../../common/errors');
 const { messages, roles } = require('../../constants');
+const { getTenantSchoolId } = require('../../helpers/tenantContext');
 const tenantPolicy = require('../../modules/auth/policies/tenant.policy');
 
 const { ROLES } = roles;
@@ -24,7 +25,7 @@ const requireTenant =
       );
 
       if (options.requireTenantId && !tenantSchoolId) {
-        throw new ForbiddenError('Tenant identifier is required', 'TENANT_REQUIRED');
+        throw new ForbiddenError(messages.AUTH.TENANT_REQUIRED, 'TENANT_REQUIRED');
       }
 
       req.tenant = {
@@ -45,7 +46,7 @@ const attachTenantFromAuth = (req, _res, next) => {
   }
 
   req.tenant = {
-    schoolId: req.auth.tenantSchoolId || null,
+    schoolId: getTenantSchoolId(req),
     bypassed: tenantPolicy.isSuperAdmin(req.auth),
     requestedSchoolId: tenantPolicy.resolveRequestedTenantId(req),
   };

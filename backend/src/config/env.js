@@ -74,7 +74,6 @@ const buildEnv = () => ({
 const validateEnv = (config) => {
   const requiredInProduction = [
     'JWT_ACCESS_SECRET',
-    'JWT_REFRESH_SECRET',
     'OTP_HMAC_SECRET',
     'MONGODB_URI',
   ];
@@ -86,7 +85,7 @@ const validateEnv = (config) => {
       }
     });
 
-    const secretKeys = ['JWT_ACCESS_SECRET', 'JWT_REFRESH_SECRET', 'OTP_HMAC_SECRET'];
+    const secretKeys = ['JWT_ACCESS_SECRET', 'OTP_HMAC_SECRET'];
     const minSecretLength = 32;
 
     secretKeys.forEach((key) => {

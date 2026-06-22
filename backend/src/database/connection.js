@@ -1,12 +1,13 @@
 const mongoose = require('mongoose');
 const databaseConfig = require('../config/database');
 const logger = require('../common/logger');
+const { DATABASE_STATE } = require('../constants/enums');
 
 const READY_STATE = {
-  0: 'disconnected',
-  1: 'connected',
-  2: 'connecting',
-  3: 'disconnecting',
+  [DATABASE_STATE.DISCONNECTED]: 'disconnected',
+  [DATABASE_STATE.CONNECTED]: 'connected',
+  [DATABASE_STATE.CONNECTING]: 'connecting',
+  [DATABASE_STATE.DISCONNECTING]: 'disconnecting',
 };
 
 let listenersRegistered = false;
@@ -44,7 +45,7 @@ const registerConnectionEvents = () => {
 const connectDB = async (uri = databaseConfig.uri) => {
   registerConnectionEvents();
 
-  if (mongoose.connection.readyState === 1) {
+  if (mongoose.connection.readyState === DATABASE_STATE.CONNECTED) {
     logger.debug('MongoDB connection already established');
     return mongoose.connection;
   }
@@ -62,7 +63,7 @@ const connectDB = async (uri = databaseConfig.uri) => {
 };
 
 const disconnectDB = async () => {
-  if (mongoose.connection.readyState === 0) {
+  if (mongoose.connection.readyState === DATABASE_STATE.DISCONNECTED) {
     return;
   }
 
@@ -76,7 +77,7 @@ const getDatabaseStatus = () => {
   return {
     status: READY_STATE[readyState] || 'unknown',
     readyState,
-    connected: readyState === 1,
+    connected: readyState === DATABASE_STATE.CONNECTED,
     host: host || null,
     name: name || null,
   };

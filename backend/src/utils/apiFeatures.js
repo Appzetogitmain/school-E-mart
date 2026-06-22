@@ -1,3 +1,5 @@
+const { parsePagination } = require('../common/pagination');
+
 class ApiFeatures {
   constructor(query, queryString = {}) {
     this.query = query;
@@ -38,7 +40,7 @@ class ApiFeatures {
     return this;
   }
 
-  sort(defaultSort = '-createdAt') {
+  sort(defaultSort = '-audit.createdAt') {
     const sortBy = this.queryString.sort
       ? this.queryString.sort.split(',').join(' ')
       : defaultSort;
@@ -56,14 +58,8 @@ class ApiFeatures {
     return this;
   }
 
-  paginate(defaultLimit = 20, maxLimit = 100) {
-    const page = Math.max(1, Number.parseInt(this.queryString.page, 10) || 1);
-    const limit = Math.min(
-      maxLimit,
-      Math.max(1, Number.parseInt(this.queryString.limit, 10) || defaultLimit)
-    );
-    const skip = (page - 1) * limit;
-
+  paginate(defaults = {}) {
+    const { page, limit, skip } = parsePagination(this.queryString, defaults);
     this.page = page;
     this.limit = limit;
     this.query = this.query.skip(skip).limit(limit);

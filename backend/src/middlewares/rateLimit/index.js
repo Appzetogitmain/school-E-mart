@@ -1,11 +1,11 @@
 const rateLimit = require('express-rate-limit');
-const env = require('../../config/env');
+const config = require('../../config');
 const { httpStatus, messages, responseCodes } = require('../../constants');
 const { fail } = require('../../common/response');
 
 const createRateLimiter = ({
-  windowMs = env.RATE_LIMIT_WINDOW_MS,
-  max = env.RATE_LIMIT_MAX,
+  windowMs = config.rateLimit.windowMs,
+  max = config.rateLimit.max,
   message = messages.COMMON.INTERNAL_ERROR,
   keyGenerator,
 } = {}) =>
@@ -22,13 +22,13 @@ const createRateLimiter = ({
 const globalLimiter = createRateLimiter();
 
 const authLimiter = createRateLimiter({
-  max: env.AUTH_RATE_LIMIT_MAX,
+  max: config.rateLimit.authMax,
   message: 'Too many authentication attempts. Please try again later.',
 });
 
 const otpLimiter = createRateLimiter({
-  windowMs: env.OTP_WINDOW_MS,
-  max: env.OTP_MAX_PER_WINDOW,
+  windowMs: config.rateLimit.otpWindowMs,
+  max: config.rateLimit.otpMax,
   message: 'Too many OTP requests. Please try again later.',
 });
 

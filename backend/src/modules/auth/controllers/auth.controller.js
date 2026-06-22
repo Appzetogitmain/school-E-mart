@@ -10,6 +10,7 @@ const { messages } = require('../../../constants');
 const env = require('../../../config/env');
 const security = require('../../../config/security');
 const { getRequestMeta } = require('../../../utils/request');
+const asyncHandler = require('../../../utils/asyncHandler');
 
 const setRefreshCookie = (res, refreshToken, expiresAt) => {
   res.cookie(env.REFRESH_COOKIE_NAME, refreshToken, {
@@ -40,9 +41,19 @@ const sendAuthResponse = (res, req, result, message) => {
   );
 };
 
-const authController = {
-  login: (expectedRole = null) => async (req, res, next) => {
+const withRefreshCookieClear = (handler) =>
+  asyncHandler(async (req, res) => {
     try {
+      return await handler(req, res);
+    } catch (error) {
+      clearRefreshCookie(res);
+      throw error;
+    }
+  });
+
+const authController = {
+  login: (expectedRole = null) =>
+    asyncHandler(async (req, res) => {
       const result = await authService.loginWithPassword(
         {
           email: req.body.email,
@@ -52,223 +63,156 @@ const authController = {
         getRequestMeta(req)
       );
       return sendAuthResponse(res, req, result, messages.AUTH.LOGIN_SUCCESS);
-    } catch (error) {
-      return next(error);
-    }
-  },
+    }),
 
-  refresh: async (req, res, next) => {
-    try {
-      const refreshToken =
-        req.cookies?.[env.REFRESH_COOKIE_NAME] || req.body?.refreshToken || null;
-      const result = await authService.refreshSession(refreshToken, getRequestMeta(req));
-      return sendAuthResponse(res, req, result, messages.AUTH.TOKEN_REFRESHED);
-    } catch (error) {
-      clearRefreshCookie(res);
-      return next(error);
-    }
-  },
+  refresh: withRefreshCookieClear(async (req, res) => {
+    const refreshToken =
+      req.cookies?.[env.REFRESH_COOKIE_NAME] || req.body?.refreshToken || null;
+    const result = await authService.refreshSession(refreshToken, getRequestMeta(req));
+    return sendAuthResponse(res, req, result, messages.AUTH.TOKEN_REFRESHED);
+  }),
 
-  logout: async (req, res, next) => {
-    try {
-      await authService.logout({
-        userId: req.auth.userId,
-        jti: req.auth.jti,
-        sessionId: req.auth.sessionId,
-        revokeAll: req.body.revokeAll,
-      });
-      clearRefreshCookie(res);
-      return success(res, null, messages.AUTH.LOGOUT_SUCCESS, undefined, req);
-    } catch (error) {
-      return next(error);
-    }
-  },
+  logout: asyncHandler(async (req, res) => {
+    await authService.logout({
+      userId: req.auth.userId,
+      jti: req.auth.jti,
+      sessionId: req.auth.sessionId,
+      revokeAll: req.body.revokeAll,
+    });
+    clearRefreshCookie(res);
+    return success(res, null, messages.AUTH.LOGOUT_SUCCESS, undefined, req);
+  }),
 
-  me: async (req, res, next) => {
-    try {
-      const user = await authService.getCurrentUser(req.auth.userId);
-      return success(res, { user }, undefined, undefined, req);
-    } catch (error) {
-      return next(error);
-    }
-  },
+  me: asyncHandler(async (req, res) => {
+    const user = await authService.getCurrentUser(req.auth.userId);
+    return success(res, { user }, undefined, undefined, req);
+  }),
 
-  requestParentOtp: (purpose = 'login_parent') => async (req, res, next) => {
-    try {
+  requestParentOtp: (purpose = 'login_parent') =>
+    asyncHandler(async (req, res) => {
       const phone = req.body.phone || req.body.mobile;
       const result = await otpService.requestOtp({ phone, purpose }, getRequestMeta(req));
       return success(res, result, messages.AUTH.OTP_SENT, undefined, req);
-    } catch (error) {
-      return next(error);
-    }
-  },
+    }),
 
-  verifyParentOtp: async (req, res, next) => {
-    try {
-      const result = await otpService.loginParentWithOtp(
-        {
-          phone: req.body.phone || req.body.mobile,
-          otp: req.body.otp,
-          purpose: 'login_parent',
-        },
-        getRequestMeta(req)
-      );
-      return sendAuthResponse(res, req, result, messages.AUTH.OTP_VERIFIED);
-    } catch (error) {
-      return next(error);
-    }
-  },
+  verifyParentOtp: asyncHandler(async (req, res) => {
+    const result = await otpService.loginParentWithOtp(
+      {
+        phone: req.body.phone || req.body.mobile,
+        otp: req.body.otp,
+        purpose: 'login_parent',
+      },
+      getRequestMeta(req)
+    );
+    return sendAuthResponse(res, req, result, messages.AUTH.OTP_VERIFIED);
+  }),
 
-  parentWebLogin: async (req, res, next) => {
-    try {
-      const result = await otpService.loginParentWithOtp(
-        { phone: req.body.mobile, otp: req.body.otp, purpose: 'login_parent' },
-        getRequestMeta(req)
-      );
-      return sendAuthResponse(res, req, result, messages.AUTH.LOGIN_SUCCESS);
-    } catch (error) {
-      return next(error);
-    }
-  },
+  parentWebLogin: asyncHandler(async (req, res) => {
+    const result = await otpService.loginParentWithOtp(
+      { phone: req.body.mobile, otp: req.body.otp, purpose: 'login_parent' },
+      getRequestMeta(req)
+    );
+    return sendAuthResponse(res, req, result, messages.AUTH.LOGIN_SUCCESS);
+  }),
 
-  verifyWebRegisterOtp: async (req, res, next) => {
-    try {
-      const result = await otpService.verifyOtp(
-        {
-          phone: req.body.phone || req.body.mobile,
-          otp: req.body.otp,
-          purpose: 'web_register',
-        },
-        getRequestMeta(req),
-        { issueSession: false }
-      );
-      return success(res, result, messages.AUTH.OTP_VERIFIED, undefined, req);
-    } catch (error) {
-      return next(error);
-    }
-  },
+  verifyWebRegisterOtp: asyncHandler(async (req, res) => {
+    const result = await otpService.verifyOtp(
+      {
+        phone: req.body.phone || req.body.mobile,
+        otp: req.body.otp,
+        purpose: 'web_register',
+      },
+      getRequestMeta(req),
+      { issueSession: false }
+    );
+    return success(res, result, messages.AUTH.OTP_VERIFIED, undefined, req);
+  }),
 
-  forgotPassword: async (req, res, next) => {
-    try {
-      const result = await passwordService.forgotPassword(
-        { email: req.body.email },
-        getRequestMeta(req)
-      );
-      return success(res, null, result.message, undefined, req);
-    } catch (error) {
-      return next(error);
-    }
-  },
+  forgotPassword: asyncHandler(async (req, res) => {
+    const result = await passwordService.forgotPassword(
+      { email: req.body.email },
+      getRequestMeta(req)
+    );
+    return success(res, null, result.message, undefined, req);
+  }),
 
-  resetPassword: async (req, res, next) => {
-    try {
-      const result = await passwordService.resetPassword(
-        { token: req.body.token, newPassword: req.body.newPassword },
-        getRequestMeta(req)
-      );
-      return success(res, null, result.message, undefined, req);
-    } catch (error) {
-      return next(error);
-    }
-  },
+  resetPassword: asyncHandler(async (req, res) => {
+    const result = await passwordService.resetPassword(
+      { token: req.body.token, newPassword: req.body.newPassword },
+      getRequestMeta(req)
+    );
+    return success(res, null, result.message, undefined, req);
+  }),
 
-  changePassword: async (req, res, next) => {
-    try {
-      const result = await passwordService.changePassword(
-        {
-          userId: req.auth.userId,
-          currentPassword: req.body.currentPassword,
-          newPassword: req.body.newPassword,
-          sessionId: req.auth.sessionId,
-        },
-        getRequestMeta(req)
-      );
-      return success(res, null, result.message, undefined, req);
-    } catch (error) {
-      return next(error);
-    }
-  },
-
-  sendEmailVerification: async (req, res, next) => {
-    try {
-      const result = await emailVerificationService.sendVerificationEmail(
-        req.auth.userId,
-        getRequestMeta(req)
-      );
-      return success(res, null, result.message, undefined, req);
-    } catch (error) {
-      return next(error);
-    }
-  },
-
-  verifyEmail: async (req, res, next) => {
-    try {
-      const result = await emailVerificationService.verifyEmail(
-        { token: req.body.token },
-        getRequestMeta(req)
-      );
-      return success(
-        res,
-        { alreadyVerified: result.alreadyVerified },
-        result.message,
-        undefined,
-        req
-      );
-    } catch (error) {
-      return next(error);
-    }
-  },
-
-  listSessions: async (req, res, next) => {
-    try {
-      const sessions = await sessionService.listActiveSessions(req.auth.userId, req.auth.jti);
-      return success(res, { sessions }, undefined, undefined, req);
-    } catch (error) {
-      return next(error);
-    }
-  },
-
-  revokeSession: async (req, res, next) => {
-    try {
-      const result = await sessionService.revokeSession({
+  changePassword: asyncHandler(async (req, res) => {
+    const result = await passwordService.changePassword(
+      {
         userId: req.auth.userId,
-        sessionId: req.params.sessionId,
-        currentSessionId: req.auth.sessionId,
-        currentJti: req.auth.jti,
-        requestMeta: getRequestMeta(req),
-      });
+        currentPassword: req.body.currentPassword,
+        newPassword: req.body.newPassword,
+        sessionId: req.auth.sessionId,
+      },
+      getRequestMeta(req)
+    );
+    return success(res, null, result.message, undefined, req);
+  }),
 
-      if (result.revokedCurrent) {
-        clearRefreshCookie(res);
-      }
+  sendEmailVerification: asyncHandler(async (req, res) => {
+    const result = await emailVerificationService.sendVerificationEmail(
+      req.auth.userId,
+      getRequestMeta(req)
+    );
+    return success(res, null, result.message, undefined, req);
+  }),
 
-      return success(res, result, messages.AUTH.SESSION_REVOKED_SUCCESS, undefined, req);
-    } catch (error) {
-      return next(error);
+  verifyEmail: asyncHandler(async (req, res) => {
+    const result = await emailVerificationService.verifyEmail(
+      { token: req.body.token },
+      getRequestMeta(req)
+    );
+    return success(
+      res,
+      { alreadyVerified: result.alreadyVerified },
+      result.message,
+      undefined,
+      req
+    );
+  }),
+
+  listSessions: asyncHandler(async (req, res) => {
+    const sessions = await sessionService.listActiveSessions(req.auth.userId, req.auth.jti);
+    return success(res, { sessions }, undefined, undefined, req);
+  }),
+
+  revokeSession: asyncHandler(async (req, res) => {
+    const result = await sessionService.revokeSession({
+      userId: req.auth.userId,
+      sessionId: req.params.sessionId,
+      currentSessionId: req.auth.sessionId,
+      currentJti: req.auth.jti,
+      requestMeta: getRequestMeta(req),
+    });
+
+    if (result.revokedCurrent) {
+      clearRefreshCookie(res);
     }
-  },
 
-  revokeOtherSessions: async (req, res, next) => {
-    try {
-      const result = await sessionService.revokeOtherSessions({
-        userId: req.auth.userId,
-        currentSessionId: req.auth.sessionId,
-        requestMeta: getRequestMeta(req),
-      });
-      return success(res, result, messages.AUTH.SESSIONS_REVOKED_SUCCESS, undefined, req);
-    } catch (error) {
-      return next(error);
-    }
-  },
+    return success(res, result, messages.AUTH.SESSION_REVOKED_SUCCESS, undefined, req);
+  }),
 
-  getAuthorization: async (req, res, next) => {
-    try {
-      const authorization = await authorizationService.getAuthorizationSnapshot(req.auth.userId);
-      return success(res, { authorization }, undefined, undefined, req);
-    } catch (error) {
-      return next(error);
-    }
-  },
+  revokeOtherSessions: asyncHandler(async (req, res) => {
+    const result = await sessionService.revokeOtherSessions({
+      userId: req.auth.userId,
+      currentSessionId: req.auth.sessionId,
+      requestMeta: getRequestMeta(req),
+    });
+    return success(res, result, messages.AUTH.SESSIONS_REVOKED_SUCCESS, undefined, req);
+  }),
+
+  getAuthorization: asyncHandler(async (req, res) => {
+    const authorization = await authorizationService.getAuthorizationSnapshot(req.auth.userId);
+    return success(res, { authorization }, undefined, undefined, req);
+  }),
 };
 
 module.exports = authController;

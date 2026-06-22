@@ -1,6 +1,7 @@
 const { success } = require('../common/response');
 const { getDatabaseStatus } = require('../database/connection');
 const { env, app: appConfig } = require('../config');
+const { httpStatus } = require('../constants');
 const { HEALTH_STATUS } = require('../constants/enums');
 const asyncHandler = require('../utils/asyncHandler');
 
@@ -26,7 +27,7 @@ const getHealthPayload = () => {
 
 const getHealth = asyncHandler(async (req, res) => {
   const data = getHealthPayload();
-  return success(res, data, 'Server is healthy', 200, req);
+  return success(res, data, 'Server is healthy', httpStatus.OK, req);
 });
 
 module.exports = {

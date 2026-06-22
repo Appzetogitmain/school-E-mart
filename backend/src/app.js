@@ -28,6 +28,7 @@ const createApp = () => {
   app.use(cookieParser());
   app.use(middlewares.requestLogger);
 
+  // Infra probe endpoint (load balancers); versioned API lives under API_PREFIX
   app.get('/health', getHealth);
   app.use(config.env.API_PREFIX, routes);
 
