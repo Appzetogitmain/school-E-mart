@@ -9,7 +9,13 @@ const createStateStore = () => {
   const { redis } = config.integrations;
 
   if (redis.enabled) {
-    return new RedisStore({ url: redis.url, keyPrefix: redis.keyPrefix });
+    return new RedisStore({
+      url: redis.url,
+      keyPrefix: redis.keyPrefix,
+      connectTimeoutMs: redis.connectTimeoutMs,
+      startupMaxAttempts: redis.startupMaxAttempts,
+      startupRetryDelayMs: redis.startupRetryDelayMs,
+    });
   }
 
   if (config.env.NODE_ENV === 'production') {

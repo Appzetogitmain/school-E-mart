@@ -5,6 +5,9 @@ module.exports = Object.freeze({
     url: env.REDIS_URL || null,
     keyPrefix: env.REDIS_KEY_PREFIX,
     enabled: Boolean(env.REDIS_URL),
+    connectTimeoutMs: env.REDIS_CONNECT_TIMEOUT_MS,
+    startupMaxAttempts: env.REDIS_STARTUP_MAX_ATTEMPTS,
+    startupRetryDelayMs: env.REDIS_STARTUP_RETRY_DELAY_MS,
   }),
   outbox: Object.freeze({
     workerEnabled: env.OUTBOX_WORKER_ENABLED,

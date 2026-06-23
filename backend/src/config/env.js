@@ -1,5 +1,9 @@
 require('dotenv').config();
 
+const LOCAL_MONGODB_URI = 'mongodb://127.0.0.1:27017/school-emart';
+
+const resolveMongoUri = () => process.env.MONGODB_URI || process.env.MONGO_URI || null;
+
 const parseDurationMs = (value, fallbackMs) => {
   if (!value) return fallbackMs;
   const match = /^(\d+)([smhd])$/.exec(String(value).trim());
@@ -18,10 +22,14 @@ const parseList = (value, fallback = []) => {
     .filter(Boolean);
 };
 
-const buildEnv = () => ({
-  NODE_ENV: process.env.NODE_ENV || 'development',
+const buildEnv = () => {
+  const nodeEnv = process.env.NODE_ENV || 'development';
+  const mongoUri = resolveMongoUri() || (nodeEnv === 'production' ? null : LOCAL_MONGODB_URI);
+
+  return {
+  NODE_ENV: nodeEnv,
   PORT: Number(process.env.PORT) || 5000,
-  MONGODB_URI: process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/school-emart',
+  MONGODB_URI: mongoUri,
   API_PREFIX: process.env.API_PREFIX || '/api/v1',
   API_VERSION: process.env.API_VERSION || 'v1',
 
@@ -72,20 +80,28 @@ const buildEnv = () => ({
 
   REDIS_URL: process.env.REDIS_URL || null,
   REDIS_KEY_PREFIX: process.env.REDIS_KEY_PREFIX || 'school-emart:',
+  REDIS_CONNECT_TIMEOUT_MS: Number(process.env.REDIS_CONNECT_TIMEOUT_MS) || 10_000,
+  REDIS_STARTUP_MAX_ATTEMPTS: Number(process.env.REDIS_STARTUP_MAX_ATTEMPTS) || 5,
+  REDIS_STARTUP_RETRY_DELAY_MS: Number(process.env.REDIS_STARTUP_RETRY_DELAY_MS) || 2000,
 
   OUTBOX_WORKER_ENABLED: process.env.OUTBOX_WORKER_ENABLED === 'true',
   OUTBOX_POLL_INTERVAL_MS: Number(process.env.OUTBOX_POLL_INTERVAL_MS) || 5000,
   OUTBOX_BATCH_SIZE: Number(process.env.OUTBOX_BATCH_SIZE) || 20,
-});
+  };
+};
 
 const validateEnv = (config) => {
-  const requiredInProduction = [
-    'JWT_ACCESS_SECRET',
-    'OTP_HMAC_SECRET',
-    'MONGODB_URI',
-  ];
+  const requiredInProduction = ['JWT_ACCESS_SECRET', 'OTP_HMAC_SECRET'];
 
   if (config.NODE_ENV === 'production') {
+    if (!resolveMongoUri()) {
+      throw new Error('Missing required environment variable: MONGODB_URI or MONGO_URI');
+    }
+
+    if (!config.MONGODB_URI) {
+      throw new Error('MongoDB URI must be configured in production');
+    }
+
     requiredInProduction.forEach((key) => {
       if (!process.env[key]) {
         throw new Error(`Missing required environment variable: ${key}`);
