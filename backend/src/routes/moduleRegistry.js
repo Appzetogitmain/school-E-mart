@@ -4,8 +4,9 @@ const { schoolModule } = require('../modules/school');
 const { lmsModule } = require('../modules/lms');
 const { vendorModule } = require('../modules/vendor');
 const { ordersModule } = require('../modules/orders');
+const { adminModule } = require('../modules/admin');
 
-const v1Modules = [authModule, marketplaceModule, schoolModule, lmsModule, vendorModule, ordersModule];
+const v1Modules = [authModule, marketplaceModule, schoolModule, lmsModule, vendorModule, ordersModule, adminModule];
 
 const registerV1Routes = (router) => {
   v1Modules.forEach(({ mountPath, routes }) => {
