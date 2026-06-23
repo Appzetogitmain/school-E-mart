@@ -79,11 +79,11 @@ const assertAccountEligible = async (user) => {
 
   if (user.role === ROLES.VENDOR) {
     const vendorProfile = await profileRepository.getVendorByUserId(user._id);
-    if (vendorProfile?.approvalStatus === 'pending') {
-      throw new ForbiddenError(messages.AUTH.VENDOR_NOT_APPROVED, 'VENDOR_PENDING');
-    }
-    if (vendorProfile?.approvalStatus === 'suspended') {
+    if (vendorProfile?.approvalStatus === 'suspended' && user.status !== 'inactive') {
       throw new ForbiddenError(messages.AUTH.ACCOUNT_SUSPENDED, 'VENDOR_SUSPENDED');
+    }
+    if (vendorProfile?.approvalStatus === 'suspended' && user.status === 'inactive') {
+      throw new ForbiddenError(messages.AUTH.VENDOR_NOT_APPROVED, 'VENDOR_REJECTED');
     }
   }
 };
