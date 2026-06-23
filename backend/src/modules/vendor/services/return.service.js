@@ -30,6 +30,11 @@ const vendorReturnService = {
     const returnRequest = await returnRepository.findVendorReturn(vendorId, returnId);
     if (!returnRequest) throw new NotFoundError('Return request not found', 'RETURN_NOT_FOUND');
 
+    if (status === 'completed') {
+      const ordersReturnService = require('../../orders/services/return.service');
+      return ordersReturnService.completeReturn(returnId, actor);
+    }
+
     const allowed = VENDOR_RETURN_TRANSITIONS[returnRequest.status] || [];
     if (!allowed.includes(status)) {
       throw new BadRequestError(

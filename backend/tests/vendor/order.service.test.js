@@ -41,9 +41,16 @@ describe('vendor order service', () => {
     expect(order.orderStatus).toBe('packed');
   });
 
-  test('rejects order from placed status', async () => {
+  test('rejects order from placed status and restores inventory', async () => {
+    const Product = require('../../src/database/models/Product');
+    const product = await Product.findById((await vendorOrderService.getOrder(vendorId, orderId)).items[0].productId);
+    const stockBefore = product.stock;
+
     const order = await vendorOrderService.rejectOrder(vendorId, orderId, { userId, role: 'vendor' }, 'Out of stock');
     expect(order.orderStatus).toBe('cancelled');
+
+    const stockAfter = (await Product.findById(product._id)).stock;
+    expect(stockAfter).toBe(stockBefore + order.items[0].quantity);
   });
 
   test('blocks invalid status transition', async () => {

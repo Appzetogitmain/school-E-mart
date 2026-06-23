@@ -83,12 +83,13 @@ const vendorOrderService = {
     return this.updateOrderStatus(vendorId, orderId, { status: 'accepted', note }, actor);
   },
 
-  rejectOrder(vendorId, orderId, actor, reason) {
-    return this.updateOrderStatus(
-      vendorId,
+  async rejectOrder(vendorId, orderId, actor, reason) {
+    await this.getOrder(vendorId, orderId);
+    const cancellationService = require('../../orders/services/cancellation.service');
+    return cancellationService.cancelOrder(
       orderId,
-      { status: 'cancelled', note: reason || 'Rejected by vendor' },
-      actor
+      { reason: reason || 'Rejected by vendor', cancelledBy: actor.userId },
+      { role: 'vendor' }
     );
   },
 
