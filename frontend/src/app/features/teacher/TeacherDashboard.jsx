@@ -1,127 +1,125 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Bell, GraduationCap, Users, Clock, ArrowRight, 
   Calendar, BookOpen, FileText, CheckSquare, Plus,
-  ChevronDown, UserCheck, MessageSquare, PlusCircle, FileCheck
+  ChevronDown, UserCheck, MessageSquare, PlusCircle, FileCheck, Loader2
 } from 'lucide-react';
+import { getDailyAttendance, listStudents } from '../../../services/schoolApi';
+import { listCourses, listAssignments } from '../../../services/lmsApi';
+import { getErrorMessage } from '../../../utils/apiHelpers';
+import { parseClassGrade, parseSection } from '../../../utils/mappers/teacherMapper';
+import { useAuthUser, useTeacherSchoolId } from '../../../utils/teacherContext';
 
 const TeacherDashboard = () => {
   const navigate = useNavigate();
+  const schoolId = useTeacherSchoolId();
+  const authUser = useAuthUser();
 
-  // Retrieve logged-in teacher info or fallback to Priya Ma'am
-  const [teacherName, setTeacherName] = useState("Priya Ma'am");
-  const [teacherAvatar, setTeacherAvatar] = useState("https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=120&h=120&fit=crop");
+  const [teacherName, setTeacherName] = useState("Teacher");
+  const [teacherAvatar, setTeacherAvatar] = useState(
+    "https://ui-avatars.com/api/?name=Teacher&background=3b2d7d&color=fff"
+  );
 
   useEffect(() => {
-    const saved = localStorage.getItem('childInfo');
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      if (parsed.role === 'teacher') {
-        // Trim standard full name to greeting style
-        const firstName = parsed.name.split(' ')[0];
-        setTeacherName(`${firstName} Ma'am`);
-      }
+    const name = authUser?.name || authUser?.fullName;
+    if (name) {
+      const firstName = name.split(' ')[0];
+      setTeacherName(`${firstName}`);
     }
-    const profileSaved = localStorage.getItem('teacherProfileDetails');
-    if (profileSaved) {
-      const parsedProfile = JSON.parse(profileSaved);
-      if (parsedProfile.fullName) {
-        const firstName = parsedProfile.fullName.split(' ')[0];
-        setTeacherName(`${firstName} Ma'am`);
-      }
-      if (parsedProfile.avatar) {
-        setTeacherAvatar(parsedProfile.avatar);
-      }
+    if (authUser?.avatarUrl) {
+      setTeacherAvatar(authUser.avatarUrl);
     }
-  }, []);
+  }, [authUser]);
 
-  // Selected Class & Section states
   const [selectedClass, setSelectedClass] = useState('Class 5');
   const [selectedSection, setSelectedSection] = useState('Section A');
   const [isClassDropdownOpen, setIsClassDropdownOpen] = useState(false);
   const [isSectionDropdownOpen, setIsSectionDropdownOpen] = useState(false);
 
-  // Quick interactive alerts/modals
   const [showNotifications, setShowNotifications] = useState(false);
   const [showFabMenu, setShowFabMenu] = useState(false);
-  const [notifications, setNotifications] = useState([
-    { id: 1, title: 'New homework submission', time: '10 mins ago', read: false },
-    { id: 2, title: 'Principal shared a circular', time: '1 hour ago', read: false },
-    { id: 3, title: 'Meeting scheduled with Admin', time: '3 hours ago', read: true }
-  ]);
+  const [notifications] = useState([]);
 
-  // Mock database representing different classes
-  const classData = {
-    'Class 5-Section A': {
-      studentsCount: 38,
-      attendance: 'Pending',
-      attendanceCount: 0,
-      homeworkCount: 2,
-      diaryCount: 1,
-      studentsList: [
-        { roll: 1, name: 'Aarav Sharma', avatar: 'AS', color: 'bg-emerald-500' },
-        { roll: 2, name: 'Ananya Verma', avatar: 'AV', color: 'bg-purple-500' },
-        { roll: 3, name: 'Rohan Singh', avatar: 'RS', color: 'bg-blue-500' },
-        { roll: 4, name: 'Diya Patel', avatar: 'DP', color: 'bg-orange-500' },
-        { roll: 5, name: 'Vivaan Gupta', avatar: 'VG', color: 'bg-pink-500' }
-      ]
-    },
-    'Class 5-Section B': {
-      studentsCount: 35,
-      attendance: 'Completed',
-      attendanceCount: '94%',
-      homeworkCount: 1,
-      diaryCount: 0,
-      studentsList: [
-        { roll: 1, name: 'Kabir Mehta', avatar: 'KM', color: 'bg-blue-500' },
-        { roll: 2, name: 'Isha Joshi', avatar: 'IJ', color: 'bg-pink-500' },
-        { roll: 3, name: 'Reyansh Shah', avatar: 'RS', color: 'bg-emerald-500' },
-        { roll: 4, name: 'Myra Sen', avatar: 'MS', color: 'bg-purple-500' },
-        { roll: 5, name: 'Arjun Rao', avatar: 'AR', color: 'bg-orange-500' }
-      ]
-    },
-    'Class 6-Section A': {
-      studentsCount: 42,
-      attendance: 'Completed',
-      attendanceCount: '98%',
-      homeworkCount: 3,
-      diaryCount: 2,
-      studentsList: [
-        { roll: 1, name: 'Aditya Birla', avatar: 'AB', color: 'bg-purple-500' },
-        { roll: 2, name: 'Sneha Reddy', avatar: 'SR', color: 'bg-orange-500' },
-        { roll: 3, name: 'Devendra Pal', avatar: 'DP', color: 'bg-emerald-500' },
-        { roll: 4, name: 'Gauri Pillai', avatar: 'GP', color: 'bg-pink-500' },
-        { roll: 5, name: 'Yash Vardhan', avatar: 'YV', color: 'bg-blue-500' }
-      ]
-    },
-    'Class 6-Section B': {
-      studentsCount: 40,
-      attendance: 'Pending',
-      attendanceCount: 0,
-      homeworkCount: 0,
-      diaryCount: 0,
-      studentsList: [
-        { roll: 1, name: 'Armaan Malik', avatar: 'AM', color: 'bg-orange-500' },
-        { roll: 2, name: 'Tara Sutaria', avatar: 'TS', color: 'bg-pink-500' },
-        { roll: 3, name: 'Varun Dhawan', avatar: 'VD', color: 'bg-blue-500' },
-        { roll: 4, name: 'Alia Bhatt', avatar: 'AB', color: 'bg-purple-500' },
-        { roll: 5, name: 'Sidharth M', avatar: 'SM', color: 'bg-emerald-500' }
-      ]
+  const [dashboardData, setDashboardData] = useState({
+    studentsCount: 0,
+    attendance: 'Pending',
+    attendanceCount: 0,
+    homeworkCount: 0,
+    diaryCount: 0,
+    studentsList: [],
+  });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const loadDashboardData = useCallback(async () => {
+    if (!schoolId) {
+      setLoading(false);
+      setError('School context is missing. Please log in again.');
+      return;
     }
-  };
 
-  const currentKey = `${selectedClass}-${selectedSection}`;
-  const activeData = classData[currentKey] || classData['Class 5-Section A'];
+    setLoading(true);
+    setError('');
+    try {
+      const classGrade = parseClassGrade(selectedClass);
+      const section = parseSection(selectedSection);
+      const attendanceDate = new Date().toISOString().slice(0, 10);
+
+      const [{ data: students }, attendanceRows, { data: courses }] = await Promise.all([
+        listStudents(schoolId, { classGrade, section, limit: 100 }),
+        getDailyAttendance(schoolId, { date: attendanceDate, classGrade, section }),
+        listCourses(schoolId, { limit: 50 }),
+      ]);
+
+      const matchingCourses = (courses || []).filter(
+        (course) => course.gradeClass === classGrade || course.title?.includes(classGrade)
+      );
+      let homeworkCount = 0;
+      for (const course of matchingCourses) {
+        const courseId = course._id || course.id;
+        const { data: assignments } = await listAssignments(schoolId, courseId, { limit: 50 });
+        homeworkCount += (assignments || []).length;
+      }
+
+      const presentCount = (attendanceRows || []).filter(
+        (row) => row.attendance?.status === 'present'
+      ).length;
+      const total = students?.length || 0;
+      const attendanceMarked = (attendanceRows || []).some((row) => row.attendance);
+
+      setDashboardData({
+        studentsCount: total,
+        attendance: attendanceMarked ? 'Completed' : 'Pending',
+        attendanceCount: total > 0 ? `${Math.round((presentCount / total) * 100)}%` : 0,
+        homeworkCount,
+        diaryCount: 0,
+        studentsList: (students || []).slice(0, 5).map((student, index) => ({
+          roll: Number(student.rollNo) || index + 1,
+          name: student.name,
+          avatar: student.name?.split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase(),
+          color: ['bg-emerald-500', 'bg-purple-500', 'bg-blue-500', 'bg-orange-500', 'bg-pink-500'][index % 5],
+        })),
+      });
+    } catch (err) {
+      setError(getErrorMessage(err, 'Unable to load dashboard'));
+    } finally {
+      setLoading(false);
+    }
+  }, [schoolId, selectedClass, selectedSection]);
+
+  useEffect(() => {
+    loadDashboardData();
+  }, [loadDashboardData]);
+
+  const activeData = dashboardData;
 
   const classes = ['Class 5', 'Class 6'];
   const sections = ['Section A', 'Section B'];
 
-  const handleNotificationClick = (id) => {
-    setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
-  };
+  const handleNotificationClick = () => {};
 
-  const unreadCount = notifications.filter(n => !n.read).length;
+  const unreadCount = 0;
 
   return (
     <div className="flex flex-col bg-gray-50 min-h-screen relative select-none animate-in fade-in duration-500 pb-20">

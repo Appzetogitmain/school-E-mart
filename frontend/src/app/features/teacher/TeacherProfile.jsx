@@ -3,30 +3,40 @@ import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, ShieldAlert, Camera, User, Phone, 
   Mail, MapPin, Briefcase, Lock, CheckCircle2, ChevronRight,
-  Save, X
+  Save, X, Loader2
 } from 'lucide-react';
+import { updateTeacher } from '../../../services/schoolApi';
+import { getErrorMessage } from '../../../utils/apiHelpers';
+import { resolveTeacherProfile } from '../../../utils/teacherApiHelpers';
+import { useAuthUser, useTeacherSchoolId } from '../../../utils/teacherContext';
 
 const TeacherProfile = () => {
   const navigate = useNavigate();
+  const schoolId = useTeacherSchoolId();
+  const authUser = useAuthUser();
 
-  // 1. Initial State Fields pre-filled from mock data or local storage
-  const [fullName, setFullName] = useState('Mrs. Neha Sharma');
-  const [dob, setDob] = useState('1992-03-12');
+  const [fullName, setFullName] = useState('');
+  const [dob, setDob] = useState('');
   const [gender, setGender] = useState('Female');
   const [maritalStatus, setMaritalStatus] = useState('Married');
 
-  const [phone, setPhone] = useState('9876543210');
-  const [email, setEmail] = useState('neha.sharma@gmail.com');
-  const [altPhone, setAltPhone] = useState('9876501234');
-  const [address, setAddress] = useState('Bhopal, Madhya Pradesh');
+  const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
+  const [altPhone, setAltPhone] = useState('');
+  const [address, setAddress] = useState('');
 
-  const [designation, setDesignation] = useState('Mathematics Teacher');
-  const [qualification, setQualification] = useState('M.Sc. Mathematics');
-  const [experience, setExperience] = useState('8 Years');
-  const [joiningDate, setJoiningDate] = useState('2017-07-15');
-  const [employeeId, setEmployeeId] = useState('EMP20230045');
+  const [designation, setDesignation] = useState('');
+  const [qualification, setQualification] = useState('');
+  const [experience, setExperience] = useState('');
+  const [joiningDate, setJoiningDate] = useState('');
+  const [employeeId, setEmployeeId] = useState('');
 
-  const [avatar, setAvatar] = useState('https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=240&h=240&fit=crop');
+  const [avatar, setAvatar] = useState(
+    'https://ui-avatars.com/api/?name=Teacher&background=3b2d7d&color=fff'
+  );
+  const [teacherProfileId, setTeacherProfileId] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
   // File Upload Ref
   const fileInputRef = useRef(null);
@@ -42,26 +52,52 @@ const TeacherProfile = () => {
   const [showToast, setShowToast] = useState(false);
 
   useEffect(() => {
-    // Attempt to read customized profile details if any
-    const saved = localStorage.getItem('teacherProfileDetails');
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      if (parsed.fullName) setFullName(parsed.fullName);
-      if (parsed.dob) setDob(parsed.dob);
-      if (parsed.gender) setGender(parsed.gender);
-      if (parsed.maritalStatus) setMaritalStatus(parsed.maritalStatus);
-      if (parsed.phone) setPhone(parsed.phone);
-      if (parsed.email) setEmail(parsed.email);
-      if (parsed.altPhone) setAltPhone(parsed.altPhone);
-      if (parsed.address) setAddress(parsed.address);
-      if (parsed.designation) setDesignation(parsed.designation);
-      if (parsed.qualification) setQualification(parsed.qualification);
-      if (parsed.experience) setExperience(parsed.experience);
-      if (parsed.joiningDate) setJoiningDate(parsed.joiningDate);
-      if (parsed.employeeId) setEmployeeId(parsed.employeeId);
-      if (parsed.avatar) setAvatar(parsed.avatar);
-    }
-  }, []);
+    const loadProfile = async () => {
+      if (!schoolId || !authUser?.id) {
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
+      try {
+        const profile = await resolveTeacherProfile(schoolId, authUser.id);
+        if (!profile) {
+          setFullName(authUser.name || '');
+          setEmail(authUser.email || '');
+          setPhone(authUser.phone || '');
+          return;
+        }
+
+        setTeacherProfileId(profile._id || profile.id);
+        const user = profile.user || {};
+        setFullName(user.name || authUser.name || '');
+        setPhone(user.phone || authUser.phone || '');
+        setEmail(user.email || authUser.email || '');
+        setDesignation(profile.designation || '');
+        setQualification(profile.qualification || '');
+        setExperience(
+          profile.experienceYears != null ? `${profile.experienceYears} Years` : ''
+        );
+        setJoiningDate(
+          profile.joiningDate ? new Date(profile.joiningDate).toISOString().slice(0, 10) : ''
+        );
+        setEmployeeId(profile._id?.toString?.()?.slice(-8) || '');
+        if (user.name) {
+          setAvatar(
+            `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=3b2d7d&color=fff`
+          );
+        }
+      } catch {
+        setFullName(authUser.name || '');
+        setEmail(authUser.email || '');
+        setPhone(authUser.phone || '');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadProfile();
+  }, [schoolId, authUser]);
 
   const triggerToast = (msg) => {
     setToastMessage(msg);
@@ -69,32 +105,38 @@ const TeacherProfile = () => {
     setTimeout(() => setShowToast(false), 2500);
   };
 
-  const handleSave = (e) => {
+  const handleSave = async (e) => {
     e.preventDefault();
     if (!fullName.trim() || !phone.trim() || !email.trim()) {
       triggerToast('Please fill all required fields (*)');
       return;
     }
+    if (!schoolId || !teacherProfileId) {
+      triggerToast('Teacher profile is not linked yet.');
+      return;
+    }
 
-    const payload = {
-      fullName, dob, gender, maritalStatus,
-      phone, email, altPhone, address,
-      designation, qualification, experience, joiningDate, employeeId,
-      avatar
-    };
+    setSaving(true);
+    try {
+      const experienceYears = parseInt(String(experience).replace(/\D/g, ''), 10);
+      await updateTeacher(schoolId, teacherProfileId, {
+        designation: designation.trim() || undefined,
+        qualification: qualification.trim() || undefined,
+        experienceYears: Number.isFinite(experienceYears) ? experienceYears : undefined,
+        user: {
+          name: fullName.trim(),
+          phone: phone.trim(),
+          email: email.trim(),
+        },
+      });
 
-    localStorage.setItem('teacherProfileDetails', JSON.stringify(payload));
-    
-    // Dynamically sync user details so headers read new name instantly
-    const childInfo = JSON.parse(localStorage.getItem('childInfo') || '{}');
-    childInfo.name = fullName;
-    localStorage.setItem('childInfo', JSON.stringify(childInfo));
-
-    triggerToast('Profile Saved Successfully!');
-    
-    setTimeout(() => {
-      navigate('/school/teacher/dashboard');
-    }, 1500);
+      triggerToast('Profile Saved Successfully!');
+      setTimeout(() => navigate('/school/teacher/dashboard'), 1500);
+    } catch (err) {
+      triggerToast(getErrorMessage(err, 'Unable to save profile'));
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleAvatarChange = () => {

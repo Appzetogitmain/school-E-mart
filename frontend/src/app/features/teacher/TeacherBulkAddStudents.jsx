@@ -3,17 +3,24 @@ import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, UploadCloud, FileSpreadsheet, Plus, 
   Trash2, HelpCircle, AlertCircle, Sparkles, Check, 
-  Users, Layers, Play
+  Users, Layers, Play, Loader2
 } from 'lucide-react';
+import { registerStudent } from '../../../services/schoolApi';
+import { getErrorMessage } from '../../../utils/apiHelpers';
+import { parseClassGrade, parseSection } from '../../../utils/mappers/teacherMapper';
+import { useTeacherSchoolId } from '../../../utils/teacherContext';
 
 const TeacherBulkAddStudents = () => {
   const navigate = useNavigate();
+  const schoolId = useTeacherSchoolId();
 
-  // 1. Initial State for Manual Entry Rows
+  const [selectedClass] = useState('Class 5');
+  const [selectedSection] = useState('A');
+
   const [rows, setRows] = useState([
-    { rollNo: '1', name: 'Aarav Sharma', parentName: 'Rajesh Sharma', phone: '9876543210' },
-    { rollNo: '2', name: 'Ananya Verma', parentName: 'Suresh Verma', phone: '9876543211' },
-    { rollNo: '3', name: 'Rohan Singh', parentName: 'Amit Singh', phone: '9876543212' },
+    { rollNo: '1', name: '', parentName: '', phone: '' },
+    { rollNo: '2', name: '', parentName: '', phone: '' },
+    { rollNo: '3', name: '', parentName: '', phone: '' },
     { rollNo: '4', name: '', parentName: '', phone: '' },
     { rollNo: '5', name: '', parentName: '', phone: '' },
   ]);
@@ -22,6 +29,8 @@ const TeacherBulkAddStudents = () => {
   const [activeTab, setActiveTab] = useState('excel');
   const [toastMessage, setToastMessage] = useState('');
   const [showToast, setShowToast] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
   const [dragActive, setDragActive] = useState(false);
   const [selectedFileName, setSelectedFileName] = useState('');
 
@@ -30,8 +39,8 @@ const TeacherBulkAddStudents = () => {
 
   useEffect(() => {
     const total = rows.length;
-    const valid = rows.filter(row => row.name.trim() !== '' && row.phone.trim() !== '').length;
-    const empty = rows.filter(row => row.name.trim() === '' && row.phone.trim() === '').length;
+    const valid = rows.filter((row) => row.name.trim() !== '').length;
+    const empty = rows.filter((row) => row.name.trim() === '').length;
     setStats({ total, valid, empty });
   }, [rows]);
 
@@ -118,49 +127,43 @@ const TeacherBulkAddStudents = () => {
     }
   };
 
-  // 5. Submit Handler
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    // Filter out rows that are not fully filled (requires at least name and phone number)
-    const validRows = rows.filter(row => row.name.trim() !== '' && row.phone.trim() !== '');
+    const validRows = rows.filter((row) => row.name.trim() !== '');
 
     if (validRows.length === 0) {
       triggerToast('Please fill at least one student row completely');
       return;
     }
+    if (!schoolId) {
+      setError('School context is missing. Please log in again.');
+      return;
+    }
 
-    // Retrieve existing students roster from localStorage to continue Roll sequence correctly
-    const savedNotes = JSON.parse(localStorage.getItem('teacherStudentsList') || '[]');
-    const startRollNo = savedNotes.length > 0 
-      ? Math.max(...savedNotes.map(s => parseInt(s.rollNo, 10) || 0))
-      : 0;
+    setSaving(true);
+    setError('');
+    try {
+      const classGrade = parseClassGrade(selectedClass);
+      const section = parseSection(selectedSection);
 
-    const formattedNewStudents = validRows.map((row, idx) => {
-      const customRoll = row.rollNo.trim() 
-        ? String(row.rollNo.trim()).padStart(2, '0') 
-        : String(startRollNo + idx + 1).padStart(2, '0');
-      return {
-        id: Date.now() + idx,
-        rollNo: customRoll,
-        name: row.name.trim(),
-        parentName: row.parentName.trim() || 'Parent',
-        motherName: 'Mother',
-        phone: row.phone.trim(),
-        gender: idx % 2 === 0 ? 'Male' : 'Female',
-        dob: '2015-08-20',
-        admissionNo: `ADM-2023-${Math.floor(100 + Math.random() * 900)}`
-      };
-    });
+      for (const row of validRows) {
+        await registerStudent(schoolId, {
+          name: row.name.trim(),
+          rollNo: row.rollNo.trim() || undefined,
+          classGrade,
+          section,
+          gender: 'unspecified',
+        });
+      }
 
-    const updatedList = [...savedNotes, ...formattedNewStudents];
-    localStorage.setItem('teacherStudentsList', JSON.stringify(updatedList));
-    
-    triggerToast(`Added ${formattedNewStudents.length} Students Successfully!`);
-    
-    setTimeout(() => {
-      navigate('/school/teacher/students');
-    }, 1500);
+      triggerToast(`Added ${validRows.length} Students Successfully!`);
+      setTimeout(() => navigate('/school/teacher/students'), 1500);
+    } catch (err) {
+      setError(getErrorMessage(err, 'Unable to add students'));
+      triggerToast(getErrorMessage(err, 'Unable to add students'));
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (

@@ -10,70 +10,7 @@ const TeacherNotifications = () => {
   const navigate = useNavigate();
   const [activeFilter, setActiveFilter] = useState('All');
 
-  // Hardcoded premium mockup notifications data matching screenshot
-  const [notifications, setNotifications] = useState([
-    {
-      id: 1,
-      type: 'Urgent',
-      title: 'School Closed Tomorrow',
-      description: 'Due to heavy rainfall, the school will remain closed tomorrow, 16 May 2025.',
-      sender: 'School Admin',
-      date: '15 May 2025',
-      time: '08:30 PM',
-      read: false,
-      isNew: true,
-      hasAttachment: false
-    },
-    {
-      id: 2,
-      type: 'Notice',
-      title: 'PTM Scheduled for Class 5',
-      description: 'Parent Teacher Meeting for Class 5 will be held on 24 May 2025 (Saturday) from 10:00 AM to 1:00 PM.',
-      sender: 'School Admin',
-      date: '15 May 2025',
-      time: '10:30 AM',
-      read: false,
-      isNew: true,
-      hasAttachment: false
-    },
-    {
-      id: 3,
-      type: 'Event',
-      title: 'Annual Sports Day 2025',
-      description: 'Annual Sports Day will be celebrated on 25 May 2025. All students must wear their house T-shirt.',
-      sender: 'School Admin',
-      date: '14 May 2025',
-      time: '04:15 PM',
-      read: false,
-      isNew: true,
-      hasAttachment: false
-    },
-    {
-      id: 4,
-      type: 'Exam',
-      title: 'Unit Test 1 Timetable',
-      description: 'Unit Test 1 for classes 1 to 8 will be conducted from 2 June to 7 June 2025. Timetable is attached.',
-      sender: 'School Admin',
-      date: '13 May 2025',
-      time: '11:20 AM',
-      read: true,
-      isNew: false,
-      hasAttachment: true,
-      attachmentName: 'PDF'
-    },
-    {
-      id: 5,
-      type: 'Holiday',
-      title: 'Summer Vacation',
-      description: 'Summer Vacation will begin from 21 May 2025 and school will reopen on 16 June 2025.',
-      sender: 'School Admin',
-      date: '12 May 2025',
-      time: '09:00 AM',
-      read: true,
-      isNew: false,
-      hasAttachment: false
-    }
-  ]);
+  const [notifications, setNotifications] = useState([]);
 
   const filters = [
     { name: 'All', icon: <Users size={14} /> },
@@ -314,8 +251,8 @@ const TeacherNotifications = () => {
             <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center text-gray-400 mb-4 animate-bounce">
               <Megaphone size={28} />
             </div>
-            <h3 className="text-xs font-black text-deep-purple">No notifications found</h3>
-            <p className="text-[10px] text-gray-400 font-bold mt-1">Check back later for school updates</p>
+            <h3 className="text-xs font-black text-deep-purple">No notifications yet</h3>
+            <p className="text-[10px] text-gray-400 font-bold mt-1">School notifications API is not connected yet</p>
           </div>
         )}
 

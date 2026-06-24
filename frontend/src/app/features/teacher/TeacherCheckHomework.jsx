@@ -1,16 +1,27 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Calendar, GraduationCap, Users, 
   CheckCircle, Clock, Search, FileText, Check, 
   Eye, Award, MessageSquare, X, ChevronDown, BookOpen,
-  CheckCircle2, AlertCircle, FileCheck
+  CheckCircle2, AlertCircle, FileCheck, Loader2
 } from 'lucide-react';
+import { listStudents } from '../../../services/schoolApi';
+import { listCourses, listAssignments, listSubmissions, evaluateSubmission } from '../../../services/lmsApi';
+import { getErrorMessage } from '../../../utils/apiHelpers';
+import {
+  mapAssignmentForHomework,
+  mapSubmissionForCheck,
+  parseClassGrade,
+  parseSection,
+} from '../../../utils/mappers/teacherMapper';
+import { gradeToScore } from '../../../utils/teacherApiHelpers';
+import { useTeacherSchoolId } from '../../../utils/teacherContext';
 
 const TeacherCheckHomework = () => {
   const navigate = useNavigate();
+  const schoolId = useTeacherSchoolId();
 
-  // 1. Dropdown options & selection states
   const classes = ['Class 5', 'Class 6', 'Class 7'];
   const sections = ['Section A', 'Section B', 'Section C'];
   const [selectedClass, setSelectedClass] = useState('Class 5');
@@ -18,153 +29,102 @@ const TeacherCheckHomework = () => {
   const [isClassDropdownOpen, setIsClassDropdownOpen] = useState(false);
   const [isSectionDropdownOpen, setIsSectionDropdownOpen] = useState(false);
 
-  // Homework list for the selected class
-  const initialHomeworks = [
-    { id: 101, title: 'Fractions Worksheet', subject: 'Mathematics', dateAssigned: '12 May 2025', dueDate: '16 May 2025', type: 'Written' },
-    { id: 102, title: 'Algebra Basics', subject: 'Mathematics', dateAssigned: '08 May 2025', dueDate: '12 May 2025', type: 'Written' },
-    { id: 103, title: 'Photosynthesis Diagram', subject: 'Science', dateAssigned: '14 May 2025', dueDate: '18 May 2025', type: 'Drawing/Written' },
-    { id: 104, title: 'Nouns & Pronouns Quiz', subject: 'English', dateAssigned: '15 May 2025', dueDate: '20 May 2025', type: 'Online Quiz' }
-  ];
-
-  const [homeworks, setHomeworks] = useState(initialHomeworks);
-  const [selectedHomework, setSelectedHomework] = useState(initialHomeworks[0]);
+  const [homeworks, setHomeworks] = useState([]);
+  const [selectedHomework, setSelectedHomework] = useState(null);
   const [isHomeworkDropdownOpen, setIsHomeworkDropdownOpen] = useState(false);
+  const [submissionsList, setSubmissionsList] = useState([]);
+  const [loadingHomeworks, setLoadingHomeworks] = useState(true);
+  const [loadingSubmissions, setLoadingSubmissions] = useState(false);
+  const [error, setError] = useState('');
+  const [savingReview, setSavingReview] = useState(false);
 
-  // 2. Student Submissions state
-  // We populate mock submissions that map to our initial student roster
-  const initialSubmissions = {
-    101: [
-      { 
-        roll: 1, 
-        name: 'Aarav Sharma', 
-        avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=100&h=100&fit=crop', 
-        status: 'Submitted',
-        submittedAt: '14 May 2025, 04:30 PM',
-        files: [
-          { name: 'Aarav_Fractions_Page1.png', url: 'https://images.unsplash.com/photo-1456513080510-7bf3a84b82f8?q=80&w=400&fit=crop' },
-          { name: 'Aarav_Fractions_Page2.png', url: 'https://images.unsplash.com/photo-1516979187457-637abb4f9353?q=80&w=400&fit=crop' }
-        ],
-        grade: '',
-        remarks: ''
-      },
-      { 
-        roll: 2, 
-        name: 'Ananya Verma', 
-        avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=100&h=100&fit=crop', 
-        status: 'Not Submitted',
-        submittedAt: null,
-        files: [],
-        grade: '',
-        remarks: ''
-      },
-      { 
-        roll: 3, 
-        name: 'Rohan Singh', 
-        avatar: 'https://images.unsplash.com/photo-1599566150163-29194dcaad36?q=80&w=100&h=100&fit=crop', 
-        status: 'Submitted',
-        submittedAt: '15 May 2025, 09:15 AM',
-        files: [
-          { name: 'Rohan_Math_Homework.jpg', url: 'https://images.unsplash.com/photo-1506784983877-45594efa4cbe?q=80&w=400&fit=crop' }
-        ],
-        grade: '',
-        remarks: ''
-      },
-      { 
-        roll: 4, 
-        name: 'Diya Patel', 
-        avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?q=80&w=100&h=100&fit=crop', 
-        status: 'Checked',
-        submittedAt: '13 May 2025, 11:20 AM',
-        files: [
-          { name: 'Diya_Homework_Fractions.pdf', url: 'https://images.unsplash.com/photo-1497633762265-9d179a990aa6?auto=format&fit=crop&w=400&q=80' }
-        ],
-        grade: 'A',
-        remarks: 'Outstanding work, perfectly solved.'
-      },
-      { 
-        roll: 5, 
-        name: 'Vivaan Gupta', 
-        avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?q=80&w=100&h=100&fit=crop', 
-        status: 'Submitted',
-        submittedAt: '15 May 2025, 06:45 PM',
-        files: [
-          { name: 'Vivaan_Fractions.png', url: 'https://images.unsplash.com/photo-1516979187457-637abb4f9353?q=80&w=400&fit=crop' }
-        ],
-        grade: '',
-        remarks: ''
-      },
-      { 
-        roll: 6, 
-        name: 'Meera Joshi', 
-        avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=100&h=100&fit=crop', 
-        status: 'Not Submitted',
-        submittedAt: null,
-        files: [],
-        grade: '',
-        remarks: ''
-      },
-      { 
-        roll: 7, 
-        name: 'Kabir Malhotra', 
-        avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=100&h=100&fit=crop', 
-        status: 'Submitted',
-        submittedAt: '15 May 2025, 08:00 PM',
-        files: [
-          { name: 'Kabir_Fractions.png', url: 'https://images.unsplash.com/photo-1506784983877-45594efa4cbe?q=80&w=400&fit=crop' }
-        ],
-        grade: '',
-        remarks: ''
-      },
-      { 
-        roll: 8, 
-        name: 'Isha Reddy', 
-        avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=100&h=100&fit=crop', 
-        status: 'Checked',
-        submittedAt: '14 May 2025, 01:10 PM',
-        files: [
-          { name: 'Isha_Maths.jpg', url: 'https://images.unsplash.com/photo-1456513080510-7bf3a84b82f8?q=80&w=400&fit=crop' }
-        ],
-        grade: 'B+',
-        remarks: 'Good job, but rewrite question 4 step 3.'
-      },
-      { 
-        roll: 9, 
-        name: 'Devansh Roy', 
-        avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=100&h=100&fit=crop', 
-        status: 'Submitted',
-        submittedAt: '15 May 2025, 10:45 AM',
-        files: [
-          { name: 'Devansh_Fractions_Solution.jpg', url: 'https://images.unsplash.com/photo-1516979187457-637abb4f9353?q=80&w=400&fit=crop' }
-        ],
-        grade: '',
-        remarks: ''
-      },
-      { 
-        roll: 10, 
-        name: 'Sia Singhal', 
-        avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?q=80&w=100&h=100&fit=crop', 
-        status: 'Not Submitted',
-        submittedAt: null,
-        files: [],
-        grade: '',
-        remarks: ''
+  const loadHomeworks = useCallback(async () => {
+    if (!schoolId) {
+      setLoadingHomeworks(false);
+      setError('School context is missing. Please log in again.');
+      setHomeworks([]);
+      setSelectedHomework(null);
+      return;
+    }
+
+    setLoadingHomeworks(true);
+    setError('');
+    try {
+      const grade = parseClassGrade(selectedClass);
+      const { data: courses } = await listCourses(schoolId, { limit: 50 });
+      const matchingCourses = (courses || []).filter(
+        (course) => course.gradeClass === grade || course.title?.includes(grade)
+      );
+
+      const assignmentRows = [];
+      for (const course of matchingCourses) {
+        const courseId = course._id || course.id;
+        const { data: assignments } = await listAssignments(schoolId, courseId, { limit: 50 });
+        (assignments || []).forEach((assignment) => {
+          assignmentRows.push(mapAssignmentForHomework(assignment, course));
+        });
       }
-    ],
-    102: [
-      { roll: 1, name: 'Aarav Sharma', avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=100&h=100&fit=crop', status: 'Checked', submittedAt: '11 May 2025', files: [{ name: 'Aarav_Algebra.png', url: 'https://images.unsplash.com/photo-1506784983877-45594efa4cbe?q=80&w=400&fit=crop' }], grade: 'A', remarks: 'Nicely done.' },
-      { roll: 2, name: 'Ananya Verma', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=100&h=100&fit=crop', status: 'Not Submitted', submittedAt: null, files: [], grade: '', remarks: '' },
-      { roll: 3, name: 'Rohan Singh', avatar: 'https://images.unsplash.com/photo-1599566150163-29194dcaad36?q=80&w=100&h=100&fit=crop', status: 'Checked', submittedAt: '10 May 2025', files: [{ name: 'Rohan_Algebra.jpg', url: 'https://images.unsplash.com/photo-1456513080510-7bf3a84b82f8?q=80&w=400&fit=crop' }], grade: 'B', remarks: 'Review algebra formulas.' }
-    ]
-  };
 
-  const [submissions, setSubmissions] = useState(() => {
-    const saved = localStorage.getItem('teacherSubmissions');
-    return saved ? JSON.parse(saved) : initialSubmissions;
-  });
+      setHomeworks(assignmentRows);
+      setSelectedHomework(assignmentRows[0] || null);
+    } catch (err) {
+      setHomeworks([]);
+      setSelectedHomework(null);
+      setError(getErrorMessage(err, 'Unable to load homework'));
+    } finally {
+      setLoadingHomeworks(false);
+    }
+  }, [schoolId, selectedClass]);
 
   useEffect(() => {
-    localStorage.setItem('teacherSubmissions', JSON.stringify(submissions));
-  }, [submissions]);
+    loadHomeworks();
+  }, [loadHomeworks]);
+
+  const loadSubmissions = useCallback(async () => {
+    if (!schoolId || !selectedHomework?.id || !selectedHomework?.courseId) {
+      setSubmissionsList([]);
+      return;
+    }
+
+    setLoadingSubmissions(true);
+    try {
+      const classGrade = parseClassGrade(selectedClass);
+      const section = parseSection(selectedSection);
+      const [{ data: apiSubmissions }, { data: students }] = await Promise.all([
+        listSubmissions(schoolId, selectedHomework.courseId, selectedHomework.id, { limit: 100 }),
+        listStudents(schoolId, { classGrade, section, limit: 100 }),
+      ]);
+
+      const studentMap = Object.fromEntries(
+        (students || []).map((student) => [student._id?.toString?.(), student])
+      );
+      const submittedIds = new Set(
+        (apiSubmissions || []).map((item) => item.studentId?.toString?.())
+      );
+
+      const mappedSubs = (apiSubmissions || []).map((item) =>
+        mapSubmissionForCheck(item, studentMap)
+      );
+      const pending = (students || [])
+        .filter((student) => !submittedIds.has(student._id?.toString?.()))
+        .map((student) =>
+          mapSubmissionForCheck({ student, status: 'pending' }, studentMap)
+        );
+
+      setSubmissionsList(
+        [...mappedSubs, ...pending].sort((a, b) => (a.roll || 0) - (b.roll || 0))
+      );
+    } catch (err) {
+      setSubmissionsList([]);
+      setError(getErrorMessage(err, 'Unable to load submissions'));
+    } finally {
+      setLoadingSubmissions(false);
+    }
+  }, [schoolId, selectedHomework, selectedClass, selectedSection]);
+
+  useEffect(() => {
+    loadSubmissions();
+  }, [loadSubmissions]);
 
   // Selected student for checking
   const [activeStudent, setActiveStudent] = useState(null);
@@ -177,8 +137,7 @@ const TeacherCheckHomework = () => {
   // Full image preview state
   const [previewImageUrl, setPreviewImageUrl] = useState(null);
 
-  // Get active homework submissions list
-  const activeSubmissionsList = submissions[selectedHomework.id] || [];
+  const activeSubmissionsList = submissionsList;
 
   // Filter students based on search query & status filter
   const filteredSubmissions = activeSubmissionsList.filter(sub => {
@@ -201,33 +160,36 @@ const TeacherCheckHomework = () => {
     setFeedbackRemarks(student.remarks || '');
   };
 
-  const handleSaveReview = () => {
-    if (!activeStudent) return;
-    
-    // Update submissions state
-    const updatedList = activeSubmissionsList.map(s => {
-      if (s.roll === activeStudent.roll) {
-        return {
-          ...s,
-          status: 'Checked',
-          grade: feedbackGrade,
-          remarks: feedbackRemarks
-        };
-      }
-      return s;
-    });
+  const handleSaveReview = async () => {
+    if (!activeStudent || !selectedHomework || !schoolId) return;
+    if (!activeStudent.mongoId) {
+      setError('This student has not submitted homework yet.');
+      return;
+    }
 
-    setSubmissions(prev => ({
-      ...prev,
-      [selectedHomework.id]: updatedList
-    }));
+    setSavingReview(true);
+    setError('');
+    try {
+      await evaluateSubmission(
+        schoolId,
+        selectedHomework.courseId,
+        selectedHomework.id,
+        activeStudent.mongoId,
+        {
+          score: gradeToScore(feedbackGrade),
+          feedback: feedbackRemarks.trim() || undefined,
+        }
+      );
 
-    // Trigger toast and close drawer panel
-    setShowToast(true);
-    setActiveStudent(null);
-    setTimeout(() => {
-      setShowToast(false);
-    }, 2500);
+      setShowToast(true);
+      setActiveStudent(null);
+      await loadSubmissions();
+      setTimeout(() => setShowToast(false), 2500);
+    } catch (err) {
+      setError(getErrorMessage(err, 'Unable to save review'));
+    } finally {
+      setSavingReview(false);
+    }
   };
 
   return (
@@ -324,18 +286,27 @@ const TeacherCheckHomework = () => {
         </div>
       </div>
 
+      {error && (
+        <div className="mx-6 mt-3 px-4 py-3 bg-rose-50 border border-rose-100 rounded-2xl text-xs font-bold text-rose-600">
+          {error}
+        </div>
+      )}
+
       {/* 3. Homework Assignment Dropdown */}
       <div className="px-6 mt-4 relative z-20 shrink-0">
         <label className="text-[10px] font-bold text-gray-400 block mb-1">Select Assigned Homework</label>
         <button 
           onClick={() => { setIsHomeworkDropdownOpen(!isHomeworkDropdownOpen); setIsClassDropdownOpen(false); setIsSectionDropdownOpen(false); }}
-          className="w-full px-4 py-4 bg-white border border-gray-200 hover:border-primary/20 active:bg-gray-50 rounded-2xl text-left flex items-center justify-between shadow-sm transition-all"
+          disabled={loadingHomeworks || homeworks.length === 0}
+          className="w-full px-4 py-4 bg-white border border-gray-200 hover:border-primary/20 active:bg-gray-50 rounded-2xl text-left flex items-center justify-between shadow-sm transition-all disabled:opacity-60"
         >
           <div className="flex items-center gap-3 text-deep-purple font-black text-xs">
-            <BookOpen size={18} className="text-primary" />
+            {loadingHomeworks ? <Loader2 size={18} className="animate-spin text-primary" /> : <BookOpen size={18} className="text-primary" />}
             <div className="flex flex-col">
-              <span>{selectedHomework.title}</span>
-              <span className="text-[9px] font-bold text-gray-400 mt-0.5">{selectedHomework.subject} • {selectedHomework.type}</span>
+              <span>{selectedHomework?.title || (loadingHomeworks ? 'Loading homework...' : 'No homework found')}</span>
+              {selectedHomework && (
+                <span className="text-[9px] font-bold text-gray-400 mt-0.5">{selectedHomework.subject} • {selectedHomework.type}</span>
+              )}
             </div>
           </div>
           <span className="text-gray-400 text-xs">▼</span>
@@ -349,7 +320,7 @@ const TeacherCheckHomework = () => {
                 <button 
                   key={hw.id}
                   onClick={() => { setSelectedHomework(hw); setIsHomeworkDropdownOpen(false); }}
-                  className={`w-full px-4 py-3 text-left text-xs font-bold border-b border-gray-50 transition-all ${selectedHomework.id === hw.id ? 'text-primary bg-primary/5 font-black' : 'text-deep-purple hover:bg-gray-50'}`}
+                  className={`w-full px-4 py-3 text-left text-xs font-bold border-b border-gray-50 transition-all ${selectedHomework?.id === hw.id ? 'text-primary bg-primary/5 font-black' : 'text-deep-purple hover:bg-gray-50'}`}
                 >
                   <div className="font-black">{hw.title}</div>
                   <div className="text-[9px] text-gray-400 mt-0.5 font-bold">{hw.subject} • Assigned: {hw.dateAssigned}</div>
@@ -360,17 +331,18 @@ const TeacherCheckHomework = () => {
         )}
       </div>
 
-      {/* Homework Metadata details */}
+      {selectedHomework && (
       <div className="mx-6 mt-3 px-4 py-3 bg-[#F6F4FD] rounded-2xl border border-[#E9E4FC] flex items-center justify-between text-[10px] text-deep-purple/80 font-bold shrink-0">
         <div className="flex items-center gap-1.5">
           <Calendar size={12} className="text-primary" />
-          <span>Assigned: {selectedHomework.dateAssigned}</span>
+          <span>Assigned: {selectedHomework.dateAssigned ? new Date(selectedHomework.dateAssigned).toLocaleDateString() : '—'}</span>
         </div>
         <div className="flex items-center gap-1.5">
           <Clock size={12} className="text-amber-500" />
-          <span>Due: {selectedHomework.dueDate}</span>
+          <span>Due: {selectedHomework.dueDate ? new Date(selectedHomework.dueDate).toLocaleDateString() : '—'}</span>
         </div>
       </div>
+      )}
 
       {/* 4. Stat Cards Grid for Submissions */}
       <div className="px-6 mt-4 grid grid-cols-4 gap-2 shrink-0">

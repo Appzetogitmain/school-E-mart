@@ -1,28 +1,28 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Users, User, Phone, Search, X, 
   Plus, Edit, Download, Save, Calendar, BookOpen,
-  Check, MoreVertical, Trash2
+  Check, MoreVertical, Trash2, Loader2
 } from 'lucide-react';
+import {
+  listStudents,
+  registerStudent,
+  updateStudent,
+  deleteStudent,
+} from '../../../services/schoolApi';
+import { getErrorMessage } from '../../../utils/apiHelpers';
+import { mapStudentForTeacherManage, parseClassGrade, parseSection } from '../../../utils/mappers/teacherMapper';
+import { useTeacherSchoolId } from '../../../utils/teacherContext';
 
 const TeacherManageStudents = () => {
   const navigate = useNavigate();
+  const schoolId = useTeacherSchoolId();
 
-  // 1. Initial Seed Data
-  const initialStudents = [
-    { id: 1, rollNo: '01', name: 'Aarav Sharma', parentName: 'Rajesh Sharma', motherName: 'Suman Sharma', phone: '9876543210', gender: 'Male', dob: '2015-04-12', admissionNo: 'ADM-2023-089' },
-    { id: 2, rollNo: '02', name: 'Ananya Verma', parentName: 'Suresh Verma', motherName: 'Reena Verma', phone: '9765432109', gender: 'Female', dob: '2015-09-22', admissionNo: 'ADM-2023-112' },
-    { id: 3, rollNo: '03', name: 'Rohan Singh', parentName: 'Amit Singh', motherName: 'Kiran Singh', phone: '9988776655', gender: 'Male', dob: '2015-01-05', admissionNo: 'ADM-2023-014' },
-    { id: 4, rollNo: '04', name: 'Diya Patel', parentName: 'Harish Patel', motherName: 'Meena Patel', phone: '9822334455', gender: 'Female', dob: '2015-11-18', admissionNo: 'ADM-2023-205' },
-    { id: 5, rollNo: '05', name: 'Kabir Mehta', parentName: 'Vikram Mehta', motherName: 'Alpa Mehta', phone: '9511223344', gender: 'Male', dob: '2015-06-30', admissionNo: 'ADM-2023-076' },
-  ];
-
-  // 2. States
-  const [students, setStudents] = useState(() => {
-    const saved = localStorage.getItem('teacherStudentsList');
-    return saved ? JSON.parse(saved) : initialStudents;
-  });
+  const [students, setStudents] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
   
   const [selectedClass, setSelectedClass] = useState('Class 5');
   const [selectedSection, setSelectedSection] = useState('A');
@@ -69,6 +69,43 @@ const TeacherManageStudents = () => {
     setTimeout(() => setShowToast(false), 2500);
   };
 
+  const loadStudents = useCallback(async () => {
+    if (!schoolId) {
+      setLoading(false);
+      setError('School context is missing. Please log in again.');
+      setStudents([]);
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+    try {
+      const classGrade = parseClassGrade(selectedClass);
+      const section = parseSection(selectedSection);
+      const { data } = await listStudents(schoolId, { classGrade, section, limit: 200 });
+      setStudents((data || []).map(mapStudentForTeacherManage));
+    } catch (err) {
+      setStudents([]);
+      setError(getErrorMessage(err, 'Unable to load students'));
+    } finally {
+      setLoading(false);
+    }
+  }, [schoolId, selectedClass, selectedSection]);
+
+  useEffect(() => {
+    loadStudents();
+  }, [loadStudents]);
+
+  const buildStudentPayload = () => ({
+    name: formName.trim(),
+    rollNo: formRollNo.trim(),
+    classGrade: parseClassGrade(formClass),
+    section: parseSection(formSection),
+    gender: formGender === 'Female' ? 'female' : 'male',
+    dob: formDob || undefined,
+    schoolRefNo: formAdmissionNo.trim() || undefined,
+  });
+
   const handleOpenAddDrawer = () => {
     setIsEditing(false);
     setCurrentStudentId(null);
@@ -105,61 +142,49 @@ const TeacherManageStudents = () => {
     setActiveActionsMenu(null);
   };
 
-  const handleDeleteStudent = (id) => {
-    const updated = students.filter(s => s.id !== id);
-    setStudents(updated);
-    localStorage.setItem('teacherStudentsList', JSON.stringify(updated));
-    triggerToast('Student Removed Successfully!');
+  const handleDeleteStudent = async (id) => {
+    const student = students.find((s) => s.id === id);
+    if (!student?.mongoId || !schoolId) return;
+
     setActiveActionsMenu(null);
+    try {
+      await deleteStudent(schoolId, student.mongoId);
+      triggerToast('Student Removed Successfully!');
+      await loadStudents();
+    } catch (err) {
+      triggerToast(getErrorMessage(err, 'Unable to remove student'));
+    }
   };
 
-  const handleSaveStudent = (e) => {
+  const handleSaveStudent = async (e) => {
     e.preventDefault();
-    if (!formName.trim() || !formRollNo.trim() || !formPhone.trim()) {
+    if (!formName.trim() || !formRollNo.trim()) {
       triggerToast('Please fill all required fields (*)');
       return;
     }
-
-    let updatedStudentsList;
-    if (isEditing) {
-      updatedStudentsList = students.map(s => {
-        if (s.id === currentStudentId) {
-          return {
-            ...s,
-            name: formName.trim(),
-            rollNo: formRollNo.trim(),
-            gender: formGender,
-            dob: formDob,
-            parentName: formFatherName.trim(),
-            motherName: formMotherName.trim(),
-            phone: formPhone.trim(),
-            altPhone: formAltPhone.trim(),
-            admissionNo: formAdmissionNo.trim()
-          };
-        }
-        return s;
-      });
-      triggerToast('Student Details Updated!');
-    } else {
-      const newStudent = {
-        id: Date.now(),
-        rollNo: formRollNo.trim().padStart(2, '0'),
-        name: formName.trim(),
-        gender: formGender,
-        dob: formDob,
-        parentName: formFatherName.trim(),
-        motherName: formMotherName.trim(),
-        phone: formPhone.trim(),
-        altPhone: formAltPhone.trim(),
-        admissionNo: formAdmissionNo.trim()
-      };
-      updatedStudentsList = [...students, newStudent];
-      triggerToast('New Student Registered!');
+    if (!schoolId) {
+      triggerToast('School context is missing. Please log in again.');
+      return;
     }
 
-    setStudents(updatedStudentsList);
-    localStorage.setItem('teacherStudentsList', JSON.stringify(updatedStudentsList));
-    setIsDrawerOpen(false);
+    setSaving(true);
+    try {
+      const payload = buildStudentPayload();
+      if (isEditing) {
+        const student = students.find((s) => s.id === currentStudentId);
+        await updateStudent(schoolId, student.mongoId, payload);
+        triggerToast('Student Details Updated!');
+      } else {
+        await registerStudent(schoolId, payload);
+        triggerToast('New Student Registered!');
+      }
+      setIsDrawerOpen(false);
+      await loadStudents();
+    } catch (err) {
+      triggerToast(getErrorMessage(err, 'Unable to save student'));
+    } finally {
+      setSaving(false);
+    }
   };
 
   // Computations
@@ -241,7 +266,20 @@ const TeacherManageStudents = () => {
         </div>
       </div>
 
-      <div className="space-y-4 px-6 mt-4 relative z-20">
+      {error && (
+        <div className="mx-6 mt-4 px-4 py-3 bg-rose-50 border border-rose-100 rounded-2xl text-xs font-bold text-rose-600">
+          {error}
+        </div>
+      )}
+
+      {loading && (
+        <div className="flex items-center justify-center gap-2 py-8 text-gray-400 text-xs font-bold">
+          <Loader2 size={16} className="animate-spin" />
+          Loading students...
+        </div>
+      )}
+
+      <div className={`space-y-4 px-6 mt-4 relative z-20 ${loading ? 'opacity-50 pointer-events-none' : ''}`}>
         
         {/* 2. Dropdown selectors row */}
         <div className="grid grid-cols-2 gap-4">
@@ -703,10 +741,11 @@ const TeacherManageStudents = () => {
               <button 
                 type="submit"
                 onClick={handleSaveStudent}
-                className="w-full py-4 bg-primary text-white hover:bg-deep-purple active:scale-98 transition-all rounded-[1.8rem] text-sm font-black shadow-lg shadow-purple-100 flex items-center justify-center gap-2"
+                disabled={saving}
+                className="w-full py-4 bg-primary text-white hover:bg-deep-purple active:scale-98 transition-all rounded-[1.8rem] text-sm font-black shadow-lg shadow-purple-100 flex items-center justify-center gap-2 disabled:opacity-60"
               >
-                <Save size={16} strokeWidth={2.5} />
-                <span>Save Student</span>
+                {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} strokeWidth={2.5} />}
+                <span>{saving ? 'Saving...' : 'Save Student'}</span>
               </button>
             </div>
 

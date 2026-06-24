@@ -57,30 +57,8 @@ const TeacherDiary = () => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    
-    const newDiaryNote = {
-      id: Date.now(),
-      class: selectedClass,
-      section: selectedSection,
-      type: noteType,
-      title: title || 'No Title',
-      message: message || 'No Message',
-      visibility,
-      priority,
-      notifyParents,
-      schedule,
-      attachmentsCount: 0
-    };
-
-    const savedNotes = JSON.parse(localStorage.getItem('teacherDiaryNotes') || '[]');
-    savedNotes.unshift(newDiaryNote);
-    localStorage.setItem('teacherDiaryNotes', JSON.stringify(savedNotes));
-
     setShowToast(true);
-    setTimeout(() => {
-      setShowToast(false);
-      navigate('/school/teacher/dashboard');
-    }, 2000);
+    setTimeout(() => setShowToast(false), 2500);
   };
 
   return (
@@ -92,7 +70,7 @@ const TeacherDiary = () => {
           <div className="w-6 h-6 bg-white/20 rounded-full flex items-center justify-center">
             <Check size={14} strokeWidth={3} />
           </div>
-          <span className="text-xs font-black">Diary Note Published Successfully!</span>
+          <span className="text-xs font-black">Diary notes API is not available yet.</span>
         </div>
       )}
 

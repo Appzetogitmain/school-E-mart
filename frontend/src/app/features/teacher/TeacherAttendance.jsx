@@ -1,13 +1,22 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Bell, Calendar, GraduationCap, Users, 
   CheckCircle2, AlertCircle, Clock, Search, RotateCcw, 
-  Bookmark, Sliders, Save, Check
+  Bookmark, Sliders, Save, Check, Loader2
 } from 'lucide-react';
+import { getDailyAttendance, markAttendance } from '../../../services/schoolApi';
+import { getErrorMessage } from '../../../utils/apiHelpers';
+import { mapAttendanceRow, mapUiStatusToApi, parseClassGrade, parseSection } from '../../../utils/mappers/teacherMapper';
+import { useTeacherSchoolId } from '../../../utils/teacherContext';
+
+const formatDisplayDate = (date = new Date()) =>
+  date.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric', weekday: 'long' });
 
 const TeacherAttendance = () => {
   const navigate = useNavigate();
+  const schoolId = useTeacherSchoolId();
+  const attendanceDate = new Date().toISOString().slice(0, 10);
 
   // 1. Dropdown options & selection states
   const classes = ['Class 5', 'Class 6', 'Class 7'];
@@ -17,25 +26,41 @@ const TeacherAttendance = () => {
   const [isClassDropdownOpen, setIsClassDropdownOpen] = useState(false);
   const [isSectionDropdownOpen, setIsSectionDropdownOpen] = useState(false);
 
-  // 2. Student Data State
-  const initialStudents = [
-    { roll: 1, name: 'Aarav Sharma', avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=100&h=100&fit=crop', status: 'P' },
-    { roll: 2, name: 'Ananya Verma', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=100&h=100&fit=crop', status: 'A' },
-    { roll: 3, name: 'Rohan Singh', avatar: 'https://images.unsplash.com/photo-1599566150163-29194dcaad36?q=80&w=100&h=100&fit=crop', status: 'P' },
-    { roll: 4, name: 'Diya Patel', avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?q=80&w=100&h=100&fit=crop', status: 'L' },
-    { roll: 5, name: 'Vivaan Gupta', avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?q=80&w=100&h=100&fit=crop', status: 'P' },
-    { roll: 6, name: 'Meera Joshi', avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=100&h=100&fit=crop', status: 'P' },
-    { roll: 7, name: 'Kabir Malhotra', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=100&h=100&fit=crop', status: 'P' },
-    { roll: 8, name: 'Isha Reddy', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=100&h=100&fit=crop', status: 'Late' },
-    { roll: 9, name: 'Devansh Roy', avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=100&h=100&fit=crop', status: 'P' },
-    { roll: 10, name: 'Sia Singhal', avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?q=80&w=100&h=100&fit=crop', status: 'P' }
-  ];
-
-  const [students, setStudents] = useState(initialStudents);
+  const [students, setStudents] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all'); // 'all', 'P', 'A', 'L'
+  const [statusFilter, setStatusFilter] = useState('all');
   const [remark, setRemark] = useState('');
   const [showSuccessToast, setShowSuccessToast] = useState(false);
+
+  const loadAttendance = useCallback(async () => {
+    if (!schoolId) {
+      setLoading(false);
+      setError('School context is missing. Please log in again.');
+      setStudents([]);
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+    try {
+      const classGrade = parseClassGrade(selectedClass);
+      const section = parseSection(selectedSection);
+      const rows = await getDailyAttendance(schoolId, { date: attendanceDate, classGrade, section });
+      setStudents((rows || []).map(mapAttendanceRow));
+    } catch (err) {
+      setStudents([]);
+      setError(getErrorMessage(err, 'Unable to load attendance'));
+    } finally {
+      setLoading(false);
+    }
+  }, [schoolId, selectedClass, selectedSection, attendanceDate]);
+
+  useEffect(() => {
+    loadAttendance();
+  }, [loadAttendance]);
 
   // 3. Dynamic Stats Calculation
   const totalCount = students.length;
@@ -54,7 +79,7 @@ const TeacherAttendance = () => {
   };
 
   const handleReset = () => {
-    setStudents(initialStudents);
+    loadAttendance();
     setSearchQuery('');
     setStatusFilter('all');
     setRemark('');
@@ -65,27 +90,39 @@ const TeacherAttendance = () => {
     setTimeout(() => setShowSuccessToast(false), 3000);
   };
 
-  const handleSaveAttendance = () => {
-    // Save to localStorage or context
-    const attendanceRecord = {
-      date: '20 May 2025',
-      class: selectedClass,
-      section: selectedSection,
-      present: presentCount,
-      total: totalCount,
-      students: students.map(s => ({ roll: s.roll, status: s.status })),
-      remark
-    };
-    
-    // Save a completed marker
-    localStorage.setItem(`attendance-${selectedClass}-${selectedSection}`, JSON.stringify(attendanceRecord));
-    
-    // Trigger successful animation alert
-    setShowSuccessToast(true);
-    setTimeout(() => {
-      setShowSuccessToast(false);
-      navigate('/school/teacher/dashboard');
-    }, 2000);
+  const handleSaveAttendance = async () => {
+    if (!schoolId) {
+      setError('School context is missing. Please log in again.');
+      return;
+    }
+    if (students.length === 0) return;
+
+    setSaving(true);
+    setError('');
+    try {
+      await markAttendance(schoolId, {
+        date: attendanceDate,
+        classGrade: parseClassGrade(selectedClass),
+        section: parseSection(selectedSection),
+        records: students
+          .filter((s) => s.mongoId)
+          .map((s) => ({
+            studentId: s.mongoId,
+            status: mapUiStatusToApi(s.status),
+            remarks: remark || undefined,
+          })),
+      });
+
+      setShowSuccessToast(true);
+      setTimeout(() => {
+        setShowSuccessToast(false);
+        navigate('/school/teacher/dashboard');
+      }, 2000);
+    } catch (err) {
+      setError(getErrorMessage(err, 'Unable to save attendance'));
+    } finally {
+      setSaving(false);
+    }
   };
 
   // Filter students based on search query AND active status card filter
@@ -126,7 +163,7 @@ const TeacherAttendance = () => {
             <h1 className="text-lg font-black text-deep-purple leading-none">Mark Attendance</h1>
             <div className="flex items-center gap-1.5 text-gray-400 font-bold text-[10px] mt-1.5">
               <Calendar size={12} className="text-primary" />
-              <span>20 May 2025, Tuesday</span>
+              <span>{formatDisplayDate()}</span>
             </div>
           </div>
         </div>
@@ -391,10 +428,11 @@ const TeacherAttendance = () => {
       <div className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white border-t border-gray-100 p-4 z-40">
         <button 
           onClick={handleSaveAttendance}
-          className="w-full py-4 bg-primary text-white hover:bg-deep-purple active:scale-98 transition-all rounded-[1.8rem] text-sm font-black shadow-lg shadow-purple-100 flex items-center justify-center gap-2"
+          disabled={saving || loading || students.length === 0}
+          className="w-full py-4 bg-primary text-white hover:bg-deep-purple active:scale-98 transition-all rounded-[1.8rem] text-sm font-black shadow-lg shadow-purple-100 flex items-center justify-center gap-2 disabled:opacity-60"
         >
-          <Save size={18} strokeWidth={2.5} />
-          <span>Save Attendance</span>
+          {saving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} strokeWidth={2.5} />}
+          <span>{saving ? 'Saving...' : 'Save Attendance'}</span>
         </button>
       </div>
 

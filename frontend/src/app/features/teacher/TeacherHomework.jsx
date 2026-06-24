@@ -3,11 +3,17 @@ import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Calendar, Clock, Bookmark, Edit2, 
   Tag, Flag, FileText, Paperclip, Info, BookOpen, 
-  Trash2, Plus, Save, File, Check
+  Trash2, Plus, Save, File, Check, Loader2
 } from 'lucide-react';
+import { createAssignment } from '../../../services/lmsApi';
+import { getErrorMessage } from '../../../utils/apiHelpers';
+import { parseClassGrade, parseSection } from '../../../utils/mappers/teacherMapper';
+import { ensureCourse } from '../../../utils/teacherApiHelpers';
+import { useTeacherSchoolId } from '../../../utils/teacherContext';
 
 const TeacherHomework = () => {
   const navigate = useNavigate();
+  const schoolId = useTeacherSchoolId();
 
   // 1. Core State (Starts completely empty for fresh input)
   const [selectedClass, setSelectedClass] = useState('Class 5');
@@ -31,6 +37,8 @@ const TeacherHomework = () => {
   const [attachments, setAttachments] = useState([]);
 
   const [showToast, setShowToast] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
   // Dropdown options
   const classes = ['Class 5', 'Class 6', 'Class 7'];
@@ -63,37 +71,43 @@ const TeacherHomework = () => {
     ]);
   };
 
-  const handleAddHomework = (e) => {
+  const handleAddHomework = async (e) => {
     e.preventDefault();
-    
-    const newHomework = {
-      id: Date.now(),
-      class: selectedClass,
-      section: selectedSection,
-      subject,
-      title,
-      dateAssigned,
-      dueDate,
-      type: homeworkType,
-      priority,
-      description,
-      instructions,
-      textbook,
-      chapter,
-      attachmentsCount: attachments.length
-    };
+    if (!title.trim()) {
+      setError('Please enter a homework title');
+      return;
+    }
+    if (!schoolId) {
+      setError('School context is missing. Please log in again.');
+      return;
+    }
 
-    // Save to local storage for persistence
-    const savedHomework = JSON.parse(localStorage.getItem('teacherHomework') || '[]');
-    savedHomework.unshift(newHomework);
-    localStorage.setItem('teacherHomework', JSON.stringify(savedHomework));
+    setSaving(true);
+    setError('');
+    try {
+      const classGrade = parseClassGrade(selectedClass);
+      const section = parseSection(selectedSection);
+      const course = await ensureCourse(schoolId, { classGrade, section, subject });
 
-    // Show gorgeous toast and redirect
-    setShowToast(true);
-    setTimeout(() => {
-      setShowToast(false);
-      navigate('/school/teacher/dashboard');
-    }, 2000);
+      await createAssignment(schoolId, course._id || course.id, {
+        title: title.trim(),
+        description: description.trim() || undefined,
+        instructions: instructions.trim() || undefined,
+        dueDate: dueDate || undefined,
+        maxScore: 100,
+        status: 'published',
+      });
+
+      setShowToast(true);
+      setTimeout(() => {
+        setShowToast(false);
+        navigate('/school/teacher/dashboard');
+      }, 2000);
+    } catch (err) {
+      setError(getErrorMessage(err, 'Unable to add homework'));
+    } finally {
+      setSaving(false);
+    }
   };
 
   // Helper: Format nice day left subtext
@@ -131,6 +145,11 @@ const TeacherHomework = () => {
       </div>
 
       <form onSubmit={handleAddHomework} className="space-y-4 px-6 mt-4 relative z-20">
+        {error && (
+          <div className="px-4 py-3 bg-rose-50 border border-rose-100 rounded-2xl text-xs font-bold text-rose-600">
+            {error}
+          </div>
+        )}
         
         {/* 2. Class & Section Dropdown Selectors */}
         <div className="grid grid-cols-2 gap-4">
@@ -511,11 +530,13 @@ const TeacherHomework = () => {
       {/* 11. Add Homework Primary Button */}
       <div className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white border-t border-gray-100 p-4 z-40">
         <button 
+          type="submit"
           onClick={handleAddHomework}
-          className="w-full py-4 bg-primary text-white hover:bg-deep-purple active:scale-98 transition-all rounded-[1.8rem] text-sm font-black shadow-lg shadow-purple-100 flex items-center justify-center gap-2"
+          disabled={saving}
+          className="w-full py-4 bg-primary text-white hover:bg-deep-purple active:scale-98 transition-all rounded-[1.8rem] text-sm font-black shadow-lg shadow-purple-100 flex items-center justify-center gap-2 disabled:opacity-60"
         >
-          <Save size={18} strokeWidth={2.5} />
-          <span>Add Homework</span>
+          {saving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} strokeWidth={2.5} />}
+          <span>{saving ? 'Saving...' : 'Add Homework'}</span>
         </button>
       </div>
 

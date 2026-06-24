@@ -86,3 +86,28 @@ export const assignClassTeacher = async (schoolId, classGrade, payload) => {
   );
   return unwrapData(response);
 };
+
+export const getTeacher = async (schoolId, teacherId) => {
+  const response = await apiClient.get(schoolPath(schoolId, `/teachers/${teacherId}`));
+  return unwrapData(response)?.teacher;
+};
+
+export const updateTeacher = async (schoolId, teacherId, payload) => {
+  const response = await apiClient.patch(schoolPath(schoolId, `/teachers/${teacherId}`), payload);
+  return unwrapData(response)?.teacher;
+};
+
+export const getDailyAttendance = async (schoolId, params) => {
+  const response = await apiClient.get(schoolPath(schoolId, '/attendance/daily'), { params });
+  return unwrapData(response)?.attendance || [];
+};
+
+export const markAttendance = async (schoolId, payload) => {
+  const response = await apiClient.post(schoolPath(schoolId, '/attendance'), payload);
+  return unwrapData(response)?.records || [];
+};
+
+export const getMonthlyAttendanceSummary = async (schoolId, params) => {
+  const response = await apiClient.get(schoolPath(schoolId, '/attendance/summary/monthly'), { params });
+  return unwrapData(response)?.summary;
+};
