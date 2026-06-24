@@ -9,12 +9,13 @@ import QuantitySelector from '../../components/QuantitySelector';
 
 const CartPage = () => {
   const navigate = useNavigate();
-  const { cartItems, updateQuantity, removeFromCart, totalQuantity } = useCart();
+  const { cartItems, updateQuantity, removeFromCart, totalQuantity, loading } = useCart();
   const [showRemoveToast, setShowRemoveToast] = useState(false);
 
   const subtotal = cartItems.reduce((sum, item) => {
-    const price = typeof item.price === 'string' 
-      ? parseInt(item.price.replace('₹', '').replace(',', '')) 
+    if (item.pricePaise) return sum + (item.pricePaise / 100) * item.quantity;
+    const price = typeof item.price === 'string'
+      ? parseInt(item.price.replace('₹', '').replace(/,/g, ''), 10)
       : item.price;
     return sum + (price * item.quantity);
   }, 0);
@@ -28,6 +29,14 @@ const CartPage = () => {
     setShowRemoveToast(true);
     setTimeout(() => setShowRemoveToast(false), 2000);
   };
+
+  if (loading && cartItems.length === 0) {
+    return (
+      <div className="min-h-screen bg-[#F8F7FF] flex items-center justify-center font-outfit">
+        <p className="text-sm text-gray-400">Loading cart...</p>
+      </div>
+    );
+  }
 
   if (cartItems.length === 0) {
     return (

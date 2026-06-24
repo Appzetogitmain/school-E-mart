@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft, Heart, ShoppingBag,
-  Trash2, Building2, Package, Search
+  Heart, ShoppingBag,
+  Trash2, Building2
 } from 'lucide-react';
 import SchoolHeader from '../../components/SchoolHeader';
+import { useWishlist } from '../../context/WishlistContext';
 
 const SchoolWishlistPage = () => {
   const navigate = useNavigate();
@@ -14,13 +15,15 @@ const SchoolWishlistPage = () => {
     return saved ? JSON.parse(saved) : { role: 'school' };
   });
 
-  const [wishlistItems, setWishlistItems] = useState([
-    { id: 1, name: "Bulk A4 Paper Reams (10pk)", price: "₹2,150", image: "https://images.unsplash.com/photo-1585336139118-132f08535091?q=80&w=200&h=200&fit=crop", type: "Office" },
-    { id: 2, name: "Classroom Board Markers (Set of 12)", price: "₹850", image: "https://images.unsplash.com/photo-1513364776144-60967b0f800f?q=80&w=200&h=200&fit=crop", type: "Supplies" }
-  ]);
+  const {
+    wishlistItems,
+    loading,
+    removeFromWishlist,
+    totalWishlistItems,
+  } = useWishlist();
 
-  const handleRemove = (id) => {
-    setWishlistItems(prev => prev.filter(item => item.id !== id));
+  const handleRemove = async (id) => {
+    await removeFromWishlist(id);
   };
 
   const handleScroll = (e) => {
@@ -37,10 +40,14 @@ const SchoolWishlistPage = () => {
         <div className="px-6 mt-6">
           <div className="mb-6">
             <p className="text-[10px] font-black text-primary uppercase tracking-[0.2em] mb-1">Procurement Planning</p>
-            <h2 className="text-2xl font-black text-deep-purple tracking-tight">Institutional Wishlist</h2>
+            <h2 className="text-2xl font-black text-deep-purple tracking-tight">
+              Institutional Wishlist ({totalWishlistItems})
+            </h2>
           </div>
 
-          {wishlistItems.length === 0 ? (
+          {loading ? (
+            <p className="text-center text-sm text-gray-400 py-16">Loading wishlist...</p>
+          ) : wishlistItems.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 text-center">
               <div className="w-24 h-24 bg-white rounded-[2.5rem] shadow-xl flex items-center justify-center mb-6">
                 <Heart size={40} className="text-gray-200" />
@@ -62,7 +69,10 @@ const SchoolWishlistPage = () => {
                   <h3 className="text-[11px] font-bold text-deep-purple line-clamp-2 h-7 mb-2 leading-tight">{item.name}</h3>
                   <div className="flex items-center justify-between mt-auto">
                     <span className="text-sm font-black text-deep-purple">{item.price}</span>
-                    <button className="w-8 h-8 bg-primary text-white rounded-xl flex items-center justify-center shadow-lg shadow-primary/20">
+                    <button
+                      onClick={() => navigate(`/user/product/${item.id}`)}
+                      className="w-8 h-8 bg-primary text-white rounded-xl flex items-center justify-center shadow-lg shadow-primary/20"
+                    >
                       <ShoppingBag size={14} />
                     </button>
                   </div>

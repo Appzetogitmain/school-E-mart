@@ -13,7 +13,7 @@ import { ENV } from '../../../config/env';
 
 const CheckoutPage = () => {
   const navigate = useNavigate();
-  const { cartItems, updateQuantity, removeFromCart } = useCart();
+  const { cartItems, updateQuantity, removeFromCart, refreshCart } = useCart();
   
   const [deliveryType, setDeliveryType] = useState('home'); // 'home' or 'school'
   const [paymentMethod, setPaymentMethod] = useState('online'); // 'online' or 'cod'
@@ -39,7 +39,9 @@ const CheckoutPage = () => {
     };
   });
 
-  const parsePrice = (price) => {
+  const parsePrice = (item) => {
+    if (item.pricePaise) return item.pricePaise / 100;
+    const price = item.price ?? item;
     if (typeof price === 'number') return price;
     if (typeof price === 'string') {
       return parseFloat(price.replace(/[^\d.]/g, '')) || 0;
@@ -47,7 +49,7 @@ const CheckoutPage = () => {
     return 0;
   };
 
-  const subtotal = cartItems.reduce((acc, item) => acc + (parsePrice(item.price) * item.quantity), 0);
+  const subtotal = cartItems.reduce((acc, item) => acc + (parsePrice(item) * item.quantity), 0);
   const handlingCharge = 10;
   const deliveryCharge = deliveryType === 'home' ? 55 : 0;
   const grandTotal = subtotal + handlingCharge + deliveryCharge;
@@ -92,6 +94,8 @@ const CheckoutPage = () => {
       } else if (paymentMethod === 'online') {
         await confirmPayment(order._id);
       }
+
+      await refreshCart();
 
       navigate('/user/order-success', {
         state: {

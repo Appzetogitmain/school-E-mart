@@ -7,7 +7,7 @@ import LoginRequired from '../../components/LoginRequired';
 
 const WishlistPage = () => {
   const navigate = useNavigate();
-  const { wishlistItems, totalWishlistItems } = useWishlist();
+  const { wishlistItems, totalWishlistItems, loading } = useWishlist();
 
   const isGuest = !localStorage.getItem('childInfo');
 
@@ -72,13 +72,17 @@ const WishlistPage = () => {
       </div>
 
       <div className="pt-24 px-6">
-        <div className="grid grid-cols-2 gap-4">
-          {wishlistItems.map((product) => (
-            <div key={product.id} className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <ProductCard product={product} />
-            </div>
-          ))}
-        </div>
+        {loading ? (
+          <p className="text-center text-sm text-gray-400 py-16">Loading wishlist...</p>
+        ) : (
+          <div className="grid grid-cols-2 gap-4">
+            {wishlistItems.map((product) => (
+              <div key={product.id} className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <ProductCard product={product} />
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

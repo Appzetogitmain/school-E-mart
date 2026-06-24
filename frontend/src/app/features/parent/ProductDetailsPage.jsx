@@ -69,7 +69,7 @@ const ProductDetailsPage = () => {
       setIsAuthPromptOpen(true);
       return;
     }
-    addToCart(product);
+    addToCart({ ...product, selectedSize });
     setShowToast(true);
     setTimeout(() => setShowToast(false), 3000);
   };
