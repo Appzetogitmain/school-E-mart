@@ -1,27 +1,28 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
-import { 
-  Package, CheckCircle, AlertTriangle, AlertCircle, Search, SlidersHorizontal, 
+import {
+  Package, CheckCircle, AlertTriangle, AlertCircle, Search, SlidersHorizontal,
   ChevronRight, Plus, HelpCircle, ArrowUpDown, ChevronDown, Check, X,
   Tag, Layers, ShieldCheck, ShoppingCart, ListCollapse, ArrowLeft,
   Bold, Italic, List, AlignLeft, Folder, Image, FileText, CheckCircle2,
-  UploadCloud
+  UploadCloud, Loader2
 } from 'lucide-react';
+import { deleteVendorProduct, listVendorProducts, setVendorProductPublishStatus } from '../../services/vendorApi';
+import { getErrorMessage } from '../../utils/apiHelpers';
+import { mapVendorProductForList } from '../../utils/mappers/vendorProductMapper';
 
 const VendorProducts = () => {
   const location = useLocation();
 
-  // Navigation State
-  const [showAddPage, setShowAddPage] = useState(() => {
-    return location.state?.openAddPage || false;
-  });
+  const [showAddPage, setShowAddPage] = useState(() => location.state?.openAddPage || false);
   const [activeFormTab, setActiveFormTab] = useState('General Info');
-
-  // Search & Filters State
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [selectedApproval, setSelectedApproval] = useState('All');
   const [selectedProduct, setSelectedProduct] = useState(null);
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   // Form states for creating a new product
   const [newName, setNewName] = useState('');
@@ -37,47 +38,47 @@ const VendorProducts = () => {
   const [newStatus, setNewStatus] = useState('PUBLISHED');
   const [newAdded, setNewAdded] = useState(false);
 
-  // Live products state initialized as clean and empty
-  const [products, setProducts] = useState([]);
+  const loadProducts = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const { data } = await listVendorProducts({ limit: 200 });
+      setProducts((data || []).map(mapVendorProductForList));
+    } catch (err) {
+      setProducts([]);
+      setError(getErrorMessage(err, 'Unable to load products'));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-  // Handle new product submission
+  useEffect(() => {
+    loadProducts();
+  }, [loadProducts]);
+
   const handlePublish = (e) => {
     e.preventDefault();
-    if (!newName.trim()) return;
+    setError('Product creation requires catalog category IDs and uploaded images. Use the admin catalog flow or contact support.');
+  };
 
-    const newProduct = {
-      id: products.length + 1,
-      name: newName,
-      code: newCode || `PRD-${Math.floor(10000 + Math.random() * 90000)}`,
-      header: newHeader || 'Uniform Catalog',
-      category: newCategory,
-      subcategory: newSubcategory,
-      variant: newVariant || 'Standard Size',
-      approval: 'Pending',
-      stock: parseInt(newStock) || 0,
-      price: parseInt(newPrice) || 350,
-      imgBg: 'bg-purple-100 text-purple-700'
-    };
+  const handleDeleteProduct = async (productId) => {
+    if (!window.confirm('Delete this product?')) return;
+    try {
+      await deleteVendorProduct(productId);
+      await loadProducts();
+    } catch (err) {
+      setError(getErrorMessage(err, 'Unable to delete product'));
+    }
+  };
 
-    setProducts([newProduct, ...products]);
-    setNewAdded(true);
-
-    setTimeout(() => {
-      setShowAddPage(false);
-      setNewAdded(false);
-      
-      // Reset inputs
-      setNewName('');
-      setNewDescription('');
-      setNewBrand('');
-      setNewCode('');
-      setNewHeader('');
-      setNewVariant('');
-      setNewStock('35');
-      setNewPrice('499');
-      setNewStatus('PUBLISHED');
-      setActiveFormTab('General Info');
-    }, 1500);
+  const handleTogglePublish = async (product) => {
+    try {
+      const nextStatus = product.publishStatus === 'published' ? 'draft' : 'published';
+      await setVendorProductPublishStatus(product.id, nextStatus);
+      await loadProducts();
+    } catch (err) {
+      setError(getErrorMessage(err, 'Unable to update publish status'));
+    }
   };
 
   // Metrics calculators

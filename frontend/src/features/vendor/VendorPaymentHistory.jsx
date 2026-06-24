@@ -1,70 +1,53 @@
-import React, { useState, useMemo } from 'react';
-import { 
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import {
   FileText, Download, Search, Clock, ShieldCheck, X, Check,
-  IndianRupee, CreditCard, Banknote, Calendar, ArrowDownToLine, HelpCircle
+  IndianRupee, CreditCard, Banknote, Calendar, ArrowDownToLine, HelpCircle, Loader2
 } from 'lucide-react';
+import { getVendorEarningsSummary, listVendorSettlements } from '../../services/vendorApi';
+import { getErrorMessage } from '../../utils/apiHelpers';
+import {
+  mapVendorEarningsToWallet,
+  mapVendorSettlementForLedger,
+} from '../../utils/mappers/vendorSettlementMapper';
 
 const VendorPaymentHistory = () => {
-  // Navigation Tabs State
   const [activeTab, setActiveTab] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [showExportModal, setShowExportModal] = useState(false);
   const [exportFormat, setExportFormat] = useState('PDF');
   const [exportRange, setExportRange] = useState('30days');
   const [exportSuccess, setExportSuccess] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  // Financial States (Strictly initialized to 0 with no mock data)
   const [settledBal, setSettledBal] = useState(0);
   const [pendingPayouts, setPendingPayouts] = useState(0);
   const [totalRevenue, setTotalRevenue] = useState(0);
   const [transactions, setTransactions] = useState([]);
 
-  // Option to simulate ledger addition for active pairing review
-  const handleLoadDemoTransaction = () => {
-    setSettledBal(15800);
-    setPendingPayouts(4900);
-    setTotalRevenue(20700);
+  const loadLedger = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const [summary, settlements] = await Promise.all([
+        getVendorEarningsSummary(),
+        listVendorSettlements({ limit: 100 }),
+      ]);
+      const wallet = mapVendorEarningsToWallet(summary);
+      setSettledBal(wallet.settledBal);
+      setPendingPayouts(wallet.pendingBal);
+      setTotalRevenue(wallet.totalRevenue);
+      setTransactions((settlements.data || []).map(mapVendorSettlementForLedger));
+    } catch (err) {
+      setError(getErrorMessage(err, 'Unable to load transaction ledger'));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-    const demoItems = [
-      {
-        id: "TXN-90821",
-        date: "2026-05-29",
-        customer: "Greenwood Academy (Uniform Procurement)",
-        ref: "REF-ORD-8820",
-        amount: 12500,
-        type: "Payments",
-        status: "Settled"
-      },
-      {
-        id: "TXN-74892",
-        date: "2026-05-28",
-        customer: "DPS School (Parent: R. Singhania)",
-        ref: "REF-ORD-7492",
-        amount: 3300,
-        type: "Payments",
-        status: "Settled"
-      },
-      {
-        id: "TXN-69018",
-        date: "2026-05-25",
-        customer: "Payout Withdrawal (HDFC ****4859)",
-        ref: "REF-PAY-2091",
-        amount: -4900,
-        type: "Withdrawal",
-        status: "Pending"
-      },
-      {
-        id: "TXN-58102",
-        date: "2026-05-22",
-        customer: "Lotus Valley School (Stitch Tear Refund)",
-        ref: "REF-REF-4091",
-        amount: -1200,
-        type: "Refund",
-        status: "Settled"
-      }
-    ];
-    setTransactions(demoItems);
-  };
+  useEffect(() => {
+    loadLedger();
+  }, [loadLedger]);
 
   // Filtered Ledger List
   const filteredTransactions = useMemo(() => {
@@ -102,16 +85,7 @@ const VendorPaymentHistory = () => {
         </div>
 
         <div className="flex items-center gap-2">
-          {transactions.length === 0 && (
-            <button 
-              onClick={handleLoadDemoTransaction}
-              className="px-3.5 py-2.5 rounded-xl border border-dashed border-purple-200 bg-purple-50 text-[#5B3FD6] text-xs font-extrabold hover:bg-purple-100/50 transition-all cursor-pointer"
-            >
-              Demo Simulation
-            </button>
-          )}
-
-          <button 
+          <button
             onClick={() => setShowExportModal(true)}
             className="bg-[#0E0E2C] hover:opacity-90 text-white font-extrabold flex items-center gap-1.5 px-5 py-2.5 rounded-xl text-xs shadow-lg cursor-pointer transition-all"
           >

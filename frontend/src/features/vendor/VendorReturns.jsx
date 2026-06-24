@@ -1,69 +1,105 @@
-import React, { useState, useMemo } from 'react';
-import { 
-  RotateCcw, RefreshCw, Inbox, Check, X, Search, ChevronDown, 
-  Eye, Truck, CheckCircle2, AlertTriangle, AlertCircle, Calendar, 
-  User, CreditCard, ShieldCheck, ShieldAlert
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import {
+  RotateCcw, RefreshCw, Inbox, Check, X, Search, ChevronDown,
+  Eye, Truck, CheckCircle2, AlertTriangle, AlertCircle, Calendar,
+  User, CreditCard, ShieldCheck, ShieldAlert, Loader2
 } from 'lucide-react';
+import {
+  listVendorReturns,
+  approveVendorReturn,
+  rejectVendorReturn,
+  updateVendorReturnStatus,
+} from '../../services/vendorApi';
+import { getErrorMessage } from '../../utils/apiHelpers';
+import {
+  formatReturnStatus,
+  getReturnSegmentCounts,
+  mapVendorReturnForList,
+} from '../../utils/mappers/vendorReturnMapper';
 
 const VendorReturns = () => {
-  // Local States
   const [searchQuery, setSearchQuery] = useState('');
   const [activeSegment, setActiveSegment] = useState('All');
   const [selectedReturn, setSelectedReturn] = useState(null);
   const [refreshSpin, setRefreshSpin] = useState(false);
-
-  // Return Requests seed data matching uniform procurement returns
   const [returns, setReturns] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [actionLoading, setActionLoading] = useState(false);
 
-  // Handle refresh action spinner
-  const handleRefresh = () => {
+  const loadReturns = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const { data } = await listVendorReturns({ limit: 100 });
+      setReturns((data || []).map(mapVendorReturnForList));
+    } catch (err) {
+      setReturns([]);
+      setError(getErrorMessage(err, 'Unable to load return requests'));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadReturns();
+  }, [loadReturns]);
+
+  const handleRefresh = async () => {
     setRefreshSpin(true);
-    setTimeout(() => {
-      setRefreshSpin(false);
-    }, 800);
+    await loadReturns();
+    setRefreshSpin(false);
   };
 
-  // Status updates
-  const updateReturnStatus = (id, newStatus, qStatus) => {
-    setReturns(returns.map(ret => {
-      if (ret.id === id) {
-        return {
-          ...ret,
-          status: newStatus,
-          qcStatus: qStatus || ret.qcStatus
-        };
+  const updateReturnStatus = async (mongoId, apiStatus, note) => {
+    setActionLoading(true);
+    setError('');
+    try {
+      let updated;
+      if (apiStatus === 'approved') {
+        updated = await approveVendorReturn(mongoId, note);
+      } else if (apiStatus === 'rejected') {
+        updated = await rejectVendorReturn(mongoId, note || 'Rejected by vendor');
+      } else {
+        updated = await updateVendorReturnStatus(mongoId, { status: apiStatus, note });
       }
-      return ret;
-    }));
-
-    if (selectedReturn && selectedReturn.id === id) {
-      setSelectedReturn({
-        ...selectedReturn,
-        status: newStatus,
-        qcStatus: qStatus || selectedReturn.qcStatus
-      });
+      const mapped = mapVendorReturnForList(updated);
+      setReturns((prev) => prev.map((ret) => (ret.mongoId === mongoId ? mapped : ret)));
+      if (selectedReturn?.mongoId === mongoId) setSelectedReturn(mapped);
+    } catch (err) {
+      setError(getErrorMessage(err, 'Unable to update return status'));
+    } finally {
+      setActionLoading(false);
     }
   };
 
-  // Metrics (Count of respective categories)
-  const countRequested = useMemo(() => returns.filter(r => r.status === 'Requested').length, [returns]);
-  const countApproved = useMemo(() => returns.filter(r => r.status === 'Approved' || r.status === 'QC Passed' || r.status === 'Pickup Assigned' || r.status === 'In Transit').length, [returns]);
-  const countRejected = useMemo(() => returns.filter(r => r.status === 'Rejected').length, [returns]);
-  const countCompleted = useMemo(() => returns.filter(r => r.status === 'Completed').length, [returns]);
+  const segmentCounts = useMemo(() => getReturnSegmentCounts(returns), [returns]);
+  const countRequested = segmentCounts.requested;
+  const countApproved = segmentCounts.approved;
+  const countRejected = segmentCounts.rejected;
+  const countCompleted = segmentCounts.completed;
 
-  // Filtered return list matching search query & segment selection
   const filteredReturns = useMemo(() => {
-    return returns.filter(ret => {
-      // Search match
-      const matchesSearch = searchQuery === '' || 
+    return returns.filter((ret) => {
+      const matchesSearch = searchQuery === '' ||
         ret.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
         ret.product.toLowerCase().includes(searchQuery.toLowerCase()) ||
         ret.customer.toLowerCase().includes(searchQuery.toLowerCase());
 
-      // Segment tabs mapping
       let matchesSegment = true;
       if (activeSegment !== 'All') {
-        matchesSegment = ret.status.toLowerCase() === activeSegment.toLowerCase();
+        const segmentMap = {
+          Requested: 'requested',
+          Approved: 'approved',
+          Rejected: 'rejected',
+          Completed: 'completed',
+        };
+        const target = segmentMap[activeSegment];
+        if (target === 'approved') {
+          matchesSegment = ['approved', 'qc_passed', 'pickup_assigned', 'in_transit'].includes(ret.statusRaw);
+        } else {
+          matchesSegment = ret.statusRaw === target;
+        }
       }
 
       return matchesSearch && matchesSegment;
@@ -93,6 +129,12 @@ const VendorReturns = () => {
           <span>REFRESH</span>
         </button>
       </div>
+
+      {error && (
+        <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
+          {error}
+        </div>
+      )}
 
       {/* 2. Top Metrics Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -381,16 +423,20 @@ const VendorReturns = () => {
                   </div>
                   
                   {/* Action buttons to trigger QC Passed/Failed */}
-                  {selectedReturn.status === 'Requested' && (
+                  {selectedReturn.statusRaw === 'requested' && (
                     <div className="flex items-center gap-2.5 pt-3 border-t border-gray-50">
                       <button
-                        onClick={() => updateReturnStatus(selectedReturn.id, 'QC Passed', 'QC Passed')}
+                        type="button"
+                        disabled={actionLoading}
+                        onClick={() => updateReturnStatus(selectedReturn.mongoId, 'qc_passed')}
                         className="flex-1 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-black rounded-xl text-[10px] uppercase tracking-wider transition-all cursor-pointer inline-flex items-center justify-center gap-1"
                       >
                         <ShieldCheck size={12} /> QC Passed
                       </button>
                       <button
-                        onClick={() => updateReturnStatus(selectedReturn.id, 'Rejected', 'QC Failed')}
+                        type="button"
+                        disabled={actionLoading}
+                        onClick={() => updateReturnStatus(selectedReturn.mongoId, 'rejected', 'QC failed')}
                         className="flex-1 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 font-black rounded-xl text-[10px] uppercase tracking-wider transition-all cursor-pointer inline-flex items-center justify-center gap-1"
                       >
                         <ShieldAlert size={12} /> QC Failed
@@ -405,16 +451,20 @@ const VendorReturns = () => {
                 <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block">Workflow Actions</span>
                 <div className="flex flex-wrap items-center gap-2">
                   
-                  {selectedReturn.status === 'Requested' && (
+                  {selectedReturn.statusRaw === 'requested' && (
                     <>
                       <button
-                        onClick={() => updateReturnStatus(selectedReturn.id, 'Approved')}
+                        type="button"
+                        disabled={actionLoading}
+                        onClick={() => updateReturnStatus(selectedReturn.mongoId, 'approved')}
                         className="flex-1 py-3 bg-[#5B3FD6] hover:bg-[#492eb3] text-white font-extrabold rounded-xl text-xs uppercase tracking-wider transition-all shadow-md shadow-purple-100 cursor-pointer inline-flex items-center justify-center gap-1.5"
                       >
                         <Check size={14} strokeWidth={2.5} /> Approve Refund
                       </button>
                       <button
-                        onClick={() => updateReturnStatus(selectedReturn.id, 'Rejected')}
+                        type="button"
+                        disabled={actionLoading}
+                        onClick={() => updateReturnStatus(selectedReturn.mongoId, 'rejected')}
                         className="px-4 py-3 bg-white hover:bg-rose-50 border border-gray-200 hover:border-rose-100 text-gray-700 hover:text-rose-600 font-extrabold rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer inline-flex items-center justify-center"
                       >
                         Reject
@@ -422,43 +472,51 @@ const VendorReturns = () => {
                     </>
                   )}
 
-                  {selectedReturn.status === 'Approved' && (
+                  {selectedReturn.statusRaw === 'approved' && (
                     <button
-                      onClick={() => updateReturnStatus(selectedReturn.id, 'Pickup Assigned')}
+                      type="button"
+                      disabled={actionLoading}
+                      onClick={() => updateReturnStatus(selectedReturn.mongoId, 'pickup_assigned')}
                       className="w-full py-3 bg-gray-900 hover:bg-gray-800 text-white font-extrabold rounded-xl text-xs uppercase tracking-wider transition-all shadow-md cursor-pointer inline-flex items-center justify-center gap-1.5"
                     >
                       <Truck size={14} /> Assign Pickup Courier
                     </button>
                   )}
 
-                  {selectedReturn.status === 'Pickup Assigned' && (
+                  {selectedReturn.statusRaw === 'pickup_assigned' && (
                     <button
-                      onClick={() => updateReturnStatus(selectedReturn.id, 'In Transit')}
+                      type="button"
+                      disabled={actionLoading}
+                      onClick={() => updateReturnStatus(selectedReturn.mongoId, 'in_transit')}
                       className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold rounded-xl text-xs uppercase tracking-wider transition-all shadow-md cursor-pointer inline-flex items-center justify-center gap-1.5"
                     >
                       <Truck size={14} /> Ship in Transit
                     </button>
                   )}
 
-                  {selectedReturn.status === 'In Transit' && (
+                  {selectedReturn.statusRaw === 'in_transit' && (
                     <button
-                      onClick={() => updateReturnStatus(selectedReturn.id, 'QC Passed')}
+                      type="button"
+                      disabled={actionLoading}
+                      onClick={() => updateReturnStatus(selectedReturn.mongoId, 'qc_passed')}
                       className="w-full py-3 bg-[#5B3FD6] hover:bg-[#492eb3] text-white font-extrabold rounded-xl text-xs uppercase tracking-wider transition-all shadow-md cursor-pointer inline-flex items-center justify-center gap-1.5"
                     >
                       <ShieldCheck size={14} /> Mark QC Passed
                     </button>
                   )}
 
-                  {selectedReturn.status === 'QC Passed' && (
+                  {selectedReturn.statusRaw === 'qc_passed' && (
                     <button
-                      onClick={() => updateReturnStatus(selectedReturn.id, 'Completed')}
+                      type="button"
+                      disabled={actionLoading}
+                      onClick={() => updateReturnStatus(selectedReturn.mongoId, 'completed')}
                       className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-xl text-xs uppercase tracking-wider transition-all shadow-md cursor-pointer inline-flex items-center justify-center gap-1.5"
                     >
                       <CheckCircle2 size={14} /> Disburse Refund & Complete
                     </button>
                   )}
 
-                  {selectedReturn.status === 'Completed' && (
+                  {selectedReturn.statusRaw === 'completed' && (
                     <div className="w-full p-4 bg-emerald-50 border border-emerald-100 rounded-2xl flex items-center gap-3">
                       <div className="w-8 h-8 rounded-lg bg-emerald-500 text-white flex items-center justify-center shrink-0">
                         <Check size={16} strokeWidth={3} />
@@ -470,7 +528,7 @@ const VendorReturns = () => {
                     </div>
                   )}
 
-                  {selectedReturn.status === 'Rejected' && (
+                  {selectedReturn.statusRaw === 'rejected' && (
                     <div className="w-full p-4 bg-rose-50 border border-rose-100 rounded-2xl flex items-center gap-3">
                       <div className="w-8 h-8 rounded-lg bg-rose-500 text-white flex items-center justify-center shrink-0">
                         <X size={16} strokeWidth={3} />

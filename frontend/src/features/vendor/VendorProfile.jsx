@@ -1,24 +1,25 @@
-import React, { useState } from 'react';
-import { 
-  User, ShieldCheck, Mail, Phone, Building, MapPin, 
-  Globe, Compass, Edit3, X, Check, AlertTriangle, HelpCircle, ShieldAlert
+import React, { useEffect, useState } from 'react';
+import {
+  User, ShieldCheck, Mail, Phone, Building, MapPin,
+  Globe, Compass, Edit3, X, Check, AlertTriangle, HelpCircle, ShieldAlert, Loader2
 } from 'lucide-react';
 import useAuthStore from '../../store/useAuthStore';
+import { getVendorProfile, updateVendorProfile } from '../../services/vendorApi';
+import { getErrorMessage } from '../../utils/apiHelpers';
 
 const VendorProfile = () => {
   const { user, setUser } = useAuthStore();
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  // Local state initialized with live user store details to avoid mock data
-  const [name, setName] = useState(user?.name || 'Harsh');
-  const [storeName, setStoreName] = useState(user?.school || "Harsh's Hub");
-  const [phone, setPhone] = useState(user?.phone || '6268423925');
-  const [email, setEmail] = useState(user?.email || 'harsh@appzeto.com');
-
-  // Location & Service settings state
+  const [name, setName] = useState(user?.name || '');
+  const [storeName, setStoreName] = useState(user?.school || '');
+  const [phone, setPhone] = useState(user?.phone || '');
+  const [email, setEmail] = useState(user?.email || '');
   const [serviceRadius, setServiceRadius] = useState(8);
   const [latitude, setLatitude] = useState(22.715188);
   const [longitude, setLongitude] = useState(75.899109);
-  const [address, setAddress] = useState(user?.location || '172, Vaibhav Nagar, Ashirwad Vihar Colony, Tilak Nagar, Indore, Madhya Pradesh 452018, India');
+  const [address, setAddress] = useState(user?.location || '');
 
   // UI Interactive States
   const [isEditing, setIsEditing] = useState(false);
@@ -32,38 +33,97 @@ const VendorProfile = () => {
   const [editEmail, setEditEmail] = useState(email);
   const [editAddress, setEditAddress] = useState(address);
 
-  const handleEditProfileSubmit = (e) => {
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+
+    getVendorProfile()
+      .then((profile) => {
+        if (cancelled || !profile) return;
+        const displayName = profile.user?.name || user?.name || '';
+        const displayStore = profile.storeName || '';
+        const displayPhone = profile.user?.phone || '';
+        const displayEmail = profile.user?.email || '';
+        const formattedAddress = [
+          profile.address?.line1,
+          profile.address?.city,
+          profile.address?.state,
+          profile.address?.pinCode,
+        ].filter(Boolean).join(', ');
+
+        setName(displayName);
+        setStoreName(displayStore);
+        setPhone(displayPhone);
+        setEmail(displayEmail);
+        setAddress(formattedAddress);
+        setServiceRadius(profile.serviceRadiusKm || 8);
+        if (profile.location?.coordinates?.length === 2) {
+          setLongitude(profile.location.coordinates[0]);
+          setLatitude(profile.location.coordinates[1]);
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) setError(getErrorMessage(err, 'Unable to load profile'));
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.name]);
+
+  const handleEditProfileSubmit = async (e) => {
     e.preventDefault();
     setIsSaving(true);
+    setError('');
 
-    setTimeout(() => {
-      setName(editName);
-      setStoreName(editStoreName);
-      setPhone(editPhone);
-      setEmail(editEmail);
+    try {
+      const profile = await updateVendorProfile({
+        name: editName,
+        storeName: editStoreName,
+        phone: editPhone,
+        email: editEmail,
+        serviceRadiusKm: serviceRadius,
+        latitude,
+        longitude,
+        address: {
+          line1: editAddress,
+          city: 'Indore',
+          state: 'Madhya Pradesh',
+          country: 'India',
+          pinCode: '452018',
+        },
+      });
+
+      setName(profile.user?.name || editName);
+      setStoreName(profile.storeName || editStoreName);
+      setPhone(profile.user?.phone || editPhone);
+      setEmail(profile.user?.email || editEmail);
       setAddress(editAddress);
 
-      // Sync with global auth store
       if (user) {
         setUser({
           ...user,
-          name: editName,
-          school: editStoreName,
-          phone: editPhone,
-          email: editEmail,
-          location: editAddress
+          name: profile.user?.name || editName,
+          school: profile.storeName || editStoreName,
+          phone: profile.user?.phone || editPhone,
+          email: profile.user?.email || editEmail,
+          location: editAddress,
         });
       }
 
-      setIsSaving(false);
       setSuccessSave(true);
-
       setTimeout(() => {
         setSuccessSave(false);
         setIsEditing(false);
       }, 1200);
-
-    }, 800);
+    } catch (err) {
+      setError(getErrorMessage(err, 'Unable to save profile'));
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const startEditing = () => {
@@ -77,6 +137,14 @@ const VendorProfile = () => {
 
   return (
     <div className="space-y-6 pb-12 font-sans text-gray-900 selection:bg-purple-100">
+      {loading && (
+        <div className="flex items-center gap-2 text-gray-400 text-sm">
+          <Loader2 size={16} className="animate-spin" /> Loading profile...
+        </div>
+      )}
+      {error && (
+        <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">{error}</div>
+      )}
       
       {/* 1. Immersive Top Banner Header Card */}
       <div className="bg-[#0E0E2C] rounded-[2rem] p-8 flex flex-col md:flex-row md:items-center justify-between text-white shadow-xl relative overflow-hidden shrink-0 group">

@@ -1,15 +1,22 @@
-import React, { useState, useMemo } from 'react';
-import { 
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import {
   CreditCard, ArrowUpRight, Search, Clock, HelpCircle, X, Check,
-  TrendingUp, AlertCircle, Sparkles, Building, Landmark, Compass, DollarSign
+  TrendingUp, AlertCircle, Sparkles, Building, Landmark, Compass, DollarSign, Loader2
 } from 'lucide-react';
+import {
+  getVendorEarningsSummary,
+  listVendorPendingSettlements,
+} from '../../services/vendorApi';
+import { getErrorMessage } from '../../utils/apiHelpers';
+import { mapVendorEarningsToWallet } from '../../utils/mappers/vendorSettlementMapper';
+import { paiseToRupees } from '../../utils/mappers/orderMapper';
 
 const VendorMoneyRequests = () => {
-  // Local States
   const [showDrawer, setShowDrawer] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  
-  // Real-time State management for Fintech simulations
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
   const [availableBal, setAvailableBal] = useState(0);
   const [onHoldBal, setOnHoldBal] = useState(0);
   const [pendingBal, setPendingBal] = useState(0);
@@ -24,49 +31,42 @@ const VendorMoneyRequests = () => {
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState(false);
 
-  // Quick simulation helper to add funds (optional testing feature for the user)
-  const handleLoadMockFunds = () => {
-    setAvailableBal(50000);
-    setOnHoldBal(12000);
-  };
+  const loadWallet = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const [summary, pending] = await Promise.all([
+        getVendorEarningsSummary(),
+        listVendorPendingSettlements({ limit: 50 }),
+      ]);
+      const wallet = mapVendorEarningsToWallet(summary);
+      setAvailableBal(wallet.availableBal);
+      setOnHoldBal(wallet.onHoldBal);
+      setPendingBal(wallet.pendingBal);
+      setRequests((pending.data || []).map((item) => ({
+        id: item._id?.toString?.()?.slice(-8)?.toUpperCase() || 'PAYOUT',
+        date: item.audit?.createdAt
+          ? new Date(item.audit.createdAt).toISOString().split('T')[0]
+          : '—',
+        amount: paiseToRupees(item.amountPaise || 0),
+        status: item.status || 'Pending Approval',
+        method: 'Bank Transfer',
+        details: item.bankSnapshot?.bankName || 'Registered bank account',
+      })));
+    } catch (err) {
+      setError(getErrorMessage(err, 'Unable to load wallet data'));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-  // Submit Payout Request
+  useEffect(() => {
+    loadWallet();
+  }, [loadWallet]);
+
   const handleSubmitRequest = (e) => {
     e.preventDefault();
-    const amt = parseFloat(reqAmount);
-    
-    if (isNaN(amt) || amt <= 0) {
-      setErrorMsg('Please enter a valid payout amount.');
-      return;
-    }
-
-    if (amt > availableBal) {
-      setErrorMsg(`Insufficient funds! Your available balance is ₹${availableBal}.`);
-      return;
-    }
-
-    // Process simulation
-    setErrorMsg('');
-    setAvailableBal(prev => prev - amt);
-    setPendingBal(prev => prev + amt);
-
-    const newReq = {
-      id: `REQ-${Math.floor(100000 + Math.random() * 900000)}`,
-      date: new Date().toISOString().split('T')[0],
-      amount: amt,
-      status: 'Pending Approval',
-      method: reqMethod,
-      details: `${reqBankName} (${reqAccount})`
-    };
-
-    setRequests([newReq, ...requests]);
-    setSuccessMsg(true);
-    setReqAmount('');
-
-    setTimeout(() => {
-      setSuccessMsg(false);
-      setShowDrawer(false);
-    }, 1500);
+    setErrorMsg('Payout requests are not available in the app yet. Pending settlements are managed by the platform.');
   };
 
   // Filter requests matching search query
@@ -94,18 +94,7 @@ const VendorMoneyRequests = () => {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Optional Simulation Button if Balance is 0 */}
-          {availableBal === 0 && (
-            <button 
-              onClick={handleLoadMockFunds}
-              className="px-3.5 py-2.5 rounded-xl border border-dashed border-purple-200 bg-purple-50 text-[#5B3FD6] text-xs font-extrabold hover:bg-purple-100/50 transition-all cursor-pointer flex items-center gap-1.5"
-            >
-              <Sparkles size={14} />
-              <span>Simulate Balances</span>
-            </button>
-          )}
-
-          <button 
+          <button
             onClick={() => setShowDrawer(true)}
             className="bg-[#0E0E2C] hover:opacity-90 text-white font-extrabold flex items-center gap-1.5 px-5 py-2.5 rounded-xl text-xs shadow-lg cursor-pointer transition-all"
           >

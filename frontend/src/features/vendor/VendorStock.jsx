@@ -1,24 +1,45 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  Package, AlertTriangle, AlertCircle, Coins, Search, Plus, 
+import {
+  Package, AlertTriangle, AlertCircle, Coins, Search, Plus,
   ChevronRight, ArrowUpDown, ChevronDown, Check, X, ShieldAlert,
-  ArrowUpRight, RefreshCw, Edit3
+  ArrowUpRight, RefreshCw, Edit3, Loader2
 } from 'lucide-react';
+import { listVendorProducts, updateVendorInventory } from '../../services/vendorApi';
+import { getErrorMessage } from '../../utils/apiHelpers';
+import { mapVendorProductForStock } from '../../utils/mappers/vendorProductMapper';
 
 const VendorStock = () => {
   const navigate = useNavigate();
 
-  // Local States
   const [searchQuery, setSearchQuery] = useState('');
   const [activeSegment, setActiveSegment] = useState('All');
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [adjustStockVal, setAdjustStockVal] = useState('');
   const [adjustPriceVal, setAdjustPriceVal] = useState('');
   const [adjustSuccess, setAdjustSuccess] = useState(false);
-
-  // Initial Seed Data with Uniform/School Supply products
   const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const loadProducts = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const { data } = await listVendorProducts({ limit: 200 });
+      setProducts((data || []).map(mapVendorProductForStock));
+    } catch (err) {
+      setProducts([]);
+      setError(getErrorMessage(err, 'Unable to load inventory'));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadProducts();
+  }, [loadProducts]);
 
   // Set initial input states when drawer is opened
   const handleOpenAdjust = (prod) => {
@@ -28,27 +49,27 @@ const VendorStock = () => {
     setAdjustSuccess(false);
   };
 
-  // Submit stock adjustments
-  const handleSaveAdjustment = (e) => {
+  const handleSaveAdjustment = async (e) => {
     e.preventDefault();
     if (!selectedProduct) return;
 
-    setProducts(products.map(prod => {
-      if (prod.id === selectedProduct.id) {
-        return {
-          ...prod,
-          stock: parseInt(adjustStockVal) || 0,
-          price: parseInt(adjustPriceVal) || 0
-        };
-      }
-      return prod;
-    }));
-
-    setAdjustSuccess(true);
-    setTimeout(() => {
-      setSelectedProduct(null);
-      setAdjustSuccess(false);
-    }, 1200);
+    setSaving(true);
+    setError('');
+    try {
+      await updateVendorInventory(selectedProduct.id, {
+        stock: parseInt(adjustStockVal, 10) || 0,
+      });
+      await loadProducts();
+      setAdjustSuccess(true);
+      setTimeout(() => {
+        setSelectedProduct(null);
+        setAdjustSuccess(false);
+      }, 1200);
+    } catch (err) {
+      setError(getErrorMessage(err, 'Unable to update stock'));
+    } finally {
+      setSaving(false);
+    }
   };
 
   // Metrics Calculations (Dynamic in real-time)

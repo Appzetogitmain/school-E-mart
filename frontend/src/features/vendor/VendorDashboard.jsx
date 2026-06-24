@@ -1,44 +1,74 @@
-import React from 'react';
-import { 
-  Download, Plus, TrendingUp, TrendingDown, ClipboardList, CheckCircle2, 
-  Clock, XCircle, Wallet, ArrowRight, Star, BellRing, FileText
+import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import {
+  Download, Plus, TrendingUp, ClipboardList, CheckCircle2,
+  Clock, XCircle, Wallet, ArrowRight, Star, BellRing, FileText, Loader2
 } from 'lucide-react';
+import useAuthStore from '../../store/useAuthStore';
+import { getVendorDashboard, listVendorOrders } from '../../services/vendorApi';
+import { getErrorMessage } from '../../utils/apiHelpers';
+import { paiseToRupees } from '../../utils/mappers/orderMapper';
+import { mapVendorOrderForList } from '../../utils/mappers/vendorOrderMapper';
+
+const formatINR = (paise) => `₹${paiseToRupees(paise).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
 
 const VendorDashboard = () => {
-  // Mock Data
-  const recentOrders = [
-    { id: 'ORD-2026-0528', school: 'Gyan Public School', amount: '₹12,450', status: 'Processing', statusColor: 'bg-blue-50 text-blue-600 border-blue-100' },
-    { id: 'ORD-2026-0527', school: 'Bright Future School', amount: '₹8,750', status: 'Shipped', statusColor: 'bg-emerald-50 text-emerald-600 border-emerald-100' },
-    { id: 'ORD-2026-0526', school: 'Little Angels School', amount: '₹15,200', status: 'Delivered', statusColor: 'bg-emerald-50 text-emerald-600 border-emerald-100' },
-    { id: 'ORD-2026-0525', school: 'Sunrise Public School', amount: '₹5,600', status: 'Pending', statusColor: 'bg-amber-50 text-amber-600 border-amber-100' },
-  ];
+  const user = useAuthStore((state) => state.user);
+  const [dashboard, setDashboard] = useState(null);
+  const [recentOrders, setRecentOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  const quotations = [
-    { title: 'Uniform Requirement 2026-27', school: 'Shining Star School', due: 'Due in 2 days', status: 'New', statusColor: 'bg-blue-50 text-blue-600 border-blue-100' },
-    { title: 'Sports Kit Requirement', school: 'Green Field School', due: 'Due in 3 days', status: 'New', statusColor: 'bg-blue-50 text-blue-600 border-blue-100' },
-    { title: 'Winter Uniform Requirement', school: 'Kids World School', due: 'Due in 5 days', status: 'In Progress', statusColor: 'bg-amber-50 text-amber-600 border-amber-100' },
-    { title: 'School Bag Requirement', school: 'Cambridge School', due: 'Due in 7 days', status: 'Pending', statusColor: 'bg-gray-50 text-gray-500 border-gray-100' },
-  ];
+  useEffect(() => {
+    let cancelled = false;
 
-  const topProducts = [
-    { name: 'School Shirt (Blue)', sales: '512 Units Sold', revenue: '₹1,02,400', image: '👕' },
-    { name: 'School Trousers (Grey)', sales: '398 Units Sold', revenue: '₹87,560', image: '👖' },
-    { name: 'School Bag', sales: '287 Units Sold', revenue: '₹71,750', image: '🎒' }
-  ];
+    Promise.all([
+      getVendorDashboard(),
+      listVendorOrders({ limit: 4 }),
+    ])
+      .then(([dashboardData, ordersResult]) => {
+        if (!cancelled) {
+          setDashboard(dashboardData);
+          setRecentOrders((ordersResult.data || []).map(mapVendorOrderForList));
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) setError(getErrorMessage(err, 'Unable to load dashboard'));
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
 
-  const announcements = [
-    { title: 'New Feature Update', desc: 'You can now create custom catalog for schools.', date: '22 May 2026', icon: BellRing, iconColor: 'text-purple-600 bg-purple-50' },
-    { title: 'System Maintenance', desc: 'Our system will be under maintenance on 25 May 2026 from 12:00 AM to 2:00 AM.', date: '21 May 2026', icon: Clock, iconColor: 'text-emerald-600 bg-emerald-50' }
-  ];
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const topProducts = (dashboard?.topSellingProducts || []).map((product) => ({
+    name: product.name,
+    sales: `${product.salesCount || 0} Units Sold`,
+    revenue: formatINR((product.pricePaise || 0) * (product.salesCount || 0)),
+    image: '📦',
+  }));
+
+  const announcements = [];
 
   return (
     <div className="space-y-8 pb-10">
-      
+      {loading && (
+        <div className="flex items-center gap-2 text-gray-400 text-sm">
+          <Loader2 size={16} className="animate-spin" /> Loading dashboard...
+        </div>
+      )}
+      {error && (
+        <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">{error}</div>
+      )}
+
       {/* 1. GREETING & QUICK ACTIONS */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl md:text-3xl font-black text-gray-900 flex items-center gap-2">
-            Welcome back, Ankit! 👋
+            Welcome back, {user?.name || 'Vendor'}! 👋
           </h1>
           <p className="text-sm font-medium text-gray-500 mt-1.5">
             Here's what's happening with your business today.
@@ -67,10 +97,7 @@ const VendorDashboard = () => {
             </div>
           </div>
           <div className="mt-4">
-            <span className="text-2xl font-black text-gray-900">98</span>
-            <span className="text-[10px] font-bold text-emerald-500 flex items-center gap-0.5 mt-1.5">
-              <TrendingUp size={10} /> +18% this month
-            </span>
+            <span className="text-2xl font-black text-gray-900">{dashboard?.orders?.ordersReceived || 0}</span>
           </div>
         </div>
 
@@ -83,10 +110,7 @@ const VendorDashboard = () => {
             </div>
           </div>
           <div className="mt-4">
-            <span className="text-2xl font-black text-gray-900">50</span>
-            <span className="text-[10px] font-bold text-emerald-500 flex items-center gap-0.5 mt-1.5">
-              <TrendingUp size={10} /> +12% this month
-            </span>
+            <span className="text-2xl font-black text-gray-900">{dashboard?.orders?.ordersCompleted || 0}</span>
           </div>
         </div>
 
@@ -99,10 +123,7 @@ const VendorDashboard = () => {
             </div>
           </div>
           <div className="mt-4">
-            <span className="text-2xl font-black text-gray-900">4</span>
-            <span className="text-[10px] font-bold text-red-500 flex items-center gap-0.5 mt-1.5">
-              <TrendingDown size={10} /> -2% this month
-            </span>
+            <span className="text-2xl font-black text-gray-900">{dashboard?.orders?.ordersInProgress || 0}</span>
           </div>
         </div>
 
@@ -115,10 +136,7 @@ const VendorDashboard = () => {
             </div>
           </div>
           <div className="mt-4">
-            <span className="text-2xl font-black text-gray-900">4</span>
-            <span className="text-[10px] font-bold text-red-500 flex items-center gap-0.5 mt-1.5">
-              <TrendingDown size={10} /> -1% this month
-            </span>
+            <span className="text-2xl font-black text-gray-900">{dashboard?.orders?.ordersCancelled || 0}</span>
           </div>
         </div>
 
@@ -131,9 +149,8 @@ const VendorDashboard = () => {
             </div>
           </div>
           <div className="mt-4">
-            <span className="text-xl md:text-2xl font-black text-gray-900 truncate block">₹1,45,320</span>
-            <span className="text-[10px] font-bold text-emerald-500 flex items-center gap-0.5 mt-1.5">
-              <TrendingUp size={10} /> +22% this month
+            <span className="text-xl md:text-2xl font-black text-gray-900 truncate block">
+              {formatINR(dashboard?.revenue?.totalEarningsPaise || 0)}
             </span>
           </div>
         </div>
@@ -147,10 +164,12 @@ const VendorDashboard = () => {
             </div>
           </div>
           <div className="mt-4">
-            <span className="text-xl md:text-2xl font-black text-gray-900 truncate block">₹12,450</span>
-            <button className="text-[10px] font-extrabold text-[#5B3FD6] hover:underline flex items-center gap-0.5 mt-2 text-left">
+            <span className="text-xl md:text-2xl font-black text-gray-900 truncate block">
+              {formatINR(dashboard?.settlement?.availableBalancePaise || 0)}
+            </span>
+            <Link to="/vendor/wallet" className="text-[10px] font-extrabold text-[#5B3FD6] hover:underline flex items-center gap-0.5 mt-2 text-left">
               View Wallet →
-            </button>
+            </Link>
           </div>
         </div>
 
@@ -163,11 +182,13 @@ const VendorDashboard = () => {
         <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm flex flex-col">
           <div className="flex items-center justify-between pb-4 border-b border-gray-50 shrink-0">
             <h2 className="font-extrabold text-sm text-gray-800">Recent Orders</h2>
-            <button className="text-xs font-bold text-[#5B3FD6] hover:underline">View All</button>
+            <Link to="/vendor/orders" className="text-xs font-bold text-[#5B3FD6] hover:underline">View All</Link>
           </div>
           <div className="flex-1 mt-4 space-y-4">
-            {recentOrders.map((order) => (
-              <div key={order.id} className="flex items-center justify-between text-xs p-1 hover:bg-gray-50 rounded-xl transition-colors">
+            {recentOrders.length === 0 ? (
+              <p className="text-xs text-gray-400 text-center py-6">No orders yet.</p>
+            ) : recentOrders.map((order) => (
+              <div key={order.mongoId || order.id} className="flex items-center justify-between text-xs p-1 hover:bg-gray-50 rounded-xl transition-colors">
                 <div className="flex items-center gap-3">
                   <div className="w-9 h-9 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center text-gray-500 shrink-0">
                     <ClipboardList size={16} />
@@ -178,7 +199,7 @@ const VendorDashboard = () => {
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="font-bold text-gray-900">{order.amount}</p>
+                  <p className="font-bold text-gray-900">₹{order.amount.toFixed(0)}</p>
                   <span className={`inline-block text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border mt-1.5 ${order.statusColor}`}>
                     {order.status}
                   </span>
@@ -186,41 +207,19 @@ const VendorDashboard = () => {
               </div>
             ))}
           </div>
-          <button className="w-full text-center py-2.5 mt-4 text-xs font-bold text-[#5B3FD6] hover:text-[#472fc2] bg-purple-50/50 hover:bg-purple-50 rounded-xl transition-all flex items-center justify-center gap-1">
+          <Link to="/vendor/orders" className="w-full text-center py-2.5 mt-4 text-xs font-bold text-[#5B3FD6] hover:text-[#472fc2] bg-purple-50/50 hover:bg-purple-50 rounded-xl transition-all flex items-center justify-center gap-1">
             View All Orders <ArrowRight size={12} />
-          </button>
+          </Link>
         </div>
 
         {/* Quotation Requests Widget */}
         <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm flex flex-col">
           <div className="flex items-center justify-between pb-4 border-b border-gray-50 shrink-0">
             <h2 className="font-extrabold text-sm text-gray-800">Quotation Requests</h2>
-            <button className="text-xs font-bold text-[#5B3FD6] hover:underline">View All</button>
           </div>
-          <div className="flex-1 mt-4 space-y-4">
-            {quotations.map((req, idx) => (
-              <div key={idx} className="flex items-center justify-between text-xs p-1 hover:bg-gray-50 rounded-xl transition-colors">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-9 h-9 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center text-gray-500 shrink-0">
-                    <FileText size={16} />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="font-extrabold text-gray-800 truncate">{req.title}</p>
-                    <p className="text-[10px] text-gray-400 font-medium mt-0.5 truncate">{req.school}</p>
-                  </div>
-                </div>
-                <div className="text-right shrink-0">
-                  <p className="text-[10px] text-red-500 font-semibold">{req.due}</p>
-                  <span className={`inline-block text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border mt-1.5 ${req.statusColor}`}>
-                    {req.status}
-                  </span>
-                </div>
-              </div>
-            ))}
+          <div className="flex-1 mt-4 flex items-center justify-center">
+            <p className="text-xs text-gray-400 text-center px-4">RFQ module is not connected yet. Quotations will appear here when available.</p>
           </div>
-          <button className="w-full text-center py-2.5 mt-4 text-xs font-bold text-[#5B3FD6] hover:text-[#472fc2] bg-purple-50/50 hover:bg-purple-50 rounded-xl transition-all flex items-center justify-center gap-1">
-            View All Quotations <ArrowRight size={12} />
-          </button>
         </div>
 
         {/* Sales Overview Widget */}
@@ -304,7 +303,9 @@ const VendorDashboard = () => {
             <button className="text-xs font-bold text-[#5B3FD6] hover:underline">View All</button>
           </div>
           <div className="flex-1 mt-4 space-y-4">
-            {topProducts.map((prod, idx) => (
+            {topProducts.length === 0 ? (
+              <p className="text-xs text-gray-400 text-center py-6">No sales data yet.</p>
+            ) : topProducts.map((prod, idx) => (
               <div key={idx} className="flex items-center justify-between text-xs hover:bg-gray-50 rounded-xl p-1 transition-colors">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-purple-50 flex items-center justify-center text-lg shrink-0">
@@ -330,7 +331,9 @@ const VendorDashboard = () => {
             <button className="text-xs font-bold text-[#5B3FD6] hover:underline">View All</button>
           </div>
           <div className="flex-1 mt-4 space-y-4">
-            {announcements.map((announce, idx) => {
+            {announcements.length === 0 ? (
+              <p className="text-xs text-gray-400 text-center py-6">No announcements right now.</p>
+            ) : announcements.map((announce, idx) => {
               const Icon = announce.icon;
               return (
                 <div key={idx} className="flex gap-3.5 hover:bg-gray-50 rounded-xl p-2.5 transition-colors text-xs items-start">
