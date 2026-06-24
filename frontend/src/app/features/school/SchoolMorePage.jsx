@@ -7,11 +7,13 @@ import {
   Heart, Search, Wallet, UserPlus, Phone, Info, LogOut
 } from 'lucide-react';
 import AuthPrompt from '../../components/AuthPrompt';
+import useAuthStore from '../../../store/useAuthStore';
 
 const SchoolMorePage = () => {
   const navigate = useNavigate();
   const isGuest = !localStorage.getItem('childInfo');
   const user = isGuest ? null : JSON.parse(localStorage.getItem('childInfo'));
+  const logout = useAuthStore((state) => state.logout);
   const [isAuthPromptOpen, setIsAuthPromptOpen] = React.useState(false);
 
   // Navigation configuration sections matching mockup exactly
@@ -341,6 +343,7 @@ const SchoolMorePage = () => {
                       return;
                     }
                     if (item.action === 'logout') {
+                      logout();
                       localStorage.removeItem('childInfo');
                       localStorage.removeItem('wishlist');
                     }

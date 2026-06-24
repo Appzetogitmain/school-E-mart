@@ -181,6 +181,7 @@ const AppRoutes = () => {
         <Route path={ROUTES.REGISTER} element={<AuthPage />} />
         <Route path={ROUTES.VENDOR.LOGIN} element={<VendorLogin />} />
         <Route path={ROUTES.SUPER_ADMIN.LOGIN} element={<SuperAdminLogin />} />
+        <Route element={<RoleRoute allowedRoles={[ROLES.ADMIN]} redirectTo={ROUTES.SUPER_ADMIN.LOGIN} />}>
         <Route path={ROUTES.SUPER_ADMIN.ROOT} element={<SuperAdminLayout />}>
           <Route index element={<Navigate to="dashboard" replace />} />
           <Route path="dashboard" element={<SuperAdminDashboard />} />
@@ -214,6 +215,7 @@ const AppRoutes = () => {
           <Route path="promo-home-banners" element={<PromoHomeBanners />} />
           <Route path="setting-billing-charges" element={<BillingChargesManagement />} />
           <Route path="profile" element={<AdminProfileManagement />} />
+        </Route>
         </Route>
         <Route element={<ProtectedRoute />}>
           <Route path={ROUTES.DASHBOARD} element={<Dashboard />} />

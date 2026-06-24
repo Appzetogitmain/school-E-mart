@@ -1,22 +1,33 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate, useLocation } from 'react-router-dom';
-import { 
-  Mail, Lock, User, Phone, School, MapPin, 
-  ArrowRight, CheckCircle2, ChevronLeft, Building2 
+import {
+  Mail, Lock, User, Phone, School, MapPin,
+  ArrowRight, CheckCircle2, ChevronLeft, Building2
 } from 'lucide-react';
 import { ROUTES } from '../../constants/routes';
+import useAuthStore from '../../store/useAuthStore';
+import * as authApi from '../../services/authApi';
+import { getErrorMessage } from '../../utils/apiHelpers';
+import { getLoginRedirectPath } from '../../utils/mappers/userMapper';
 
 const AuthPage = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const location = useLocation();
-  
-  // States
+  const loginFromAuthResponse = useAuthStore((state) => state.loginFromAuthResponse);
+
   const [isLogin, setIsLogin] = useState(location.pathname === ROUTES.LOGIN);
   const [role, setRole] = useState(searchParams.get('role') || 'parent');
   const [isSuccess, setIsSuccess] = useState(false);
   const [generatedId, setGeneratedId] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [otpSent, setOtpSent] = useState(false);
+
+  const [mobile, setMobile] = useState('');
+  const [otp, setOtp] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
 
   // Sync mode with URL
   useEffect(() => {
@@ -29,22 +40,64 @@ const AuthPage = () => {
     return `${prefix}${random}`;
   };
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
+  const handleSendOtp = async () => {
+    const phone = mobile.replace(/\D/g, '').slice(-10);
+    if (phone.length !== 10) {
+      setError('Please enter a valid 10-digit mobile number');
+      return;
+    }
+    setError('');
     setIsLoading(true);
-    
-    // Simulate API call
-    setTimeout(() => {
+    try {
+      await authApi.requestParentOtp(phone);
+      setOtpSent(true);
+    } catch (err) {
+      setError(getErrorMessage(err, 'Unable to send OTP'));
+    } finally {
       setIsLoading(false);
-      if (!isLogin) {
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+
+    if (!isLogin) {
+      setIsLoading(true);
+      setTimeout(() => {
+        setIsLoading(false);
         const newId = generateId(role);
         setGeneratedId(newId);
         setIsSuccess(true);
+      }, 1500);
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      if (role === 'parent') {
+        const phone = mobile.replace(/\D/g, '').slice(-10);
+        if (phone.length !== 10 || otp.length !== 4) {
+          setError('Enter a valid mobile number and 4-digit OTP');
+          return;
+        }
+        const authData = await authApi.parentWebLogin(phone, otp);
+        loginFromAuthResponse(authData, 'parent');
+        navigate(getLoginRedirectPath(authData.user, 'parent'));
       } else {
-        // Handle Login
-        navigate(ROUTES.MARKETPLACE + `?role=${role}`);
+        if (!email.trim() || !password) {
+          setError('Email and password are required');
+          return;
+        }
+        const authData = await authApi.schoolAdminLogin(email.trim(), password);
+        loginFromAuthResponse(authData, 'school');
+        navigate(getLoginRedirectPath(authData.user, 'school'));
       }
-    }, 1500);
+    } catch (err) {
+      setError(getErrorMessage(err, 'Login failed. Please try again.'));
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   if (isSuccess) {
@@ -174,6 +227,11 @@ const AuthPage = () => {
             </div>
 
             {/* Form */}
+            {error && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-100 text-red-600 rounded-xl text-sm font-medium">
+                {error}
+              </div>
+            )}
             <form onSubmit={handleSubmit} className="space-y-4">
               {role === 'parent' ? (
                 <>
@@ -195,18 +253,22 @@ const AuthPage = () => {
                     <div className="flex gap-2">
                       <div className="relative flex-1 group">
                         <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-primary transition-colors" size={18} />
-                        <input 
-                          type="tel" 
+                        <input
+                          type="tel"
                           required
-                          placeholder="+91 XXXXX XXXXX" 
+                          value={mobile}
+                          onChange={(e) => setMobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                          placeholder="+91 XXXXX XXXXX"
                           className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
                         />
                       </div>
-                      <button 
+                      <button
                         type="button"
+                        onClick={handleSendOtp}
+                        disabled={isLoading}
                         className="px-4 py-3 bg-primary/10 text-primary text-[12px] font-bold rounded-2xl hover:bg-primary/20 transition-all whitespace-nowrap"
                       >
-                        Send OTP
+                        {otpSent ? 'Resend OTP' : 'Send OTP'}
                       </button>
                     </div>
                   </div>
@@ -215,11 +277,13 @@ const AuthPage = () => {
                     <label className="text-[12px] font-bold text-gray-400 uppercase tracking-wider ml-1">Enter OTP</label>
                     <div className="relative group">
                       <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-primary transition-colors" size={18} />
-                      <input 
-                        type="text" 
+                      <input
+                        type="text"
                         required
-                        maxLength={6}
-                        placeholder="6-digit code" 
+                        maxLength={4}
+                        value={otp}
+                        onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                        placeholder="4-digit code"
                         className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all tracking-[0.5em] font-mono"
                       />
                     </div>
@@ -289,10 +353,12 @@ const AuthPage = () => {
                     <label className="text-[12px] font-bold text-gray-400 uppercase tracking-wider ml-1">Email Address</label>
                     <div className="relative group">
                       <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-primary transition-colors" size={18} />
-                      <input 
-                        type="email" 
+                      <input
+                        type="email"
                         required
-                        placeholder="admin@school.com" 
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="admin@school.com"
                         className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
                       />
                     </div>
@@ -317,10 +383,12 @@ const AuthPage = () => {
                     <label className="text-[12px] font-bold text-gray-400 uppercase tracking-wider ml-1">Password</label>
                     <div className="relative group">
                       <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-primary transition-colors" size={18} />
-                      <input 
-                        type="password" 
+                      <input
+                        type="password"
                         required
-                        placeholder="••••••••" 
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="••••••••"
                         className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
                       />
                     </div>

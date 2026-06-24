@@ -7,6 +7,7 @@ import {
   ShieldCheck, AlertCircle
 } from 'lucide-react';
 import AuthPrompt from '../../components/AuthPrompt';
+import useAuthStore from '../../../store/useAuthStore';
 
 const ProfilePage = () => {
   const navigate = useNavigate();
@@ -51,10 +52,13 @@ const ProfilePage = () => {
     if (item.to) navigate(item.to);
   };
 
-  const handleAuthAction = () => {
+  const logout = useAuthStore((state) => state.logout);
+
+  const handleAuthAction = async () => {
     if (isGuest) {
       navigate('/user/login');
     } else {
+      await logout();
       localStorage.removeItem('childInfo');
       localStorage.removeItem('wishlist');
       window.dispatchEvent(new Event('storage'));

@@ -6,10 +6,13 @@ import {
   Sparkles, School
 } from 'lucide-react';
 import useAuthStore from '../../../store/useAuthStore';
+import * as authApi from '../../../services/authApi';
+import { getErrorMessage } from '../../../utils/apiHelpers';
+import { getLoginRedirectPath } from '../../../utils/mappers/userMapper';
 
 const SchoolAuthPage = () => {
   const navigate = useNavigate();
-  const loginStore = useAuthStore((state) => state.login);
+  const loginFromAuthResponse = useAuthStore((state) => state.loginFromAuthResponse);
 
   // Splash States
   const [showSplash, setShowSplash] = useState(true);
@@ -95,7 +98,7 @@ const SchoolAuthPage = () => {
     return '';
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     const validationError = validateForm();
     if (validationError) {
@@ -104,8 +107,23 @@ const SchoolAuthPage = () => {
     }
 
     setLoading(true);
+    setError('');
 
-    // Simulate Auth API Call
+    if (mode === 'login') {
+      try {
+        const loginFn = role === 'teacher' ? authApi.teacherLogin : authApi.schoolAdminLogin;
+        const authData = await loginFn(formData.email, formData.password);
+        loginFromAuthResponse(authData, role === 'teacher' ? 'teacher' : 'school');
+        navigate(getLoginRedirectPath(authData.user, role === 'teacher' ? 'teacher' : 'school'));
+      } catch (err) {
+        setError(getErrorMessage(err, 'Login failed. Please check your credentials.'));
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
+    // Signup remains local until school onboarding API is available
     setTimeout(() => {
       setLoading(false);
 
@@ -117,29 +135,20 @@ const SchoolAuthPage = () => {
 
       const mockUser = {
         name: userDisplayName,
-        school: role === 'admin' ? formData.schoolName : (formData.schoolCode || "Associated School"),
+        school: role === 'admin' ? formData.schoolName : (formData.schoolCode || 'Associated School'),
         role: role === 'admin' ? 'school' : 'teacher',
-        phone: formData.mobile || "9876543210",
+        phone: formData.mobile || '9876543210',
         email: formData.email,
-        refId: referenceId
+        refId: referenceId,
       };
 
-      if (mode === 'login') {
-        // Direct redirection for login
-        localStorage.setItem('childInfo', JSON.stringify(mockUser));
-        loginStore(mockUser, 'mock-school-token');
-        navigate(role === 'teacher' ? '/school/teacher/dashboard' : '/school/admin');
-      } else {
-        // Success screen for sign up
-        setSuccessInfo({
-          id: referenceId,
-          name: userDisplayName,
-          role: role === 'admin' ? 'School Administrator' : 'Teacher'
-        });
-        localStorage.setItem('childInfo', JSON.stringify(mockUser));
-        loginStore(mockUser, 'mock-school-token');
-        setStep(3);
-      }
+      setSuccessInfo({
+        id: referenceId,
+        name: userDisplayName,
+        role: role === 'admin' ? 'School Administrator' : 'Teacher',
+      });
+      localStorage.setItem('childInfo', JSON.stringify(mockUser));
+      setStep(3);
     }, 1500);
   };
 

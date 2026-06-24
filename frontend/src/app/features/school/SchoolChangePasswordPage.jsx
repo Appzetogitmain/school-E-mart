@@ -1,11 +1,15 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  ArrowLeft, Lock, Eye, EyeOff, ShieldCheck, Check, AlertCircle 
+import {
+  ArrowLeft, Lock, Eye, EyeOff, ShieldCheck, Check, AlertCircle
 } from 'lucide-react';
+import * as authApi from '../../../services/authApi';
+import { getErrorMessage } from '../../../utils/apiHelpers';
+import useAuthStore from '../../../store/useAuthStore';
 
 const SchoolChangePasswordPage = () => {
   const navigate = useNavigate();
+  const { isAuthenticated } = useAuthStore();
   
   // State for form fields
   const [currentPassword, setCurrentPassword] = useState('');
@@ -27,9 +31,14 @@ const SchoolChangePasswordPage = () => {
   const hasNumber = /\d/.test(newPassword);
   const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>]/.test(newPassword);
 
-  const handleSave = (e) => {
+  const handleSave = async (e) => {
     e.preventDefault();
     setErrorMsg('');
+
+    if (!isAuthenticated) {
+      setErrorMsg('Please log in to change your password.');
+      return;
+    }
 
     if (!currentPassword) {
       setErrorMsg('Please enter your current account password.');
@@ -46,15 +55,21 @@ const SchoolChangePasswordPage = () => {
 
     setLoading(true);
 
-    // Simulate safe secure API call
-    setTimeout(() => {
-      setLoading(false);
+    try {
+      await authApi.changePassword({
+        currentPassword,
+        newPassword,
+        confirmPassword,
+      });
       setShowSuccess(true);
-      setTimeout(() => {
-        setShowSuccess(false);
-        navigate(-1); // Go back to More page
-      }, 1500);
-    }, 1000);
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch (err) {
+      setErrorMsg(getErrorMessage(err, 'Unable to update password. Please try again.'));
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
