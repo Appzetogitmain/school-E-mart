@@ -20,123 +20,12 @@ const SchoolVendorsPage = () => {
   const [selectedVendor, setSelectedVendor] = useState(null);
   const [quoteSuccessVendor, setQuoteSuccessVendor] = useState(null);
 
-  // Mock Vendors data exactly matching the mockup specifications
-  const [vendors, setVendors] = useState([
-    {
-      id: 'VND-2026-001',
-      name: 'ABC Uniforms',
-      rating: '4.8',
-      reviews: '52',
-      location: 'Delhi, India',
-      category: 'Uniform',
-      tag: 'Uniform Supplier',
-      completedOrders: 48,
-      pendingQuotes: 2,
-      avatar: 'https://images.unsplash.com/photo-1590247813693-5541d1c609fd?w=150',
-      contactPerson: 'Rajesh Kumar (Sales Head)',
-      phone: '+91 98765 43210',
-      email: 'info@abcuniforms.com',
-      gstin: '07AAAAA1111A1Z1',
-      address: 'A-42, Okhla Industrial Area Phase-II, New Delhi, 110020',
-      specialities: 'Customized Blazers, Athletic Tracksuits, Summer Uniform Sets, Premium Cotton Shirts.'
-    },
-    {
-      id: 'VND-2026-002',
-      name: 'Elite School Wear',
-      rating: '4.6',
-      reviews: '38',
-      location: 'Mumbai, India',
-      category: 'Uniform',
-      tag: 'Uniform Supplier',
-      completedOrders: 36,
-      pendingQuotes: 1,
-      avatar: 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?w=150',
-      contactPerson: 'Milind Sawant (Manager)',
-      phone: '+91 98223 44556',
-      email: 'contact@eliteschoolwear.com',
-      gstin: '27BBBBB2222B2Z2',
-      address: '104, Lower Parel Industrial Estate, Mumbai, 400013',
-      specialities: 'Custom Knitted Sweaters, Prefect Ties, Premium Checked Skirts, Woolen Socks.'
-    },
-    {
-      id: 'VND-2026-003',
-      name: 'Smart Uniforms',
-      rating: '4.5',
-      reviews: '29',
-      location: 'Bangalore, India',
-      category: 'Uniform',
-      tag: 'Uniform Supplier',
-      completedOrders: 29,
-      pendingQuotes: 3,
-      avatar: 'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=150',
-      contactPerson: 'Vikram Reddy (BDM)',
-      phone: '+91 96000 88776',
-      email: 'sales@smartuniforms.in',
-      gstin: '29CCCCC3333C3Z3',
-      address: 'Sector 5, HSR Layout, Bangalore, 560102',
-      specialities: 'Eco-Friendly Bio-Washed School Uniforms, Sports Kits, Lab Aprons.'
-    },
-    {
-      id: 'VND-2026-004',
-      name: 'BookMate Publishers',
-      rating: '4.7',
-      reviews: '41',
-      location: 'Pune, India',
-      category: 'Books',
-      tag: 'Books Supplier',
-      completedOrders: 57,
-      pendingQuotes: 4,
-      avatar: 'https://images.unsplash.com/photo-1512820790803-83ca734da794?w=150',
-      contactPerson: 'Sunil Deshpande (Director)',
-      phone: '+91 94220 11223',
-      email: 'orders@bookmate.com',
-      gstin: '27DDDDD4444D4Z4',
-      address: 'Shaniwar Peth, Pune, 411030',
-      specialities: 'CBSE, ICSE Textbook Bundles, Custom Activity Notebooks, School Diaries.'
-    },
-    {
-      id: 'VND-2026-005',
-      name: 'Prime Stationery',
-      rating: '4.4',
-      reviews: '26',
-      location: 'Hyderabad, India',
-      category: 'Stationery',
-      tag: 'Stationery Supplier',
-      completedOrders: 42,
-      pendingQuotes: 0,
-      avatar: 'https://images.unsplash.com/photo-1456513080510-7bf3a84b82f8?w=150',
-      contactPerson: 'Srinivas Rao (Partner)',
-      phone: '+91 99887 76655',
-      email: 'prime@stationeryhub.com',
-      gstin: '36EEEEE5555E5Z5',
-      address: 'Madhapur Metro Pillar 24, Hyderabad, 500081',
-      specialities: 'Branded Writing Materials, Art & Craft Supplies, Office Files & Folders.'
-    },
-    {
-      id: 'VND-2026-006',
-      name: 'Decathlon Sports Hub',
-      rating: '4.9',
-      reviews: '85',
-      location: 'Delhi, India',
-      category: 'Sports',
-      tag: 'Sports Equipment',
-      completedOrders: 65,
-      pendingQuotes: 5,
-      avatar: 'https://images.unsplash.com/photo-1461896836934-ffe607ba8211?w=150',
-      contactPerson: 'Amit Rawat (Institutional Lead)',
-      phone: '+91 91112 23344',
-      email: 'schools@decathlon.in',
-      gstin: '07FFFFF6666F6Z6',
-      address: 'Connaught Place, Block E, New Delhi, 110001',
-      specialities: 'Athletic Ground Equipments, High-grade Soccer Balls, Cricket Kits, School Gym setups.'
-    }
-  ]);
+  const vendors = [];
 
-  // Statistics summaries based on mockup baselines
-  const totalCount = 28;
-  const uniformCount = 8;
-  const pendingQuotesCount = 12;
-  const activeCount = 25;
+  const totalCount = vendors.length;
+  const uniformCount = vendors.filter((v) => v.category === 'Uniform').length;
+  const pendingQuotesCount = vendors.reduce((sum, v) => sum + (v.pendingQuotes || 0), 0);
+  const activeCount = vendors.length;
 
   // Filter vendor list
   const filteredVendors = vendors.filter(v => {
@@ -285,6 +174,14 @@ const SchoolVendorsPage = () => {
 
       {/* Vendor Cards list exactly matching the mockup */}
       <div className="px-6 py-4 space-y-4">
+
+        {vendors.length === 0 && (
+          <div className="text-center py-16 bg-white border border-gray-150 rounded-[2.2rem] p-6 shadow-sm">
+            <Store size={44} className="text-gray-300 mx-auto block stroke-[1.5]" />
+            <span className="text-xs font-black text-gray-500 block mt-3">No vendor directory yet</span>
+            <span className="text-[10px] text-gray-400 font-bold block mt-1">School vendor procurement API is not available yet.</span>
+          </div>
+        )}
         
         {filteredVendors.map((vendor) => (
           <div 

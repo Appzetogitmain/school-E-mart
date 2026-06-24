@@ -18,152 +18,12 @@ const SchoolKitsPage = () => {
   // Modals state
   const [selectedKit, setSelectedKit] = useState(null);
 
-  // Mock Procurement Kits data exactly matching the mockup specifications
-  const [kits, setKits] = useState([
-    {
-      id: 'KIT-2026-001',
-      name: 'Class 1 Starter Kit',
-      category: 'Academic',
-      tag: 'Academic Kit',
-      desc: '5 Notebooks, 2 Pencils, Eraser, Sharpener & more',
-      classes: 'Classes 1 - 3',
-      itemsCount: 6,
-      status: 'Active',
-      price: 599,
-      updatedDate: '12 May 2024',
-      avatar: 'https://images.unsplash.com/photo-1576267423445-b2e0074d68a4?w=150',
-      itemsList: [
-        { name: 'Double Line Notebooks (120 Pages)', qty: '5' },
-        { name: 'HB Black Pencils', qty: '2' },
-        { name: 'Non-Dust Eraser', qty: '1' },
-        { name: 'Dual Sharpener', qty: '1' },
-        { name: 'Plastic Scale (15 cm)', qty: '1' },
-        { name: 'Drawing Book (A4)', qty: '1' }
-      ]
-    },
-    {
-      id: 'KIT-2026-002',
-      name: 'Art & Craft Kit',
-      category: 'Stationery',
-      tag: 'Art & Craft Kit',
-      desc: 'Crayons, Drawing Book, Color Paper, Glue, Scissors & more',
-      classes: 'Classes 1 - 5',
-      itemsCount: 8,
-      status: 'Active',
-      price: 399,
-      updatedDate: '10 May 2024',
-      avatar: 'https://images.unsplash.com/photo-1513364776144-60967b0f800f?w=150',
-      itemsList: [
-        { name: 'Jumbo Wax Crayons (12 shades)', qty: '1 pack' },
-        { name: 'Drawing Book (A4)', qty: '1' },
-        { name: 'Multi-Color Origami Sheets', qty: '1 pack' },
-        { name: 'Craft Glue Stick (15g)', qty: '1' },
-        { name: 'Safety Scissors (Rounded)', qty: '1' },
-        { name: 'Poster Colors (6 basic shades)', qty: '1 box' },
-        { name: 'Synthetic Paintbrush Set', qty: '1 pack' },
-        { name: 'Glitter Foam Sheets', qty: '5 sheets' }
-      ]
-    },
-    {
-      id: 'KIT-2026-003',
-      name: 'Science Lab Kit',
-      category: 'Lab',
-      tag: 'Lab Kit',
-      desc: 'Lab Manual, Safety Goggles, Measuring Tools, Test Tubes & more',
-      classes: 'Classes 6 - 10',
-      itemsCount: 12,
-      status: 'Active',
-      price: 999,
-      updatedDate: '08 May 2024',
-      avatar: 'https://images.unsplash.com/photo-1507668077129-56e32842fceb?w=150',
-      itemsList: [
-        { name: 'Comprehensive Science Lab Manual', qty: '1' },
-        { name: 'Polycarbonate Safety Goggles', qty: '1' },
-        { name: 'Graduated Cylinder (100ml)', qty: '1' },
-        { name: 'Borosilicate Glass Test Tubes', qty: '5' },
-        { name: 'Test Tube Holder & Stand', qty: '1 set' },
-        { name: 'Litmus Paper Strips (Red/Blue)', qty: '1 box' },
-        { name: 'Handheld Magnifying Glass (50mm)', qty: '1' },
-        { name: 'Bar Magnet Pair', qty: '1 pack' },
-        { name: 'Simple Pendulum Bob & Thread', qty: '1 set' },
-        { name: 'Lab Safety Apron', qty: '1' },
-        { name: 'Digital Stop Watch', qty: '1' },
-        { name: 'Tuning Fork set', qty: '1 set' }
-      ]
-    },
-    {
-      id: 'KIT-2026-004',
-      name: 'Sports Kit',
-      category: 'Sports',
-      tag: 'Sports Kit',
-      desc: 'Jersey, Shorts, Socks, Water Bottle & more',
-      classes: 'All Classes',
-      itemsCount: 5,
-      status: 'Active',
-      price: 799,
-      updatedDate: '07 May 2024',
-      avatar: 'https://images.unsplash.com/photo-1541534741688-6078c6bfb5c5?w=150',
-      itemsList: [
-        { name: 'Breathable Sports Mesh Jersey', qty: '1' },
-        { name: 'Athletic Shorts with drawstring', qty: '1' },
-        { name: 'Ribbed Sports Knee Socks', qty: '1 pair' },
-        { name: 'Stainless Steel Water Bottle (750ml)', qty: '1' },
-        { name: 'School Sports Gym Bag', qty: '1' }
-      ]
-    },
-    {
-      id: 'KIT-2026-005',
-      name: 'Grade 6 Academic Kit',
-      category: 'Academic',
-      tag: 'Academic Kit',
-      desc: '8 Notebooks, Geometry Box, Pens, Pencils & more',
-      classes: 'Classes 6 - 8',
-      itemsCount: 9,
-      status: 'Draft',
-      price: 899,
-      updatedDate: '05 May 2024',
-      avatar: 'https://images.unsplash.com/photo-1586075010923-2dd4570fb338?w=150',
-      itemsList: [
-        { name: 'Single Line Classwork Notebooks', qty: '8' },
-        { name: 'Mathematical Geometry Box', qty: '1' },
-        { name: 'Retractable Ballpoint Blue Pens', qty: '3' },
-        { name: 'HB Wooden Writing Pencils', qty: '5' },
-        { name: 'Neon Text Highlighters', qty: '2' },
-        { name: 'Writing Pad board', qty: '1' },
-        { name: 'Weekly Academic Student Planner', qty: '1' },
-        { name: 'Non-Dust Erasers', qty: '2' },
-        { name: 'Long Steel Ruler (30 cm)', qty: '1' }
-      ]
-    },
-    {
-      id: 'KIT-2026-006',
-      name: 'Pre-School Kit',
-      category: 'Academic',
-      tag: 'Preschool Kit',
-      desc: 'Activity Book, Crayons, Water Bottle, Lunch Box & more',
-      classes: 'Pre-Nur - UKG',
-      itemsCount: 7,
-      status: 'Active',
-      price: 549,
-      updatedDate: '01 May 2024',
-      avatar: 'https://images.unsplash.com/photo-1516627145497-ae6968895b74?w=150',
-      itemsList: [
-        { name: 'Pictorial Alphabet & Number Activity Book', qty: '1' },
-        { name: 'Jumbo Wax Crayons (8 shades)', qty: '1 pack' },
-        { name: 'BPA-Free Kids Sipper Bottle', qty: '1' },
-        { name: 'Insulated School Lunch Box', qty: '1' },
-        { name: 'Pre-school Cartoon Mini Backpack', qty: '1' },
-        { name: 'Alphabet Flash Cards', qty: '1 set' },
-        { name: 'Plastic Modeling Clay (non-toxic)', qty: '1 pack' }
-      ]
-    }
-  ]);
+  const kits = [];
 
-  // Statistics summaries based on mockup baselines
-  const totalCount = 24;
-  const activeCount = 18;
-  const draftCount = 4;
-  const archivedCount = 2;
+  const totalCount = kits.length;
+  const activeCount = kits.filter((k) => k.status === 'Active').length;
+  const draftCount = kits.filter((k) => k.status === 'Draft').length;
+  const archivedCount = kits.filter((k) => k.status === 'Archived').length;
 
   // Filter kits list
   const filteredKits = kits.filter(k => {
@@ -314,6 +174,14 @@ const SchoolKitsPage = () => {
 
       {/* Kits Cards list exactly matching the mockup */}
       <div className="px-6 py-4 space-y-4">
+
+        {kits.length === 0 && (
+          <div className="text-center py-16 bg-white border border-gray-150 rounded-[2.2rem] p-6 shadow-sm">
+            <Package size={44} className="text-gray-300 mx-auto block stroke-[1.5]" />
+            <span className="text-xs font-black text-gray-500 block mt-3">No procurement kits yet</span>
+            <span className="text-[10px] text-gray-400 font-bold block mt-1">School kit management API is not available yet.</span>
+          </div>
+        )}
         
         {filteredKits.map((kit) => (
           <div 

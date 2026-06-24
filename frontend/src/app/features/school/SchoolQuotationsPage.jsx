@@ -17,132 +17,12 @@ const SchoolQuotationsPage = () => {
   const [selectedRequirement, setSelectedRequirement] = useState(null);
   const [quoteSuccessMsg, setQuoteSuccessMsg] = useState(null);
 
-  // Mock requirements with quotes data matching the mockup
-  const [requirements, setRequirements] = useState([
-    {
-      id: 'REQ-2026-01',
-      title: 'Annual Uniform Requirement 2026-27',
-      status: 'Received',
-      badgeText: 'Received 3 / 5 Quotes',
-      badgeColor: 'bg-emerald-50 text-emerald-600 border-emerald-100',
-      dotColor: 'bg-emerald-500',
-      icon: <Shirt className="text-purple-600" size={20} />,
-      iconBg: 'bg-purple-100/70',
-      deadline: '15 Dec 2026',
-      vendorsInvited: 5,
-      quotesReceived: 3,
-      createdDate: '01 Dec 2026',
-      quotes: [
-        {
-          vendorName: 'ABC Uniforms',
-          pricePerUnit: '₹1,850',
-          totalAmount: '₹3,70,000',
-          deliveryDays: '10 days',
-          rating: '4.8',
-          material: 'Premium Cotton-Poly Blend',
-          remarks: 'Standard institutional sizes. Sample swatches attached.'
-        },
-        {
-          vendorName: 'Elite School Wear',
-          pricePerUnit: '₹1,920',
-          totalAmount: '₹3,84,000',
-          deliveryDays: '8 days',
-          rating: '4.6',
-          material: '100% Organic combed Cotton',
-          remarks: 'Eco-certified fabric. Highly durable stitching.'
-        },
-        {
-          vendorName: 'Smart Uniforms',
-          pricePerUnit: '₹1,800',
-          totalAmount: '₹3,60,000',
-          deliveryDays: '15 days',
-          rating: '4.5',
-          material: 'Standard Polyester Cotton',
-          remarks: 'Budget alternative. Machine wash durable.'
-        }
-      ]
-    },
-    {
-      id: 'REQ-2026-02',
-      title: 'Winter Uniform Requirement 2026-27',
-      status: 'Received',
-      badgeText: 'Received 2 / 4 Quotes',
-      badgeColor: 'bg-emerald-50 text-emerald-600 border-emerald-100',
-      dotColor: 'bg-emerald-500',
-      icon: <Snowflake className="text-blue-500" size={20} />,
-      iconBg: 'bg-blue-100/70',
-      deadline: '20 Dec 2026',
-      vendorsInvited: 4,
-      quotesReceived: 2,
-      createdDate: '05 Dec 2026',
-      quotes: [
-        {
-          vendorName: 'ABC Uniforms',
-          pricePerUnit: '₹2,400',
-          totalAmount: '₹4,80,000',
-          deliveryDays: '12 days',
-          rating: '4.8',
-          material: 'Heavy Knit Woolen Blend',
-          remarks: 'Thick inner lining. Hooded windcheater included.'
-        },
-        {
-          vendorName: 'Elite School Wear',
-          pricePerUnit: '₹2,650',
-          totalAmount: '₹5,30,000',
-          deliveryDays: '9 days',
-          rating: '4.6',
-          material: 'Pure Cashmere feel Acrylic Wool',
-          remarks: 'Ultra light-weight. Anti-pilling technology.'
-        }
-      ]
-    },
-    {
-      id: 'REQ-2026-03',
-      title: 'Textbook Requirement 2026-27',
-      status: 'Pending',
-      badgeText: 'Pending Quotes',
-      badgeColor: 'bg-orange-50 text-orange-500 border-orange-100',
-      dotColor: 'bg-orange-500',
-      icon: <BookOpen className="text-amber-500" size={20} />,
-      iconBg: 'bg-amber-100/70',
-      deadline: '25 Dec 2026',
-      vendorsInvited: 6,
-      quotesReceived: 0,
-      createdDate: '08 Dec 2026',
-      quotes: []
-    },
-    {
-      id: 'REQ-2026-04',
-      title: 'Lab Equipment Requirement 2026-27',
-      status: 'Received',
-      badgeText: 'Received 1 / 3 Quotes',
-      badgeColor: 'bg-emerald-50 text-emerald-600 border-emerald-100',
-      dotColor: 'bg-emerald-500',
-      icon: <FlaskConical className="text-emerald-500" size={20} />,
-      iconBg: 'bg-emerald-100/70',
-      deadline: '10 Jan 2027',
-      vendorsInvited: 3,
-      quotesReceived: 1,
-      createdDate: '10 Dec 2026',
-      quotes: [
-        {
-          vendorName: 'Prime Stationery & Labs',
-          pricePerUnit: '₹480',
-          totalAmount: '₹96,000',
-          deliveryDays: '5 days',
-          rating: '4.4',
-          material: 'Borosil high-resistance Glassware',
-          remarks: 'Safety certified. Breakage replacement warranty.'
-        }
-      ]
-    }
-  ]);
+  const requirements = [];
 
-  // Metric card parameters matching mockup
-  const pendingQuotesCount = 12;
-  const receivedQuotesCount = 8;
-  const awardedContractsCount = 3;
-  const expiredCount = 2;
+  const pendingQuotesCount = requirements.filter((r) => r.status === 'Pending').length;
+  const receivedQuotesCount = requirements.filter((r) => r.status === 'Received').length;
+  const awardedContractsCount = requirements.filter((r) => r.status === 'Awarded').length;
+  const expiredCount = requirements.filter((r) => r.status === 'Expired').length;
 
   // Filter requirements list
   const filteredRequirements = requirements.filter(req => {
@@ -241,6 +121,14 @@ const SchoolQuotationsPage = () => {
 
       {/* Requirement Cards List */}
       <div className="px-6 py-5 space-y-4">
+        {requirements.length === 0 && (
+          <div className="text-center py-16 bg-white border border-gray-150 rounded-[2.2rem] p-6 shadow-sm">
+            <FileText size={44} className="text-gray-300 mx-auto block stroke-[1.5]" />
+            <span className="text-xs font-black text-gray-500 block mt-3">No quotation requirements yet</span>
+            <span className="text-[10px] text-gray-400 font-bold block mt-1">RFQ quotations API is not available yet.</span>
+          </div>
+        )}
+
         {filteredRequirements.map((req) => (
           <div 
             key={req.id}

@@ -1,138 +1,94 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Filter, Search, UserPlus, Check, X, 
   MoreVertical, Clock, Users, ArrowUpRight, 
-  ThumbsUp, ThumbsDown, CheckCircle2, XCircle
+  ThumbsUp, ThumbsDown, CheckCircle2, XCircle, Loader2
 } from 'lucide-react';
+import { listTeachers, setTeacherStatus } from '../../../services/schoolApi';
+import { getErrorMessage } from '../../../utils/apiHelpers';
+import { mapTeacherForApproval } from '../../../utils/mappers/schoolTeacherMapper';
+import { useSchoolId } from '../../../utils/schoolContext';
 
 const SchoolTeacherApprovals = () => {
   const navigate = useNavigate();
+  const schoolId = useSchoolId();
 
-  // Tab State
   const [activeTab, setActiveTab] = useState('Pending');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTeacher, setSelectedTeacher] = useState(null);
+  const [teachers, setTeachers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [actionId, setActionId] = useState(null);
 
-  // Initial Mock Teachers Data with signup details
-  const [teachers, setTeachers] = useState([
-    {
-      id: 'EMP1023',
-      name: 'Priya Sharma',
-      phone: '98XXXXXX45',
-      email: 'priya.sharma@gmail.com',
-      date: 'Requested on 12 May 2026, 10:30 AM',
-      status: 'Pending',
-      avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150',
-      designation: 'Senior English Teacher',
-      department: 'Languages & Humanities',
-      qualifications: 'M.A. in English Literature, B.Ed (First Class)',
-      experience: '6 Years Teaching CBSE Curriculum',
-      refCode: 'SCH-INV-4921'
-    },
-    {
-      id: 'EMP1045',
-      name: 'Rohit Verma',
-      phone: '97XXXXXX32',
-      email: 'rohit.verma@gmail.com',
-      date: 'Requested on 12 May 2026, 09:15 AM',
-      status: 'Pending',
-      avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',
-      designation: 'Senior Mathematics Teacher',
-      department: 'Science & Math',
-      qualifications: 'M.Sc in Applied Mathematics, B.Ed',
-      experience: '5 Years Teaching ICSE Secondary Students',
-      refCode: 'SCH-INV-1104'
-    },
-    {
-      id: 'EMP1078',
-      name: 'Neha Gupta',
-      phone: '99XXXXXX18',
-      email: 'neha.gupta@gmail.com',
-      date: 'Requested on 11 May 2026, 04:45 PM',
-      status: 'Pending',
-      avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150',
-      designation: 'Primary coordinator',
-      department: 'Pre-Primary Education',
-      qualifications: 'Nursery Teacher Training (NTT), B.Ed',
-      experience: '8 Years Leading Early Years Program',
-      refCode: 'SCH-INV-8876'
-    },
-    {
-      id: 'EMP1011',
-      name: 'Amit Patel',
-      phone: '96XXXXXX67',
-      email: 'amit.patel@gmail.com',
-      date: 'Requested on 11 May 2026, 02:20 PM',
-      status: 'Pending',
-      avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150',
-      designation: 'P.E. & Physical Development Coach',
-      department: 'Physical Education & Sports',
-      qualifications: 'B.P.Ed, Certified Life Saving Instructor',
-      experience: '4 Years Coaching Athletics & Swimming',
-      refCode: 'SCH-INV-3051'
-    },
-    {
-      id: 'EMP1002',
-      name: 'Suresh Kumar',
-      phone: '95XXXXXX81',
-      email: 'suresh.kumar@gmail.com',
-      date: 'Requested on 10 May 2026, 11:15 AM',
-      status: 'Approved',
-      avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150',
-      designation: 'Computer Science Instructor',
-      department: 'Information Technology',
-      qualifications: 'Master of Computer Applications (MCA)',
-      experience: '7 Years teaching Python & Web Technologies',
-      refCode: 'SCH-INV-0012'
-    },
-    {
-      id: 'EMP1005',
-      name: 'Anjali Desai',
-      phone: '94XXXXXX12',
-      email: 'anjali.desai@gmail.com',
-      date: 'Requested on 10 May 2026, 08:30 AM',
-      status: 'Approved',
-      avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150',
-      designation: 'Music & Arts Teacher',
-      department: 'Creative Arts & Music',
-      qualifications: 'B.Mus in Indian Classical Vocal, Sangeet Visharad',
-      experience: '6 Years Conducting School Choir & Plays',
-      refCode: 'SCH-INV-9934'
-    },
-    {
-      id: 'EMP1099',
-      name: 'Vikram Singh',
-      phone: '93XXXXXX55',
-      email: 'vikram.singh@gmail.com',
-      date: 'Requested on 09 May 2026, 05:00 PM',
-      status: 'Rejected',
-      avatar: 'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=150',
-      designation: 'Physics Head of Department (HOD)',
-      department: 'Science & Physics',
-      qualifications: 'M.Sc in Physics, Ph.D in Thermal Physics (Qualified)',
-      experience: '12 Years instructing Higher Secondary Science',
-      refCode: 'SCH-INV-5077'
+  const loadTeachers = useCallback(async () => {
+    if (!schoolId) {
+      setLoading(false);
+      setError('School context is missing. Please log in again.');
+      return;
     }
-  ]);
 
-  // Statistics calculation based on live state
-  const pendingCount = teachers.filter(t => t.status === 'Pending').length;
-  const approvedCount = teachers.filter(t => t.status === 'Approved').length + 40; // baseline of 42
-  const rejectedCount = teachers.filter(t => t.status === 'Rejected').length + 1; // baseline of 2
-  const totalCount = pendingCount + approvedCount + rejectedCount;
+    setLoading(true);
+    setError('');
+    try {
+      const { data } = await listTeachers(schoolId, { limit: 100 });
+      setTeachers((data || []).map(mapTeacherForApproval));
+    } catch (err) {
+      setTeachers([]);
+      setError(getErrorMessage(err, 'Unable to load teachers'));
+    } finally {
+      setLoading(false);
+    }
+  }, [schoolId]);
 
-  // Real-time Action handlers
-  const handleApprove = (id) => {
-    setTeachers(teachers.map(t => 
-      t.id === id ? { ...t, status: 'Approved' } : t
-    ));
+  useEffect(() => {
+    loadTeachers();
+  }, [loadTeachers]);
+
+  const pendingCount = teachers.filter((t) => t.status === 'Pending').length;
+  const approvedCount = teachers.filter((t) => t.status === 'Approved').length;
+  const rejectedCount = teachers.filter((t) => t.status === 'Rejected').length;
+  const totalCount = teachers.length;
+
+  const handleApprove = async (teacher) => {
+    if (!schoolId || !teacher?.mongoId) return;
+    setActionId(teacher.mongoId);
+    try {
+      await setTeacherStatus(schoolId, teacher.mongoId, { approvalStatus: 'approved' });
+      setTeachers((prev) =>
+        prev.map((t) =>
+          t.mongoId === teacher.mongoId ? { ...t, status: 'Approved', statusRaw: 'approved' } : t
+        )
+      );
+      if (selectedTeacher?.mongoId === teacher.mongoId) {
+        setSelectedTeacher((prev) => ({ ...prev, status: 'Approved', statusRaw: 'approved' }));
+      }
+    } catch (err) {
+      alert(getErrorMessage(err, 'Unable to approve teacher'));
+    } finally {
+      setActionId(null);
+    }
   };
 
-  const handleReject = (id) => {
-    setTeachers(teachers.map(t => 
-      t.id === id ? { ...t, status: 'Rejected' } : t
-    ));
+  const handleReject = async (teacher) => {
+    if (!schoolId || !teacher?.mongoId) return;
+    setActionId(teacher.mongoId);
+    try {
+      await setTeacherStatus(schoolId, teacher.mongoId, { approvalStatus: 'rejected' });
+      setTeachers((prev) =>
+        prev.map((t) =>
+          t.mongoId === teacher.mongoId ? { ...t, status: 'Rejected', statusRaw: 'rejected' } : t
+        )
+      );
+      if (selectedTeacher?.mongoId === teacher.mongoId) {
+        setSelectedTeacher((prev) => ({ ...prev, status: 'Rejected', statusRaw: 'rejected' }));
+      }
+    } catch (err) {
+      alert(getErrorMessage(err, 'Unable to reject teacher'));
+    } finally {
+      setActionId(null);
+    }
   };
 
   const filteredTeachers = teachers.filter(t => {
@@ -213,6 +169,13 @@ const SchoolTeacherApprovals = () => {
           </div>
         </div>
 
+        {error && (
+          <div className="px-4 py-3 bg-red-50 border border-red-100 rounded-2xl text-xs font-bold text-red-600 flex items-center justify-between gap-3">
+            <span>{error}</span>
+            <button type="button" onClick={loadTeachers} className="text-red-700 underline shrink-0">Retry</button>
+          </div>
+        )}
+
         {/* Action Row Search */}
         <div className="relative flex items-center w-full">
           <Search size={16} className="absolute left-4.5 text-gray-400" />
@@ -249,16 +212,23 @@ const SchoolTeacherApprovals = () => {
 
         {/* Dynamic Teacher Lists */}
         <div className="space-y-4">
-          {filteredTeachers.map((t) => (
+          {loading && (
+            <div className="flex flex-col items-center justify-center py-16 text-gray-400">
+              <Loader2 size={32} className="animate-spin mb-3" />
+              <span className="text-xs font-bold">Loading teachers…</span>
+            </div>
+          )}
+
+          {!loading && filteredTeachers.map((t) => (
             <div 
-              key={t.id}
+              key={t.mongoId || t.id}
               className="bg-white border border-gray-200/80 rounded-[2.2rem] p-6 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-5 relative overflow-hidden"
             >
               <div className="flex items-center gap-4 min-w-0">
                 {/* Avatar with dynamic clock circle badge overlay */}
                 <div className="relative shrink-0">
                   <img 
-                    src={t.avatar} 
+                    src={t.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(t.name)}&background=3b2d7d&color=fff`}
                     alt={t.name}
                     className="w-16 h-16 rounded-full object-cover border-2 border-purple-100 shadow-inner"
                   />
@@ -307,15 +277,17 @@ const SchoolTeacherApprovals = () => {
                 {t.status === 'Pending' && (
                   <div className="flex items-center gap-2 w-full xs:w-auto">
                     <button 
-                      onClick={() => handleApprove(t.id)}
-                      className="flex-1 xs:flex-initial px-4 py-2.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1 border border-emerald-200 active:scale-95"
+                      onClick={() => handleApprove(t)}
+                      disabled={actionId === t.mongoId}
+                      className="flex-1 xs:flex-initial px-4 py-2.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1 border border-emerald-200 active:scale-95 disabled:opacity-50"
                     >
                       <Check size={11} className="stroke-[3.5]" />
                       Approve
                     </button>
                     <button 
-                      onClick={() => handleReject(t.id)}
-                      className="flex-1 xs:flex-initial px-4 py-2.5 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1 border border-rose-200 active:scale-95"
+                      onClick={() => handleReject(t)}
+                      disabled={actionId === t.mongoId}
+                      className="flex-1 xs:flex-initial px-4 py-2.5 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1 border border-rose-200 active:scale-95 disabled:opacity-50"
                     >
                       <X size={11} className="stroke-[3.5]" />
                       Reject
@@ -348,7 +320,7 @@ const SchoolTeacherApprovals = () => {
             </div>
           ))}
 
-          {filteredTeachers.length === 0 && (
+          {!loading && filteredTeachers.length === 0 && (
             <div className="text-center py-12 bg-white border border-gray-150 rounded-[2.2rem] p-6 shadow-sm">
               <Users size={36} className="text-gray-300 mx-auto block stroke-[1.5]" />
               <span className="text-xs font-black text-gray-400 block mt-3">No matching teacher requests in this tab</span>
@@ -486,21 +458,17 @@ const SchoolTeacherApprovals = () => {
               {selectedTeacher.status === 'Pending' && (
                 <>
                   <button 
-                    onClick={() => {
-                      handleApprove(selectedTeacher.id);
-                      setSelectedTeacher(null);
-                    }}
-                    className="flex-1 py-3.5 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white rounded-2xl text-xs font-black uppercase tracking-wider transition-all shadow-md flex items-center justify-center gap-1.5"
+                    onClick={() => handleApprove(selectedTeacher)}
+                    disabled={actionId === selectedTeacher.mongoId}
+                    className="flex-1 py-3.5 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white rounded-2xl text-xs font-black uppercase tracking-wider transition-all shadow-md flex items-center justify-center gap-1.5 disabled:opacity-50"
                   >
                     <Check size={14} className="stroke-[3]" />
                     Approve
                   </button>
                   <button 
-                    onClick={() => {
-                      handleReject(selectedTeacher.id);
-                      setSelectedTeacher(null);
-                    }}
-                    className="flex-1 py-3.5 bg-rose-500 hover:bg-rose-600 active:scale-95 text-white rounded-2xl text-xs font-black uppercase tracking-wider transition-all shadow-md flex items-center justify-center gap-1.5"
+                    onClick={() => handleReject(selectedTeacher)}
+                    disabled={actionId === selectedTeacher.mongoId}
+                    className="flex-1 py-3.5 bg-rose-500 hover:bg-rose-600 active:scale-95 text-white rounded-2xl text-xs font-black uppercase tracking-wider transition-all shadow-md flex items-center justify-center gap-1.5 disabled:opacity-50"
                   >
                     <X size={14} className="stroke-[3]" />
                     Reject

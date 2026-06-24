@@ -1,0 +1,88 @@
+import apiClient from './apiClient';
+import { unwrapData } from '../utils/apiHelpers';
+
+const schoolPath = (schoolId, suffix = '') => `/schools/${schoolId}${suffix}`;
+
+const extractPaginated = (response, key) => {
+  const { data, pagination } = response.data;
+  return {
+    data: data?.[key] || [],
+    pagination: pagination || null,
+  };
+};
+
+export const getSchool = async (schoolId) => {
+  const response = await apiClient.get(schoolPath(schoolId));
+  return unwrapData(response)?.school;
+};
+
+export const updateSchool = async (schoolId, payload) => {
+  const response = await apiClient.patch(schoolPath(schoolId), payload);
+  return unwrapData(response)?.school;
+};
+
+export const listStudents = async (schoolId, params = {}) => {
+  const response = await apiClient.get(schoolPath(schoolId, '/students'), { params });
+  return extractPaginated(response, 'students');
+};
+
+export const registerStudent = async (schoolId, payload) => {
+  const response = await apiClient.post(schoolPath(schoolId, '/students'), payload);
+  return unwrapData(response)?.student;
+};
+
+export const updateStudent = async (schoolId, studentId, payload) => {
+  const response = await apiClient.patch(schoolPath(schoolId, `/students/${studentId}`), payload);
+  return unwrapData(response)?.student;
+};
+
+export const updateStudentStatus = async (schoolId, studentId, status) => {
+  const response = await apiClient.patch(schoolPath(schoolId, `/students/${studentId}/status`), {
+    status,
+  });
+  return unwrapData(response)?.student;
+};
+
+export const deleteStudent = async (schoolId, studentId) => {
+  const response = await apiClient.delete(schoolPath(schoolId, `/students/${studentId}`));
+  return unwrapData(response);
+};
+
+export const listTeachers = async (schoolId, params = {}) => {
+  const response = await apiClient.get(schoolPath(schoolId, '/teachers'), { params });
+  return extractPaginated(response, 'teachers');
+};
+
+export const setTeacherStatus = async (schoolId, teacherId, payload) => {
+  const response = await apiClient.patch(
+    schoolPath(schoolId, `/teachers/${teacherId}/status`),
+    payload
+  );
+  return unwrapData(response)?.teacher;
+};
+
+export const listClasses = async (schoolId) => {
+  const response = await apiClient.get(schoolPath(schoolId, '/classes'));
+  return unwrapData(response)?.classes || [];
+};
+
+export const createClass = async (schoolId, payload) => {
+  const response = await apiClient.post(schoolPath(schoolId, '/classes'), payload);
+  return unwrapData(response)?.school;
+};
+
+export const createSection = async (schoolId, classGrade, section) => {
+  const response = await apiClient.post(
+    schoolPath(schoolId, `/classes/${encodeURIComponent(classGrade)}/sections`),
+    { section }
+  );
+  return unwrapData(response)?.school;
+};
+
+export const assignClassTeacher = async (schoolId, classGrade, payload) => {
+  const response = await apiClient.post(
+    schoolPath(schoolId, `/classes/${encodeURIComponent(classGrade)}/class-teacher`),
+    payload
+  );
+  return unwrapData(response);
+};

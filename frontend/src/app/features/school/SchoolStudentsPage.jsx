@@ -1,174 +1,68 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  ArrowLeft, Search, Filter, ChevronDown, Check, X, 
+import {
+  ArrowLeft, Search, Filter, ChevronDown, Check, X,
   MoreVertical, RefreshCw, GraduationCap, Users, User,
-  Calendar, CheckCircle, AlertCircle, Sparkles, Upload, 
-  Download, Award, Shield, MapPin, Phone, Mail
+  Calendar, CheckCircle, AlertCircle, Sparkles, Upload,
+  Download, Award, Shield, MapPin, Phone, Mail, Loader2
 } from 'lucide-react';
+import { listStudents } from '../../../services/schoolApi';
+import { getErrorMessage } from '../../../utils/apiHelpers';
+import { mapStudentForList } from '../../../utils/mappers/schoolStudentMapper';
+import { useSchoolId } from '../../../utils/schoolContext';
 
 const SchoolStudentsPage = () => {
   const navigate = useNavigate();
+  const schoolId = useSchoolId();
 
-  // Tab Selection for active categories
   const [activeStatTab, setActiveStatTab] = useState('All');
-  
-  // Search & Filter state
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedClass, setSelectedClass] = useState('All Classes');
   const [selectedSection, setSelectedSection] = useState('All Sections');
   const [selectedStatus, setSelectedStatus] = useState('All Statuses');
   const [sortBy, setSortBy] = useState('Name (A - Z)');
-  
-  // Modals state
   const [selectedStudent, setSelectedStudent] = useState(null);
-  
-  // Mock Students data matching the structure in mockup
-  const [students, setStudents] = useState([
-    {
-      id: 'ADM-2026-0045',
-      name: 'Aarav Sharma',
-      class: 'Class 5-A',
-      rollNo: '23',
-      gender: 'Boy',
-      parent: 'Rajesh Sharma',
-      parentPhone: '98XXXXXX98',
-      status: 'Active',
-      avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150',
-      parentEmail: 'rajesh.sharma@gmail.com',
-      dob: '12 Oct 2015',
-      bloodGroup: 'O+',
-      attendance: '96%',
-      fees: 'Paid'
-    },
-    {
-      id: 'ADM-2026-0046',
-      name: 'Ananya Verma',
-      class: 'Class 5-A',
-      rollNo: '24',
-      gender: 'Girl',
-      parent: 'Suresh Verma',
-      parentPhone: '98XXXXXX97',
-      status: 'Active',
-      avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150',
-      parentEmail: 'suresh.verma@gmail.com',
-      dob: '05 Jan 2016',
-      bloodGroup: 'A+',
-      attendance: '98%',
-      fees: 'Paid'
-    },
-    {
-      id: 'ADM-2026-0047',
-      name: 'Vihaan Patel',
-      class: 'Class 5-B',
-      rollNo: '01',
-      gender: 'Boy',
-      parent: 'Nilesh Patel',
-      parentPhone: '98XXXXXX96',
-      status: 'Active',
-      avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',
-      parentEmail: 'nilesh.patel@gmail.com',
-      dob: '19 Aug 2015',
-      bloodGroup: 'B+',
-      attendance: '92%',
-      fees: 'Pending'
-    },
-    {
-      id: 'ADM-2026-0048',
-      name: 'Diya Singh',
-      class: 'Class 5-B',
-      rollNo: '02',
-      gender: 'Girl',
-      parent: 'Amit Singh',
-      parentPhone: '98XXXXXX95',
-      status: 'Active',
-      avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150',
-      parentEmail: 'amit.singh@gmail.com',
-      dob: '14 Feb 2016',
-      bloodGroup: 'AB+',
-      attendance: '95%',
-      fees: 'Paid'
-    },
-    {
-      id: 'ADM-2026-0049',
-      name: 'Krish Gupta',
-      class: 'Class 5-C',
-      rollNo: '05',
-      gender: 'Boy',
-      parent: 'Rohit Gupta',
-      parentPhone: '98XXXXXX94',
-      status: 'Active',
-      avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150',
-      parentEmail: 'rohit.gupta@gmail.com',
-      dob: '22 Dec 2015',
-      bloodGroup: 'O-',
-      attendance: '94%',
-      fees: 'Paid'
-    },
-    {
-      id: 'ADM-2026-0050',
-      name: 'Meera Joshi',
-      class: 'Class 5-C',
-      rollNo: '06',
-      gender: 'Girl',
-      parent: 'Alok Joshi',
-      parentPhone: '98XXXXXX93',
-      status: 'Active',
-      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
-      parentEmail: 'alok.joshi@gmail.com',
-      dob: '09 Mar 2016',
-      bloodGroup: 'A-',
-      attendance: '97%',
-      fees: 'Pending'
-    },
-    {
-      id: 'ADM-2026-0099',
-      name: 'Ishaan Reddy',
-      class: 'Class 5-A',
-      rollNo: '15',
-      gender: 'Boy',
-      parent: 'Karan Reddy',
-      parentPhone: '98XXXXXX90',
-      status: 'Pending Admissions',
-      avatar: 'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=150',
-      parentEmail: 'karan.reddy@gmail.com',
-      dob: '30 Jul 2016',
-      bloodGroup: 'B-',
-      attendance: '0%',
-      fees: 'Pending'
-    },
-    {
-      id: 'ADM-2026-0080',
-      name: 'Rohan Deshmukh',
-      class: 'Class 5-B',
-      rollNo: '29',
-      gender: 'Boy',
-      parent: 'Vijay Deshmukh',
-      parentPhone: '98XXXXXX80',
-      status: 'Inactive',
-      avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150',
-      parentEmail: 'vijay.desh@gmail.com',
-      dob: '18 Nov 2015',
-      bloodGroup: 'O+',
-      attendance: '85%',
-      fees: 'Paid'
-    }
-  ]);
+  const [students, setStudents] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  // Statistics summaries based on actual state
-  const boysCount = students.filter(s => s.gender === 'Boy' && s.status === 'Active').length + 647; // baseline of 650
-  const girlsCount = students.filter(s => s.gender === 'Girl' && s.status === 'Active').length + 597; // baseline of 600
-  const pendingCount = students.filter(s => s.status === 'Pending Admissions').length + 11; // baseline of 12
-  const inactiveCount = students.filter(s => s.status === 'Inactive').length + 11; // baseline of 12
-  const totalCount = boysCount + girlsCount + pendingCount + inactiveCount - 22; // calibrated for exactly 1,250
+  const loadStudents = useCallback(async () => {
+    if (!schoolId) {
+      setLoading(false);
+      setError('School context is missing. Please log in again.');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+    try {
+      const { data } = await listStudents(schoolId, { limit: 200 });
+      setStudents((data || []).map(mapStudentForList));
+    } catch (err) {
+      setStudents([]);
+      setError(getErrorMessage(err, 'Unable to load students'));
+    } finally {
+      setLoading(false);
+    }
+  }, [schoolId]);
+
+  useEffect(() => {
+    loadStudents();
+  }, [loadStudents]);
+
+  const boysCount = students.filter((s) => s.gender === 'Boy' && s.status === 'Active').length;
+  const girlsCount = students.filter((s) => s.gender === 'Girl' && s.status === 'Active').length;
+  const pendingCount = students.filter((s) => s.statusRaw === 'inactive').length;
+  const inactiveCount = students.filter((s) => s.status === 'Inactive' || s.status === 'Alumni').length;
+  const totalCount = students.length;
 
   // Filter students based on all states combined
   const filteredStudents = students.filter(s => {
     // 1. Search Query
     const matchesSearch = s.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          s.id.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          s.rollNo.includes(searchQuery) ||
-                          s.parentPhone.includes(searchQuery);
+                          (s.id || '').toLowerCase().includes(searchQuery.toLowerCase()) || 
+                          (s.rollNo || '').includes(searchQuery) ||
+                          (s.parentPhone || '').includes(searchQuery);
     
     // 2. Class Filter
     const matchesClass = selectedClass === 'All Classes' || s.class.startsWith(selectedClass);
@@ -236,6 +130,13 @@ const SchoolStudentsPage = () => {
           </div>
         </div>
       </div>
+
+      {error && (
+        <div className="mx-6 mt-4 px-4 py-3 bg-red-50 border border-red-100 rounded-2xl text-xs font-bold text-red-600 flex items-center justify-between gap-3">
+          <span>{error}</span>
+          <button type="button" onClick={loadStudents} className="text-red-700 underline shrink-0">Retry</button>
+        </div>
+      )}
 
       {/* Metrics Row Grid exactly matching the design style */}
       <div className="px-6 pt-6">
@@ -367,8 +268,15 @@ const SchoolStudentsPage = () => {
 
       {/* Student rows list exactly matching mockup */}
       <div className="px-6 py-4 space-y-4">
-        
-        {sortedStudents.map((student) => (
+
+        {loading && (
+          <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+            <Loader2 size={32} className="animate-spin mb-3" />
+            <span className="text-xs font-bold">Loading students…</span>
+          </div>
+        )}
+
+        {!loading && sortedStudents.map((student) => (
           <div 
             key={student.id}
             onClick={() => setSelectedStudent(student)}
@@ -377,7 +285,7 @@ const SchoolStudentsPage = () => {
             <div className="flex items-center gap-4 min-w-0">
               {/* Student avatar */}
               <img 
-                src={student.avatar} 
+                src={student.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(student.name)}&background=3b2d7d&color=fff`}
                 alt={student.name}
                 className="w-16 h-16 rounded-full object-cover border-2 border-purple-100 shadow-inner shrink-0"
               />
@@ -418,7 +326,7 @@ const SchoolStudentsPage = () => {
           </div>
         ))}
 
-        {sortedStudents.length === 0 && (
+        {!loading && sortedStudents.length === 0 && (
           <div className="text-center py-16 bg-white border border-gray-150 rounded-[2.2rem] p-6 shadow-sm">
             <GraduationCap size={44} className="text-gray-300 mx-auto block stroke-[1.5]" />
             <span className="text-xs font-black text-gray-400 block mt-3">No matching students found in this search filter</span>

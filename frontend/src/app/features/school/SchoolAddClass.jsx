@@ -1,76 +1,125 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, HelpCircle, Calendar, Search, 
-  Save, CheckCircle2, AlertCircle, ChevronDown, GraduationCap
+  Save, CheckCircle2, AlertCircle, ChevronDown, GraduationCap, Loader2
 } from 'lucide-react';
+import {
+  listClasses,
+  listTeachers,
+  createClass,
+  createSection,
+  assignClassTeacher,
+  getSchool,
+} from '../../../services/schoolApi';
+import { getErrorMessage } from '../../../utils/apiHelpers';
+import { flattenClassesForList } from '../../../utils/mappers/schoolClassMapper';
+import { mapTeacherForSelect } from '../../../utils/mappers/schoolTeacherMapper';
+import { useSchoolId } from '../../../utils/schoolContext';
 
 const SchoolAddClass = () => {
   const navigate = useNavigate();
+  const schoolId = useSchoolId();
 
-  // Form states
   const [className, setClassName] = useState('');
   const [academicYear, setAcademicYear] = useState('2025 - 2026');
   const [section, setSection] = useState('');
   const [classTeacher, setClassTeacher] = useState('');
 
-  // UI status
   const [showToast, setShowToast] = useState(false);
   const [errors, setErrors] = useState({});
+  const [classesList, setClassesList] = useState([]);
+  const [teachers, setTeachers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
-  // List of recorded classes (initialized with mock classes)
-  const [classesList, setClassesList] = useState([
-    { id: 1, className: 'Class 2', academicYear: '2025 - 2026', section: 'A', classTeacher: 'Mrs. Neha Sharma' },
-    { id: 2, className: 'Grade 5', academicYear: '2025 - 2026', section: 'B', classTeacher: 'Mr. Rajesh Verma' },
-    { id: 3, className: 'Class 10', academicYear: '2025 - 2026', section: 'C', classTeacher: 'Mrs. Priya Iyer' }
-  ]);
+  const loadData = useCallback(async () => {
+    if (!schoolId) {
+      setLoading(false);
+      setError('School context is missing. Please log in again.');
+      return;
+    }
 
-  // Mock list of teachers for dropdown
-  const teachers = [
-    'Mrs. Neha Sharma',
-    'Mr. Rajesh Verma',
-    'Mrs. Priya Iyer',
-    'Mr. Amit Patel',
-    'Mrs. Shalini Sen'
-  ];
+    setLoading(true);
+    setError('');
+    try {
+      const [school, classes, teacherResult] = await Promise.all([
+        getSchool(schoolId),
+        listClasses(schoolId),
+        listTeachers(schoolId, { limit: 100 }),
+      ]);
+
+      const year = school?.academicYearCurrent || '2025 - 2026';
+      setAcademicYear(year);
+      setClassesList(flattenClassesForList(classes, year));
+      setTeachers(
+        (teacherResult.data || [])
+          .filter((t) => t.approvalStatus === 'approved')
+          .map(mapTeacherForSelect)
+      );
+    } catch (err) {
+      setError(getErrorMessage(err, 'Unable to load classes'));
+    } finally {
+      setLoading(false);
+    }
+  }, [schoolId]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   const validate = () => {
     const tempErrors = {};
     if (!className.trim()) tempErrors.className = 'Class Name is required';
     if (!academicYear) tempErrors.academicYear = 'Academic Year is required';
-    
+
     setErrors(tempErrors);
     return Object.keys(tempErrors).length === 0;
   };
 
-  const handleSave = (e) => {
+  const handleSave = async (e) => {
     e.preventDefault();
-    if (!validate()) {
+    if (!validate() || !schoolId) {
       window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
 
-    const newClass = {
-      id: Date.now(),
-      className: className.trim(),
-      academicYear,
-      section: section.trim() ? section.trim().toUpperCase() : '-',
-      classTeacher: classTeacher || 'Not Assigned'
-    };
+    const classGrade = className.trim();
+    const sectionValue = section.trim() ? section.trim().toUpperCase() : '';
 
-    // Add new class to list
-    setClassesList(prev => [newClass, ...prev]);
+    setSaving(true);
+    setError('');
+    try {
+      const existingClass = classesList.some((c) => c.className === classGrade);
 
-    // Reset form fields
-    setClassName('');
-    setSection('');
-    setClassTeacher('');
+      if (!existingClass) {
+        await createClass(schoolId, {
+          classGrade,
+          sections: sectionValue ? [sectionValue] : [],
+        });
+      } else if (sectionValue) {
+        await createSection(schoolId, classGrade, sectionValue);
+      }
 
-    // Show success toast
-    setShowToast(true);
-    setTimeout(() => {
-      setShowToast(false);
-    }, 2000);
+      if (classTeacher && sectionValue) {
+        await assignClassTeacher(schoolId, classGrade, {
+          section: sectionValue,
+          teacherProfileId: classTeacher,
+        });
+      }
+
+      await loadData();
+      setClassName('');
+      setSection('');
+      setClassTeacher('');
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 2000);
+    } catch (err) {
+      setError(getErrorMessage(err, 'Unable to save class'));
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -202,8 +251,8 @@ const SchoolAddClass = () => {
                   className="w-full pl-10 pr-8 py-3.5 bg-gray-50 border-2 border-transparent rounded-2xl text-xs font-bold text-deep-purple outline-none focus:border-primary/10 focus:bg-white focus:shadow-xl focus:shadow-primary/5 transition-all appearance-none cursor-pointer"
                 >
                   <option value="">Search teacher name</option>
-                  {teachers.map(t => (
-                    <option key={t} value={t}>{t}</option>
+                  {teachers.map((t) => (
+                    <option key={t.id} value={t.id}>{t.label}</option>
                   ))}
                 </select>
                 <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
@@ -216,13 +265,20 @@ const SchoolAddClass = () => {
           <div className="pt-2">
             <button
               type="submit"
-              className="w-full py-4 bg-[#5B3FD6] hover:bg-[#4a32b3] text-white rounded-2xl text-xs font-black shadow-lg shadow-[#5B3FD6]/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2 uppercase tracking-widest"
+              disabled={saving || loading}
+              className="w-full py-4 bg-[#5B3FD6] hover:bg-[#4a32b3] text-white rounded-2xl text-xs font-black shadow-lg shadow-[#5B3FD6]/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2 uppercase tracking-widest disabled:opacity-60"
             >
-              <Save size={16} />
-              Save Class
+              {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+              {saving ? 'Saving…' : 'Save Class'}
             </button>
           </div>
         </form>
+
+        {error && (
+          <div className="px-4 py-3 bg-red-50 border border-red-100 rounded-2xl text-xs font-bold text-red-600">
+            {error}
+          </div>
+        )}
 
         {/* Recorded Classes Grid/Table Card */}
         <div className="bg-white border border-gray-150 rounded-3xl p-5 shadow-sm space-y-4">
@@ -245,14 +301,29 @@ const SchoolAddClass = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {classesList.map((cls) => (
-                    <tr key={cls.id} className="hover:bg-gray-50/50 transition-colors">
-                      <td className="px-4 py-3.5 text-xs font-black text-deep-purple">{cls.className}</td>
-                      <td className="px-4 py-3.5 text-xs font-medium text-gray-400">{cls.academicYear}</td>
-                      <td className="px-4 py-3.5 text-xs font-black text-deep-purple uppercase">{cls.section}</td>
-                      <td className="px-4 py-3.5 text-xs font-bold text-primary">{cls.classTeacher}</td>
+                  {loading ? (
+                    <tr>
+                      <td colSpan={4} className="px-4 py-8 text-center text-xs font-bold text-gray-400">
+                        <Loader2 size={20} className="animate-spin inline-block mr-2" />
+                        Loading classes…
+                      </td>
                     </tr>
-                  ))}
+                  ) : classesList.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="px-4 py-8 text-center text-xs font-bold text-gray-400">
+                        No classes recorded yet
+                      </td>
+                    </tr>
+                  ) : (
+                    classesList.map((cls) => (
+                      <tr key={cls.id} className="hover:bg-gray-50/50 transition-colors">
+                        <td className="px-4 py-3.5 text-xs font-black text-deep-purple">{cls.className}</td>
+                        <td className="px-4 py-3.5 text-xs font-medium text-gray-400">{cls.academicYear}</td>
+                        <td className="px-4 py-3.5 text-xs font-black text-deep-purple uppercase">{cls.section}</td>
+                        <td className="px-4 py-3.5 text-xs font-bold text-primary">{cls.classTeacher}</td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>

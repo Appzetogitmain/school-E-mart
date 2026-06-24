@@ -30,13 +30,7 @@ const SchoolCreateRequest = () => {
   const [deadlineDate, setDeadlineDate] = useState('2025-12-15');
   const [additionalNotes, setAdditionalNotes] = useState('');
   
-  const [vendors, setVendors] = useState([
-    { id: 1, name: 'ABC Uniforms', location: 'Delhi, India', rating: 4.6, completed: 128, verified: true, checked: true, logo: 'ABC', logoBg: 'bg-blue-50 text-blue-600' },
-    { id: 2, name: 'Elite School Wear', location: 'Mumbai, India', rating: 4.5, completed: 96, verified: true, checked: true, logo: 'ELITE', logoBg: 'bg-purple-50 text-[#3b2d7d]' },
-    { id: 3, name: 'Smart Uniforms', location: 'Bangalore, India', rating: 4.4, completed: 86, verified: true, checked: true, logo: 'SMART', logoBg: 'bg-orange-50 text-orange-600' },
-    { id: 4, name: 'Royal Uniform Suppliers', location: 'Chennai, India', rating: 4.3, completed: 71, verified: true, checked: false, logo: 'ROYAL', logoBg: 'bg-indigo-50 text-indigo-600' },
-    { id: 5, name: 'School Style', location: 'Kolkata, India', rating: 4.2, completed: 58, verified: true, checked: false, logo: 'STYLE', logoBg: 'bg-teal-50 text-teal-600' }
-  ]);
+  const [vendors, setVendors] = useState([]);
 
   const [quotationRequirements, setQuotationRequirements] = useState([
     { label: 'Sample Required', icon: '📦', checked: true },

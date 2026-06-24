@@ -1,34 +1,84 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Camera, User, Mail, Phone, 
   MapPin, Home, Globe, Navigation, 
   ShieldCheck, Check, AlertCircle, ImageIcon, Building2
 } from 'lucide-react';
+import { getSchool, updateSchool } from '../../../services/schoolApi';
+import { getErrorMessage } from '../../../utils/apiHelpers';
+import { useSchoolId } from '../../../utils/schoolContext';
 
 const SchoolEditProfilePage = () => {
   const navigate = useNavigate();
   const fileInputRef = useRef(null);
+  const schoolId = useSchoolId();
   const [loading, setLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [showSuccess, setShowSuccess] = useState(false);
   const [errors, setErrors] = useState({});
+  const [loadError, setLoadError] = useState('');
 
-  const [formData, setFormData] = useState(() => {
+  const [formData, setFormData] = useState({
+    fullName: '',
+    email: '',
+    phone: '',
+    altPhone: '',
+    address: '',
+    pinCode: '',
+    city: '',
+    state: '',
+    country: 'India',
+    photo: '',
+  });
+
+  const loadProfile = useCallback(async () => {
     const saved = localStorage.getItem('childInfo');
     const parsed = saved ? JSON.parse(saved) : {};
-    return {
-      fullName: parsed.name || "School Admin",
-      email: parsed.email || "",
-      phone: parsed.phone || "",
-      altPhone: parsed.altPhone || "",
-      address: parsed.address || "",
-      pinCode: parsed.pinCode || "",
-      city: parsed.city || "",
-      state: parsed.state || "",
-      country: parsed.country || "India",
-      photo: parsed.photo || ""
-    };
-  });
+
+    if (!schoolId) {
+      setFormData({
+        fullName: parsed.name || 'School Admin',
+        email: parsed.email || '',
+        phone: parsed.phone || '',
+        altPhone: parsed.altPhone || '',
+        address: parsed.address || '',
+        pinCode: parsed.pinCode || '',
+        city: parsed.city || '',
+        state: parsed.state || '',
+        country: parsed.country || 'India',
+        photo: parsed.photo || '',
+      });
+      setInitialLoading(false);
+      return;
+    }
+
+    setInitialLoading(true);
+    setLoadError('');
+    try {
+      const school = await getSchool(schoolId);
+      setFormData({
+        fullName: school?.principalName || parsed.name || 'School Admin',
+        email: school?.adminEmail || parsed.email || '',
+        phone: parsed.phone || '',
+        altPhone: parsed.altPhone || '',
+        address: school?.address?.line1 || parsed.address || '',
+        pinCode: school?.address?.pinCode || parsed.pinCode || '',
+        city: school?.address?.city || parsed.city || '',
+        state: school?.address?.state || parsed.state || '',
+        country: school?.address?.country || parsed.country || 'India',
+        photo: parsed.photo || '',
+      });
+    } catch (err) {
+      setLoadError(getErrorMessage(err, 'Unable to load school profile'));
+    } finally {
+      setInitialLoading(false);
+    }
+  }, [schoolId]);
+
+  useEffect(() => {
+    loadProfile();
+  }, [loadProfile]);
 
   const handleInputChange = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -64,12 +114,13 @@ const SchoolEditProfilePage = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!validate()) return;
     setLoading(true);
+
     const saved = localStorage.getItem('childInfo');
     const existing = saved ? JSON.parse(saved) : { role: 'school' };
-    
+
     const updatedInfo = {
       ...existing,
       name: formData.fullName,
@@ -81,12 +132,25 @@ const SchoolEditProfilePage = () => {
       city: formData.city,
       state: formData.state,
       country: formData.country,
-      photo: formData.photo
+      photo: formData.photo,
     };
-    
-    localStorage.setItem('childInfo', JSON.stringify(updatedInfo));
 
-    setTimeout(() => {
+    try {
+      if (schoolId) {
+        await updateSchool(schoolId, {
+          principalName: formData.fullName,
+          adminEmail: formData.email,
+          address: {
+            line1: formData.address,
+            pinCode: formData.pinCode,
+            city: formData.city,
+            state: formData.state,
+            country: formData.country,
+          },
+        });
+      }
+
+      localStorage.setItem('childInfo', JSON.stringify(updatedInfo));
       setLoading(false);
       setShowSuccess(true);
       setTimeout(() => {
@@ -94,7 +158,10 @@ const SchoolEditProfilePage = () => {
         navigate(-1);
         window.dispatchEvent(new Event('storage'));
       }, 1500);
-    }, 800);
+    } catch (err) {
+      setLoading(false);
+      alert(getErrorMessage(err, 'Unable to save school profile'));
+    }
   };
 
   const InputField = ({ label, icon: Icon, field, type = "text", placeholder }) => (
@@ -135,6 +202,18 @@ const SchoolEditProfilePage = () => {
       </div>
 
       <div className="pt-24 px-6 space-y-8 overflow-y-auto">
+        {loadError && (
+          <div className="px-4 py-3 bg-red-50 border border-red-100 rounded-2xl text-xs font-bold text-red-600">
+            {loadError}
+          </div>
+        )}
+
+        {initialLoading ? (
+          <div className="flex justify-center py-20">
+            <div className="w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+          </div>
+        ) : (
+        <>
         <div className="flex flex-col items-center gap-4">
           <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" className="hidden" />
           <div className="relative group">
@@ -168,6 +247,8 @@ const SchoolEditProfilePage = () => {
             <InputField label="City" icon={Globe} field="city" placeholder="City" />
           </div>
         </div>
+        </>
+        )}
       </div>
 
       <div className="fixed bottom-0 left-0 right-0 p-6 bg-white/80 backdrop-blur-xl border-t border-gray-100 z-50">

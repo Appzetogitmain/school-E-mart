@@ -13,55 +13,12 @@ const SchoolDraftRequests = () => {
   const [activeCategory, setActiveCategory] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Initial Mock Drafts Data
-  const [drafts, setDrafts] = useState([
-    {
-      id: 'DR-2025-0008',
-      title: 'Annual Uniform Requirement 2026-27',
-      category: 'Uniform Requests',
-      lastUpdated: 'Today, 11:45 AM',
-      createdBy: 'School Admin',
-      completedSteps: 3,
-      totalSteps: 5,
-      percent: 60,
-      classes: 'Nursery - 12',
-      setsCount: 2,
-      vendorsCount: 3,
-    },
-    {
-      id: 'DR-2025-0007',
-      title: 'Winter Uniform Requirement 2026-27',
-      category: 'Uniform Requests',
-      lastUpdated: 'Yesterday, 4:30 PM',
-      createdBy: 'School Admin',
-      completedSteps: 2,
-      totalSteps: 5,
-      percent: 40,
-      classes: '1 - 10',
-      setsCount: 1,
-      vendorsCount: 2,
-    },
-    {
-      id: 'DR-2025-0006',
-      title: 'Sports Kit Requirement 2026',
-      category: 'Kits',
-      lastUpdated: '2 days ago',
-      createdBy: 'School Admin',
-      completedSteps: 1,
-      totalSteps: 5,
-      percent: 20,
-      classes: '6 - 12',
-      setsCount: 1,
-      vendorsCount: 1,
-    }
-  ]);
+  const drafts = [];
 
   const categories = ['All', 'Uniform Requests', 'Purchase Requests', 'Kits', 'Others'];
 
-  const handleDeleteDraft = (id) => {
-    if (window.confirm(`Are you sure you want to delete draft ${id}?`)) {
-      setDrafts(drafts.filter(d => d.id !== id));
-    }
+  const handleDeleteDraft = () => {
+    alert('RFQ draft API is not available yet.');
   };
 
   const handleResumeDraft = (d) => {
@@ -253,7 +210,8 @@ const SchoolDraftRequests = () => {
           {filteredDrafts.length === 0 && (
             <div className="text-center py-10 bg-white border border-gray-150 rounded-[2.2rem] p-6 shadow-sm">
               <FolderOpen size={36} className="text-gray-300 mx-auto block stroke-[1.5]" />
-              <span className="text-xs font-black text-gray-400 block mt-3">No matching draft requests found</span>
+              <span className="text-xs font-black text-gray-500 block mt-3">No draft requests yet</span>
+              <span className="text-[10px] text-gray-400 font-bold block mt-1">RFQ draft API is not available yet.</span>
             </div>
           )}
         </div>

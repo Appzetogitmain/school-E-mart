@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   ChevronRight, ArrowLeft, Bell, Info,
   CheckCircle2, ShoppingBag, RotateCcw,
@@ -10,30 +10,45 @@ import SchoolHeader from '../../components/SchoolHeader';
 import SectionHeader from '../../components/SectionHeader';
 import ProductCard from '../../components/ProductCard';
 import { useDraggableScroll } from '../../hooks/useDraggableScroll';
+import { getSchool } from '../../../services/schoolApi';
+import { useSchoolId } from '../../../utils/schoolContext';
 
 const SchoolMySchoolPage = () => {
   const navigate = useNavigate();
+  const schoolId = useSchoolId();
   const kitsRef = useDraggableScroll();
   const [scrolled, setScrolled] = useState(false);
-  const [schoolInfo] = useState(() => {
+  const [schoolInfo, setSchoolInfo] = useState(() => {
     const saved = localStorage.getItem('childInfo');
     return saved ? JSON.parse(saved) : { role: 'school', name: 'School Admin', school: 'School Management', progress: { completed: 85, total: 100 } };
   });
+
+  const loadSchool = useCallback(async () => {
+    if (!schoolId) return;
+    try {
+      const school = await getSchool(schoolId);
+      setSchoolInfo((prev) => ({
+        ...prev,
+        school: school?.name || prev.school,
+        name: school?.principalName || prev.name,
+      }));
+    } catch {
+      // keep local fallback
+    }
+  }, [schoolId]);
+
+  useEffect(() => {
+    loadSchool();
+  }, [loadSchool]);
 
   const handleScroll = (e) => {
     const scrollPos = e.target.scrollTop;
     setScrolled(scrollPos > 50);
   };
 
-  const announcements = [
-    { id: 1, title: "Vendor Bidding Open", text: "Q3 Uniform supply cycle is now open", date: "1h ago" },
-    { id: 2, title: "New Inventory Guidelines", text: "Revised stock management protocol", date: "4h ago" }
-  ];
+  const announcements = [];
 
-  const institutionalKits = [
-    { id: 1, name: "Complete Grade 2 Batch", price: "₹45,299", image: "https://images.unsplash.com/photo-1503919545889-aef636e10ad4?q=80&w=300&h=400&fit=crop", badge: "Bulk Best Seller" },
-    { id: 2, name: "Faculty Uniform Set", price: "₹18,450", image: "https://images.unsplash.com/photo-1516627145497-ae6968895b74?q=80&w=300&h=400&fit=crop", badge: "Staff Standard" }
-  ];
+  const institutionalKits = [];
 
   const renderProductCard = (product) => (
     <ProductCard key={product.id} product={product} />
