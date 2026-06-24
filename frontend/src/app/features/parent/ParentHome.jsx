@@ -8,6 +8,7 @@ import {
   Grid, Layout, CheckCircle2, BookOpen, Check
 } from 'lucide-react';
 import AppHeader from '../../components/AppHeader';
+import apiClient from '../../../services/apiClient';
 import ProductCard from '../../components/ProductCard';
 import SectionHeader from '../../components/SectionHeader';
 import CategoryStory from '../../components/CategoryStory';
@@ -68,6 +69,8 @@ const ParentHome = () => {
         { name: 'Technology', image: '/assets/technology.png', slug: 'technology' },
       ];
 
+  const [todayAttendance, setTodayAttendance] = useState(null);
+
   useEffect(() => {
     const handleUpdate = () => {
       const saved = localStorage.getItem('childInfo');
@@ -76,6 +79,95 @@ const ParentHome = () => {
     window.addEventListener('storage', handleUpdate);
     return () => window.removeEventListener('storage', handleUpdate);
   }, []);
+
+  useEffect(() => {
+    const fetchTodayAttendance = async () => {
+      const studentId = childInfo?.studentId;
+      const schoolId = childInfo?.schoolId;
+      if (!studentId || !schoolId || schoolId === 'explore-schools') return;
+
+      try {
+        const today = new Date().toISOString().slice(0, 10);
+        const response = await apiClient.get(`/schools/${schoolId}/attendance/history`, {
+          params: { studentId, date: today }
+        });
+        const records = response.data.data.records || [];
+        if (records.length > 0) {
+          setTodayAttendance(records[0]);
+        } else {
+          setTodayAttendance(null);
+        }
+      } catch (err) {
+        console.error('Failed to fetch today attendance:', err);
+      }
+    };
+    fetchTodayAttendance();
+  }, [childInfo]);
+
+  const getTodayStatusDetails = () => {
+    if (!todayAttendance) {
+      return {
+        label: 'Pending',
+        color: 'text-[#F2994A]',
+        bg: 'bg-[#FEF6EC]',
+        dotBg: 'bg-[#F2994A]',
+        time: 'Not marked yet',
+        icon: <BookOpen size={12} strokeWidth={2.5} />
+      };
+    }
+    const status = todayAttendance.status;
+    const remarks = todayAttendance.remarks;
+    if (status === 'present' && remarks === 'Late') {
+      return {
+        label: 'Late',
+        color: 'text-[#F2994A]',
+        bg: 'bg-[#FFF6ED]',
+        dotBg: 'bg-[#F2994A]',
+        time: 'Marked at 09:45 a.m.',
+        icon: <Check size={12} strokeWidth={3.5} />
+      };
+    }
+    if (status === 'present') {
+      return {
+        label: 'Present',
+        color: 'text-[#34A853]',
+        bg: 'bg-[#EBFBF0]',
+        dotBg: 'bg-[#34A853]',
+        time: 'Marked at 09:15 a.m.',
+        icon: <Check size={12} strokeWidth={3.5} />
+      };
+    }
+    if (status === 'absent') {
+      return {
+        label: 'Absent',
+        color: 'text-[#D93025]',
+        bg: 'bg-[#FEF3F2]',
+        dotBg: 'bg-[#D93025]',
+        time: 'Absent today',
+        icon: <Check size={12} strokeWidth={3.5} />
+      };
+    }
+    if (status === 'leave') {
+      return {
+        label: 'Leave',
+        color: 'text-[#7F56D9]',
+        bg: 'bg-[#F9F5FF]',
+        dotBg: 'bg-[#7F56D9]',
+        time: 'Approved leave',
+        icon: <Check size={12} strokeWidth={3.5} />
+      };
+    }
+    return {
+      label: 'Holiday',
+      color: 'text-[#7F56D9]',
+      bg: 'bg-[#F9F5FF]',
+      dotBg: 'bg-[#7F56D9]',
+      time: 'School closed',
+      icon: <Check size={12} strokeWidth={3.5} />
+    };
+  };
+
+  const todayDetails = getTodayStatusDetails();
 
   const handleScroll = (e) => {
     const scrollPos = e.target.scrollTop;
@@ -115,17 +207,20 @@ const ParentHome = () => {
             </div>
             <div className="grid grid-cols-2 gap-3.5">
               {/* Attendance Status Card */}
-              <div className="bg-white border border-gray-100 rounded-2xl p-3 flex items-center gap-3 shadow-[0_2px_8px_rgba(0,0,0,0.02)] hover:shadow-md transition-all duration-300">
-                {/* Double Ring Green Checkmark Badge */}
-                <div className="w-9 h-9 rounded-full bg-[#EBFBF0] flex items-center justify-center shrink-0">
-                  <div className="w-[26px] h-[26px] rounded-full bg-[#34A853] flex items-center justify-center text-white shadow-sm">
-                    <Check size={12} strokeWidth={3.5} />
+              <div 
+                onClick={() => navigate('/user/attendance')}
+                className="bg-white border border-gray-100 rounded-2xl p-3 flex items-center gap-3 shadow-[0_2px_8px_rgba(0,0,0,0.02)] hover:shadow-md active:scale-[0.98] transition-all duration-300 cursor-pointer"
+              >
+                {/* Double Ring Badge */}
+                <div className={`w-9 h-9 rounded-full ${todayDetails.bg} flex items-center justify-center shrink-0`}>
+                  <div className={`w-[26px] h-[26px] rounded-full ${todayDetails.dotBg} flex items-center justify-center text-white shadow-sm`}>
+                    {todayDetails.icon}
                   </div>
                 </div>
                 <div className="min-w-0 flex flex-col justify-center">
                   <p className="text-[11px] font-semibold text-gray-500 leading-none">Attendance</p>
-                  <p className="text-[13px] font-black text-[#34A853] leading-none mt-1.5 truncate">Present</p>
-                  <p className="text-[9px] font-medium text-gray-400 leading-none mt-1 truncate">Marked at 09:15 a.m.</p>
+                  <p className={`text-[13px] font-black ${todayDetails.color} leading-none mt-1.5 truncate`}>{todayDetails.label}</p>
+                  <p className="text-[9px] font-medium text-gray-400 leading-none mt-1 truncate">{todayDetails.time}</p>
                 </div>
               </div>
 

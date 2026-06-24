@@ -9,6 +9,7 @@ const studentSchema = new mongoose.Schema({
   rollNo: { type: String },
   classGrade: { type: String, required: true },
   section: { type: String, required: true },
+  admissionNo: { type: String },
   status: {
     type: String,
     enum: ['active', 'inactive', 'alumni'],

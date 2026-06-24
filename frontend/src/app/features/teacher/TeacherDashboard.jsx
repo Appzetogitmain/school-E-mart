@@ -296,7 +296,7 @@ const TeacherDashboard = () => {
           <OverviewCard 
             color="bg-emerald-500 text-white" 
             icon={<Users size={20} />} 
-            count={activeData.studentsCount} 
+            count={studentsCount || activeData.studentsCount} 
             label="Total Students" 
           />
 
@@ -304,10 +304,10 @@ const TeacherDashboard = () => {
           <OverviewCard 
             color="bg-amber-500 text-white" 
             icon={<CheckSquare size={20} />} 
-            count={activeData.attendanceCount || 0} 
+            count={attendanceStatus === 'Completed' ? attendanceCountLabel : '0%'} 
             label="Attendance" 
-            badge={activeData.attendance}
-            badgeColor={activeData.attendance === 'Pending' ? 'bg-orange-600' : 'bg-emerald-600'}
+            badge={attendanceStatus}
+            badgeColor={attendanceStatus === 'Pending' ? 'bg-orange-600' : 'bg-emerald-600'}
           />
 
           {/* Card 3: Homework Added */}

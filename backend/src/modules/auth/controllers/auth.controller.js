@@ -213,6 +213,168 @@ const authController = {
     const authorization = await authorizationService.getAuthorizationSnapshot(req.auth.userId);
     return success(res, { authorization }, undefined, undefined, req);
   }),
+
+  registerParent: asyncHandler(async (req, res) => {
+    const { phone, studentName, grade, schoolRefNo } = req.body;
+    const { normalizePhone } = require('../../../utils');
+    const { ConflictError, BadRequestError } = require('../../../common/errors');
+    const { withTransaction } = require('../../../database');
+    const { generateUserRefId } = require('../../school/utils/refId');
+    const { issueAuthenticatedSession } = require('../services/sessionIssue.service');
+
+    const User = require('../../../database/models/User');
+    const ParentProfile = require('../../../database/models/ParentProfile');
+    const ChildProfile = require('../../../database/models/ChildProfile');
+    const School = require('../../../database/models/School');
+
+    const normalizedPhone = normalizePhone(phone);
+
+    // 1. Check if user already exists
+    const existingUser = await User.findOne({ phone: normalizedPhone, role: 'parent', 'softDelete.isDeleted': { $ne: true } });
+    if (existingUser) {
+      throw new ConflictError('Phone number already registered', 'PHONE_EXISTS');
+    }
+
+    // 2. Resolve schoolRefNo
+    let school = null;
+    if (schoolRefNo) {
+      school = await School.findOne({ schoolRefNo, 'softDelete.isDeleted': { $ne: true } });
+      if (!school) {
+        throw new BadRequestError('Invalid school reference number', null, 'INVALID_SCHOOL_REF');
+      }
+    }
+
+    // 3. Register user, profile, and child in transaction
+    const result = await withTransaction(async (session) => {
+      const refId = generateUserRefId('P');
+
+      // Generate a unique referralCode (format EMARTxxxx)
+      let referralCode;
+      let isUnique = false;
+      while (!isUnique) {
+        const rand = Math.floor(1000 + Math.random() * 9000); // 4 digits
+        referralCode = `EMART${rand}`;
+        const match = await ParentProfile.findOne({ referralCode }).session(session);
+        if (!match) isUnique = true;
+      }
+
+      // Create User
+      const userList = await User.create(
+        [
+          {
+            refId,
+            role: 'parent',
+            status: 'active',
+            name: `${studentName} Parent`,
+            phone: normalizedPhone,
+            phoneVerifiedAt: new Date(),
+          },
+        ],
+        { session }
+      );
+      const user = userList[0];
+
+      // Create ParentProfile
+      const parentProfileList = await ParentProfile.create(
+        [
+          {
+            userId: user._id,
+            referralCode,
+          },
+        ],
+        { session }
+      );
+      const parentProfile = parentProfileList[0];
+
+      // Create ChildProfile
+      const childProfileList = await ChildProfile.create(
+        [
+          {
+            parentUserId: user._id,
+            name: studentName,
+            grade,
+            schoolId: school ? school._id : null,
+            schoolRefNo: school ? school.schoolRefNo : null,
+          },
+        ],
+        { session }
+      );
+      const childProfile = childProfileList[0];
+
+      // Link child as activeChildId in ParentProfile
+      await ParentProfile.findByIdAndUpdate(
+        parentProfile._id,
+        { $set: { activeChildId: childProfile._id } },
+        { session }
+      );
+
+      return user;
+    });
+
+    // 4. Issue session and return auth tokens
+    const sessionResponse = await issueAuthenticatedSession(result, getRequestMeta(req), 'auth.register.parent.success');
+    
+    // Add childProfile details to the user DTO returned
+    if (sessionResponse.user) {
+      sessionResponse.user.childProfile = {
+        name: studentName,
+        grade: grade,
+        schoolId: school ? school._id : 'explore-schools',
+        schoolName: school ? school.name : 'Explore Schools',
+        schoolRefNo: school ? school.schoolRefNo : null,
+      };
+    }
+
+    return success(res, sessionResponse, 'Registration successful', 201, req);
+  }),
+
+  registerTeacher: asyncHandler(async (req, res) => {
+    const { fullName, email, mobile, schoolCode, password } = req.body;
+    const { normalizePhone, normalizeEmail } = require('../../../utils');
+    const { BadRequestError, ConflictError } = require('../../../common/errors');
+    const teacherService = require('../../school/services/teacher.service');
+    const School = require('../../../database/models/School');
+    const User = require('../../../database/models/User');
+
+    const normalizedPhone = normalizePhone(mobile);
+    const normalizedEmail = normalizeEmail(email);
+
+    // 1. Check if user already exists
+    const existingUser = await User.findOne({
+      $or: [{ email: normalizedEmail }, { phone: normalizedPhone }],
+      'softDelete.isDeleted': { $ne: true }
+    });
+    if (existingUser) {
+      throw new ConflictError('Email or mobile number already registered', 'USER_EXISTS');
+    }
+
+    // 2. Resolve schoolCode
+    const school = await School.findOne({ schoolRefNo: schoolCode, 'softDelete.isDeleted': { $ne: true } });
+    if (!school) {
+      throw new BadRequestError('Invalid school code', null, 'INVALID_SCHOOL_REF');
+    }
+
+    // 3. Create teacher profile
+    const { user } = await teacherService.createTeacher(school._id, {
+      name: fullName,
+      email: normalizedEmail,
+      phone: normalizedPhone,
+      password: password,
+      autoApprove: true,
+      classAssignments: [
+        { class: 'Class 5', section: 'Section A' },
+        { class: 'Class 5', section: 'Section B' },
+        { class: 'Class 6', section: 'Section A' },
+        { class: 'Class 6', section: 'Section B' }
+      ]
+    });
+
+    // 4. Issue authenticated session
+    const { issueAuthenticatedSession } = require('../services/sessionIssue.service');
+    const sessionResponse = await issueAuthenticatedSession(user, getRequestMeta(req), 'auth.register.teacher.success');
+
+    return success(res, sessionResponse, 'Teacher registration successful', 201, req);
+  }),
 };
 
 module.exports = authController;

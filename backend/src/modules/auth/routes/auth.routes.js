@@ -74,6 +74,20 @@ router.post(
 );
 
 router.post(
+  '/parent/register',
+  authLimiter,
+  validateBody(authValidators.parentRegisterSchema),
+  authController.registerParent
+);
+
+router.post(
+  '/school/teacher/register',
+  authLimiter,
+  validateBody(authValidators.teacherRegisterSchema),
+  authController.registerTeacher
+);
+
+router.post(
   '/parent/web/login',
   otpLimiter,
   validateBody(authValidators.parentWebLoginSchema),

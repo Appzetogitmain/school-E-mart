@@ -122,6 +122,9 @@ const createStudentSchema = Joi.object({
   bloodGroup: Joi.string().trim().optional(),
   parentUserId: objectId.optional(),
   parentProfileIds: Joi.array().items(objectId).optional(),
+  parentPhone: schemas.indianMobile.optional(),
+  parentName: Joi.string().trim().optional(),
+  admissionNo: Joi.string().trim().optional(),
 });
 
 const updateStudentSchema = createStudentSchema.fork(
@@ -212,7 +215,7 @@ const assignClassTeacherSchema = Joi.object({
 });
 
 module.exports = {
-  paginationQuery,
+  paginationQuery: Joi.object(paginationQuery),
   schoolIdParam,
   classGradeParam,
   sectionParam,

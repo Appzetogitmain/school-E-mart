@@ -39,7 +39,6 @@ const TeacherManageStudents = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [currentStudentId, setCurrentStudentId] = useState(null);
 
-
   // Form Fields
   const [formName, setFormName] = useState('');
   const [formRollNo, setFormRollNo] = useState('');
@@ -61,6 +60,9 @@ const TeacherManageStudents = () => {
 
   // Actions menu for specific student row
   const [activeActionsMenu, setActiveActionsMenu] = useState(null);
+
+  const user = useAuthStore((state) => state.user);
+  const schoolId = user?.tenantSchoolId;
 
   // Helpers
   const triggerToast = (msg) => {
@@ -123,7 +125,6 @@ const TeacherManageStudents = () => {
     setIsDrawerOpen(true);
   };
 
-
   const handleOpenEditDrawer = (student) => {
     setIsEditing(true);
     setCurrentStudentId(student.id);
@@ -156,6 +157,7 @@ const TeacherManageStudents = () => {
     }
   };
 
+  const handleSaveStudent = async (e) => {
   const handleSaveStudent = async (e) => {
     e.preventDefault();
     if (!formName.trim() || !formRollNo.trim()) {
