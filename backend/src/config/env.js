@@ -1,4 +1,6 @@
-require('dotenv').config();
+const path = require('path');
+
+require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
 
 const LOCAL_MONGODB_URI = 'mongodb://127.0.0.1:27017/school-emart';
 
@@ -71,6 +73,10 @@ const buildEnv = () => {
   EMAIL_VERIFICATION_EXPIRY: process.env.EMAIL_VERIFICATION_EXPIRY || '24h',
 
   FRONTEND_URL: process.env.FRONTEND_URL || 'http://localhost:5173',
+
+  RAZORPAY_KEY_ID: process.env.RAZORPAY_KEY_ID || null,
+  RAZORPAY_KEY_SECRET: process.env.RAZORPAY_KEY_SECRET || null,
+  RAZORPAY_WEBHOOK_SECRET: process.env.RAZORPAY_WEBHOOK_SECRET || null,
 
   LOG_LEVEL: process.env.LOG_LEVEL || (process.env.NODE_ENV === 'production' ? 'info' : 'debug'),
   LOG_DIR: process.env.LOG_DIR || 'logs',

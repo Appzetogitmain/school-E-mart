@@ -37,19 +37,52 @@ const paymentService = {
     return payment;
   },
 
-  async confirmPayment(orderId, { session = null } = {}) {
+  async confirmPayment(
+    orderId,
+    { razorpayPaymentId, razorpayOrderId, razorpaySignature, session = null } = {}
+  ) {
     const payment = await paymentRepository.findByOrderId(orderId);
     if (!payment) throw new NotFoundError('Payment not found', 'PAYMENT_NOT_FOUND');
     if (payment.status === 'captured') return payment;
 
-    const capture = await paymentGateway.capturePayment({ gatewayOrderId: payment.gatewayOrderId });
+    let gatewayPaymentId;
     const opts = session ? { session } : {};
+
+    if (payment.gateway === 'razorpay') {
+      if (!razorpayPaymentId || !razorpayOrderId || !razorpaySignature) {
+        throw new BadRequestError(
+          'Razorpay payment details are required',
+          null,
+          'RAZORPAY_DETAILS_REQUIRED'
+        );
+      }
+      if (payment.gatewayOrderId !== razorpayOrderId) {
+        throw new BadRequestError('Payment order mismatch', null, 'PAYMENT_ORDER_MISMATCH');
+      }
+      const valid = paymentGateway.verifyPaymentSignature({
+        razorpayOrderId,
+        razorpayPaymentId,
+        razorpaySignature,
+      });
+      if (!valid) {
+        throw new BadRequestError('Invalid payment signature', null, 'INVALID_PAYMENT_SIGNATURE');
+      }
+      gatewayPaymentId = razorpayPaymentId;
+    } else {
+      const capture = await paymentGateway.capturePayment({
+        gatewayOrderId: payment.gatewayOrderId,
+        gateway: payment.gateway,
+      });
+      gatewayPaymentId = capture.gatewayPaymentId;
+    }
+
     return Payment.findByIdAndUpdate(
       payment._id,
       {
         $set: {
           status: 'captured',
-          gatewayPaymentId: capture.gatewayPaymentId,
+          gatewayPaymentId,
+          ...(razorpaySignature ? { gatewaySignature: razorpaySignature } : {}),
         },
       },
       { new: true, ...opts }
@@ -78,6 +111,7 @@ const paymentService = {
       gatewayPaymentId: payment.gatewayPaymentId || payment.gatewayOrderId,
       amountPaise: refundAmount,
       reason,
+      gateway: payment.gateway,
     });
 
     const refundEntry = {

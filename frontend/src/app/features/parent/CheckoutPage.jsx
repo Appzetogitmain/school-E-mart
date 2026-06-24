@@ -4,9 +4,12 @@ import {
   ChevronLeft, MapPin, Edit3, ShoppingBag, 
   Clock, CreditCard, Wallet, ChevronRight, 
   Heart, Plus, Minus, Info, CheckCircle2,
-  Building2, Truck, BadgePercent
+  Building2, Truck, BadgePercent, Loader2
 } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
+import { createOrder, confirmPayment } from '../../../services/ordersApi';
+import { openRazorpayCheckout } from '../../../utils/razorpay';
+import { ENV } from '../../../config/env';
 
 const CheckoutPage = () => {
   const navigate = useNavigate();
@@ -14,6 +17,8 @@ const CheckoutPage = () => {
   
   const [deliveryType, setDeliveryType] = useState('home'); // 'home' or 'school'
   const [paymentMethod, setPaymentMethod] = useState('online'); // 'online' or 'cod'
+  const [isPlacingOrder, setIsPlacingOrder] = useState(false);
+  const [orderError, setOrderError] = useState('');
   const [childInfo] = useState(() => {
     const saved = localStorage.getItem('childInfo');
     return saved ? JSON.parse(saved) : {
@@ -46,6 +51,70 @@ const CheckoutPage = () => {
   const handlingCharge = 10;
   const deliveryCharge = deliveryType === 'home' ? 55 : 0;
   const grandTotal = subtotal + handlingCharge + deliveryCharge;
+
+  const buildOrderPayload = () => ({
+    deliveryType,
+    paymentMethod,
+    address: {
+      line1: address.address,
+      city: address.city || 'Indore',
+      state: 'Madhya Pradesh',
+      country: 'India',
+      pinCode: '452018',
+    },
+    handlingChargePaise: handlingCharge * 100,
+    deliveryChargePaise: deliveryCharge * 100,
+  });
+
+  const handlePlaceOrder = async () => {
+    setOrderError('');
+    setIsPlacingOrder(true);
+
+    try {
+      const { order, checkout } = await createOrder(buildOrderPayload());
+
+      if (paymentMethod === 'online' && checkout?.razorpayOrderId) {
+        const razorpayResponse = await openRazorpayCheckout({
+          keyId: checkout.keyId || ENV.RAZORPAY_KEY_ID,
+          razorpayOrderId: checkout.razorpayOrderId,
+          amountPaise: checkout.amountPaise,
+          currency: checkout.currency,
+          description: `Order ${order.orderNumber}`,
+          prefill: { name: address.name, contact: address.phone },
+          notes: { orderId: order._id },
+        });
+
+        await confirmPayment(order._id, {
+          razorpayPaymentId: razorpayResponse.razorpay_payment_id,
+          razorpayOrderId: razorpayResponse.razorpay_order_id,
+          razorpaySignature: razorpayResponse.razorpay_signature,
+        });
+      } else if (paymentMethod === 'online') {
+        await confirmPayment(order._id);
+      }
+
+      navigate('/user/order-success', {
+        state: {
+          orderId: order.orderNumber,
+          city: address.city,
+          address: address.address,
+          paymentMethod: paymentMethod === 'online' ? 'ONLINE PAYMENT' : 'CASH ON DELIVERY',
+          subtotal,
+          shipping: deliveryCharge,
+          totalAmount: grandTotal,
+          itemsCount: cartItems.length,
+        },
+      });
+    } catch (error) {
+      const message =
+        error.response?.data?.message ||
+        error.message ||
+        'Unable to place order. Please try again.';
+      setOrderError(message);
+    } finally {
+      setIsPlacingOrder(false);
+    }
+  };
 
   if (cartItems.length === 0) {
     return (
@@ -304,31 +373,23 @@ const CheckoutPage = () => {
       </div>
 
       {/* Sticky Bottom Bar */}
-      <div className="fixed bottom-0 left-0 right-0 p-6 bg-white border-t border-gray-100 z-[60] flex items-center justify-between gap-4 shadow-[0_-8px_30px_rgb(0,0,0,0.04)]">
-        <div className="flex flex-col">
-          <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Total to pay</span>
-          <span className="text-xl font-black text-black leading-none">₹{grandTotal.toLocaleString()}</span>
+      <div className="fixed bottom-0 left-0 right-0 p-6 bg-white border-t border-gray-100 z-[60] flex flex-col gap-3 shadow-[0_-8px_30px_rgb(0,0,0,0.04)]">
+        {orderError && (
+          <p className="text-sm text-red-500 font-medium text-center">{orderError}</p>
+        )}
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex flex-col">
+            <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Total to pay</span>
+            <span className="text-xl font-black text-black leading-none">₹{grandTotal.toLocaleString()}</span>
+          </div>
+          <button 
+            onClick={handlePlaceOrder}
+            disabled={isPlacingOrder}
+            className="flex-1 max-w-[200px] h-14 bg-primary text-white font-black text-base rounded-2xl shadow-xl shadow-primary/25 active:scale-[0.98] transition-all flex items-center justify-center uppercase tracking-widest disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {isPlacingOrder ? <Loader2 size={22} className="animate-spin" /> : 'Place Order'}
+          </button>
         </div>
-        <button 
-          onClick={() => {
-            const orderId = Math.floor(10000000 + Math.random() * 90000000).toString();
-            navigate('/user/order-success', {
-              state: {
-                orderId,
-                city: address.city,
-                address: address.address,
-                paymentMethod: paymentMethod === 'online' ? 'ONLINE PAYMENT' : 'CASH ON DELIVERY',
-                subtotal,
-                shipping: deliveryCharge,
-                totalAmount: grandTotal,
-                itemsCount: cartItems.length
-              }
-            });
-          }}
-          className="flex-1 max-w-[200px] h-14 bg-primary text-white font-black text-base rounded-2xl shadow-xl shadow-primary/25 active:scale-[0.98] transition-all flex items-center justify-center uppercase tracking-widest"
-        >
-          Place Order
-        </button>
       </div>
     </div>
   );

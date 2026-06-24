@@ -10,6 +10,7 @@ const deliveryService = require('../services/delivery.service');
 const invoiceService = require('../services/invoice.service');
 const paymentService = require('../services/payment.service');
 const orderAccessPolicy = require('../policies/orderAccess.policy');
+const config = require('../../../config');
 
 const ordersController = {
   validateCheckout: asyncHandler(async (req, res) => {
@@ -27,7 +28,19 @@ const ordersController = {
   createOrder: asyncHandler(async (req, res) => {
     const audience = checkoutService.resolveAudience(req.auth, req.body.audience);
     const order = await orderService.createOrder(req.auth.userId, audience, req.body, req.auth);
-    return created(res, { order }, 'Order created', req);
+    const payment = await paymentService.getPaymentByOrder(order._id);
+
+    const checkout =
+      payment.gateway === 'razorpay'
+        ? {
+            keyId: config.env.RAZORPAY_KEY_ID,
+            razorpayOrderId: payment.gatewayOrderId,
+            amountPaise: payment.amountPaise,
+            currency: payment.currency || 'INR',
+          }
+        : null;
+
+    return created(res, { order, payment, checkout }, 'Order created', req);
   }),
 
   listOrders: asyncHandler(async (req, res) => {
@@ -94,7 +107,7 @@ const ordersController = {
   confirmPayment: asyncHandler(async (req, res) => {
     const order = await orderService.getOrder(req.params.orderId);
     await orderAccessPolicy.assertOrderAccess(req.auth, order);
-    const payment = await paymentService.confirmPayment(order._id);
+    const payment = await paymentService.confirmPayment(order._id, req.body);
     await orderService.updatePaymentStatus(order._id, 'paid');
     return success(res, { payment }, 'Payment confirmed', undefined, req);
   }),

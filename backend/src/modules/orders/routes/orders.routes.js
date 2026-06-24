@@ -79,6 +79,7 @@ router.post(
   '/:orderId/payment/confirm',
   ...customerWrite,
   validateParams(validators.orderIdParam),
+  validateBody(validators.confirmPaymentSchema),
   ordersController.confirmPayment
 );
 router.patch(

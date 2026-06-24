@@ -1,33 +1,40 @@
-/**
- * Payment gateway interface stub — no external gateway integration in this phase.
- * Actual gateway adapters will plug in here later.
- */
+const internalGateway = require('./internal');
+const razorpayGateway = require('./razorpay');
+const { isRazorpayConfigured } = require('./razorpayClient');
+
+const useRazorpayForOnline = (method) =>
+  method !== 'cod' && process.env.NODE_ENV !== 'test' && isRazorpayConfigured();
+
 const paymentGateway = {
+  isRazorpayEnabled: isRazorpayConfigured,
+
+  verifyPaymentSignature(params) {
+    return razorpayGateway.verifyPaymentSignature(params);
+  },
+
+  verifyWebhookSignature(rawBody, signature) {
+    return razorpayGateway.verifyWebhookSignature(rawBody, signature);
+  },
+
   async createPaymentIntent({ orderId, amountPaise, method, currency = 'INR' }) {
-    return {
-      gateway: 'internal',
-      gatewayOrderId: `INT-ORD-${orderId}`,
-      amountPaise,
-      currency,
-      method,
-      status: 'initiated',
-    };
+    if (useRazorpayForOnline(method)) {
+      return razorpayGateway.createPaymentIntent({ orderId, amountPaise, currency });
+    }
+    return internalGateway.createPaymentIntent({ orderId, amountPaise, method, currency });
   },
 
-  async capturePayment({ gatewayOrderId }) {
-    return {
-      gatewayPaymentId: `INT-PAY-${gatewayOrderId}`,
-      status: 'captured',
-    };
+  async capturePayment({ gatewayOrderId, gateway }) {
+    if (gateway === 'razorpay') {
+      return razorpayGateway.capturePayment({ gatewayOrderId });
+    }
+    return internalGateway.capturePayment({ gatewayOrderId });
   },
 
-  async initiateRefund({ gatewayPaymentId, amountPaise, reason }) {
-    return {
-      refundId: `INT-REF-${gatewayPaymentId}-${Date.now()}`,
-      amountPaise,
-      reason,
-      status: 'initiated',
-    };
+  async initiateRefund({ gatewayPaymentId, amountPaise, reason, gateway }) {
+    if (gateway === 'razorpay' && isRazorpayConfigured()) {
+      return razorpayGateway.initiateRefund({ gatewayPaymentId, amountPaise, reason });
+    }
+    return internalGateway.initiateRefund({ gatewayPaymentId, amountPaise, reason });
   },
 };
 
