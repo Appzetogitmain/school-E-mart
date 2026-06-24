@@ -13,7 +13,7 @@ const toObjectId = (value) => {
   return new mongoose.Types.ObjectId(value);
 };
 
-const resolveTargetSchoolId = (req) => {
+const resolveTargetSchoolId = async (req) => {
   const fromParams = req.params.schoolId;
   const fromTenant = req.tenant?.schoolId || req.auth?.tenantSchoolId;
   const requested = fromParams || fromTenant;
@@ -38,11 +38,24 @@ const resolveTargetSchoolId = (req) => {
     return schoolId;
   }
 
+  if (req.auth?.role === ROLES.PARENT) {
+    const ChildProfile = require('../../../database/models/ChildProfile');
+    const child = await ChildProfile.findOne({ parentUserId: req.auth.userId, 'softDelete.isDeleted': { $ne: true } }).lean();
+    if (!child || !child.schoolId) {
+      throw new ForbiddenError('No associated school found for child profile', 'SCHOOL_REQUIRED');
+    }
+    const schoolId = child.schoolId;
+    if (fromParams && String(fromParams) !== String(schoolId)) {
+      throw new ForbiddenError('Cross-tenant access is not allowed', 'TENANT_FORBIDDEN');
+    }
+    return schoolId;
+  }
+
   throw new ForbiddenError('You do not have permission to access this school', 'SCHOOL_ACCESS_DENIED');
 };
 
 const assertSchoolAccess = async (req) => {
-  const schoolId = resolveTargetSchoolId(req);
+  const schoolId = await resolveTargetSchoolId(req);
   if (!schoolId) {
     throw new ForbiddenError('School context is required', 'SCHOOL_REQUIRED');
   }

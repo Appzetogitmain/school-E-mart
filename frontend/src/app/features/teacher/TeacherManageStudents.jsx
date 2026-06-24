@@ -1,28 +1,20 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Users, User, Phone, Search, X, 
   Plus, Edit, Download, Save, Calendar, BookOpen,
   Check, MoreVertical, Trash2
 } from 'lucide-react';
+import useAuthStore from '../../../store/useAuthStore';
+import apiClient from '../../../services/apiClient';
 
 const TeacherManageStudents = () => {
   const navigate = useNavigate();
 
-  // 1. Initial Seed Data
-  const initialStudents = [
-    { id: 1, rollNo: '01', name: 'Aarav Sharma', parentName: 'Rajesh Sharma', motherName: 'Suman Sharma', phone: '9876543210', gender: 'Male', dob: '2015-04-12', admissionNo: 'ADM-2023-089' },
-    { id: 2, rollNo: '02', name: 'Ananya Verma', parentName: 'Suresh Verma', motherName: 'Reena Verma', phone: '9765432109', gender: 'Female', dob: '2015-09-22', admissionNo: 'ADM-2023-112' },
-    { id: 3, rollNo: '03', name: 'Rohan Singh', parentName: 'Amit Singh', motherName: 'Kiran Singh', phone: '9988776655', gender: 'Male', dob: '2015-01-05', admissionNo: 'ADM-2023-014' },
-    { id: 4, rollNo: '04', name: 'Diya Patel', parentName: 'Harish Patel', motherName: 'Meena Patel', phone: '9822334455', gender: 'Female', dob: '2015-11-18', admissionNo: 'ADM-2023-205' },
-    { id: 5, rollNo: '05', name: 'Kabir Mehta', parentName: 'Vikram Mehta', motherName: 'Alpa Mehta', phone: '9511223344', gender: 'Male', dob: '2015-06-30', admissionNo: 'ADM-2023-076' },
-  ];
-
-  // 2. States
-  const [students, setStudents] = useState(() => {
-    const saved = localStorage.getItem('teacherStudentsList');
-    return saved ? JSON.parse(saved) : initialStudents;
-  });
+  // 1. States
+  const [students, setStudents] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   
   const [selectedClass, setSelectedClass] = useState('Class 5');
   const [selectedSection, setSelectedSection] = useState('A');
@@ -38,7 +30,6 @@ const TeacherManageStudents = () => {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [currentStudentId, setCurrentStudentId] = useState(null);
-
 
   // Form Fields
   const [formName, setFormName] = useState('');
@@ -62,12 +53,57 @@ const TeacherManageStudents = () => {
   // Actions menu for specific student row
   const [activeActionsMenu, setActiveActionsMenu] = useState(null);
 
+  const user = useAuthStore((state) => state.user);
+  const schoolId = user?.tenantSchoolId;
+
   // Helpers
   const triggerToast = (msg) => {
     setToastMessage(msg);
     setShowToast(true);
     setTimeout(() => setShowToast(false), 2500);
   };
+
+  const fetchStudents = async () => {
+    if (!schoolId) return;
+    setLoading(true);
+    setError('');
+    try {
+      const sectionQuery = selectedSection.startsWith('Section') ? selectedSection : `Section ${selectedSection}`;
+      const response = await apiClient.get(`/schools/${schoolId}/students`, {
+        params: {
+          classGrade: selectedClass,
+          section: sectionQuery,
+          limit: 100
+        }
+      });
+      
+      const list = response.data.data.students || [];
+      const mapped = list.map(s => {
+        const primaryParentProfile = s.parentProfileIds && s.parentProfileIds[0];
+        const parentUser = primaryParentProfile?.userId;
+        return {
+          id: s._id,
+          rollNo: s.rollNo || '',
+          name: s.name,
+          parentName: parentUser?.name || '',
+          phone: parentUser?.phone || '',
+          gender: s.gender === 'female' ? 'Female' : 'Male',
+          dob: s.dob ? s.dob.slice(0, 10) : '',
+          admissionNo: s.admissionNo || s.schoolRefNo || ''
+        };
+      });
+      setStudents(mapped);
+    } catch (err) {
+      console.error('Failed to fetch students:', err);
+      setError('Failed to load students.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchStudents();
+  }, [selectedClass, selectedSection, schoolId]);
 
   const handleOpenAddDrawer = () => {
     setIsEditing(false);
@@ -85,7 +121,6 @@ const TeacherManageStudents = () => {
     setFormSection(selectedSection);
     setIsDrawerOpen(true);
   };
-
 
   const handleOpenEditDrawer = (student) => {
     setIsEditing(true);
@@ -105,61 +140,60 @@ const TeacherManageStudents = () => {
     setActiveActionsMenu(null);
   };
 
-  const handleDeleteStudent = (id) => {
-    const updated = students.filter(s => s.id !== id);
-    setStudents(updated);
-    localStorage.setItem('teacherStudentsList', JSON.stringify(updated));
-    triggerToast('Student Removed Successfully!');
-    setActiveActionsMenu(null);
+  const handleDeleteStudent = async (id) => {
+    setLoading(true);
+    try {
+      await apiClient.delete(`/schools/${schoolId}/students/${id}`);
+      triggerToast('Student Removed Successfully!');
+      setActiveActionsMenu(null);
+      fetchStudents();
+    } catch (err) {
+      console.error('Failed to delete student:', err);
+      triggerToast('Failed to delete student.');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleSaveStudent = (e) => {
+  const handleSaveStudent = async (e) => {
     e.preventDefault();
     if (!formName.trim() || !formRollNo.trim() || !formPhone.trim()) {
       triggerToast('Please fill all required fields (*)');
       return;
     }
 
-    let updatedStudentsList;
-    if (isEditing) {
-      updatedStudentsList = students.map(s => {
-        if (s.id === currentStudentId) {
-          return {
-            ...s,
-            name: formName.trim(),
-            rollNo: formRollNo.trim(),
-            gender: formGender,
-            dob: formDob,
-            parentName: formFatherName.trim(),
-            motherName: formMotherName.trim(),
-            phone: formPhone.trim(),
-            altPhone: formAltPhone.trim(),
-            admissionNo: formAdmissionNo.trim()
-          };
-        }
-        return s;
-      });
-      triggerToast('Student Details Updated!');
-    } else {
-      const newStudent = {
-        id: Date.now(),
-        rollNo: formRollNo.trim().padStart(2, '0'),
+    setLoading(true);
+    try {
+      const sectionQuery = formSection.startsWith('Section') ? formSection : `Section ${formSection}`;
+      const payload = {
         name: formName.trim(),
-        gender: formGender,
-        dob: formDob,
+        rollNo: formRollNo.trim(),
+        gender: formGender.toLowerCase(),
+        dob: formDob || undefined,
+        classGrade: formClass,
+        section: sectionQuery,
+        parentPhone: formPhone.trim(),
         parentName: formFatherName.trim(),
-        motherName: formMotherName.trim(),
-        phone: formPhone.trim(),
-        altPhone: formAltPhone.trim(),
-        admissionNo: formAdmissionNo.trim()
+        admissionNo: formAdmissionNo.trim() || undefined
       };
-      updatedStudentsList = [...students, newStudent];
-      triggerToast('New Student Registered!');
-    }
 
-    setStudents(updatedStudentsList);
-    localStorage.setItem('teacherStudentsList', JSON.stringify(updatedStudentsList));
-    setIsDrawerOpen(false);
+      if (isEditing) {
+        await apiClient.patch(`/schools/${schoolId}/students/${currentStudentId}`, payload);
+        triggerToast('Student Details Updated!');
+      } else {
+        await apiClient.post(`/schools/${schoolId}/students`, payload);
+        triggerToast('New Student Registered!');
+      }
+
+      setIsDrawerOpen(false);
+      fetchStudents();
+    } catch (err) {
+      console.error('Failed to save student:', err);
+      const errMsg = err.response?.data?.message || 'Failed to save student details.';
+      triggerToast(errMsg);
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Computations

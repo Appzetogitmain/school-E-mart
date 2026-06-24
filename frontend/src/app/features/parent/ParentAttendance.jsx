@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   ChevronLeft, 
   ChevronRight, 
@@ -15,36 +15,27 @@ import {
 import { useNavigate } from 'react-router-dom';
 import AppHeader from '../../components/AppHeader';
 import LoginRequired from '../../components/LoginRequired';
-
-// Deterministic attendance status generator
-const getAttendanceStatus = (year, month, day) => {
-  const dateObj = new Date(year, month, day);
-  const dayOfWeek = dateObj.getDay();
-  if (dayOfWeek === 0) return 'sunday';
-
-  // Deterministic holidays (e.g. Day 3 or Day 31 in any month, or standard public holidays)
-  if (day === 3 || day === 31) return 'holiday';
-  
-  // Specific national holidays
-  if (month === 0 && day === 1) return 'holiday'; // New Year
-  if (month === 7 && day === 15) return 'holiday'; // Independence Day
-  if (month === 9 && day === 2) return 'holiday'; // Gandhi Jayanti
-  if (month === 11 && day === 25) return 'holiday'; // Christmas
-
-  // Deterministic weekday hash for attendance
-  // We want mostly Present (approx 75%), with some Late (12%), Absent (7%), and Leave (6%)
-  const hash = (day * 3 + month * 7 + year * 13) % 100;
-  
-  if (hash < 75) return 'present';
-  if (hash < 87) return 'late';
-  if (hash < 94) return 'absent';
-  return 'leave';
-};
+import apiClient from '../../../services/apiClient';
 
 const formatSelectedDate = (date) => {
   const weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
   const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
   return `${weekdays[date.getDay()]}, ${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}`;
+};
+
+const getUTCDateString = (dateObjOrStr) => {
+  const date = new Date(dateObjOrStr);
+  const y = date.getUTCFullYear();
+  const m = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const d = String(date.getUTCDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
+
+const getLocalDateString = (year, month, day) => {
+  const y = year;
+  const m = String(month + 1).padStart(2, '0');
+  const d = String(day).padStart(2, '0');
+  return `${y}-${m}-${d}`;
 };
 
 const ParentAttendance = () => {
@@ -57,22 +48,11 @@ const ParentAttendance = () => {
   const [currentMonthDate, setCurrentMonthDate] = useState(() => new Date());
   const [selectedDate, setSelectedDate] = useState(() => new Date());
 
+  const [records, setRecords] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
   // Backend Integration State Hook for Overview Stats:
-  // Feed fetched API data directly into this hook to automatically populate all placeholders!
-  // E.g. setOverviewStats({
-  //   overallPercentage: 86,
-  //   presentPercent: 80,
-  //   absentPercent: 5,
-  //   latePercent: 8,
-  //   leavePercent: 4,
-  //   holidayPercent: 3,
-  //   presentDays: 20,
-  //   totalDays: 25,
-  //   absentDays: 1,
-  //   lateDays: 2,
-  //   leaveDays: 1,
-  //   holidayDays: 1,
-  // });
   const [overviewStats, setOverviewStats] = useState(null);
 
   // Dropdown Filter States
@@ -91,6 +71,120 @@ const ParentAttendance = () => {
       progress: { completed: 12, total: 18 }
     };
   });
+
+  useEffect(() => {
+    const fetchHistory = async () => {
+      const studentId = childInfo?.studentId;
+      const schoolId = childInfo?.schoolId;
+      if (!studentId || !schoolId || schoolId === 'explore-schools') return;
+
+      setLoading(true);
+      setError('');
+      try {
+        const response = await apiClient.get(`/schools/${schoolId}/attendance/history`, {
+          params: { studentId, limit: 100 }
+        });
+        const fetchedRecords = response.data.data.records || [];
+        setRecords(fetchedRecords);
+      } catch (err) {
+        console.error('Failed to fetch attendance history:', err);
+        setError('Failed to load attendance logs.');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchHistory();
+  }, [childInfo]);
+
+  useEffect(() => {
+    if (records.length === 0) {
+      setOverviewStats({
+        overallPercentage: 0,
+        presentPercent: 0,
+        absentPercent: 0,
+        latePercent: 0,
+        leavePercent: 0,
+        holidayPercent: 0,
+        presentDays: 0,
+        totalDays: 0,
+        absentDays: 0,
+        lateDays: 0,
+        leaveDays: 0,
+        holidayDays: 0,
+      });
+      return;
+    }
+
+    let presentDays = 0;
+    let absentDays = 0;
+    let lateDays = 0;
+    let leaveDays = 0;
+    let holidayDays = 0;
+
+    records.forEach(r => {
+      if (r.status === 'present') {
+        if (r.remarks === 'Late') {
+          lateDays++;
+        } else {
+          presentDays++;
+        }
+      } else if (r.status === 'absent') {
+        absentDays++;
+      } else if (r.status === 'leave') {
+        leaveDays++;
+      } else if (r.status === 'holiday') {
+        holidayDays++;
+      }
+    });
+
+    const totalDays = presentDays + absentDays + lateDays + leaveDays; // active school/working days
+    const overallCount = records.length; // total records (including holidays)
+
+    const overallPercentage = totalDays > 0 ? Math.round(((presentDays + lateDays) / totalDays) * 100) : 0;
+    const presentPercent = overallCount > 0 ? Math.round((presentDays / overallCount) * 100) : 0;
+    const absentPercent = overallCount > 0 ? Math.round((absentDays / overallCount) * 100) : 0;
+    const latePercent = overallCount > 0 ? Math.round((lateDays / overallCount) * 100) : 0;
+    const leavePercent = overallCount > 0 ? Math.round((leaveDays / overallCount) * 100) : 0;
+    const holidayPercent = overallCount > 0 ? Math.round((holidayDays / overallCount) * 100) : 0;
+
+    setOverviewStats({
+      overallPercentage,
+      presentPercent,
+      absentPercent,
+      latePercent,
+      leavePercent,
+      holidayPercent,
+      presentDays,
+      totalDays,
+      absentDays,
+      lateDays,
+      leaveDays,
+      holidayDays,
+    });
+  }, [records]);
+
+  // Create a recordMap for quick lookup
+  const recordMap = {};
+  records.forEach(r => {
+    const dateKey = getUTCDateString(r.date);
+    recordMap[dateKey] = r;
+  });
+
+  const getAttendanceStatus = (year, month, day) => {
+    const dateKey = getLocalDateString(year, month, day);
+    const record = recordMap[dateKey];
+    if (record) {
+      if (record.status === 'present' && record.remarks === 'Late') {
+        return 'late';
+      }
+      return record.status; // 'present', 'absent', 'leave', 'holiday'
+    }
+
+    const dateObj = new Date(year, month, day);
+    const dayOfWeek = dateObj.getDay();
+    if (dayOfWeek === 0) return 'sunday';
+    return 'none';
+  };
 
   const handleScroll = (e) => {
     setScrolled(e.target.scrollTop > 50);
@@ -152,6 +246,10 @@ const ParentAttendance = () => {
     const selYear = selectedDate.getFullYear();
     const selMonth = selectedDate.getMonth();
     const selDay = selectedDate.getDate();
+    const dateKey = getLocalDateString(selYear, selMonth, selDay);
+    const record = recordMap[dateKey];
+    const remarks = record ? record.remarks : '';
+
     const status = getAttendanceStatus(selYear, selMonth, selDay);
     const dateTitle = formatSelectedDate(selectedDate);
 
@@ -165,7 +263,7 @@ const ParentAttendance = () => {
           icon: <Check size={14} strokeWidth={3.5} className="text-white" />,
           iconWrapperBg: 'bg-[#34A853]',
           timeText: 'Marked at 09:15 AM',
-          noteText: 'No remarks for this date.'
+          noteText: remarks || 'No remarks for this date.'
         };
       case 'absent':
         return {
@@ -176,7 +274,7 @@ const ParentAttendance = () => {
           icon: <AlertCircle size={15} className="text-white" />,
           iconWrapperBg: 'bg-[#D93025]',
           timeText: 'Not Marked / Absent',
-          noteText: 'Unexcused absence. Please submit leave application.'
+          noteText: remarks || 'Unexcused absence. Please submit leave application.'
         };
       case 'late':
         return {
@@ -187,7 +285,7 @@ const ParentAttendance = () => {
           icon: <Clock size={14} className="text-white" />,
           iconWrapperBg: 'bg-[#F2994A]',
           timeText: 'Marked Late at 09:45 AM',
-          noteText: 'Delayed by 15 minutes due to heavy traffic.'
+          noteText: remarks || 'Delayed by 15 minutes.'
         };
       case 'leave':
         return {
@@ -198,7 +296,7 @@ const ParentAttendance = () => {
           icon: <FileText size={14} className="text-white" />,
           iconWrapperBg: 'bg-[#7F56D9]',
           timeText: 'Approved Leave',
-          noteText: 'Medical leave approved by Principal.'
+          noteText: remarks || 'Medical leave approved by Principal.'
         };
       case 'holiday':
         return {
@@ -209,7 +307,7 @@ const ParentAttendance = () => {
           icon: <CalendarIcon size={14} className="text-white" />,
           iconWrapperBg: 'bg-[#7F56D9]',
           timeText: 'School Closed',
-          noteText: 'Gazetted public holiday / School event day.'
+          noteText: remarks || 'Gazetted public holiday / School event day.'
         };
       case 'sunday':
         return {

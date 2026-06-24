@@ -5,6 +5,8 @@ import {
   GraduationCap, Phone, ArrowRight,
   Sparkles, ChevronDown
 } from 'lucide-react';
+import apiClient from '../../../services/apiClient';
+import useAuthStore from '../../../store/useAuthStore';
 
 const ProfileSetupPage = () => {
   const navigate = useNavigate();
@@ -66,34 +68,57 @@ const ProfileSetupPage = () => {
 
   const isFormValid = formData.phone.length === 10 && formData.studentName && formData.grade;
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e?.preventDefault();
     if (!validate()) return;
 
     setLoading(true);
 
-    const userData = {
-      phone: formData.phone,
-      children: [
-        {
-          name: formData.studentName,
-          schoolId: 'explore-schools',
-          school: 'Explore Schools',
-          grade: formData.grade,
-          schoolRefNo: formData.schoolRefNo
-        }
-      ]
-    };
+    try {
+      const response = await apiClient.post('/auth/parent/register', {
+        phone: formData.phone,
+        studentName: formData.studentName,
+        grade: formData.grade,
+        schoolRefNo: formData.schoolRefNo
+      });
 
-    // Simulate registration
-    setTimeout(() => {
-      localStorage.setItem('childInfo', JSON.stringify({
-        ...userData.children[0],
-        phone: formData.phone
-      }));
-      setLoading(false);
+      const { user, accessToken } = response.data.data;
+
+      // Update zustand auth store
+      useAuthStore.getState().login(user, accessToken);
+
+      // Construct and save childInfo details for local usage across parent pages
+      const childInfo = {
+        name: user.childProfile?.name || formData.studentName,
+        school: user.childProfile?.schoolName || 'Explore Schools',
+        schoolId: user.childProfile?.schoolId || 'explore-schools',
+        grade: user.childProfile?.grade || formData.grade,
+        phone: user.phone || formData.phone,
+        schoolRefNo: user.childProfile?.schoolRefNo || formData.schoolRefNo,
+        studentId: user.childProfile?.studentId || null
+      };
+
+      localStorage.setItem('childInfo', JSON.stringify(childInfo));
+
       navigate('/user/home');
-    }, 1500);
+    } catch (err) {
+      console.error('Registration failed:', err);
+      const errorMessage = err.response?.data?.message || 'Registration failed. Please try again.';
+      
+      // Dynamic mapping of field-specific validation errors from backend
+      if (err.response?.data?.code === 'VALIDATION_ERROR' && err.response?.data?.errors) {
+        setErrors(prev => ({ ...prev, ...err.response.data.errors }));
+      } else if (err.response?.data?.code === 'PHONE_EXISTS') {
+        setErrors(prev => ({ ...prev, phone: errorMessage }));
+      } else if (err.response?.data?.code === 'INVALID_SCHOOL_REF') {
+        setErrors(prev => ({ ...prev, schoolRefNo: errorMessage }));
+      } else {
+        // Fallback: set it as a phone field or general validation error
+        setErrors(prev => ({ ...prev, phone: errorMessage }));
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -150,16 +175,17 @@ const ProfileSetupPage = () => {
             <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.15em] ml-1">
               School Ref No
             </label>
-            <div className="relative group">
-              <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-primary transition-colors font-bold text-sm">#</div>
+            <div className={`relative group transition-all duration-300 ${errors.schoolRefNo ? 'scale-[0.98]' : ''}`}>
+              <div className={`absolute left-4 top-1/2 -translate-y-1/2 transition-colors font-bold text-sm ${errors.schoolRefNo ? 'text-red-400' : 'text-gray-400 group-focus-within:text-primary'}`}>#</div>
               <input
                 type="text"
                 value={formData.schoolRefNo || ''}
                 onChange={(e) => handleInputChange('schoolRefNo', e.target.value)}
                 placeholder="Enter reference number"
-                className="w-full pl-12 pr-4 py-4 bg-gray-50 border-2 border-transparent rounded-[14px] text-sm font-bold text-deep-purple outline-none focus:border-primary/10 focus:bg-white focus:shadow-xl focus:shadow-primary/5 transition-all"
+                className={`w-full pl-12 pr-4 py-4 bg-gray-50 border-2 rounded-[14px] text-sm font-bold text-deep-purple outline-none transition-all ${errors.schoolRefNo ? 'border-red-100 bg-red-50/30' : 'border-transparent focus:border-primary/10 focus:bg-white focus:shadow-xl focus:shadow-primary/5'}`}
               />
             </div>
+            {errors.schoolRefNo && <p className="text-[9px] font-bold text-red-500 ml-1">{errors.schoolRefNo}</p>}
           </div>
 
           {/* Grade / Class */}

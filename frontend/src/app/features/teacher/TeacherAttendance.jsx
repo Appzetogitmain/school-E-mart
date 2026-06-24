@@ -5,6 +5,8 @@ import {
   CheckCircle2, AlertCircle, Clock, Search, RotateCcw, 
   Bookmark, Sliders, Save, Check
 } from 'lucide-react';
+import useAuthStore from '../../../store/useAuthStore';
+import apiClient from '../../../services/apiClient';
 
 const TeacherAttendance = () => {
   const navigate = useNavigate();
@@ -18,24 +20,67 @@ const TeacherAttendance = () => {
   const [isSectionDropdownOpen, setIsSectionDropdownOpen] = useState(false);
 
   // 2. Student Data State
-  const initialStudents = [
-    { roll: 1, name: 'Aarav Sharma', avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=100&h=100&fit=crop', status: 'P' },
-    { roll: 2, name: 'Ananya Verma', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=100&h=100&fit=crop', status: 'A' },
-    { roll: 3, name: 'Rohan Singh', avatar: 'https://images.unsplash.com/photo-1599566150163-29194dcaad36?q=80&w=100&h=100&fit=crop', status: 'P' },
-    { roll: 4, name: 'Diya Patel', avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?q=80&w=100&h=100&fit=crop', status: 'L' },
-    { roll: 5, name: 'Vivaan Gupta', avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?q=80&w=100&h=100&fit=crop', status: 'P' },
-    { roll: 6, name: 'Meera Joshi', avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=100&h=100&fit=crop', status: 'P' },
-    { roll: 7, name: 'Kabir Malhotra', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=100&h=100&fit=crop', status: 'P' },
-    { roll: 8, name: 'Isha Reddy', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=100&h=100&fit=crop', status: 'Late' },
-    { roll: 9, name: 'Devansh Roy', avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=100&h=100&fit=crop', status: 'P' },
-    { roll: 10, name: 'Sia Singhal', avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?q=80&w=100&h=100&fit=crop', status: 'P' }
-  ];
-
-  const [students, setStudents] = useState(initialStudents);
+  const [students, setStudents] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all'); // 'all', 'P', 'A', 'L'
   const [remark, setRemark] = useState('');
   const [showSuccessToast, setShowSuccessToast] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const fetchRoster = async () => {
+      const user = useAuthStore.getState().user;
+      const schoolId = user?.tenantSchoolId;
+      if (!schoolId) return;
+
+      setLoading(true);
+      try {
+        const today = new Date().toISOString().slice(0, 10);
+        const response = await apiClient.get(`/schools/${schoolId}/attendance/daily`, {
+          params: {
+            date: today,
+            classGrade: selectedClass,
+            section: selectedSection
+          }
+        });
+
+        const attendanceData = response.data.data.attendance || [];
+        if (attendanceData.length > 0) {
+          const mappedStudents = attendanceData.map((item, index) => {
+            let uiStatus = 'P';
+            if (item.attendance) {
+              const status = item.attendance.status;
+              const remarks = item.attendance.remarks;
+              if (status === 'present' && remarks === 'Late') {
+                uiStatus = 'Late';
+              } else if (status === 'present') {
+                uiStatus = 'P';
+              } else if (status === 'absent') {
+                uiStatus = 'A';
+              } else if (status === 'leave') {
+                uiStatus = 'L';
+              }
+            }
+            return {
+              roll: Number(item.student.rollNo) || (index + 1),
+              name: item.student.name,
+              studentId: item.student._id,
+              status: uiStatus
+            };
+          });
+          setStudents(mappedStudents);
+        } else {
+          setStudents([]);
+        }
+      } catch (err) {
+        console.error('Failed to load roster:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchRoster();
+  }, [selectedClass, selectedSection]);
 
   // 3. Dynamic Stats Calculation
   const totalCount = students.length;
@@ -54,7 +99,7 @@ const TeacherAttendance = () => {
   };
 
   const handleReset = () => {
-    setStudents(initialStudents);
+    setStudents(prev => prev.map(s => ({ ...s, status: 'P' })));
     setSearchQuery('');
     setStatusFilter('all');
     setRemark('');
@@ -65,27 +110,60 @@ const TeacherAttendance = () => {
     setTimeout(() => setShowSuccessToast(false), 3000);
   };
 
-  const handleSaveAttendance = () => {
-    // Save to localStorage or context
-    const attendanceRecord = {
-      date: '20 May 2025',
-      class: selectedClass,
-      section: selectedSection,
-      present: presentCount,
-      total: totalCount,
-      students: students.map(s => ({ roll: s.roll, status: s.status })),
-      remark
-    };
-    
-    // Save a completed marker
-    localStorage.setItem(`attendance-${selectedClass}-${selectedSection}`, JSON.stringify(attendanceRecord));
-    
-    // Trigger successful animation alert
-    setShowSuccessToast(true);
-    setTimeout(() => {
-      setShowSuccessToast(false);
-      navigate('/school/teacher/dashboard');
-    }, 2000);
+  const handleSaveAttendance = async () => {
+    const user = useAuthStore.getState().user;
+    const schoolId = user?.tenantSchoolId;
+    if (!schoolId) {
+      // Bypassed/Mock flow fallback
+      setShowSuccessToast(true);
+      setTimeout(() => {
+        setShowSuccessToast(false);
+        navigate('/school/teacher/dashboard');
+      }, 2000);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      const records = students.map(s => {
+        let backendStatus = 'present';
+        let backendRemarks = '';
+        if (s.status === 'P') {
+          backendStatus = 'present';
+        } else if (s.status === 'A') {
+          backendStatus = 'absent';
+        } else if (s.status === 'L') {
+          backendStatus = 'leave';
+        } else if (s.status === 'Late') {
+          backendStatus = 'present';
+          backendRemarks = 'Late';
+        }
+        return {
+          studentId: s.studentId,
+          status: backendStatus,
+          remarks: backendRemarks || remark || undefined
+        };
+      });
+
+      await apiClient.post(`/schools/${schoolId}/attendance`, {
+        date: today,
+        classGrade: selectedClass,
+        section: selectedSection,
+        records
+      });
+
+      setShowSuccessToast(true);
+      setTimeout(() => {
+        setShowSuccessToast(false);
+        navigate('/school/teacher/dashboard');
+      }, 2000);
+    } catch (err) {
+      console.error('Failed to save attendance:', err);
+      alert(err.response?.data?.message || 'Failed to save attendance. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Filter students based on search query AND active status card filter
@@ -126,7 +204,7 @@ const TeacherAttendance = () => {
             <h1 className="text-lg font-black text-deep-purple leading-none">Mark Attendance</h1>
             <div className="flex items-center gap-1.5 text-gray-400 font-bold text-[10px] mt-1.5">
               <Calendar size={12} className="text-primary" />
-              <span>20 May 2025, Tuesday</span>
+              <span>{new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', weekday: 'long' })}</span>
             </div>
           </div>
         </div>

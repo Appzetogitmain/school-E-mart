@@ -32,9 +32,28 @@ const issueAuthenticatedSession = async (user, requestMeta = {}, auditAction = '
     after: { jti: tokens.jti },
   });
 
+  const userDto = mapUserToDto(updatedUser || user, authContext);
+
+  if (user.role === 'parent') {
+    const ChildProfile = require('../../../database/models/ChildProfile');
+    const School = require('../../../database/models/School');
+    const child = await ChildProfile.findOne({ parentUserId: user._id, 'softDelete.isDeleted': { $ne: true } }).lean();
+    if (child) {
+      const school = child.schoolId ? await School.findById(child.schoolId).lean() : null;
+      userDto.childProfile = {
+        name: child.name,
+        grade: child.grade,
+        schoolId: child.schoolId ? child.schoolId.toString() : 'explore-schools',
+        schoolName: school ? school.name : 'Explore Schools',
+        schoolRefNo: child.schoolRefNo || (school ? school.schoolRefNo : null),
+        studentId: child.studentId ? child.studentId.toString() : null
+      };
+    }
+  }
+
   return {
     ...tokens,
-    user: mapUserToDto(updatedUser || user, authContext),
+    user: userDto,
     expiresIn: Math.floor(authConfig.accessExpiryMs / 1000),
   };
 };

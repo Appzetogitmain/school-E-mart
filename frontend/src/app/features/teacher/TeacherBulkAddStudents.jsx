@@ -5,17 +5,17 @@ import {
   Trash2, HelpCircle, AlertCircle, Sparkles, Check, 
   Users, Layers, Play
 } from 'lucide-react';
+import useAuthStore from '../../../store/useAuthStore';
+import apiClient from '../../../services/apiClient';
 
 const TeacherBulkAddStudents = () => {
   const navigate = useNavigate();
 
   // 1. Initial State for Manual Entry Rows
   const [rows, setRows] = useState([
-    { rollNo: '1', name: 'Aarav Sharma', parentName: 'Rajesh Sharma', phone: '9876543210' },
-    { rollNo: '2', name: 'Ananya Verma', parentName: 'Suresh Verma', phone: '9876543211' },
-    { rollNo: '3', name: 'Rohan Singh', parentName: 'Amit Singh', phone: '9876543212' },
-    { rollNo: '4', name: '', parentName: '', phone: '' },
-    { rollNo: '5', name: '', parentName: '', phone: '' },
+    { rollNo: '1', name: '', parentName: '', phone: '' },
+    { rollNo: '2', name: '', parentName: '', phone: '' },
+    { rollNo: '3', name: '', parentName: '', phone: '' },
   ]);
 
   // Tab State: 'excel' or 'manual'
@@ -119,7 +119,7 @@ const TeacherBulkAddStudents = () => {
   };
 
   // 5. Submit Handler
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     
     // Filter out rows that are not fully filled (requires at least name and phone number)
@@ -130,37 +130,40 @@ const TeacherBulkAddStudents = () => {
       return;
     }
 
-    // Retrieve existing students roster from localStorage to continue Roll sequence correctly
-    const savedNotes = JSON.parse(localStorage.getItem('teacherStudentsList') || '[]');
-    const startRollNo = savedNotes.length > 0 
-      ? Math.max(...savedNotes.map(s => parseInt(s.rollNo, 10) || 0))
-      : 0;
+    const user = useAuthStore.getState().user;
+    const schoolId = user?.tenantSchoolId;
+    if (!schoolId) {
+      triggerToast('School ID not found.');
+      return;
+    }
 
-    const formattedNewStudents = validRows.map((row, idx) => {
-      const customRoll = row.rollNo.trim() 
-        ? String(row.rollNo.trim()).padStart(2, '0') 
-        : String(startRollNo + idx + 1).padStart(2, '0');
-      return {
-        id: Date.now() + idx,
-        rollNo: customRoll,
-        name: row.name.trim(),
-        parentName: row.parentName.trim() || 'Parent',
-        motherName: 'Mother',
-        phone: row.phone.trim(),
-        gender: idx % 2 === 0 ? 'Male' : 'Female',
-        dob: '2015-08-20',
-        admissionNo: `ADM-2023-${Math.floor(100 + Math.random() * 900)}`
-      };
-    });
+    triggerToast(`Registering ${validRows.length} Students...`);
 
-    const updatedList = [...savedNotes, ...formattedNewStudents];
-    localStorage.setItem('teacherStudentsList', JSON.stringify(updatedList));
-    
-    triggerToast(`Added ${formattedNewStudents.length} Students Successfully!`);
-    
-    setTimeout(() => {
-      navigate('/school/teacher/students');
-    }, 1500);
+    try {
+      for (let i = 0; i < validRows.length; i++) {
+        const row = validRows[i];
+        const payload = {
+          name: row.name.trim(),
+          rollNo: row.rollNo.trim(),
+          gender: i % 2 === 0 ? 'male' : 'female',
+          classGrade: 'Class 5',
+          section: 'Section A',
+          parentPhone: row.phone.trim(),
+          parentName: row.parentName.trim() || `${row.name.trim()} Parent`,
+          admissionNo: `ADM-2026-${Math.floor(1000 + Math.random() * 9000)}`
+        };
+        await apiClient.post(`/schools/${schoolId}/students`, payload);
+      }
+
+      triggerToast(`Added ${validRows.length} Students Successfully!`);
+      setTimeout(() => {
+        navigate('/school/teacher/students');
+      }, 1500);
+    } catch (err) {
+      console.error('Failed to bulk register students:', err);
+      const errMsg = err.response?.data?.message || 'Failed to register student list.';
+      triggerToast(errMsg);
+    }
   };
 
   return (

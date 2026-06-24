@@ -6,6 +6,7 @@ import {
   Sparkles, School
 } from 'lucide-react';
 import useAuthStore from '../../../store/useAuthStore';
+import apiClient from '../../../services/apiClient';
 
 const SchoolAuthPage = () => {
   const navigate = useNavigate();
@@ -95,7 +96,7 @@ const SchoolAuthPage = () => {
     return '';
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     const validationError = validateForm();
     if (validationError) {
@@ -104,43 +105,61 @@ const SchoolAuthPage = () => {
     }
 
     setLoading(true);
+    setError('');
 
-    // Simulate Auth API Call
-    setTimeout(() => {
-      setLoading(false);
-
-      const referenceId = role === 'admin'
-        ? `SEM-ADM-${Math.floor(100000 + Math.random() * 900000)}`
-        : `SEM-TCH-${Math.floor(100000 + Math.random() * 900000)}`;
-
-      const userDisplayName = formData.fullName || (role === 'admin' ? 'School Administrator' : 'Teacher');
-
-      const mockUser = {
-        name: userDisplayName,
-        school: role === 'admin' ? formData.schoolName : (formData.schoolCode || "Associated School"),
-        role: role === 'admin' ? 'school' : 'teacher',
-        phone: formData.mobile || "9876543210",
-        email: formData.email,
-        refId: referenceId
-      };
-
+    try {
       if (mode === 'login') {
-        // Direct redirection for login
-        localStorage.setItem('childInfo', JSON.stringify(mockUser));
-        loginStore(mockUser, 'mock-school-token');
+        const response = await apiClient.post(
+          role === 'teacher' ? '/auth/school/teacher/login' : '/auth/school/admin/login',
+          { email: formData.email, password: formData.password }
+        );
+        const { user, accessToken } = response.data.data;
+        loginStore(user, accessToken);
+
+        localStorage.setItem('childInfo', JSON.stringify(user));
+        if (role === 'teacher') {
+          localStorage.setItem('teacherProfileDetails', JSON.stringify({
+            fullName: user.name,
+            avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=120&h=120&fit=crop'
+          }));
+        }
+
         navigate(role === 'teacher' ? '/school/teacher/dashboard' : '/school/admin');
       } else {
-        // Success screen for sign up
-        setSuccessInfo({
-          id: referenceId,
-          name: userDisplayName,
-          role: role === 'admin' ? 'School Administrator' : 'Teacher'
+        if (role === 'admin') {
+          throw new Error('School Admin self-signup is not available. Please contact the administrator.');
+        }
+
+        const response = await apiClient.post('/auth/school/teacher/register', {
+          fullName: formData.fullName,
+          email: formData.email,
+          mobile: formData.mobile,
+          schoolCode: formData.schoolCode,
+          password: formData.password
         });
-        localStorage.setItem('childInfo', JSON.stringify(mockUser));
-        loginStore(mockUser, 'mock-school-token');
+        const { user, accessToken } = response.data.data;
+        loginStore(user, accessToken);
+
+        localStorage.setItem('childInfo', JSON.stringify(user));
+        localStorage.setItem('teacherProfileDetails', JSON.stringify({
+          fullName: user.name,
+          avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=120&h=120&fit=crop'
+        }));
+
+        setSuccessInfo({
+          id: user.refId,
+          name: user.name,
+          role: 'Teacher'
+        });
         setStep(3);
       }
-    }, 1500);
+    } catch (err) {
+      console.error('Authentication failed:', err);
+      const msg = err.response?.data?.message || err.message || 'Authentication failed. Please check details.';
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const selectRole = (selectedRole) => {

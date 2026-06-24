@@ -176,7 +176,7 @@ router.post(
 
 router.post(
   '/:schoolId/students',
-  ...protectedRoute({ roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN], permissions: [PERMISSIONS.STUDENTS_WRITE] }),
+  ...protectedRoute({ roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN, ROLES.TEACHER], permissions: [PERMISSIONS.STUDENTS_WRITE] }),
   resolveSchool(),
   validateBody(validators.createStudentSchema),
   schoolController.registerStudent
@@ -197,7 +197,7 @@ router.get(
 );
 router.patch(
   '/:schoolId/students/:studentId',
-  ...protectedRoute({ roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN], permissions: [PERMISSIONS.STUDENTS_WRITE] }),
+  ...protectedRoute({ roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN, ROLES.TEACHER], permissions: [PERMISSIONS.STUDENTS_WRITE] }),
   resolveSchool(),
   validateParams(validators.studentIdParam),
   validateBody(validators.updateStudentSchema),
@@ -205,7 +205,7 @@ router.patch(
 );
 router.post(
   '/:schoolId/students/:studentId/transfer',
-  ...protectedRoute({ roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN], permissions: [PERMISSIONS.STUDENTS_WRITE] }),
+  ...protectedRoute({ roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN, ROLES.TEACHER], permissions: [PERMISSIONS.STUDENTS_WRITE] }),
   resolveSchool(),
   validateParams(validators.studentIdParam),
   validateBody(validators.transferStudentSchema),
@@ -213,7 +213,7 @@ router.post(
 );
 router.patch(
   '/:schoolId/students/:studentId/status',
-  ...protectedRoute({ roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN], permissions: [PERMISSIONS.STUDENTS_WRITE] }),
+  ...protectedRoute({ roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN, ROLES.TEACHER], permissions: [PERMISSIONS.STUDENTS_WRITE] }),
   resolveSchool(),
   validateParams(validators.studentIdParam),
   validateBody(validators.studentStatusSchema),
@@ -221,7 +221,7 @@ router.patch(
 );
 router.delete(
   '/:schoolId/students/:studentId',
-  ...protectedRoute({ roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN], permissions: [PERMISSIONS.STUDENTS_WRITE] }),
+  ...protectedRoute({ roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN, ROLES.TEACHER], permissions: [PERMISSIONS.STUDENTS_WRITE] }),
   resolveSchool(),
   validateParams(validators.studentIdParam),
   schoolController.deleteStudent
@@ -294,7 +294,7 @@ router.get(
 );
 router.get(
   '/:schoolId/attendance/history',
-  ...protectedRoute({ roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN, ROLES.TEACHER], permissions: [PERMISSIONS.ATTENDANCE_READ] }),
+  ...protectedRoute({ roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN, ROLES.TEACHER, ROLES.PARENT], permissions: [PERMISSIONS.ATTENDANCE_READ] }),
   resolveSchool(),
   validateQuery(validators.attendanceQuerySchema),
   schoolController.getAttendanceHistory

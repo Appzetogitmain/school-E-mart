@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Phone, Lock, ArrowRight, ChevronLeft } from 'lucide-react';
+import useAuthStore from '../../../store/useAuthStore';
+import apiClient from '../../../services/apiClient';
 
 const AppAuthPage = () => {
   const navigate = useNavigate();
@@ -37,34 +39,57 @@ const AppAuthPage = () => {
     } else navigate(-1);
   };
 
-  const handleNext = (data) => {
+  const handleNext = async (data) => {
     setError('');
     if (step === 2) {
-      setContactValue(data.value);
+      setLoading(true);
+      try {
+        await apiClient.post('/auth/parent/otp/request', { phone: data.value });
+        setContactValue(data.value);
+        setStep(3);
+      } catch (err) {
+        console.error('OTP request failed:', err);
+        setError(err.response?.data?.message || 'Failed to send OTP. Please check the number.');
+      } finally {
+        setLoading(false);
+      }
     }
     if (step === 3) {
-      // Step 3 is OTP Verification
-      const mockUser = {
-        name: "Priya Damodaran",
-        role: "parent",
-        phone: contactValue,
-        email: "",
-        school: "St. Xavier's High School",
-        grade: "Class 2",
-        progress: { completed: 12, total: 18 }
-      };
-      localStorage.setItem('childInfo', JSON.stringify(mockUser));
-      navigate("/user/home");
-      return;
+      setLoading(true);
+      try {
+        const response = await apiClient.post('/auth/parent/otp/verify', {
+          phone: contactValue,
+          otp: data.value
+        });
+        const { user, accessToken } = response.data.data;
+        useAuthStore.getState().login(user, accessToken);
+
+        const childInfo = {
+          name: user.childProfile?.name || "Child",
+          school: user.childProfile?.schoolName || "Explore Schools",
+          schoolId: user.childProfile?.schoolId || "explore-schools",
+          grade: user.childProfile?.grade || "Grade",
+          phone: user.phone || contactValue,
+          schoolRefNo: user.childProfile?.schoolRefNo || null,
+          studentId: user.childProfile?.studentId || null
+        };
+        localStorage.setItem('childInfo', JSON.stringify(childInfo));
+
+        navigate("/user/home");
+      } catch (err) {
+        console.error('OTP verification failed:', err);
+        setError(err.response?.data?.message || 'Invalid OTP code. Please try again.');
+      } finally {
+        setLoading(false);
+      }
     }
-    setStep(step + 1);
   };
 
   const renderStep = () => {
     switch (step) {
-      case 2: return <ContactInput onNext={handleNext} onError={setError} error={error} />;
-      case 3: return <Verification onNext={handleNext} onError={setError} error={error} />;
-      default: return <ContactInput onNext={handleNext} onError={setError} error={error} />;
+      case 2: return <ContactInput onNext={handleNext} onError={setError} error={error} loading={loading} />;
+      case 3: return <Verification onNext={handleNext} onError={setError} error={error} loading={loading} />;
+      default: return <ContactInput onNext={handleNext} onError={setError} error={error} loading={loading} />;
     }
   };
 
@@ -125,7 +150,7 @@ const AppAuthPage = () => {
   );
 };
 
-const ContactInput = ({ onNext, onError, error }) => {
+const ContactInput = ({ onNext, onError, error, loading }) => {
   const [value, setValue] = useState('');
   const handleInputChange = (e) => {
     const val = e.target.value.replace(/\D/g, '').slice(0, 10);
@@ -156,13 +181,19 @@ const ContactInput = ({ onNext, onError, error }) => {
           </div>
           {error && <p className="text-red-500 text-[11px] font-medium ml-1 mt-1">{error}</p>}
         </div>
-        <button type="submit" disabled={!isValid} className={`w-full py-4 font-medium rounded-2xl flex items-center justify-center gap-3 transition-all duration-300 ${isValid ? 'bg-primary text-white shadow-xl shadow-primary/20 active:scale-95' : 'bg-gray-50 text-gray-300 border border-gray-100 cursor-not-allowed'}`}>Send OTP <ArrowRight size={20} /></button>
+        <button type="submit" disabled={!isValid || loading} className={`w-full py-4 font-medium rounded-2xl flex items-center justify-center gap-3 transition-all duration-300 ${isValid && !loading ? 'bg-primary text-white shadow-xl shadow-primary/20 active:scale-95' : 'bg-gray-50 text-gray-300 border border-gray-100 cursor-not-allowed'}`}>
+          {loading ? (
+            <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+          ) : (
+            <>Send OTP <ArrowRight size={20} /></>
+          )}
+        </button>
       </form>
     </div>
   );
 };
 
-const Verification = ({ onNext, onError, error }) => {
+const Verification = ({ onNext, onError, error, loading }) => {
   const [value, setValue] = useState('');
   const handleInputChange = (e) => {
     const val = e.target.value.replace(/\D/g, '').slice(0, 4);
@@ -196,7 +227,13 @@ const Verification = ({ onNext, onError, error }) => {
           </div>
           {error && <p className="text-red-500 text-[11px] font-medium ml-1 mt-1">{error}</p>}
         </div>
-        <button type="submit" disabled={!isValid} className={`w-full py-4 font-medium rounded-2xl flex items-center justify-center gap-3 transition-all duration-300 ${isValid ? 'bg-primary text-white shadow-xl shadow-primary/20 active:scale-95' : 'bg-gray-50 text-gray-300 border border-gray-100 cursor-not-allowed'}`}>Verify & Continue <ArrowRight size={20} /></button>
+        <button type="submit" disabled={!isValid || loading} className={`w-full py-4 font-medium rounded-2xl flex items-center justify-center gap-3 transition-all duration-300 ${isValid && !loading ? 'bg-primary text-white shadow-xl shadow-primary/20 active:scale-95' : 'bg-gray-50 text-gray-300 border border-gray-100 cursor-not-allowed'}`}>
+          {loading ? (
+            <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+          ) : (
+            <>Verify & Continue <ArrowRight size={20} /></>
+          )}
+        </button>
       </form>
     </div>
   );

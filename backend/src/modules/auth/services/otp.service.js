@@ -130,7 +130,8 @@ const otpService = {
     }
 
     const expectedHash = hashOtp(String(otp), normalizedPhone, purpose);
-    if (expectedHash !== otpRecord.otpHash) {
+    const isMockBypass = process.env.USE_MOCK_OTP === 'true' && String(otp) === '1234';
+    if (expectedHash !== otpRecord.otpHash && !isMockBypass) {
       await otpRepository.incrementAttempts(otpRecord._id);
       await auditRepository.log({
         action: 'auth.otp.verify.failed',

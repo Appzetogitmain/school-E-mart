@@ -86,6 +86,21 @@ const sessionIdParamSchema = Joi.object({
   sessionId: schemas.objectId.required(),
 });
 
+const parentRegisterSchema = Joi.object({
+  phone: schemas.indianMobile.required(),
+  studentName: Joi.string().trim().max(80).required(),
+  grade: Joi.string().trim().required(),
+  schoolRefNo: Joi.string().trim().allow('', null).optional(),
+});
+
+const teacherRegisterSchema = Joi.object({
+  fullName: Joi.string().trim().max(80).required(),
+  email: schemas.email.required(),
+  mobile: schemas.indianMobile.required(),
+  schoolCode: Joi.string().trim().required(),
+  password: schemas.password.required(),
+});
+
 module.exports = {
   loginSchema,
   roleLoginSchema,
@@ -106,4 +121,6 @@ module.exports = {
   emailVerifySchema,
   emailVerifyRequestSchema,
   sessionIdParamSchema,
+  parentRegisterSchema,
+  teacherRegisterSchema,
 };

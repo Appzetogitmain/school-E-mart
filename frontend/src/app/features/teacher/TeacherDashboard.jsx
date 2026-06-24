@@ -6,6 +6,9 @@ import {
   ChevronDown, UserCheck, MessageSquare, PlusCircle, FileCheck
 } from 'lucide-react';
 
+import useAuthStore from '../../../store/useAuthStore';
+import apiClient from '../../../services/apiClient';
+
 const TeacherDashboard = () => {
   const navigate = useNavigate();
 
@@ -41,6 +44,51 @@ const TeacherDashboard = () => {
   const [selectedSection, setSelectedSection] = useState('Section A');
   const [isClassDropdownOpen, setIsClassDropdownOpen] = useState(false);
   const [isSectionDropdownOpen, setIsSectionDropdownOpen] = useState(false);
+
+  // Dynamic attendance metrics from backend
+  const [studentsCount, setStudentsCount] = useState(0);
+  const [attendanceStatus, setAttendanceStatus] = useState('Pending');
+  const [attendanceCountLabel, setAttendanceCountLabel] = useState('0%');
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      const user = useAuthStore.getState().user;
+      const schoolId = user?.tenantSchoolId;
+      if (!schoolId) return;
+
+      try {
+        const today = new Date().toISOString().slice(0, 10);
+        const response = await apiClient.get(`/schools/${schoolId}/attendance/daily`, {
+          params: {
+            date: today,
+            classGrade: selectedClass,
+            section: selectedSection
+          }
+        });
+
+        const attendanceData = response.data.data.attendance || [];
+        const total = attendanceData.length;
+        setStudentsCount(total);
+
+        const marked = attendanceData.filter(a => a.attendance !== null);
+        const markedCount = marked.length;
+
+        if (markedCount > 0) {
+          setAttendanceStatus('Completed');
+          const presents = marked.filter(a => a.attendance?.status === 'present');
+          const percent = total > 0 ? Math.round((presents.length / total) * 100) : 0;
+          setAttendanceCountLabel(`${percent}%`);
+        } else {
+          setAttendanceStatus('Pending');
+          setAttendanceCountLabel('0%');
+        }
+      } catch (err) {
+        console.error('Failed to fetch attendance stats:', err);
+      }
+    };
+
+    fetchStats();
+  }, [selectedClass, selectedSection]);
 
   // Quick interactive alerts/modals
   const [showNotifications, setShowNotifications] = useState(false);
@@ -298,7 +346,7 @@ const TeacherDashboard = () => {
           <OverviewCard 
             color="bg-emerald-500 text-white" 
             icon={<Users size={20} />} 
-            count={activeData.studentsCount} 
+            count={studentsCount || activeData.studentsCount} 
             label="Total Students" 
           />
 
@@ -306,10 +354,10 @@ const TeacherDashboard = () => {
           <OverviewCard 
             color="bg-amber-500 text-white" 
             icon={<CheckSquare size={20} />} 
-            count={activeData.attendanceCount || 0} 
+            count={attendanceStatus === 'Completed' ? attendanceCountLabel : '0%'} 
             label="Attendance" 
-            badge={activeData.attendance}
-            badgeColor={activeData.attendance === 'Pending' ? 'bg-orange-600' : 'bg-emerald-600'}
+            badge={attendanceStatus}
+            badgeColor={attendanceStatus === 'Pending' ? 'bg-orange-600' : 'bg-emerald-600'}
           />
 
           {/* Card 3: Homework Added */}
