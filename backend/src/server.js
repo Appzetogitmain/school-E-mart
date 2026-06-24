@@ -1,3 +1,8 @@
+const dns = require('dns');
+
+// Force known public DNS resolvers to avoid local DNS issues (Atlas SRV lookups)
+dns.setServers(['8.8.8.8', '8.8.4.4', '1.1.1.1']);
+
 const { startServer } = require('./app');
 const { disconnectDB } = require('./database/connection');
 const { connectStateStore, disconnectStateStore } = require('./common/stateStore');

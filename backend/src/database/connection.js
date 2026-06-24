@@ -1,7 +1,34 @@
 const mongoose = require('mongoose');
+require('../config/env');
 const databaseConfig = require('../config/database');
 const logger = require('../common/logger');
 const { DATABASE_STATE } = require('../constants/enums');
+
+const MONGO_URI_PATTERN = /^mongodb(\+srv)?:\/\//i;
+
+const resolveConnectionUri = (uri) => uri ?? databaseConfig.uri;
+
+const validateConnectionUri = (uri) => {
+  if (!uri || typeof uri !== 'string' || !uri.trim()) {
+    const error = new Error(
+      'MongoDB connection URI is not configured. Set MONGODB_URI or MONGO_URI in backend/.env.'
+    );
+    error.code = 'MONGODB_URI_MISSING';
+    throw error;
+  }
+
+  const normalizedUri = uri.trim();
+
+  if (!MONGO_URI_PATTERN.test(normalizedUri)) {
+    const error = new Error(
+      'MongoDB connection URI is invalid. Expected a mongodb:// or mongodb+srv:// connection string.'
+    );
+    error.code = 'MONGODB_URI_INVALID';
+    throw error;
+  }
+
+  return normalizedUri;
+};
 
 const READY_STATE = {
   [DATABASE_STATE.DISCONNECTED]: 'disconnected',
@@ -42,7 +69,7 @@ const registerConnectionEvents = () => {
   });
 };
 
-const connectDB = async (uri = databaseConfig.uri) => {
+const connectDB = async (uri) => {
   registerConnectionEvents();
 
   if (mongoose.connection.readyState === DATABASE_STATE.CONNECTED) {
@@ -50,8 +77,25 @@ const connectDB = async (uri = databaseConfig.uri) => {
     return mongoose.connection;
   }
 
+  let connectionUri;
+
   try {
-    await mongoose.connect(uri, databaseConfig.options);
+    connectionUri = validateConnectionUri(resolveConnectionUri(uri));
+  } catch (error) {
+    logger.error('Failed to connect to MongoDB', {
+      message: error.message,
+      code: error.code,
+      mongoUriSource: process.env.MONGODB_URI
+        ? 'MONGODB_URI'
+        : process.env.MONGO_URI
+          ? 'MONGO_URI'
+          : 'none',
+    });
+    throw error;
+  }
+
+  try {
+    await mongoose.connect(connectionUri, databaseConfig.options);
     return mongoose.connection;
   } catch (error) {
     logger.error('Failed to connect to MongoDB', {
