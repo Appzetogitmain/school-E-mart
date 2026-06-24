@@ -100,6 +100,12 @@ const statusUpdateSchema = Joi.object({
   note: Joi.string().trim().max(500).optional(),
 });
 
+const confirmPaymentSchema = Joi.object({
+  razorpayPaymentId: Joi.string().trim().optional(),
+  razorpayOrderId: Joi.string().trim().optional(),
+  razorpaySignature: Joi.string().trim().optional(),
+}).default({});
+
 module.exports = {
   paginationQuery,
   audienceQuery,
@@ -116,5 +122,6 @@ module.exports = {
   createReturnSchema,
   assignShipmentSchema,
   updateShipmentSchema,
+  confirmPaymentSchema,
   statusUpdateSchema,
 };

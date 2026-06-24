@@ -72,6 +72,10 @@ const buildEnv = () => {
 
   FRONTEND_URL: process.env.FRONTEND_URL || 'http://localhost:5173',
 
+  RAZORPAY_KEY_ID: process.env.RAZORPAY_KEY_ID || null,
+  RAZORPAY_KEY_SECRET: process.env.RAZORPAY_KEY_SECRET || null,
+  RAZORPAY_WEBHOOK_SECRET: process.env.RAZORPAY_WEBHOOK_SECRET || null,
+
   LOG_LEVEL: process.env.LOG_LEVEL || (process.env.NODE_ENV === 'production' ? 'info' : 'debug'),
   LOG_DIR: process.env.LOG_DIR || 'logs',
   REQUEST_ID_HEADER: process.env.REQUEST_ID_HEADER || 'x-request-id',
