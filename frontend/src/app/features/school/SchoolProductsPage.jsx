@@ -1,35 +1,42 @@
-import React, { useState, useEffect } from 'react';
-import { useSearchParams, useNavigate, Link } from 'react-router-dom';
-import { 
-  ArrowLeft, Search, Filter, ShoppingCart, 
-  Star, ChevronDown, Package, Sparkles,
+import React, { useMemo, useState } from 'react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
+import {
+  ArrowLeft, Search, Filter,
+  ChevronDown, Sparkles,
   ShoppingBag, Building2
 } from 'lucide-react';
 import ProductCard from '../../components/ProductCard';
+import { useCategoryTree } from '../../../hooks/useCategoryTree';
+import { useProducts } from '../../../hooks/useProducts';
+import { findHeaderByCategoryName } from '../../../utils/mappers/categoryMapper';
+import { gradeLabelToQuery, sortKeyFromLabel } from '../../../utils/mappers/productMapper';
 
 const SchoolProductsPage = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const grade = searchParams.get('grade') || 'Bulk Orders';
-  
+
   const [activeCategory, setActiveCategory] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortBy, setSortBy] = useState('Recommended');
+  const [sortBy] = useState('Recommended');
+  const { tree } = useCategoryTree();
 
   const categories = ['All', 'Bulk Uniforms', 'Textbooks', 'Office Supplies', 'Lab Equipment', 'Sports Gear'];
 
-  const products = [
-    { id: 1, name: "Premium Cotton School Shirt (Bulk 50pk)", price: 24500, originalPrice: 32000, image: "https://images.unsplash.com/photo-1596755094514-f87e34085b2c?q=80&w=300&h=400&fit=crop", category: "Bulk Uniforms", rating: 4.8, reviews: 124 },
-    { id: 2, name: "Oxford English Grammar - Class 2 (Set of 100)", price: 42000, originalPrice: 55000, image: "https://images.unsplash.com/photo-1544947950-fa07a98d237f?q=80&w=300&h=400&fit=crop", category: "Textbooks", rating: 4.9, reviews: 89 },
-    { id: 3, name: "Institutional Waterproof Bags (Bulk 25pk)", price: 28500, originalPrice: 35000, image: "https://images.unsplash.com/photo-1553062407-98eeb64c6a62?q=80&w=300&h=400&fit=crop", category: "Bags", rating: 4.7, reviews: 256 },
-    { id: 4, name: "Bulk A4 Paper Reams (50 Boxes)", price: 12500, originalPrice: 15000, image: "https://images.unsplash.com/photo-1585336139118-132f08535091?q=80&w=300&h=400&fit=crop", category: "Office Supplies", rating: 4.6, reviews: 142 },
-  ];
+  const selectedHeader = useMemo(
+    () => findHeaderByCategoryName(tree, activeCategory === 'Bulk Uniforms' ? 'Uniforms' : activeCategory),
+    [tree, activeCategory]
+  );
 
-  const filteredProducts = products
-    .filter(p => 
-      (activeCategory === 'All' || p.category === activeCategory) &&
-      p.name.toLowerCase().includes(searchQuery.toLowerCase())
-    );
+  const productQuery = useMemo(() => ({
+    limit: 50,
+    sort: sortKeyFromLabel(sortBy),
+    grade: gradeLabelToQuery(grade),
+    search: searchQuery || undefined,
+    ...(selectedHeader?.id ? { headerId: selectedHeader.id } : {}),
+  }), [grade, searchQuery, sortBy, selectedHeader]);
+
+  const { products, loading, pagination } = useProducts(productQuery);
 
   return (
     <div className="min-h-screen bg-gray-50 pb-24 font-outfit">
@@ -56,7 +63,7 @@ const SchoolProductsPage = () => {
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40 group-focus-within:text-white transition-colors" size={18} />
           <input
             type="text"
-            placeholder={`Search items...`}
+            placeholder="Search items..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-12 pr-12 py-3.5 bg-white rounded-2xl text-sm shadow-inner outline-none font-medium"
@@ -105,15 +112,21 @@ const SchoolProductsPage = () => {
         )}
 
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-bold text-deep-purple -ml-1">Bulk Products ({filteredProducts.length})</h2>
+          <h2 className="text-lg font-bold text-deep-purple -ml-1">
+            Bulk Products ({pagination?.total ?? products.length})
+          </h2>
           <button className="text-[10px] font-black text-primary uppercase tracking-widest bg-white px-3 py-1.5 rounded-full border border-gray-100">{sortBy}</button>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          {filteredProducts.map((product) => (
-            <ProductCard key={product.id} product={product} />
-          ))}
-        </div>
+        {loading ? (
+          <p className="text-center text-sm text-gray-400 py-10">Loading products...</p>
+        ) : (
+          <div className="grid grid-cols-2 gap-4">
+            {products.map((product) => (
+              <ProductCard key={product.id} product={product} />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

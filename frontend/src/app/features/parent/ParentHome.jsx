@@ -19,6 +19,9 @@ import ParentLearningHub from './ParentLearningHub';
 import RecommendedKits from './RecommendedKits';
 import PromoCategoryBanners from './PromoCategoryBanners';
 import ReelsRow from './ReelsRow';
+import { useCategoryTree } from '../../../hooks/useCategoryTree';
+import { useProducts } from '../../../hooks/useProducts';
+import { findHeaderCategory } from '../../../utils/mappers/categoryMapper';
 
 const ParentHome = () => {
   const navigate = useNavigate();
@@ -38,6 +41,32 @@ const ParentHome = () => {
   });
 
   const isGuest = !localStorage.getItem('childInfo');
+  const { tree: categoryTree } = useCategoryTree();
+  const { products: essentialProducts, loading: essentialLoading } = useProducts({ limit: 4, sort: 'popular' });
+  const uniformsHeader = findHeaderCategory(categoryTree, 'uniforms');
+  const stationeryHeader = findHeaderCategory(categoryTree, 'stationery');
+  const { products: uniformProducts } = useProducts(
+    { headerId: uniformsHeader?.id, limit: 2, sort: 'popular' },
+    { enabled: Boolean(uniformsHeader?.id) }
+  );
+  const { products: stationeryProducts } = useProducts(
+    { headerId: stationeryHeader?.id, limit: 2, sort: 'popular' },
+    { enabled: Boolean(stationeryHeader?.id) }
+  );
+
+  const categories = categoryTree.length
+    ? categoryTree.map((cat) => ({
+        name: cat.name,
+        image: cat.image,
+        slug: cat.slug,
+      }))
+    : [
+        { name: 'Uniforms', image: '/assets/uniforms.png', slug: 'uniforms' },
+        { name: 'Books', image: '/assets/books.png', slug: 'books' },
+        { name: 'Stationery', image: '/assets/stationary.png', slug: 'stationery' },
+        { name: 'Sports', image: '/assets/toys_and_sports.png', slug: 'sports' },
+        { name: 'Technology', image: '/assets/technology.png', slug: 'technology' },
+      ];
 
   useEffect(() => {
     const handleUpdate = () => {
@@ -53,20 +82,7 @@ const ParentHome = () => {
     setScrolled(scrollPos > 50);
   };
 
-  const categories = [
-    { name: "Uniforms", image: "/assets/uniforms.png" },
-    { name: "Books", image: "/assets/books.png" },
-    { name: "Stationery", image: "/assets/stationary.png" },
-    { name: "Sports", image: "/assets/toys_and_sports.png" },
-    { name: "Technology", image: "/assets/technology.png" },
-  ];
-
-  const products = [
-    { id: 1, name: "Oxford English Grammar", price: "₹450", originalPrice: "₹599", image: "https://images.unsplash.com/photo-1544947950-fa07a98d237f?q=80&w=200&h=200&fit=crop", type: "Book" },
-    { id: 2, name: "Formal School Shoes", price: "₹899", originalPrice: "₹1,299", image: "https://images.unsplash.com/photo-1549298916-b41d501d3772?q=80&w=200&h=200&fit=crop", type: "Shoes" },
-    { id: 3, name: "Math Geometry Box", price: "₹240", originalPrice: "₹350", image: "https://images.unsplash.com/photo-1634045550273-db9897ca800c?q=80&w=200&h=200&fit=crop", type: "Stationery" },
-    { id: 4, name: "Cotton School Socks", price: "₹120", originalPrice: "₹199", image: "https://images.unsplash.com/photo-1582966271819-755813ec3b90?q=80&w=200&h=200&fit=crop", type: "Uniform" },
-  ];
+  const products = essentialProducts;
 
   const renderProductCard = (product) => (
     <ProductCard key={product.id} product={product} />
@@ -175,7 +191,7 @@ const ParentHome = () => {
                 key={cat.name}
                 name={cat.name}
                 image={cat.image}
-                to={`/user/category/${cat.name.toLowerCase()}`}
+                to={`/user/category/${cat.slug || cat.name.toLowerCase()}`}
               />
             ))}
           </div>
@@ -189,7 +205,11 @@ const ParentHome = () => {
             onViewAll={() => navigate('/user/products')}
           />
           <div className="grid grid-cols-2 gap-4 px-6">
-            {products.map((product) => renderProductCard(product))}
+            {essentialLoading ? (
+              <p className="col-span-2 text-center text-sm text-gray-400 py-6">Loading products...</p>
+            ) : (
+              products.map((product) => renderProductCard(product))
+            )}
           </div>
         </div>
 
@@ -199,10 +219,7 @@ const ParentHome = () => {
             <img src="/assets/category_banner1.png" className="w-full h-full object-cover" alt="Uniforms" />
           </div>
           <div className="grid grid-cols-2 gap-3">
-            {[
-              { id: 201, name: "Summer Polo Shirt", price: "₹350", originalPrice: "₹499", image: "https://images.unsplash.com/photo-1596755094514-f87e34085b2c?q=80&w=200&h=200&fit=crop" },
-              { id: 202, name: "Daily Cotton Trousers", price: "₹550", originalPrice: "₹799", image: "https://images.unsplash.com/photo-1594633312681-425c7b97ccd1?q=80&w=200&h=200&fit=crop" }
-            ].map((product) => renderProductCard(product))}
+            {(uniformProducts.length ? uniformProducts : products.slice(0, 2)).map((product) => renderProductCard(product))}
           </div>
         </div>
 
@@ -212,10 +229,7 @@ const ParentHome = () => {
             <img src="/assets/category_banner3.png" className="w-full h-full object-cover" alt="Stationery" />
           </div>
           <div className="grid grid-cols-2 gap-3">
-            {[
-              { id: 301, name: "Advanced Drawing Set", price: "₹280", originalPrice: "₹399", image: "https://images.unsplash.com/photo-1513364776144-60967b0f800f?q=80&w=200&h=200&fit=crop" },
-              { id: 302, name: "Premium Pen Pack", price: "₹120", originalPrice: "₹180", image: "https://images.unsplash.com/photo-1585336139118-132f08535091?q=80&w=200&h=200&fit=crop" },
-            ].map((product) => renderProductCard(product))}
+            {(stationeryProducts.length ? stationeryProducts : products.slice(0, 2)).map((product) => renderProductCard(product))}
           </div>
         </div>
 

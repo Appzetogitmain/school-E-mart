@@ -1,43 +1,37 @@
-import React, { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { 
-  ArrowLeft, Search, ShoppingBag, Star, 
-  ChevronRight, Filter, Building2, Package, Sparkles
-} from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { useParams } from 'react-router-dom';
+import { Search, ShoppingBag, Star, Filter, Sparkles } from 'lucide-react';
 import SchoolHeader from '../../components/SchoolHeader';
+import { useCategoryTree } from '../../../hooks/useCategoryTree';
+import { useProducts } from '../../../hooks/useProducts';
+import {
+  buildProductQueryForSubcategory,
+  getSubcategoryOptions,
+  resolveTaxonomyFromParam,
+} from '../../../utils/mappers/categoryMapper';
 
 const SchoolSubcategoryPage = () => {
   const { categoryName } = useParams();
-  const navigate = useNavigate();
   const [activeSub, setActiveSub] = useState('All');
-  const schoolInfo = { name: "Adarsh Public School", code: "APS-1024" };
+  const schoolInfo = { name: 'Adarsh Public School', code: 'APS-1024' };
+  const { tree, loading: treeLoading } = useCategoryTree();
 
-  // Mock Data for Subcategories
-  const subcategories = [
-    { id: 'all', name: 'All', image: 'https://images.unsplash.com/photo-1596755094514-f87e34085b2c?q=80&w=100&h=100&fit=crop' },
-    { id: 'shirts', name: 'Bulk Shirts', image: 'https://images.unsplash.com/photo-1596755094514-f87e34085b2c?q=80&w=100&h=100&fit=crop' },
-    { id: 'trousers', name: 'Bulk Trousers', image: 'https://images.unsplash.com/photo-1594633312681-425c7b97ccd1?q=80&w=100&h=100&fit=crop' },
-    { id: 'blazers', name: 'Bulk Blazers', image: 'https://images.unsplash.com/photo-1591336373305-5850a990a5a0?q=80&w=100&h=100&fit=crop' },
-    { id: 'sweaters', name: 'Bulk Sweaters', image: 'https://images.unsplash.com/photo-1620799140408-edc6dcb6d633?q=80&w=100&h=100&fit=crop' },
-    { id: 'shoes', name: 'Bulk Shoes', image: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?q=80&w=100&h=100&fit=crop' },
-    { id: 'socks', name: 'Bulk Socks', image: 'https://images.unsplash.com/photo-1582966271819-755813ec3b90?q=80&w=100&h=100&fit=crop' },
-  ];
-
-  const products = [
-    { id: 1, name: "Premium Cotton Shirt (Bulk 50pk)", price: "₹24,500", image: "https://images.unsplash.com/photo-1596755094514-f87e34085b2c?q=80&w=200&h=200&fit=crop", badge: "Bulk Best Seller" },
-    { id: 2, name: "Institutional Trousers (Bulk 30pk)", price: "₹18,200", image: "https://images.unsplash.com/photo-1594633312681-425c7b97ccd1?q=80&w=200&h=200&fit=crop", badge: "New Arrival" },
-    { id: 3, name: "School Sports Kit (Bulk 20pk)", price: "₹12,450", image: "https://images.unsplash.com/photo-1591336373305-5850a990a5a0?q=80&w=200&h=200&fit=crop", badge: "Bulk Deal" },
-    { id: 4, name: "Faculty Polo Shirt (Bulk 10pk)", price: "₹4,500", image: "https://images.unsplash.com/photo-1582966271819-755813ec3b90?q=80&w=200&h=200&fit=crop", badge: "Staff Only" },
-  ];
+  const taxonomy = useMemo(() => resolveTaxonomyFromParam(tree, categoryName), [tree, categoryName]);
+  const subcategories = useMemo(() => getSubcategoryOptions(taxonomy), [taxonomy]);
+  const productQuery = useMemo(
+    () => buildProductQueryForSubcategory(taxonomy, activeSub, subcategories),
+    [taxonomy, activeSub, subcategories]
+  );
+  const { products, loading: productsLoading } = useProducts(productQuery, {
+    mapperKey: 'subcategory',
+  });
 
   const renderProductCard = (product) => (
     <div key={product.id} className="bg-white rounded-[2.5rem] shadow-xl shadow-gray-200/40 border border-gray-100 flex flex-col overflow-hidden group active:scale-[0.98] transition-all">
       <div className="relative aspect-square bg-gray-50 p-4">
-        {product.badge && (
-          <div className="absolute top-4 left-4 bg-primary/90 backdrop-blur-md px-3 py-1.5 rounded-full text-[8px] font-black text-white uppercase tracking-wider z-10 shadow-lg">
-            {product.badge}
-          </div>
-        )}
+        <div className="absolute top-4 left-4 bg-primary/90 backdrop-blur-md px-3 py-1.5 rounded-full text-[8px] font-black text-white uppercase tracking-wider z-10 shadow-lg">
+          Bulk Deal
+        </div>
         <button className="absolute top-4 right-4 text-gray-300 hover:text-red-500 transition-colors z-10 bg-white/80 backdrop-blur-md w-8 h-8 rounded-full flex items-center justify-center">
           <Star size={16} />
         </button>
@@ -62,18 +56,14 @@ const SchoolSubcategoryPage = () => {
 
   return (
     <div className="flex flex-col h-full bg-white font-outfit">
-      <SchoolHeader 
-        showSearch={true} 
-        childInfo={schoolInfo} 
-      />
+      <SchoolHeader showSearch={true} childInfo={schoolInfo} />
 
       <div className="flex flex-1 overflow-hidden">
-        {/* Left Sidebar (Subcategories) */}
         <div className="w-24 bg-gray-50/50 border-r border-gray-100 overflow-y-auto scrollbar-hide pt-52 pb-32">
           <div className="flex flex-col items-center gap-6">
-            {subcategories.map((sub) => (
-              <button 
-                key={sub.id} 
+            {(treeLoading ? [{ id: 'all', name: 'All', image: '/assets/uniforms.png' }] : subcategories).map((sub) => (
+              <button
+                key={sub.id}
                 onClick={() => setActiveSub(sub.name)}
                 className="flex flex-col items-center gap-2 group w-full px-2"
               >
@@ -91,9 +81,7 @@ const SchoolSubcategoryPage = () => {
           </div>
         </div>
 
-        {/* Main Content (Product Grid) */}
         <div className="flex-1 overflow-y-auto bg-white pt-48 pb-32 px-6">
-          {/* Promo Banner */}
           <div className="bg-gradient-to-br from-[#ffc107] to-[#ffb300] rounded-[2.5rem] p-8 mb-8 relative overflow-hidden group shadow-xl shadow-yellow-100/50">
             <div className="absolute top-0 right-0 w-48 h-48 bg-white/20 rounded-full -mr-24 -mt-24 blur-3xl"></div>
             <div className="relative z-10 max-w-[85%]">
@@ -101,7 +89,7 @@ const SchoolSubcategoryPage = () => {
                 <Sparkles size={16} className="text-deep-purple" />
                 <span className="text-[10px] font-black uppercase tracking-widest text-deep-purple/60">Launch Offer</span>
               </div>
-              <h2 className="text-deep-purple text-xl font-black leading-tight mb-4">Special Rates for Institutional Orders</h2>
+              <h2 className="text-deep-purple text-xl font-black leading-tight mb-4">Special Rates for {taxonomy.title}</h2>
               <button className="bg-deep-purple text-white text-[10px] font-black px-6 py-3 rounded-2xl shadow-lg active:scale-95 transition-all">
                 REQUEST QUOTE
               </button>
@@ -116,9 +104,13 @@ const SchoolSubcategoryPage = () => {
             </button>
           </div>
 
-          <div className="grid grid-cols-1 gap-6">
-            {products.map((product) => renderProductCard(product))}
-          </div>
+          {productsLoading ? (
+            <p className="text-center text-sm text-gray-400 py-10">Loading products...</p>
+          ) : (
+            <div className="grid grid-cols-1 gap-6">
+              {products.map((product) => renderProductCard(product))}
+            </div>
+          )}
         </div>
       </div>
     </div>

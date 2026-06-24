@@ -1,14 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { 
-  Search, 
-  Filter, 
-  ChevronDown, 
-  ShoppingBag, 
-  BookOpen, 
-  Shirt, 
-  PenTool, 
-  Trophy, 
+import {
+  Search,
+  ChevronDown,
+  ShoppingBag,
+  BookOpen,
+  Shirt,
+  PenTool,
+  Trophy,
   Star,
   Info,
   ArrowRight,
@@ -16,6 +15,10 @@ import {
 } from 'lucide-react';
 import ProductCard from '../../components/ui/ProductCard';
 import { ROUTES } from '../../constants/routes';
+import { useCategoryTree } from '../../hooks/useCategoryTree';
+import { useProducts } from '../../hooks/useProducts';
+import { findHeaderCategory } from '../../utils/mappers/categoryMapper';
+import { classIdToGradeQuery, sortKeyFromLabel } from '../../utils/mappers/productMapper';
 
 const MOCK_GRADE_DATA = {
   nursery: { name: 'Nursery', focus: 'Early Learning & Comfort', age: '3-4 Years' },
@@ -35,6 +38,14 @@ const MOCK_GRADE_DATA = {
   '12': { name: 'Class 12', focus: 'Higher Ed Transition', age: '17-18 Years' },
 };
 
+const CATEGORY_HEADER_MAP = {
+  all: null,
+  books: 'books',
+  uniform: 'uniforms',
+  stationery: 'stationery',
+  sports: 'sports',
+};
+
 const GradeProductsPage = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -43,10 +54,7 @@ const GradeProductsPage = () => {
 
   const [activeCategory, setActiveCategory] = useState('all');
   const [sortBy, setSortBy] = useState('featured');
-
-  useEffect(() => {
-    window.scrollTo(0, 0);
-  }, [classId]);
+  const { tree } = useCategoryTree();
 
   const categories = [
     { id: 'all', name: 'All Essentials', icon: ShoppingBag },
@@ -56,22 +64,30 @@ const GradeProductsPage = () => {
     { id: 'sports', name: 'Sports & PE', icon: Trophy },
   ];
 
-  // Simple mock products
-  const products = [
-    { id: 1, title: `Complete ${gradeInfo.name} Book Set`, price: 2499, oldPrice: 2999, rating: 4.8, reviews: 124, tag: 'Bestseller', image: 'https://images.unsplash.com/photo-1497633762265-9d179a990aa6?auto=format&fit=crop&q=80&w=300' },
-    { id: 2, title: `Premium ${gradeInfo.name} Uniform Kit`, price: 1850, rating: 4.6, reviews: 89, tag: 'High Quality', image: 'https://images.unsplash.com/photo-1516627145497-ae6968895b74?auto=format&fit=crop&q=80&w=300' },
-    { id: 3, title: 'Essential Stationery Bundle', price: 599, oldPrice: 799, rating: 4.9, reviews: 256, tag: 'Top Value', image: 'https://images.unsplash.com/photo-1513542789411-b6a5d4f31634?auto=format&fit=crop&q=80&w=300' },
-    { id: 4, title: 'Ergonomic Student Backpack', price: 1299, rating: 4.7, reviews: 142, image: 'https://images.unsplash.com/photo-1553062407-98eeb94c6a62?auto=format&fit=crop&q=80&w=300' },
-    { id: 5, title: 'Sports & Activity Set', price: 850, oldPrice: 999, rating: 4.5, reviews: 64, image: 'https://images.unsplash.com/photo-1461896836934-ffe607ba8211?auto=format&fit=crop&q=80&w=300' },
-    { id: 6, title: 'Art & Craft Mega Box', price: 450, rating: 4.8, reviews: 210, image: 'https://images.unsplash.com/photo-1513364776144-60967b0f800f?auto=format&fit=crop&q=80&w=300' },
-  ];
+  const selectedHeader = useMemo(() => {
+    const slug = CATEGORY_HEADER_MAP[activeCategory];
+    return slug ? findHeaderCategory(tree, slug) : null;
+  }, [tree, activeCategory]);
+
+  const productQuery = useMemo(() => {
+    const query = {
+      limit: 24,
+      sort: sortKeyFromLabel(sortBy),
+      grade: classIdToGradeQuery(classId),
+    };
+    if (selectedHeader?.id) query.headerId = selectedHeader.id;
+    return query;
+  }, [classId, sortBy, selectedHeader]);
+
+  const { products, loading } = useProducts(productQuery, { mapperKey: 'grade' });
+
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [classId]);
 
   return (
     <div className="w-full bg-[#fcfcfd] min-h-screen">
-      
-      {/* 1. Dynamic Hero Section */}
       <section className="pt-32 pb-16 bg-primary relative overflow-hidden">
-        {/* Decorations */}
         <div className="absolute top-0 right-0 w-1/3 h-full bg-white/5 skew-x-12 translate-x-1/4"></div>
         <div className="absolute bottom-0 left-0 w-64 h-64 bg-accent-orange/10 rounded-full -translate-x-1/2 translate-y-1/2 blur-3xl"></div>
 
@@ -86,7 +102,7 @@ const GradeProductsPage = () => {
                 Everything Your Child Needs for <span className="text-accent-orange">{gradeInfo.name}</span>
               </h1>
               <p className="text-white/70 text-lg mb-8 max-w-xl font-normal">
-                Curated essentials focusing on <span className="text-white font-medium">{gradeInfo.focus}</span>. 
+                Curated essentials focusing on <span className="text-white font-medium">{gradeInfo.focus}</span>.
                 Everything from verified books to high-quality uniforms.
               </p>
               <div className="flex flex-wrap items-center justify-center md:justify-start gap-4">
@@ -101,13 +117,16 @@ const GradeProductsPage = () => {
               </div>
             </div>
 
-            {/* Featured Kit Preview Card */}
             <div className="w-full max-w-sm bg-white rounded-[3rem] p-8 shadow-2xl relative animate-in zoom-in-95 duration-500">
               <div className="absolute -top-4 -right-4 bg-accent-orange text-deep-purple font-black px-6 py-2 rounded-full text-sm shadow-xl z-20">
                 SAVE 15%
               </div>
               <div className="mb-6 rounded-[2rem] overflow-hidden bg-gray-50 h-48 relative group">
-                <img src={products[0].image} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" alt="Essential Kit" />
+                <img
+                  src={products[0]?.image || 'https://images.unsplash.com/photo-1497633762265-9d179a990aa6?auto=format&fit=crop&q=80&w=300'}
+                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+                  alt="Essential Kit"
+                />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-6">
                   <p className="text-white font-bold">The Ultimate {gradeInfo.name} Bundle</p>
                 </div>
@@ -131,7 +150,6 @@ const GradeProductsPage = () => {
         </div>
       </section>
 
-      {/* 2. Filter Bar */}
       <section className="sticky top-20 z-40 bg-white/80 backdrop-blur-xl border-b border-gray-100 py-4 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-6">
           <div className="flex items-center gap-2 overflow-x-auto pb-2 md:pb-0 w-full md:w-auto no-scrollbar">
@@ -140,8 +158,8 @@ const GradeProductsPage = () => {
                 key={cat.id}
                 onClick={() => setActiveCategory(cat.id)}
                 className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-bold transition-all whitespace-nowrap ${
-                  activeCategory === cat.id 
-                    ? 'bg-primary text-white shadow-lg shadow-purple-100' 
+                  activeCategory === cat.id
+                    ? 'bg-primary text-white shadow-lg shadow-purple-100'
                     : 'bg-gray-50 text-text-secondary hover:bg-gray-100'
                 }`}
               >
@@ -154,14 +172,14 @@ const GradeProductsPage = () => {
           <div className="flex items-center gap-4 w-full md:w-auto">
             <div className="relative flex-1 md:w-64">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-              <input 
-                type="text" 
+              <input
+                type="text"
                 placeholder={`Search ${gradeInfo.name} items...`}
                 className="w-full bg-gray-50 border border-gray-100 rounded-full py-2.5 pl-10 pr-4 text-xs focus:outline-none focus:ring-4 focus:ring-primary/5 focus:border-primary transition-all"
               />
             </div>
             <div className="relative group">
-              <select 
+              <select
                 className="appearance-none bg-gray-50 border border-gray-100 rounded-full py-2.5 pl-5 pr-10 text-xs font-bold text-text-primary cursor-pointer focus:outline-none"
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value)}
@@ -177,21 +195,23 @@ const GradeProductsPage = () => {
         </div>
       </section>
 
-      {/* 3. Product Grid */}
       <section className="py-16 px-4">
         <div className="max-w-7xl mx-auto">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
-            {products.map((product) => (
-              <ProductCard 
-                key={product.id} 
-                product={product} 
-                quickComm={true} 
-                compact={false} 
-              />
-            ))}
-          </div>
-          
-          {/* Load More */}
+          {loading ? (
+            <p className="text-center text-gray-400 py-20">Loading products...</p>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+              {products.map((product) => (
+                <ProductCard
+                  key={product.id}
+                  product={product}
+                  quickComm={true}
+                  compact={false}
+                />
+              ))}
+            </div>
+          )}
+
           <div className="mt-20 text-center">
             <button className="px-10 py-4 border-2 border-gray-100 text-deep-purple rounded-2xl font-bold hover:border-primary/30 hover:bg-primary/5 transition-all active:scale-95">
               Explore More {gradeInfo.name} Products
@@ -200,7 +220,6 @@ const GradeProductsPage = () => {
         </div>
       </section>
 
-      {/* 4. Grade Insights Section */}
       <section className="py-20 bg-soft-lavender/30 px-4">
         <div className="max-w-5xl mx-auto bg-white rounded-[3rem] p-10 md:p-16 border border-purple-100/30 shadow-xl relative overflow-hidden">
           <div className="relative z-10 flex flex-col md:flex-row items-center gap-12">
@@ -221,12 +240,10 @@ const GradeProductsPage = () => {
               </div>
             </div>
           </div>
-          {/* Abstract decoration */}
           <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full translate-x-10 -translate-y-10 blur-2xl"></div>
         </div>
       </section>
 
-      {/* 5. Quick Navigation to Other Grades */}
       <section className="py-20 px-4 text-center">
         <div className="max-w-7xl mx-auto">
           <h2 className="text-2xl font-bold text-deep-purple mb-10">Shopping for another child?</h2>
@@ -236,8 +253,8 @@ const GradeProductsPage = () => {
                 key={id}
                 onClick={() => navigate(`${ROUTES.SHOP_BY_GRADE}?class=${id}`)}
                 className={`w-14 h-14 rounded-2xl flex items-center justify-center text-sm font-bold border transition-all ${
-                  classId === id 
-                    ? 'bg-primary border-primary text-white shadow-lg' 
+                  classId === id
+                    ? 'bg-primary border-primary text-white shadow-lg'
                     : 'bg-white border-gray-100 text-text-primary hover:border-primary/30 hover:bg-primary/5'
                 }`}
               >
@@ -247,7 +264,6 @@ const GradeProductsPage = () => {
           </div>
         </div>
       </section>
-
     </div>
   );
 };
