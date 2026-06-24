@@ -1,133 +1,16 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { 
+import {
   Eye, Search, Download, ChevronRight, X, Calendar, User, MapPin, DollarSign, Clock, FileText
 } from 'lucide-react';
+import { listOrders } from '../../../services/ordersApi';
+import { getErrorMessage } from '../../../utils/apiHelpers';
+import { mapOrderForAdminList } from '../../../utils/mappers/orderMapper';
 
 const OrdersListManagement = () => {
-  // Mock orders list matching your screenshot data exactly
-  const [orders, setOrders] = useState([
-    {
-      id: 'ORD1780130489670897',
-      customer: 'Rahul Verma',
-      address: 'Corporate house, Chhoti Gwaltoli',
-      date: '30/05/2026',
-      status: 'Scheduled',
-      deliveryStatus: 'Not Assigned',
-      amount: 142.00,
-      seller: 'harsh\'s hub',
-      items: [
-        { name: 'Fresh Apples Red Premium', qty: 2, price: 50.00 },
-        { name: 'Local Farm Honey Organic', qty: 1, price: 42.00 }
-      ]
-    },
-    {
-      id: 'ORD1780126968340909',
-      customer: 'Rahul Verma',
-      address: 'Corporate house, Chhoti Gwaltoli',
-      date: '30/05/2026',
-      status: 'Received',
-      deliveryStatus: 'Not Assigned',
-      amount: 278.50,
-      seller: 'patidar store',
-      items: [
-        { name: 'Organic Brocolli Green', qty: 3, price: 70.00 },
-        { name: 'Premium Milk Dairy Gold', qty: 1, price: 68.50 }
-      ]
-    },
-    {
-      id: 'ORD17801259910309810',
-      customer: 'Rahul Verma',
-      address: 'Corporate house, Chhoti Gwaltoli',
-      date: '30/05/2026',
-      status: 'Scheduled',
-      deliveryStatus: 'Not Assigned',
-      amount: 221.50,
-      seller: 'harsh\'s hub',
-      items: [
-        { name: 'Banana Golden Bunch', qty: 2, price: 45.00 },
-        { name: 'Chocolates Mixed Box', qty: 1, price: 131.50 }
-      ]
-    },
-    {
-      id: 'ORD1780120267093245',
-      customer: 'Harsh',
-      address: 'Corporate House, Regal Square',
-      date: '30/05/2026',
-      status: 'Received',
-      deliveryStatus: 'Not Assigned',
-      amount: 62.00,
-      seller: 'nexus',
-      items: [
-        { name: 'Brown Bread Wheat Grain', qty: 1, price: 62.00 }
-      ]
-    },
-    {
-      id: 'ORD1780054731433627',
-      customer: 'Harsh',
-      address: 'Corporate House, Regal Square',
-      date: '29/05/2026',
-      status: 'Delivered',
-      deliveryStatus: 'Delivered',
-      amount: 62.00,
-      seller: 'nexus',
-      items: [
-        { name: 'Brown Bread Wheat Grain', qty: 1, price: 62.00 }
-      ]
-    },
-    {
-      id: 'ORD1780043020326166',
-      customer: 'Harsh',
-      address: 'Corporate House, Regal Square',
-      date: '29/05/2026',
-      status: 'Delivered',
-      deliveryStatus: 'Delivered',
-      amount: 85.00,
-      seller: 'harsh\'s hub',
-      items: [
-        { name: 'Pomegranate Seeds Pack', qty: 1, price: 85.00 }
-      ]
-    },
-    {
-      id: 'ORD1780042034930386',
-      customer: 'Harsh',
-      address: 'Corporate House, Regal Square',
-      date: '29/05/2026',
-      status: 'Delivered',
-      deliveryStatus: 'Delivered',
-      amount: 85.00,
-      seller: 'nexus',
-      items: [
-        { name: 'Pomegranate Seeds Pack', qty: 1, price: 85.00 }
-      ]
-    },
-    {
-      id: 'ORD1780040551080794',
-      customer: 'Harsh',
-      address: 'Corporate House, Regal Square',
-      date: '29/05/2026',
-      status: 'Delivered',
-      deliveryStatus: 'Delivered',
-      amount: 85.00,
-      seller: 'patidar store',
-      items: [
-        { name: 'Pomegranate Seeds Pack', qty: 1, price: 85.00 }
-      ]
-    },
-    {
-      id: 'ORD1779971342101309',
-      customer: 'Harsh',
-      address: 'Corporate House, Regal Square',
-      date: '28/05/2026',
-      status: 'Delivered',
-      deliveryStatus: 'Delivered',
-      amount: 102.00,
-      seller: 'harsh\'s hub',
-      items: [
-        { name: 'Fresh Apples Red Premium', qty: 2, price: 51.00 }
-      ]
-    }
-  ]);
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState('');
 
   // Filtering / control states
   const [fromDate, setFromDate] = useState('');
@@ -139,6 +22,42 @@ const OrdersListManagement = () => {
 
   // Selected Order for Modal Details Invoice
   const [selectedOrder, setSelectedOrder] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+
+    listOrders({ limit: 100 })
+      .then(({ data }) => {
+        if (!cancelled) {
+          setOrders((data || []).map(mapOrderForAdminList));
+          setFetchError('');
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setOrders([]);
+          setFetchError(getErrorMessage(err, 'Unable to load orders'));
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const sellerOptions = useMemo(() => {
+    const sellers = new Set(orders.map((order) => order.seller).filter(Boolean));
+    return ['All Sellers', ...Array.from(sellers)];
+  }, [orders]);
+
+  const statusOptions = useMemo(() => {
+    const statuses = new Set(orders.map((order) => order.status).filter(Boolean));
+    return ['All Status', ...Array.from(statuses)];
+  }, [orders]);
 
   // Export Order Ledger CSV
   const handleExportCSV = () => {
@@ -166,7 +85,7 @@ const OrdersListManagement = () => {
       o.amount.toString().includes(searchQuery);
 
     const matchesSeller = sellerFilter === 'All Sellers' || o.seller.toLowerCase() === sellerFilter.toLowerCase();
-    const matchesStatus = statusFilter === 'All Status' || o.status.toLowerCase() === statusFilter.toLowerCase();
+    const matchesStatus = statusFilter === 'All Status' || o.status === statusFilter;
 
     return matchesSearch && matchesSeller && matchesStatus;
   });
@@ -226,10 +145,9 @@ const OrdersListManagement = () => {
               onChange={(e) => setSellerFilter(e.target.value)}
               className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 focus:outline-none cursor-pointer font-bold"
             >
-              <option value="All Sellers">All Sellers</option>
-              <option value="harsh's hub">harsh's hub</option>
-              <option value="patidar store">patidar store</option>
-              <option value="nexus">nexus</option>
+              {sellerOptions.map((seller) => (
+                <option key={seller} value={seller}>{seller}</option>
+              ))}
             </select>
           </div>
 
@@ -241,17 +159,9 @@ const OrdersListManagement = () => {
               onChange={(e) => setStatusFilter(e.target.value)}
               className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 focus:outline-none cursor-pointer font-bold"
             >
-              <option value="All Status">All Status</option>
-              <option value="Pending">Pending</option>
-              <option value="Received">Received</option>
-              <option value="Processed">Processed</option>
-              <option value="Shipped">Shipped</option>
-              <option value="Scheduled">Scheduled</option>
-              <option value="Out for Delivery">Out for Delivery</option>
-              <option value="Delivered">Delivered</option>
-              <option value="Cancelled">Cancelled</option>
-              <option value="Rejected">Rejected</option>
-              <option value="Returned">Returned</option>
+              {statusOptions.map((status) => (
+                <option key={status} value={status}>{status}</option>
+              ))}
             </select>
           </div>
 
@@ -311,21 +221,41 @@ const OrdersListManagement = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 text-xs font-bold text-gray-700">
-              {filteredOrders.length === 0 ? (
+              {loading ? (
+                <tr>
+                  <td colSpan="8" className="px-5 py-8 text-center text-gray-400 font-extrabold select-none">
+                    Loading orders...
+                  </td>
+                </tr>
+              ) : fetchError ? (
+                <tr>
+                  <td colSpan="8" className="px-5 py-8 text-center text-red-500 font-extrabold select-none">
+                    {fetchError}
+                  </td>
+                </tr>
+              ) : filteredOrders.length === 0 ? (
                 <tr>
                   <td colSpan="8" className="px-5 py-8 text-center text-gray-400 font-extrabold select-none">
                     No orders recorded matching filter constraints.
                   </td>
                 </tr>
               ) : (
-                filteredOrders.slice(0, parseInt(perPage)).map(o => {
-                  const isNotAssigned = o.deliveryStatus === 'Not Assigned';
-                  
-                  // Status badge helper colors
+                filteredOrders.slice(0, parseInt(perPage, 10)).map((o) => {
+                  const isNotAssigned = ['placed', 'accepted'].includes(o.statusRaw);
+
                   let statusStyle = 'bg-gray-50 text-gray-500 border-gray-150';
-                  if (o.status === 'Scheduled') statusStyle = 'bg-amber-50 text-amber-700 border-amber-100';
-                  if (o.status === 'Received') statusStyle = 'bg-sky-50 text-sky-700 border-sky-100';
-                  if (o.status === 'Delivered') statusStyle = 'bg-emerald-50 text-emerald-700 border-emerald-100';
+                  if (['placed', 'accepted', 'processed', 'packed'].includes(o.statusRaw)) {
+                    statusStyle = 'bg-amber-50 text-amber-700 border-amber-100';
+                  }
+                  if (['shipped', 'out_for_delivery'].includes(o.statusRaw)) {
+                    statusStyle = 'bg-sky-50 text-sky-700 border-sky-100';
+                  }
+                  if (o.statusRaw === 'delivered') {
+                    statusStyle = 'bg-emerald-50 text-emerald-700 border-emerald-100';
+                  }
+                  if (o.statusRaw === 'cancelled') {
+                    statusStyle = 'bg-red-50 text-red-700 border-red-100';
+                  }
 
                   return (
                     <tr key={o.id} className="hover:bg-gray-50/50 transition-colors">

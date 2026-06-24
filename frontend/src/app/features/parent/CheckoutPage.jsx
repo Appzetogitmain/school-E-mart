@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  ChevronLeft, MapPin, Edit3, ShoppingBag, 
-  Clock, CreditCard, Wallet, ChevronRight, 
+import {
+  ChevronLeft, ShoppingBag,
+  CreditCard, Wallet, ChevronRight,
   Heart, Plus, Minus, Info, CheckCircle2,
   Building2, Truck, BadgePercent, Loader2
 } from 'lucide-react';
@@ -10,21 +10,25 @@ import { useCart } from '../../context/CartContext';
 import { createOrder, confirmPayment } from '../../../services/ordersApi';
 import { openRazorpayCheckout } from '../../../utils/razorpay';
 import { ENV } from '../../../config/env';
+import useAuthStore from '../../../store/useAuthStore';
+import { useCheckoutSummary } from '../../../hooks/useCheckoutSummary';
+import { mapOrderForDetail } from '../../../utils/mappers/orderMapper';
 
 const CheckoutPage = () => {
   const navigate = useNavigate();
-  const { cartItems, updateQuantity, removeFromCart, refreshCart } = useCart();
-  
-  const [deliveryType, setDeliveryType] = useState('home'); // 'home' or 'school'
-  const [paymentMethod, setPaymentMethod] = useState('online'); // 'online' or 'cod'
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const { cartItems, updateQuantity, refreshCart } = useCart();
+
+  const [deliveryType, setDeliveryType] = useState('home');
+  const [paymentMethod, setPaymentMethod] = useState('online');
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [orderError, setOrderError] = useState('');
   const [childInfo] = useState(() => {
     const saved = localStorage.getItem('childInfo');
     return saved ? JSON.parse(saved) : {
-      name: "Priya Damodaran",
-      school: "St. Xavier's High School",
-      grade: "Class 2"
+      name: 'Guest',
+      school: 'Explore Schools',
+      grade: 'Select Grade',
     };
   });
 
@@ -32,48 +36,65 @@ const CheckoutPage = () => {
     const saved = localStorage.getItem('childInfo');
     const parsed = saved ? JSON.parse(saved) : {};
     return {
-      name: parsed.name || 'Harshvardhan Panchal',
-      phone: parsed.phone || '6268423925',
-      address: parsed.address || '321 Lala Banarasilal Dawar Marg, Near 69A, Indore - 452018',
-      city: parsed.city || 'Indore'
+      name: parsed.name || 'Guest',
+      phone: parsed.phone || '',
+      address: parsed.address || 'Please update your delivery address in profile',
+      city: parsed.city || 'Indore',
+      pinCode: parsed.pinCode || '452018',
     };
   });
 
+  const addressSource = useMemo(
+    () => ({
+      address: address.address,
+      city: address.city,
+      pinCode: address.pinCode,
+    }),
+    [address.address, address.city, address.pinCode]
+  );
+
+  const schoolIdForPickup =
+    deliveryType === 'school' ? childInfo.schoolId || null : null;
+
+  const { summary, loading: summaryLoading, error: summaryError, totals, buildPayload } =
+    useCheckoutSummary({
+      deliveryType,
+      paymentMethod,
+      addressSource,
+      schoolIdForPickup,
+      audience: 'parent',
+      enabled: isAuthenticated && cartItems.length > 0,
+    });
+
   const parsePrice = (item) => {
     if (item.pricePaise) return item.pricePaise / 100;
-    const price = item.price ?? item;
-    if (typeof price === 'number') return price;
-    if (typeof price === 'string') {
-      return parseFloat(price.replace(/[^\d.]/g, '')) || 0;
+    if (typeof item.price === 'number') return item.price;
+    if (typeof item.price === 'string') {
+      return parseFloat(item.price.replace(/[^\d.]/g, '')) || 0;
     }
     return 0;
   };
 
-  const subtotal = cartItems.reduce((acc, item) => acc + (parsePrice(item) * item.quantity), 0);
-  const handlingCharge = 10;
-  const deliveryCharge = deliveryType === 'home' ? 55 : 0;
-  const grandTotal = subtotal + handlingCharge + deliveryCharge;
-
-  const buildOrderPayload = () => ({
-    deliveryType,
-    paymentMethod,
-    address: {
-      line1: address.address,
-      city: address.city || 'Indore',
-      state: 'Madhya Pradesh',
-      country: 'India',
-      pinCode: '452018',
-    },
-    handlingChargePaise: handlingCharge * 100,
-    deliveryChargePaise: deliveryCharge * 100,
-  });
+  const fallbackSubtotal = cartItems.reduce(
+    (acc, item) => acc + parsePrice(item) * item.quantity,
+    0
+  );
+  const subtotal = totals.subtotal || fallbackSubtotal;
+  const handlingCharge = totals.handlingCharge || 0;
+  const deliveryCharge = totals.deliveryCharge ?? (deliveryType === 'home' ? 0 : 0);
+  const grandTotal = totals.grandTotal || subtotal + handlingCharge + deliveryCharge;
 
   const handlePlaceOrder = async () => {
+    if (!isAuthenticated) {
+      navigate('/user/login');
+      return;
+    }
+
     setOrderError('');
     setIsPlacingOrder(true);
 
     try {
-      const { order, checkout } = await createOrder(buildOrderPayload());
+      const { order, checkout } = await createOrder(buildPayload(), { audience: 'parent' });
 
       if (paymentMethod === 'online' && checkout?.razorpayOrderId) {
         const razorpayResponse = await openRazorpayCheckout({
@@ -97,16 +118,18 @@ const CheckoutPage = () => {
 
       await refreshCart();
 
+      const mapped = mapOrderForDetail(order);
       navigate('/user/order-success', {
         state: {
-          orderId: order.orderNumber,
-          city: address.city,
-          address: address.address,
-          paymentMethod: paymentMethod === 'online' ? 'ONLINE PAYMENT' : 'CASH ON DELIVERY',
-          subtotal,
-          shipping: deliveryCharge,
-          totalAmount: grandTotal,
-          itemsCount: cartItems.length,
+          orderId: mapped.id,
+          orderNumber: mapped.orderNumber,
+          city: mapped.city || address.city,
+          address: mapped.address || address.address,
+          paymentMethod: mapped.paymentMethod,
+          subtotal: mapped.subtotal,
+          shipping: mapped.shipping,
+          totalAmount: mapped.totalAmount,
+          itemsCount: mapped.itemsCount,
         },
       });
     } catch (error) {
@@ -381,14 +404,19 @@ const CheckoutPage = () => {
         {orderError && (
           <p className="text-sm text-red-500 font-medium text-center">{orderError}</p>
         )}
+        {summaryError && (
+          <p className="text-sm text-amber-600 font-medium text-center">{summaryError}</p>
+        )}
         <div className="flex items-center justify-between gap-4">
           <div className="flex flex-col">
             <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Total to pay</span>
-            <span className="text-xl font-black text-black leading-none">₹{grandTotal.toLocaleString()}</span>
+            <span className="text-xl font-black text-black leading-none">
+              {summaryLoading ? '...' : `₹${grandTotal.toLocaleString()}`}
+            </span>
           </div>
           <button 
             onClick={handlePlaceOrder}
-            disabled={isPlacingOrder}
+            disabled={isPlacingOrder || summaryLoading || !isAuthenticated}
             className="flex-1 max-w-[200px] h-14 bg-primary text-white font-black text-base rounded-2xl shadow-xl shadow-primary/25 active:scale-[0.98] transition-all flex items-center justify-center uppercase tracking-widest disabled:opacity-60 disabled:cursor-not-allowed"
           >
             {isPlacingOrder ? <Loader2 size={22} className="animate-spin" /> : 'Place Order'}
