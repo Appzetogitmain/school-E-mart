@@ -1,9 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { 
   Plus, Search, Download, ChevronDown, ChevronRight, Edit, Trash2, 
-  X, Check, LayoutGrid, List, Upload
+  X, Check, LayoutGrid, List, Upload, Loader2
 } from 'lucide-react';
+import { getCategoryTree } from '../../../services/catalogApi';
+import { getErrorMessage } from '../../../utils/apiHelpers';
+import { mapCategoryTreeForAdmin } from '../../../utils/mappers/categoryAdminMapper';
 
 const CategoryManagement = () => {
   // Views toggle: 'tree' | 'list'
@@ -42,46 +45,27 @@ const CategoryManagement = () => {
   const [editCatStatus, setEditCatStatus] = useState(true);
   const [editCatImage, setEditCatImage] = useState('');
 
-  // Categories seed data
-  const [categories, setCategories] = useState([
-    {
-      id: '1',
-      name: 'Ice Cream',
-      image: 'https://images.unsplash.com/photo-1579954115545-a95591f28bfc?w=120&auto=format&fit=crop&q=60',
-      status: 'Active',
-      header: 'Ice Creams',
-      order: 0,
-      subcategories: [
-        { id: '1-1', name: 'Chocobar', status: 'Active', order: 0 },
-        { id: '1-2', name: 'Vanilla Cup', status: 'Active', order: 1 }
-      ]
-    },
-    {
-      id: '2',
-      name: 'School Kits',
-      image: 'https://images.unsplash.com/photo-1588072432836-e10032774350?w=120&auto=format&fit=crop&q=60',
-      status: 'Active',
-      header: 'School Uniforms',
-      order: 1,
-      subcategories: [
-        { id: '2-1', name: 'General Kit', status: 'Active', order: 0 },
-        { id: '2-2', name: 'Secondary Uniform', status: 'Active', order: 1 },
-        { id: '2-3', name: 'Primary Kit', status: 'Active', order: 2 }
-      ]
-    },
-    {
-      id: '3',
-      name: 'Stationery',
-      image: 'https://images.unsplash.com/photo-1456513080510-7bf3a84b82f8?w=120&auto=format&fit=crop&q=60',
-      status: 'Active',
-      header: 'Textbooks & Guides',
-      order: 2,
-      subcategories: [
-        { id: '3-1', name: 'Note Books', status: 'Active', order: 0 },
-        { id: '3-2', name: 'Drawing Books', status: 'Active', order: 1 }
-      ]
+  const [categories, setCategories] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const loadCategories = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const tree = await getCategoryTree();
+      setCategories(mapCategoryTreeForAdmin(tree));
+    } catch (err) {
+      setCategories([]);
+      setError(getErrorMessage(err, 'Unable to load categories'));
+    } finally {
+      setLoading(false);
     }
-  ]);
+  }, []);
+
+  useEffect(() => {
+    loadCategories();
+  }, [loadCategories]);
 
   const toggleNode = (id) => {
     setExpandedNodes(prev => ({ ...prev, [id]: !prev[id] }));

@@ -1,10 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { 
   Plus, Search, Edit, Trash2, X, ChevronRight, Upload, 
   Package, CheckCircle, AlertCircle, ShoppingBag, Check, Filter,
-  FileText, Tag, Folder, Image, ChevronDown, UploadCloud
+  FileText, Tag, Folder, Image, ChevronDown, UploadCloud, Loader2
 } from 'lucide-react';
+import { listProducts, setProductApprovalStatus } from '../../../services/catalogApi';
+import { getErrorMessage } from '../../../utils/apiHelpers';
+import { mapProductForAdminList } from '../../../utils/mappers/vendorProductMapper';
 
 const ProductListManagement = () => {
   // Filter and search states
@@ -33,95 +36,60 @@ const ProductListManagement = () => {
   const [editApprovalStatus, setEditApprovalStatus] = useState('Approved');
   const [editImage, setEditImage] = useState('');
 
-  // Seeded product records with rich vendor data
-  const [products, setProducts] = useState([
-    {
-      id: '1',
-      name: 'Sony WH-CH520 Wireless Headphones',
-      description: 'A premium sound experience with high-fidelity acoustics, long battery life, and comfortable earcups.',
-      brand: 'Sony',
-      sku: 'SONY-WH520',
-      price: '4499',
-      stock: 4, // triggers "Low Stock"
-      variant: 'Standard Size',
-      headerGroup: 'Accessories',
-      category: 'Accessories',
-      subcategory: 'Backpacks',
-      stockStatus: 'Low Stock',
-      approvalStatus: 'Approved',
-      image: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=180&auto=format&fit=crop&q=60',
-      vendor: "Harsh's Hub"
-    },
-    {
-      id: '2',
-      name: 'Premium Leather Headphones',
-      description: 'Handcrafted leather headphones with active noise cancellation and memory foam cushioning.',
-      brand: 'AcousticPro',
-      sku: 'PRM-HDPHN',
-      price: '8999',
-      stock: 2, // triggers "Low Stock"
-      variant: 'Premium Black',
-      headerGroup: 'Accessories',
-      category: 'Fashion',
-      subcategory: 'Premium Head...',
-      stockStatus: 'Low Stock',
-      approvalStatus: 'Approved',
-      image: 'https://images.unsplash.com/photo-1546435770-a3e426bf472b?w=180&auto=format&fit=crop&q=60',
-      vendor: "Harsh's Hub"
-    },
-    {
-      id: '3',
-      name: 'Standard School Uniform Kit (Grade 5)',
-      description: 'Comes with 2 shirts, 2 pants, 1 tie, and 1 belt. Durable materials tailored for secondary school students.',
-      brand: 'ClassSmart',
-      sku: 'UNIF-G5-KIT',
-      price: '1499',
-      stock: 35, // triggers "In Stock"
-      variant: 'Boys Medium',
-      headerGroup: 'Uniform Catalog',
-      category: 'School Uniforms',
-      subcategory: 'Uniform Kits',
-      stockStatus: 'In Stock',
-      approvalStatus: 'Approved',
-      image: 'https://images.unsplash.com/photo-1588072432836-e10032774350?w=180&auto=format&fit=crop&q=60',
-      vendor: 'Apex Uniforms'
-    },
-    {
-      id: '4',
-      name: 'Oxford English Dictionary',
-      description: 'Latest edition with search definitions, spelling references, and dynamic guides.',
-      brand: 'Oxford Press',
-      sku: 'OX-DICT-ENG',
-      price: '550',
-      stock: 0, // triggers "Out of Stock"
-      variant: 'Hardcover',
-      headerGroup: 'Textbook Collection',
-      category: 'Stationery',
-      subcategory: 'Textbooks',
-      stockStatus: 'Out of Stock',
-      approvalStatus: 'Pending',
-      image: 'https://images.unsplash.com/photo-1456513080510-7bf3a84b82f8?w=180&auto=format&fit=crop&q=60',
-      vendor: 'Stationery World'
-    }
-  ]);
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  // Handle Quick Approval toggle
-  const handleApprove = (id) => {
-    setProducts(prev => prev.map(p => {
-      if (p.id === id) {
-        return { ...p, approvalStatus: 'Approved' };
-      }
-      return p;
-    }));
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    listProducts({ limit: 100 })
+      .then(({ data }) => {
+        if (!cancelled) {
+          setProducts((data || []).map(mapProductForAdminList));
+          setError('');
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setProducts([]);
+          setError(getErrorMessage(err, 'Unable to load products'));
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleApprove = async (product) => {
+    if (!product?.mongoId) return;
+    try {
+      await setProductApprovalStatus(product.mongoId, 'approved');
+      setProducts((prev) =>
+        prev.map((p) =>
+          p.mongoId === product.mongoId ? { ...p, approvalStatus: 'Approved', approvalRaw: 'approved' } : p
+        )
+      );
+    } catch (err) {
+      alert(getErrorMessage(err, 'Unable to approve product'));
+    }
   };
 
-  const handleReject = (id) => {
-    setProducts(prev => prev.map(p => {
-      if (p.id === id) {
-        return { ...p, approvalStatus: 'Rejected' };
-      }
-      return p;
-    }));
+  const handleReject = async (product) => {
+    if (!product?.mongoId) return;
+    try {
+      await setProductApprovalStatus(product.mongoId, 'rejected');
+      setProducts((prev) =>
+        prev.map((p) =>
+          p.mongoId === product.mongoId ? { ...p, approvalStatus: 'Rejected', approvalRaw: 'rejected' } : p
+        )
+      );
+    } catch (err) {
+      alert(getErrorMessage(err, 'Unable to reject product'));
+    }
   };
 
   // Safe product deletion handler
@@ -460,7 +428,7 @@ const ProductListManagement = () => {
                       <div className="flex items-center gap-1.5 ml-auto justify-end">
                         {/* Approve button */}
                         <button 
-                          onClick={() => handleApprove(p.id)}
+                          onClick={() => handleApprove(p)}
                           title="Approve Product Listing"
                           className="w-7 h-7 rounded-xl border border-gray-250/60 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50/50 flex items-center justify-center transition-all shrink-0"
                         >
@@ -469,7 +437,7 @@ const ProductListManagement = () => {
 
                         {/* Reject button */}
                         <button 
-                          onClick={() => handleReject(p.id)}
+                          onClick={() => handleReject(p)}
                           title="Reject / Flag Product"
                           className="w-7 h-7 rounded-xl border border-gray-250/60 text-gray-400 hover:text-red-500 hover:bg-red-50 flex items-center justify-center transition-all shrink-0"
                         >

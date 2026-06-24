@@ -1,60 +1,34 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
-  Home, Edit3, Trash2, Plus, RefreshCw, X, ChevronRight, CheckCircle, Info 
+  Home, Edit3, Trash2, Plus, RefreshCw, X, ChevronRight, CheckCircle, Info, Loader2
 } from 'lucide-react';
+import { listCmsSections } from '../../../services/adminApi';
+import { getErrorMessage } from '../../../utils/apiHelpers';
+import { mapSectionForAdmin } from '../../../utils/mappers/adminCmsMapper';
 
 const PromoHomeSections = () => {
   // Mock promotional home sections matching your screenshot exactly
-  const [sections, setSections] = useState([
-    {
-      id: 1,
-      order: 1,
-      title: 'Fresh milk',
-      slug: 'fresh-milk',
-      location: 'Home Page',
-      type: 'Products',
-      categories: ['Bread', 'Buffalo Milk', 'Cow Milk', 'Camel Milk'],
-      columns: 4,
-      limit: 8,
-      status: 'Active'
-    },
-    {
-      id: 2,
-      order: 2,
-      title: 'Dessert Corner',
-      slug: 'dessert-corner',
-      location: 'Home Page',
-      type: 'Products',
-      categories: ['Greek Yogurt', 'Ice Cream', 'Kulfi', 'Lassi'],
-      columns: 4,
-      limit: 8,
-      status: 'Active'
-    },
-    {
-      id: 3,
-      order: 3,
-      title: 'Farm Fresh',
-      slug: 'farm-fresh',
-      location: 'Home Page',
-      type: 'Products',
-      categories: ['Bread', 'Buffalo Milk', 'Cheese', 'Cow Milk', 'Full Cream Milk', 'Ghee', 'Rusk'],
-      columns: 4,
-      limit: 8,
-      status: 'Active'
-    },
-    {
-      id: 4,
-      order: 4,
-      title: 'Milk',
-      slug: 'milk',
-      location: 'Home Page',
-      type: 'Products',
-      categories: ['Buffalo Milk', 'Camel Milk', 'Cow Milk', 'Full Cream Milk'],
-      columns: 6,
-      limit: 8,
-      status: 'Active'
+  const [sections, setSections] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const loadSections = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const { data } = await listCmsSections({ limit: 100 });
+      setSections((data || []).map(mapSectionForAdmin));
+    } catch (err) {
+      setSections([]);
+      setError(getErrorMessage(err, 'Unable to load homepage sections'));
+    } finally {
+      setLoading(false);
     }
-  ]);
+  }, []);
+
+  useEffect(() => {
+    loadSections();
+  }, [loadSections]);
 
   // Master categories list for checkbox feed
   const [allCategories, setAllCategories] = useState([

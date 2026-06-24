@@ -1,10 +1,19 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { 
   Search, Edit, Trash2, X, Download, Plus, Filter, 
   User, Check, AlertCircle, RefreshCw, ChevronDown, Eye, MapPin, 
-  CreditCard, ShieldAlert, Landmark, Settings
+  CreditCard, ShieldAlert, Landmark, Settings, Loader2
 } from 'lucide-react';
+import {
+  listVendors,
+  approveVendor,
+  rejectVendor,
+  suspendVendor,
+  reactivateVendor,
+} from '../../../services/adminApi';
+import { getErrorMessage } from '../../../utils/apiHelpers';
+import { mapAdminVendorForList } from '../../../utils/mappers/adminVendorMapper';
 
 const VendorListManagement = () => {
   // Navigation, filtering & search states
@@ -48,119 +57,49 @@ const VendorListManagement = () => {
   const [editBalance, setEditBalance] = useState('0.00');
   const [editCategoriesCount, setEditCategoriesCount] = useState(0);
 
-  // Seeded high-fidelity vendor lists matching the screenshot exactly
-  const [vendors, setVendors] = useState([
-    {
-      id: '2966276',
-      name: 'xxxxx',
-      storeName: 'patidar store',
-      phone: '9399231681',
-      email: 'test@gmail.com',
-      category: 'Backpacks & Bags',
-      balance: '0.00',
-      commission: '10.00%',
-      categoriesCount: 0,
-      status: 'Pending',
-      needApproval: 'Yes',
-      // Address & service bounds
-      address: 'Corporate House, HO-406, RNT Marg, Near D.A.V.V, Flim Colony, Chhoti Gwaltoli, Indore, Madhya Pradesh 452001, India',
-      city: 'Indore',
-      serviceableArea: 'Indore Central Hub',
-      latitude: '22.717591',
-      longitude: '75.871987',
-      serviceRadius: '7',
-      // Taxes & Banking
-      panCard: 'ABCDE1234F',
-      taxName: 'xxxxx',
-      taxNumber: '11ABCDE1234F1Z1',
-      accountName: 'Patidar Store Proprietor',
-      bankName: 'State Bank of India',
-      branch: 'Indore Main Branch',
-      accountNumber: '30987654321',
-      ifscCode: 'SBI00001234'
-    },
-    {
-      id: '144717',
-      name: 'xyz',
-      storeName: 'nexus',
-      phone: '7458947838',
-      email: 'testing@gmail.com',
-      category: 'School Uniforms',
-      balance: '0.00',
-      commission: '10.00%',
-      categoriesCount: 0,
-      status: 'Pending',
-      needApproval: 'Yes',
-      address: 'Nexus Trade Complex, 12 G.S. Road, Indore, 452010, India',
-      city: 'Indore',
-      serviceableArea: 'Indore North',
-      latitude: '22.756201',
-      longitude: '75.890123',
-      serviceRadius: '10',
-      panCard: 'PQRXT9876Z',
-      taxName: 'xyz enterprise',
-      taxNumber: '11PQRXT9876Z2Z5',
-      accountName: 'Nexus Retail Corp',
-      bankName: 'HDFC Bank',
-      branch: 'Vijay Nagar Branch',
-      accountNumber: '501004561239',
-      ifscCode: 'HDFC0001234'
-    },
-    {
-      id: '9036667',
-      name: 'Rahul',
-      storeName: 'Test Factory',
-      phone: '9179815763',
-      email: 'testingdata475@gmail.com',
-      category: 'Textbooks & Guides',
-      balance: '0.00',
-      commission: '10.00%',
-      categoriesCount: 0,
-      status: 'Pending',
-      needApproval: 'Yes',
-      address: 'Block C, Scheme 78, Indore, MP, 452005, India',
-      city: 'Indore',
-      serviceableArea: 'Indore East',
-      latitude: '22.730121',
-      longitude: '75.882415',
-      serviceRadius: '5',
-      panCard: 'LMNOP1234A',
-      taxName: 'Rahul Books Inc',
-      taxNumber: '11LMNOP1234A1Z9',
-      accountName: 'Rahul Kumar',
-      bankName: 'ICICI Bank',
-      branch: 'LIG Colony Branch',
-      accountNumber: '001201987654',
-      ifscCode: 'ICIC0005678'
-    },
-    {
-      id: '2001453',
-      name: 'nb',
-      storeName: 'zvczx',
-      phone: '2132152123',
-      email: 'a@gmail.com',
-      category: 'Stationery',
-      balance: '0.00',
-      commission: '10.00%',
-      categoriesCount: 0,
-      status: 'Pending',
-      needApproval: 'Yes',
-      address: '22 Flat G, Annapurna Road, Indore, 452009, India',
-      city: 'Indore',
-      serviceableArea: 'Indore South',
-      latitude: '22.698421',
-      longitude: '75.842109',
-      serviceRadius: '8',
-      panCard: 'XYZAB8765C',
-      taxName: 'nb stationery mart',
-      taxNumber: '11XYZAB8765C1Z3',
-      accountName: 'NB Enterprises Proprietor',
-      bankName: 'Bank of Baroda',
-      branch: 'Annapurna Branch',
-      accountNumber: '124501000987',
-      ifscCode: 'BARB0ANNAPO'
+  const [vendors, setVendors] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [actionId, setActionId] = useState(null);
+
+  const loadVendors = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const params = { limit: 100 };
+      if (activeTab === 'Pending') params.approvalStatus = 'pending';
+      if (activeTab === 'Approved') params.approvalStatus = 'approved';
+      if (activeTab === 'Suspended') params.approvalStatus = 'suspended';
+      const { data } = await listVendors(params);
+      setVendors((data || []).map(mapAdminVendorForList));
+    } catch (err) {
+      setVendors([]);
+      setError(getErrorMessage(err, 'Unable to load vendors'));
+    } finally {
+      setLoading(false);
     }
-  ]);
+  }, [activeTab]);
+
+  useEffect(() => {
+    loadVendors();
+  }, [loadVendors]);
+
+  const runVendorAction = async (vendor, action) => {
+    if (!vendor?.mongoId) return;
+    setActionId(vendor.mongoId);
+    try {
+      if (action === 'approve') await approveVendor(vendor.mongoId, {});
+      if (action === 'reject') await rejectVendor(vendor.mongoId, { reason: 'Rejected by admin' });
+      if (action === 'suspend') await suspendVendor(vendor.mongoId, { reason: 'Suspended by admin' });
+      if (action === 'reactivate') await reactivateVendor(vendor.mongoId, {});
+      await loadVendors();
+    } catch (err) {
+      alert(getErrorMessage(err, `Unable to ${action} vendor`));
+    } finally {
+      setActionId(null);
+    }
+  };
+
 
   // Open Edit Modal & populate details
   const openEditModal = (v) => {

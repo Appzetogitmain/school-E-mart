@@ -1,85 +1,35 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { 
-  Users, UserCheck, Wallet, ShoppingBag, Search, ChevronRight, X, Edit3, ShieldAlert 
+  Users, UserCheck, Wallet, ShoppingBag, Search, ChevronRight, X, Edit3, ShieldAlert, Loader2
 } from 'lucide-react';
+import { listUsers, suspendUser, activateUser } from '../../../services/adminApi';
+import { getErrorMessage } from '../../../utils/apiHelpers';
+import { mapAdminUserForList } from '../../../utils/mappers/adminUserMapper';
 
 const UserManagement = () => {
-  // Mock users list state matching your screenshot data
-  const [users, setUsers] = useState([
-    {
-      id: 1,
-      name: 'User',
-      email: '9555788454@kosil.temp',
-      phone: '9555788454',
-      registrationDate: '30/05/2026, 11:27:02',
-      status: 'Active',
-      refCode: 'USERUG69',
-      walletAmt: 0.00,
-      totalOrders: 0,
-      totalSpent: 0.00
-    },
-    {
-      id: 2,
-      name: 'Rahul Verma',
-      email: 'tes@rahul.com',
-      phone: '9179815763',
-      registrationDate: '30/05/2026, 11:26:36',
-      status: 'Active',
-      refCode: 'USERITZZ',
-      walletAmt: 0.00,
-      totalOrders: 3,
-      totalSpent: 642.00
-    },
-    {
-      id: 3,
-      name: 'New Account',
-      email: '1234567890@kosil.temp',
-      phone: '1234567890',
-      registrationDate: '30/05/2026, 10:47:09',
-      status: 'Active',
-      refCode: 'NEWAXVA8',
-      walletAmt: 0.00,
-      totalOrders: 0,
-      totalSpent: 0.00
-    },
-    {
-      id: 4,
-      name: 'new',
-      email: '7221132121@kosil.temp',
-      phone: '7221132121',
-      registrationDate: '29/05/2026, 22:02:08',
-      status: 'Active',
-      refCode: 'NEWVR83',
-      walletAmt: 0.00,
-      totalOrders: 0,
-      totalSpent: 0.00
-    },
-    {
-      id: 5,
-      name: 'wholesaler',
-      email: '7089334366@kosil.temp',
-      phone: '7089334366',
-      registrationDate: '25/05/2026, 12:08:01',
-      status: 'Active',
-      refCode: 'WHOLIS09',
-      walletAmt: 0.00,
-      totalOrders: 0,
-      totalSpent: 0.00
-    },
-    {
-      id: 6,
-      name: 'Priyanshi',
-      email: 'priyanshdass@gmail.com',
-      phone: '7999942772',
-      registrationDate: '25/05/2026, 12:00:26',
-      status: 'Active',
-      refCode: 'PRIYUNNF',
-      walletAmt: 0.00,
-      totalOrders: 1,
-      totalSpent: 704.50
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [actionId, setActionId] = useState(null);
+
+  const loadUsers = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const { data } = await listUsers({ limit: 100, role: 'parent' });
+      setUsers((data || []).map(mapAdminUserForList));
+    } catch (err) {
+      setUsers([]);
+      setError(getErrorMessage(err, 'Unable to load users'));
+    } finally {
+      setLoading(false);
     }
-  ]);
+  }, []);
+
+  useEffect(() => {
+    loadUsers();
+  }, [loadUsers]);
 
   // Search and entry count states
   const [searchQuery, setSearchQuery] = useState('');
@@ -90,15 +40,30 @@ const UserManagement = () => {
   const [adjustAmount, setAdjustAmount] = useState('');
   const [adjustType, setAdjustType] = useState('Credit');
 
-  // Toggle single user status
-  const handleToggleStatus = (id) => {
-    setUsers(prev => prev.map(u => {
-      if (u.id === id) {
-        const nextStatus = u.status === 'Active' ? 'Inactive' : 'Active';
-        return { ...u, status: nextStatus };
+  const handleToggleStatus = async (user) => {
+    if (!user?.mongoId) return;
+    setActionId(user.mongoId);
+    try {
+      if (user.statusRaw === 'active') {
+        await suspendUser(user.mongoId, { reason: 'Suspended by admin' });
+        setUsers((prev) =>
+          prev.map((u) =>
+            u.mongoId === user.mongoId ? { ...u, status: 'Inactive', statusRaw: 'inactive' } : u
+          )
+        );
+      } else {
+        await activateUser(user.mongoId);
+        setUsers((prev) =>
+          prev.map((u) =>
+            u.mongoId === user.mongoId ? { ...u, status: 'Active', statusRaw: 'active' } : u
+          )
+        );
       }
-      return u;
-    }));
+    } catch (err) {
+      alert(getErrorMessage(err, 'Unable to update user status'));
+    } finally {
+      setActionId(null);
+    }
   };
 
   // Submit wallet adjustment
@@ -109,20 +74,7 @@ const UserManagement = () => {
       return;
     }
 
-    setUsers(prev => prev.map(u => {
-      if (u.id === selectedUser.id) {
-        let newAmt = u.walletAmt;
-        if (adjustType === 'Credit') {
-          newAmt += parseFloat(adjustAmount);
-        } else {
-          newAmt = Math.max(0, newAmt - parseFloat(adjustAmount));
-        }
-        return { ...u, walletAmt: newAmt };
-      }
-      return u;
-    }));
-
-    alert(`Successfully ${adjustType === 'Credit' ? 'credited' : 'debited'} ₹${parseFloat(adjustAmount).toFixed(2)} to ${selectedUser.name}'s wallet!`);
+    alert('Wallet adjustments API is not available yet. Amount not saved.');
     setSelectedUser(null);
     setAdjustAmount('');
   };
@@ -165,6 +117,12 @@ const UserManagement = () => {
           <span className="text-gray-700">User List</span>
         </div>
       </div>
+
+      {error && (
+        <div className="px-4 py-3 bg-red-50 border border-red-100 rounded-xl text-xs font-bold text-red-600">
+          {error}
+        </div>
+      )}
 
       {/* OVERVIEW ANALYTICS COUNTERS */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 select-none">
@@ -310,7 +268,8 @@ const UserManagement = () => {
                       <td className="px-5 py-4 select-none">
                         <button
                           type="button"
-                          onClick={() => handleToggleStatus(u.id)}
+                          onClick={() => handleToggleStatus(u)}
+                          disabled={actionId === u.mongoId}
                           title="Click to toggle status active state"
                           className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border transition-all ${
                             isActive 

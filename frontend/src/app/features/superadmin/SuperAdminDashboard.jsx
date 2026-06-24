@@ -1,74 +1,66 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   User, Layers, Box, Clipboard, CheckCircle, XCircle, AlertTriangle, TrendingDown, MapPin, Award,
-  Eye, ChevronLeft, ChevronRight
+  Eye, ChevronLeft, ChevronRight, Loader2
 } from 'lucide-react';
+import { getDashboard, getOrderAnalytics } from '../../../services/adminApi';
+import { getErrorMessage } from '../../../utils/apiHelpers';
+import { formatRupee } from '../../../utils/mappers/productMapper';
 
 const SuperAdminDashboard = () => {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [overview, setOverview] = useState(null);
+  const [orderAnalytics, setOrderAnalytics] = useState(null);
+  const [recentRegistrations, setRecentRegistrations] = useState([]);
+  const [recentOrders, setRecentOrders] = useState([]);
 
-  // Dashboard stats cleared to zero for dynamic live state
+  useEffect(() => {
+    let cancelled = false;
+
+    const load = async () => {
+      setLoading(true);
+      setError('');
+      try {
+        const [dashboard, orders] = await Promise.all([
+          getDashboard({ limit: 5 }),
+          getOrderAnalytics(),
+        ]);
+        if (cancelled) return;
+        setOverview(dashboard?.overview || null);
+        setRecentRegistrations(dashboard?.recentRegistrations || []);
+        setRecentOrders(dashboard?.recentOrders || []);
+        setOrderAnalytics(orders);
+      } catch (err) {
+        if (!cancelled) setError(getErrorMessage(err, 'Unable to load dashboard'));
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const totals = overview?.totals || {};
+  const statusBreakdown = orderAnalytics?.orderStatusBreakdown || {};
+
   const stats = [
-    {
-      label: 'Total User',
-      value: '0',
-      icon: User,
-      color: 'bg-blue-50 text-blue-600 border-blue-100',
-    },
-    {
-      label: 'Total Category',
-      value: '0',
-      icon: Layers,
-      color: 'bg-amber-50 text-amber-600 border-amber-100',
-    },
-    {
-      label: 'Total Subcategory',
-      value: '0',
-      icon: Layers,
-      color: 'bg-pink-50 text-pink-600 border-pink-100',
-    },
-    {
-      label: 'Total Product',
-      value: '0',
-      icon: Box,
-      color: 'bg-rose-50 text-rose-600 border-rose-100',
-    },
-    {
-      label: 'Total Orders',
-      value: '0',
-      icon: Clipboard,
-      color: 'bg-sky-50 text-sky-600 border-sky-100',
-    },
-    {
-      label: 'Completed Orders',
-      value: '0',
-      icon: CheckCircle,
-      color: 'bg-emerald-50 text-emerald-600 border-emerald-100',
-    },
-    {
-      label: 'Pending Orders',
-      value: '0',
-      icon: Clipboard,
-      color: 'bg-purple-50 text-purple-600 border-purple-100',
-    },
-    {
-      label: 'Cancelled Orders',
-      value: '0',
-      icon: XCircle,
-      color: 'bg-red-50 text-red-600 border-red-100',
-    },
-    {
-      label: 'Product Sold Out',
-      value: '0',
-      icon: Box,
-      color: 'bg-fuchsia-50 text-fuchsia-600 border-fuchsia-100',
-    },
-    {
-      label: 'Product low on Stock',
-      value: '0',
-      icon: AlertTriangle,
-      color: 'bg-yellow-50 text-yellow-600 border-yellow-100',
-    }
+    { label: 'Total User', value: String(totals.users ?? 0), icon: User, color: 'bg-blue-50 text-blue-600 border-blue-100' },
+    { label: 'Total Schools', value: String(totals.schools ?? 0), icon: Layers, color: 'bg-amber-50 text-amber-600 border-amber-100' },
+    { label: 'Total Vendors', value: String(totals.vendors ?? 0), icon: Layers, color: 'bg-pink-50 text-pink-600 border-pink-100' },
+    { label: 'Total Product', value: String(totals.products ?? 0), icon: Box, color: 'bg-rose-50 text-rose-600 border-rose-100' },
+    { label: 'Total Orders', value: String(totals.orders ?? 0), icon: Clipboard, color: 'bg-sky-50 text-sky-600 border-sky-100' },
+    { label: 'Completed Orders', value: String(statusBreakdown.delivered ?? 0), icon: CheckCircle, color: 'bg-emerald-50 text-emerald-600 border-emerald-100' },
+    { label: 'Pending Orders', value: String(statusBreakdown.placed ?? statusBreakdown.accepted ?? 0), icon: Clipboard, color: 'bg-purple-50 text-purple-600 border-purple-100' },
+    { label: 'Cancelled Orders', value: String(statusBreakdown.cancelled ?? 0), icon: XCircle, color: 'bg-red-50 text-red-600 border-red-100' },
+    { label: 'Active Courses', value: String(totals.activeCourses ?? 0), icon: Box, color: 'bg-fuchsia-50 text-fuchsia-600 border-fuchsia-100' },
+    { label: 'Product low on Stock', value: String(totals.lowStockProducts ?? 0), icon: AlertTriangle, color: 'bg-yellow-50 text-yellow-600 border-yellow-100' },
   ];
+
+  const revenueDisplay = formatRupee(orderAnalytics?.totalRevenuePaise || totals.revenuePaise || 0);
 
   // June 2026 days helper for left chart
   const juneDays = Array.from({ length: 30 }, (_, i) => `${String(i + 1).padStart(2, '0')}-Jun`);
@@ -93,7 +85,22 @@ const SuperAdminDashboard = () => {
         </div>
       </div>
 
-      {/* 1. GRID CARDS SECTION (CLEARED TO 0) */}
+      {error && (
+        <div className="px-4 py-3 bg-red-50 border border-red-100 rounded-xl text-xs font-bold text-red-600">
+          {error}
+        </div>
+      )}
+
+      {loading && (
+        <div className="flex items-center justify-center py-16 text-gray-400">
+          <Loader2 size={28} className="animate-spin mr-2" />
+          <span className="text-sm font-bold">Loading dashboard…</span>
+        </div>
+      )}
+
+      {!loading && (
+      <>
+      {/* 1. GRID CARDS SECTION */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
         {stats.map((stat, idx) => {
           const Icon = stat.icon;
@@ -122,7 +129,7 @@ const SuperAdminDashboard = () => {
           <div className="flex items-center justify-between pb-4 border-b border-gray-100">
             <div className="leading-tight">
               <span className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest block">Total Sales Today</span>
-              <span className="text-3xl font-black text-gray-950 block mt-1.5 tracking-tight">₹0.00</span>
+              <span className="text-3xl font-black text-gray-950 block mt-1.5 tracking-tight">{revenueDisplay}</span>
               <span className="text-gray-400 text-xs font-bold flex items-center gap-1.5 mt-2">
                 <TrendingDown size={14} className="text-gray-300" />
                 <span>₹0.00 vs same day last week</span>
@@ -413,6 +420,8 @@ const SuperAdminDashboard = () => {
       <footer className="text-center text-xs font-bold text-gray-400 pt-8 border-t border-gray-200/60 mt-6 shrink-0">
         Copyright © 2026. Developed By School E Mart
       </footer>
+      </>
+      )}
 
     </div>
   );

@@ -1,9 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { 
   Plus, Search, Edit, Trash2, X, ChevronRight, Upload, 
-  ShoppingBag, HelpCircle, Utensils, Home as HomeIcon, Baby, Heart, ShieldAlert
+  ShoppingBag, HelpCircle, Utensils, Home as HomeIcon, Baby, Heart, ShieldAlert, Loader2
 } from 'lucide-react';
+import { listHeaderCategories } from '../../../services/catalogApi';
+import { getErrorMessage } from '../../../utils/apiHelpers';
+import { mapHeaderCategoryForAdmin } from '../../../utils/mappers/categoryAdminMapper';
 
 const HeaderCategoryManagement = () => {
   // Search state
@@ -22,72 +25,27 @@ const HeaderCategoryManagement = () => {
   const [formStatus, setFormStatus] = useState('active');
   const [formImage, setFormImage] = useState('');
 
-  // List of header categories seeded from user mockup
-  const [headers, setHeaders] = useState([
-    { 
-      id: '1', 
-      name: 'All', 
-      slug: 'all', 
-      commission: '0%', 
-      fees: '₹0', 
-      status: 'active', 
-      imageType: 'all' 
-    },
-    { 
-      id: '2', 
-      name: 'Ashlay', 
-      slug: 'ashlay', 
-      commission: '10%', 
-      fees: '₹0', 
-      status: 'active', 
-      image: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=80&auto=format&fit=crop&q=60' 
-    },
-    { 
-      id: '3', 
-      name: 'Grocery', 
-      slug: 'grocery', 
-      commission: '10%', 
-      fees: '₹10', 
-      status: 'active', 
-      imageType: 'grocery' 
-    },
-    { 
-      id: '4', 
-      name: 'Home & Kitchen', 
-      slug: 'home-kitchen', 
-      commission: '10%', 
-      fees: '₹0', 
-      status: 'active', 
-      imageType: 'kitchen' 
-    },
-    { 
-      id: '5', 
-      name: 'Kids', 
-      slug: 'kids', 
-      commission: '2%', 
-      fees: '₹0', 
-      status: 'active', 
-      imageType: 'kids' 
-    },
-    { 
-      id: '6', 
-      name: 'Pet Supplies', 
-      slug: 'pet-supplies', 
-      commission: '1.5%', 
-      fees: '₹0', 
-      status: 'active', 
-      imageType: 'pet' 
-    },
-    { 
-      id: '7', 
-      name: 'Sports', 
-      slug: 'sports', 
-      commission: '2.5%', 
-      fees: '₹0', 
-      status: 'active', 
-      imageType: 'sports' 
+  const [headers, setHeaders] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const loadHeaders = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const { data } = await listHeaderCategories({ limit: 100 });
+      setHeaders((data || []).map(mapHeaderCategoryForAdmin));
+    } catch (err) {
+      setHeaders([]);
+      setError(getErrorMessage(err, 'Unable to load header categories'));
+    } finally {
+      setLoading(false);
     }
-  ]);
+  }, []);
+
+  useEffect(() => {
+    loadHeaders();
+  }, [loadHeaders]);
 
   // Handle name input changes to automatically suggest slug
   const handleNameChange = (val, isEdit = false) => {

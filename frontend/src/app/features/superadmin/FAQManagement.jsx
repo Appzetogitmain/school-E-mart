@@ -1,23 +1,17 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { 
-  HelpCircle, Edit3, Trash2, Plus, Download, Search, X, ChevronRight, CheckCircle 
+  HelpCircle, Edit3, Trash2, Plus, Download, Search, X, ChevronRight, CheckCircle, Loader2
 } from 'lucide-react';
+import { listFaqs, createFaq, updateFaq, deleteFaq } from '../../../services/adminApi';
+import { getErrorMessage } from '../../../utils/apiHelpers';
+import { mapFaqForAdmin } from '../../../utils/mappers/adminCmsMapper';
 
 const FAQManagement = () => {
-  // Mock FAQ list state matching your screenshot data exactly
-  const [faqs, setFaqs] = useState([
-    {
-      id: '3f6179',
-      question: 'mnvb',
-      answer: 'mnvnm'
-    },
-    {
-      id: 'b5da27',
-      question: 'this is the question?',
-      answer: 'this is the answer'
-    }
-  ]);
+  const [faqs, setFaqs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
 
   // Form states (Add)
   const [newQuestion, setNewQuestion] = useState('');
@@ -33,31 +27,48 @@ const FAQManagement = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
 
-  // Generate unique 6-character hex ID
-  const generateHexId = () => {
-    return Math.floor((1 + Math.random()) * 0x100000)
-      .toString(16)
-      .substring(1);
-  };
+  const loadFaqs = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const { data } = await listFaqs({ limit: 100 });
+      setFaqs((data || []).map(mapFaqForAdmin));
+    } catch (err) {
+      setFaqs([]);
+      setError(getErrorMessage(err, 'Unable to load FAQs'));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-  // Add FAQ handler
-  const handleAddFaq = (e) => {
+  useEffect(() => {
+    loadFaqs();
+  }, [loadFaqs]);
+
+  const handleAddFaq = async (e) => {
     e.preventDefault();
     if (!newQuestion.trim() || !newAnswer.trim()) {
       alert('Please fill out both FAQ Question and Answer.');
       return;
     }
 
-    const added = {
-      id: generateHexId(),
-      question: newQuestion.trim(),
-      answer: newAnswer.trim()
-    };
-
-    setFaqs(prev => [...prev, added]);
-    setNewQuestion('');
-    setNewAnswer('');
-    alert('FAQ added successfully!');
+    setSaving(true);
+    try {
+      const created = await createFaq({
+        question: newQuestion.trim(),
+        answer: newAnswer.trim(),
+        category: 'General',
+        audience: 'all',
+        status: 'active',
+      });
+      setFaqs((prev) => [...prev, mapFaqForAdmin(created)]);
+      setNewQuestion('');
+      setNewAnswer('');
+    } catch (err) {
+      alert(getErrorMessage(err, 'Unable to create FAQ'));
+    } finally {
+      setSaving(false);
+    }
   };
 
   // Trigger edit modal
@@ -67,29 +78,37 @@ const FAQManagement = () => {
     setEditAnswer(faq.answer);
   };
 
-  // Submit edit FAQ
-  const handleSaveEdit = (e) => {
+  const handleSaveEdit = async (e) => {
     e.preventDefault();
-    if (!editQuestion.trim() || !editAnswer.trim()) {
+    if (!editQuestion.trim() || !editAnswer.trim() || !editingFaq?.mongoId) {
       alert('Please fill out both FAQ Question and Answer.');
       return;
     }
 
-    setFaqs(prev => prev.map(f => {
-      if (f.id === editingFaq.id) {
-        return { ...f, question: editQuestion.trim(), answer: editAnswer.trim() };
-      }
-      return f;
-    }));
-
-    setEditingFaq(null);
-    alert('FAQ updated successfully!');
+    setSaving(true);
+    try {
+      const updated = await updateFaq(editingFaq.mongoId, {
+        question: editQuestion.trim(),
+        answer: editAnswer.trim(),
+      });
+      setFaqs((prev) =>
+        prev.map((f) => (f.mongoId === editingFaq.mongoId ? mapFaqForAdmin(updated) : f))
+      );
+      setEditingFaq(null);
+    } catch (err) {
+      alert(getErrorMessage(err, 'Unable to update FAQ'));
+    } finally {
+      setSaving(false);
+    }
   };
 
-  // Delete FAQ
-  const handleDeleteFaq = (id) => {
-    if (window.confirm('Are you sure you want to delete this FAQ entry?')) {
-      setFaqs(prev => prev.filter(f => f.id !== id));
+  const handleDeleteFaq = async (faq) => {
+    if (!window.confirm('Are you sure you want to delete this FAQ entry?')) return;
+    try {
+      await deleteFaq(faq.mongoId || faq.id);
+      setFaqs((prev) => prev.filter((f) => f.mongoId !== faq.mongoId));
+    } catch (err) {
+      alert(getErrorMessage(err, 'Unable to delete FAQ'));
     }
   };
 
@@ -296,7 +315,7 @@ const FAQManagement = () => {
                           {/* Delete button (red background) */}
                           <button
                             type="button"
-                            onClick={() => handleDeleteFaq(f.id)}
+                            onClick={() => handleDeleteFaq(f)}
                             className="bg-red-500 hover:bg-red-600 text-white p-2 rounded-xl shadow-xs transition-all"
                           >
                             <X size={12} className="stroke-[2.5]" />

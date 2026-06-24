@@ -34,4 +34,30 @@ export const mapVendorProductForList = (product) => {
 
 export const mapVendorProductForStock = (product) => mapVendorProductForList(product);
 
+export const mapProductForAdminList = (product) => {
+  const mapped = mapVendorProductForList(product);
+  const approvalLabels = { pending: 'Pending Approval', approved: 'Approved', rejected: 'Rejected' };
+
+  return {
+    id: mapped.id,
+    mongoId: mapped.id,
+    name: mapped.name,
+    description: product?.description || '',
+    brand: product?.brand || '—',
+    sku: mapped.code,
+    price: mapped.price,
+    stock: mapped.stock,
+    variant: mapped.variant,
+    headerGroup: mapped.header,
+    category: mapped.category,
+    subcategory: mapped.subcategory,
+    stockStatus: mapped.stockStatus === 'low' ? 'Low Stock' : mapped.stockStatus === 'out' ? 'Out of Stock' : 'In Stock',
+    approvalStatus: approvalLabels[mapped.approvalRaw] || 'Pending Approval',
+    approvalRaw: mapped.approvalRaw,
+    image: product?.images?.[0]?.url || product?.images?.[0] || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?q=80&w=180&auto=format&fit=crop&q=60',
+    vendor: product?.vendorName || product?.vendor?.storeName || '—',
+    raw: product,
+  };
+};
+
 export const formatVendorProductPrice = (rupees) => formatRupee(Number(rupees || 0) * 100);

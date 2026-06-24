@@ -1,40 +1,17 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import ReactDOM from 'react-dom';
 import { 
   Plus, Edit3, Trash2, X, Upload, Image as ImageIcon, CheckCircle, ChevronRight, Link as LinkIcon, Tag, Trash 
 } from 'lucide-react';
+import { listBanners, deleteBanner } from '../../../services/adminApi';
+import { getErrorMessage } from '../../../utils/apiHelpers';
+import { mapBannerForAdmin } from '../../../utils/mappers/adminCmsMapper';
 
 const PromoHomeBanners = () => {
-  // Pre-loaded active home banners matching your exact screenshot, populated with target categories
-  const [banners, setBanners] = useState([
-    {
-      id: 1,
-      slug: 'healthy_delight',
-      category: 'Kits',
-      orderRank: 0,
-      imageUrl: 'https://images.unsplash.com/photo-1488477181946-6428a0291777?w=600&q=80',
-      targetUrl: 'https://schoolemart.com/categories/healthy-dairy',
-      status: 'Active'
-    },
-    {
-      id: 2,
-      slug: 'healthy_delight',
-      category: 'Uniforms',
-      orderRank: 0,
-      imageUrl: 'https://images.unsplash.com/photo-1527018601619-a508a2be00cd?w=600&q=80',
-      targetUrl: 'https://schoolemart.com/categories/milk-farm',
-      status: 'Active'
-    },
-    {
-      id: 3,
-      slug: 'healthy_delight',
-      category: 'Kits',
-      orderRank: 1, // Multiple banners for one category (Kits has rank 0 and rank 1!)
-      imageUrl: 'https://images.unsplash.com/photo-1587049352846-4a222e784d38?w=600&q=80',
-      targetUrl: 'https://schoolemart.com/categories/wild-honey',
-      status: 'Active'
-    }
-  ]);
+  const [banners, setBanners] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
 
   // Categories list matching user app tags
   const categories = ['All', 'Kits', 'Uniforms', 'Stationery', 'Activities'];
@@ -55,8 +32,35 @@ const PromoHomeBanners = () => {
   // Each object: { id, file, previewUrl }
   const [uploadedImages, setUploadedImages] = useState([]);
   
-  // Ref for hidden input
   const fileInputRef = useRef(null);
+
+  const loadBanners = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const { data } = await listBanners({ limit: 100 });
+      setBanners((data || []).map(mapBannerForAdmin));
+    } catch (err) {
+      setBanners([]);
+      setError(getErrorMessage(err, 'Unable to load banners'));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadBanners();
+  }, [loadBanners]);
+
+  const handleDeleteBanner = async (banner) => {
+    if (!window.confirm('Delete this banner?')) return;
+    try {
+      await deleteBanner(banner.mongoId || banner.id);
+      setBanners((prev) => prev.filter((b) => b.mongoId !== banner.mongoId));
+    } catch (err) {
+      alert(getErrorMessage(err, 'Unable to delete banner'));
+    }
+  };
 
   // Handle batch file selection
   const handleFileSelect = (e) => {
@@ -162,11 +166,8 @@ const PromoHomeBanners = () => {
     setIsModalOpen(false);
   };
 
-  // Deletion trigger
-  const handleDelete = (id) => {
-    if (window.confirm('Are you sure you want to delete this promotional banner?')) {
-      setBanners(prev => prev.filter(b => b.id !== id));
-    }
+  const handleDelete = (banner) => {
+    handleDeleteBanner(banner);
   };
 
   return (
@@ -240,7 +241,7 @@ const PromoHomeBanners = () => {
 
                 <button
                   type="button"
-                  onClick={() => handleDelete(b.id)}
+                  onClick={() => handleDelete(b)}
                   className="bg-white hover:bg-rose-50 border border-gray-150 text-gray-700 hover:text-rose-600 p-2 rounded-full shadow transition-colors cursor-pointer"
                   title="Delete Banner"
                 >

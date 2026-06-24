@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   DollarSign, Save, ShieldCheck, MapPin, AlertCircle, RefreshCw, CheckCircle, Navigation, Info
 } from 'lucide-react';
+import { getMarketplaceSettings, updateMarketplaceSettings } from '../../../services/adminApi';
+import { getErrorMessage } from '../../../utils/apiHelpers';
 
 const BillingChargesManagement = () => {
-  // Config state representing the initial dashboard parameters
   const [platformFee, setPlatformFee] = useState(10);
   const [freeDeliveryThreshold, setFreeDeliveryThreshold] = useState(0);
   const [pricingMode, setPricingMode] = useState('fixed'); // 'fixed' or 'distance'
@@ -18,20 +19,33 @@ const BillingChargesManagement = () => {
   const [extraKmCharge, setExtraKmCharge] = useState(0);
   const [riderCommission, setRiderCommission] = useState(0);
 
-  // Saved success toast state
   const [showToast, setShowToast] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [loadError, setLoadError] = useState('');
 
-  const handleSave = (e) => {
+  useEffect(() => {
+    getMarketplaceSettings()
+      .then((settings) => {
+        if (settings?.commissionPercent != null) {
+          setPlatformFee(settings.commissionPercent);
+        }
+      })
+      .catch((err) => setLoadError(getErrorMessage(err, 'Unable to load billing settings')));
+  }, []);
+
+  const handleSave = async (e) => {
     e.preventDefault();
     setIsSaving(true);
-
-    // Simulate saving process
-    setTimeout(() => {
-      setIsSaving(false);
+    setLoadError('');
+    try {
+      await updateMarketplaceSettings({ commissionPercent: Number(platformFee) });
       setShowToast(true);
       setTimeout(() => setShowToast(false), 3500);
-    }, 800);
+    } catch (err) {
+      setLoadError(getErrorMessage(err, 'Unable to save billing settings'));
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (

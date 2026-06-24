@@ -55,3 +55,55 @@ export const getProductReviews = async (productId, params = {}) => {
   const response = await apiClient.get(`/catalog/products/${productId}/reviews`, { params });
   return extractPaginated(response);
 };
+
+export const createHeaderCategory = async (payload) => {
+  const response = await apiClient.post('/catalog/header-categories', payload);
+  return unwrapData(response);
+};
+
+export const updateHeaderCategory = async (id, payload) => {
+  const response = await apiClient.patch(`/catalog/header-categories/${id}`, payload);
+  return unwrapData(response);
+};
+
+export const deleteHeaderCategory = async (id) => {
+  const response = await apiClient.delete(`/catalog/header-categories/${id}`);
+  return unwrapData(response);
+};
+
+export const createCategory = async (payload) => {
+  const response = await apiClient.post('/catalog/categories', payload);
+  return unwrapData(response);
+};
+
+export const updateCategory = async (id, payload) => {
+  const response = await apiClient.patch(`/catalog/categories/${id}`, payload);
+  return unwrapData(response);
+};
+
+export const deleteCategory = async (id) => {
+  const response = await apiClient.delete(`/catalog/categories/${id}`);
+  return unwrapData(response);
+};
+
+export const createSubcategory = async (payload) => {
+  const response = await apiClient.post('/catalog/subcategories', payload);
+  return unwrapData(response);
+};
+
+export const updateSubcategory = async (id, payload) => {
+  const response = await apiClient.patch(`/catalog/subcategories/${id}`, payload);
+  return unwrapData(response);
+};
+
+export const deleteSubcategory = async (id) => {
+  const response = await apiClient.delete(`/catalog/subcategories/${id}`);
+  return unwrapData(response);
+};
+
+export const setProductApprovalStatus = async (productId, approvalStatus) => {
+  const response = await apiClient.patch(`/catalog/products/${productId}/approval-status`, {
+    approvalStatus,
+  });
+  return unwrapData(response);
+};
