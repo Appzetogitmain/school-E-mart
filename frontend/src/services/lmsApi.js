@@ -47,6 +47,14 @@ export const listSubmissions = async (schoolId, courseId, assignmentId, params =
   return extractPaginated(response, 'submissions');
 };
 
+export const getMySubmission = async (schoolId, courseId, assignmentId, params = {}) => {
+  const response = await apiClient.get(
+    lmsPath(schoolId, `/courses/${courseId}/assignments/${assignmentId}/submissions/mine`),
+    { params }
+  );
+  return unwrapData(response)?.submission || null;
+};
+
 export const evaluateSubmission = async (schoolId, courseId, assignmentId, submissionId, payload) => {
   const response = await apiClient.patch(
     lmsPath(schoolId, `/courses/${courseId}/assignments/${assignmentId}/submissions/${submissionId}/evaluate`),

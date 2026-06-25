@@ -24,6 +24,22 @@ import {
 import { useNavigate } from 'react-router-dom';
 import AppHeader from '../../components/AppHeader';
 import LoginRequired from '../../components/LoginRequired';
+import { listParentNotices } from '../../../services/parentApi';
+import { mapNoticeForParent } from '../../../utils/mappers/parentMapper';
+import { getErrorMessage } from '../../../utils/apiHelpers';
+
+const NOTICE_ICONS = {
+  megaphone: <Megaphone size={18} />,
+  academic: <BookOpen size={18} />,
+  event: <Calendar size={18} />,
+  urgent: <AlertTriangle size={18} />,
+};
+
+const withNoticeIcons = (rows = []) =>
+  rows.map((row) => ({
+    ...row,
+    icon: NOTICE_ICONS[row.iconKey] || NOTICE_ICONS.megaphone,
+  }));
 
 const ParentNotices = () => {
   const navigate = useNavigate();
@@ -100,7 +116,38 @@ const ParentNotices = () => {
     setScrolled(scrollPos > 50);
   };
 
-  const [notices] = useState([]);
+  const [notices, setNotices] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState('');
+
+  useEffect(() => {
+    const loadNotices = async () => {
+      const schoolId = childInfo?.schoolId;
+      const studentId = childInfo?.studentId;
+      if (!schoolId || schoolId === 'explore-schools') {
+        setNotices([]);
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
+      setFetchError('');
+      try {
+        const { data } = await listParentNotices(schoolId, {
+          limit: 50,
+          studentId,
+        });
+        setNotices(withNoticeIcons((data || []).map(mapNoticeForParent)));
+      } catch (err) {
+        setNotices([]);
+        setFetchError(getErrorMessage(err, 'Unable to load notices'));
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadNotices();
+  }, [childInfo]);
 
   // Tab Filtering Logic
   // Tabs: All Notices, General, Academic, Events, Urgent
@@ -368,13 +415,18 @@ const ParentNotices = () => {
         <div className="mt-6 px-6 flex flex-col gap-4">
           <h2 className="text-sm font-extrabold text-gray-800 tracking-tight">All Notices</h2>
           
-          {finalFilteredNotices.length === 0 ? (
+          {loading ? (
+            <div className="bg-white border border-gray-100 rounded-3xl p-10 flex flex-col items-center justify-center text-center shadow-sm py-14">
+              <Megaphone size={40} className="text-gray-300 mb-2.5 animate-pulse" />
+              <h4 className="text-xs font-extrabold text-gray-700">Loading Notices...</h4>
+            </div>
+          ) : finalFilteredNotices.length === 0 ? (
             /* Empty State */
             <div className="bg-white border border-gray-100 rounded-3xl p-10 flex flex-col items-center justify-center text-center shadow-sm py-14">
               <Megaphone size={40} className="text-gray-300 mb-2.5" />
               <h4 className="text-xs font-extrabold text-gray-700">No Notices Posted</h4>
               <p className="text-[10px] font-bold text-gray-400 mt-1 max-w-[200px] leading-normal">
-                School notices API is not connected yet. Notices from your school will appear here once available.
+                {fetchError || 'School notices from your child\'s school will appear here once published.'}
               </p>
               <button 
                 onClick={() => {

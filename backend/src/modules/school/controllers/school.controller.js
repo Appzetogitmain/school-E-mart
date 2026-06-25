@@ -8,6 +8,8 @@ const studentService = require('../services/student.service');
 const subjectService = require('../services/subject.service');
 const attendanceService = require('../services/attendance.service');
 const timetableService = require('../services/timetable.service');
+const noticeService = require('../services/notice.service');
+const diaryService = require('../services/diary.service');
 
 const schoolController = {
   createSchool: asyncHandler(async (req, res) => {
@@ -260,6 +262,71 @@ const schoolController = {
   deleteTimetableSlot: asyncHandler(async (req, res) => {
     await timetableService.deleteSlot(req.schoolId, req.params.slotId, req.auth.userId);
     return success(res, null, 'Timetable slot deleted successfully', undefined, req);
+  }),
+
+  createNotice: asyncHandler(async (req, res) => {
+    const notice = await noticeService.createNotice(req.schoolId, req.body);
+    return created(res, { notice }, 'Notice created successfully', req);
+  }),
+
+  listNotices: asyncHandler(async (req, res) => {
+    const { data, pagination } = await noticeService.listNotices(req, req.schoolId, req.query);
+    return paginated(res, { notices: data }, pagination, 'Notices fetched successfully', req);
+  }),
+
+  getNotice: asyncHandler(async (req, res) => {
+    const notice = await noticeService.getNotice(req, req.schoolId, req.params.noticeId);
+    return success(res, { notice }, 'Notice fetched successfully', undefined, req);
+  }),
+
+  updateNotice: asyncHandler(async (req, res) => {
+    const notice = await noticeService.updateNotice(req.schoolId, req.params.noticeId, req.body);
+    return success(res, { notice }, 'Notice updated successfully', undefined, req);
+  }),
+
+  setNoticeStatus: asyncHandler(async (req, res) => {
+    const notice = await noticeService.setNoticeStatus(req.schoolId, req.params.noticeId, req.body.status);
+    return success(res, { notice }, 'Notice status updated successfully', undefined, req);
+  }),
+
+  deleteNotice: asyncHandler(async (req, res) => {
+    await noticeService.deleteNotice(req.schoolId, req.params.noticeId, req.auth.userId);
+    return success(res, null, 'Notice deleted successfully', undefined, req);
+  }),
+
+  createDiaryEntry: asyncHandler(async (req, res) => {
+    const entry = await diaryService.createEntry(req, req.schoolId, req.body);
+    return created(res, { entry }, 'Diary entry created successfully', req);
+  }),
+
+  listDiaryEntries: asyncHandler(async (req, res) => {
+    const { data, pagination } = await diaryService.listEntries(req, req.schoolId, req.query);
+    return paginated(res, { entries: data }, pagination, 'Diary entries fetched successfully', req);
+  }),
+
+  getDiaryEntry: asyncHandler(async (req, res) => {
+    const entry = await diaryService.getEntry(req, req.schoolId, req.params.entryId);
+    return success(res, { entry }, 'Diary entry fetched successfully', undefined, req);
+  }),
+
+  markDiaryRead: asyncHandler(async (req, res) => {
+    const entry = await diaryService.markRead(
+      req.schoolId,
+      req.params.entryId,
+      req.auth.userId,
+      req.query.studentId
+    );
+    return success(res, { entry }, 'Diary entry marked as read', undefined, req);
+  }),
+
+  updateDiaryEntry: asyncHandler(async (req, res) => {
+    const entry = await diaryService.updateEntry(req, req.schoolId, req.params.entryId, req.body);
+    return success(res, { entry }, 'Diary entry updated successfully', undefined, req);
+  }),
+
+  deleteDiaryEntry: asyncHandler(async (req, res) => {
+    await diaryService.deleteEntry(req, req.schoolId, req.params.entryId, req.auth.userId);
+    return success(res, null, 'Diary entry deleted successfully', undefined, req);
   }),
 };
 

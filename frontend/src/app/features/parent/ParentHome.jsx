@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import AppHeader from '../../components/AppHeader';
 import { getAttendanceHistory, fetchParentHomework } from '../../../services/parentApi';
-import { buildHomeworkStats, getSubmissionCache, mapAssignmentForParentHomework } from '../../../utils/mappers/parentMapper';
+import { buildHomeworkStats, mapAssignmentForParentHomework } from '../../../utils/mappers/parentMapper';
 import ProductCard from '../../components/ProductCard';
 import SectionHeader from '../../components/SectionHeader';
 import CategoryStory from '../../components/CategoryStory';
@@ -106,10 +106,9 @@ const ParentHome = () => {
       if (!schoolId || schoolId === 'explore-schools') return;
 
       try {
-        const rows = await fetchParentHomework(schoolId, childInfo.grade);
-        const cache = getSubmissionCache(studentId);
-        const mapped = rows.map(({ assignment, course }) =>
-          mapAssignmentForParentHomework(assignment, course, cache)
+        const rows = await fetchParentHomework(schoolId, childInfo.grade, studentId);
+        const mapped = rows.map(({ assignment, course, submission }) =>
+          mapAssignmentForParentHomework(assignment, course, submission)
         );
         setPendingHomeworkCount(buildHomeworkStats(mapped).pending);
       } catch {

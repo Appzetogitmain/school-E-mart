@@ -24,6 +24,24 @@ import {
 } from 'lucide-react';
 import AppHeader from '../../components/AppHeader';
 import LoginRequired from '../../components/LoginRequired';
+import { listParentDiary, markParentDiaryRead } from '../../../services/parentApi';
+import { mapDiaryEntryForParent } from '../../../utils/mappers/parentMapper';
+import { getErrorMessage } from '../../../utils/apiHelpers';
+
+const DIARY_ICONS = {
+  message: <MessageSquare size={18} />,
+  notice: <Megaphone size={18} />,
+  event: <Calendar size={18} />,
+  circular: <FileText size={18} />,
+  homework: <BookOpen size={18} />,
+  gallery: <Image size={18} />,
+};
+
+const withDiaryIcons = (rows = []) =>
+  rows.map((row) => ({
+    ...row,
+    icon: DIARY_ICONS[row.iconKey] || DIARY_ICONS.message,
+  }));
 
 const ParentDiary = () => {
   const navigate = useNavigate();
@@ -107,7 +125,62 @@ const ParentDiary = () => {
     setScrolled(scrollPos > 50);
   };
 
-  const [diaryEntries] = useState([]);
+  const [diaryEntries, setDiaryEntries] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState('');
+
+  useEffect(() => {
+    const loadDiary = async () => {
+      const schoolId = childInfo?.schoolId;
+      const studentId = childInfo?.studentId;
+      if (!schoolId || schoolId === 'explore-schools') {
+        setDiaryEntries([]);
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
+      setFetchError('');
+      try {
+        const { data } = await listParentDiary(schoolId, {
+          limit: 50,
+          studentId,
+        });
+        setDiaryEntries(withDiaryIcons((data || []).map(mapDiaryEntryForParent)));
+      } catch (err) {
+        setDiaryEntries([]);
+        setFetchError(getErrorMessage(err, 'Unable to load diary entries'));
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadDiary();
+  }, [childInfo]);
+
+  const handleAcknowledge = async (entry) => {
+    const schoolId = childInfo?.schoolId;
+    const studentId = childInfo?.studentId;
+    if (!schoolId || !entry?.id || entry.isRead) {
+      setSelectedEntry(null);
+      return;
+    }
+
+    try {
+      await markParentDiaryRead(schoolId, entry.id, { studentId });
+      setDiaryEntries((prev) =>
+        prev.map((item) =>
+          item.id === entry.id
+            ? { ...item, isRead: true, badgeText: 'Read', badgeColor: 'bg-gray-50 text-gray-500 border-gray-100' }
+            : item
+        )
+      );
+    } catch {
+      // Keep modal closable even if mark-read fails
+    } finally {
+      setSelectedEntry(null);
+    }
+  };
 
   // Tab Filtering Logic
   // Tabs: All, Messages (message), Notices (notice), Events (event), Updates (circular, homework, gallery)
@@ -465,13 +538,18 @@ const ParentDiary = () => {
 
         {/* 5. Timeline Feed List */}
         <div className="px-6 mt-6 flex flex-col gap-5 flex-1">
-          {sortedEntries.length === 0 ? (
+          {loading ? (
+            <div className="bg-white border border-gray-100 rounded-3xl p-10 flex flex-col items-center justify-center text-center shadow-[0_4px_12px_rgba(0,0,0,0.01)] py-16 mt-4">
+              <ClipboardList size={44} className="text-gray-300 mb-3 animate-pulse" />
+              <h4 className="text-sm font-extrabold text-gray-700">Loading Diary...</h4>
+            </div>
+          ) : sortedEntries.length === 0 ? (
             /* Empty State */
             <div className="bg-white border border-gray-100 rounded-3xl p-10 flex flex-col items-center justify-center text-center shadow-[0_4px_12px_rgba(0,0,0,0.01)] py-16 mt-4">
               <ClipboardList size={44} className="text-gray-300 mb-3" />
               <h4 className="text-sm font-extrabold text-gray-700">No Diary Entries Found</h4>
               <p className="text-[11px] font-bold text-gray-400 mt-1.5 max-w-[220px] mx-auto leading-relaxed">
-                Diary entries API is not connected yet. Teacher messages and class updates will appear here once available.
+                {fetchError || 'Teacher messages and class updates will appear here once published.'}
               </p>
               <button 
                 onClick={() => {
@@ -634,10 +712,10 @@ const ParentDiary = () => {
                 Close Details
               </button>
               <button 
-                onClick={() => alert(`Acknowledge: ${selectedEntry.title}`)}
+                onClick={() => handleAcknowledge(selectedEntry)}
                 className="flex-1 py-3.5 bg-[#6A47DE] text-white text-xs font-black rounded-2xl hover:bg-[#5532C8] transition-colors active:scale-95 text-center shadow-lg shadow-[#6A47DE]/20"
               >
-                Acknowledge Receipt
+                {selectedEntry.isRead ? 'Close' : 'Acknowledge Receipt'}
               </button>
             </div>
           </div>

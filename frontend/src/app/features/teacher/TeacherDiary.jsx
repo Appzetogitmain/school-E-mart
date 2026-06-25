@@ -2,11 +2,16 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Users, MessageSquare, Book, User, 
-  Star, Check, Volume2, Send
+  Star, Check, Volume2, Send, Loader2
 } from 'lucide-react';
+import { createDiaryEntry } from '../../../services/schoolApi';
+import { parseClassGrade, parseSection } from '../../../utils/mappers/teacherMapper';
+import { getErrorMessage } from '../../../utils/apiHelpers';
+import { useTeacherSchoolId } from '../../../utils/teacherContext';
 
 const TeacherDiary = () => {
   const navigate = useNavigate();
+  const schoolId = useTeacherSchoolId();
 
   // 1. Core States
   const [selectedClass, setSelectedClass] = useState('Class 5');
@@ -31,6 +36,9 @@ const TeacherDiary = () => {
   const [schedule, setSchedule] = useState('now');
   
   const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
   // Lists & configs
   const classes = ['Class 5', 'Class 6', 'Class 7'];
@@ -55,10 +63,43 @@ const TeacherDiary = () => {
     }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    setShowToast(true);
-    setTimeout(() => setShowToast(false), 2500);
+    if (!title.trim() || !message.trim()) {
+      setError('Please enter a title and diary message.');
+      return;
+    }
+    if (visibility === 'students') {
+      setError('Selected-student notes are not available yet. Use Entire Class.');
+      return;
+    }
+    if (!schoolId) {
+      setError('School context is missing. Please sign in again.');
+      return;
+    }
+
+    setSaving(true);
+    setError('');
+    try {
+      await createDiaryEntry(schoolId, {
+        title: title.trim(),
+        content: message.trim(),
+        classGrade: parseClassGrade(selectedClass),
+        section: parseSection(selectedSection),
+      });
+      setToastMessage('Diary note published successfully.');
+      setShowToast(true);
+      setTitle('');
+      setMessage('');
+      setTimeout(() => {
+        setShowToast(false);
+        navigate('/school/teacher/dashboard');
+      }, 2000);
+    } catch (err) {
+      setError(getErrorMessage(err, 'Unable to publish diary note'));
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -70,7 +111,7 @@ const TeacherDiary = () => {
           <div className="w-6 h-6 bg-white/20 rounded-full flex items-center justify-center">
             <Check size={14} strokeWidth={3} />
           </div>
-          <span className="text-xs font-black">Diary notes API is not available yet.</span>
+          <span className="text-xs font-black">{toastMessage || 'Diary note published successfully.'}</span>
         </div>
       )}
 
@@ -437,14 +478,19 @@ const TeacherDiary = () => {
 
       </form>
 
+      {error && (
+        <p className="px-6 text-[10px] font-bold text-red-500 text-center">{error}</p>
+      )}
+
       {/* 12. Add Diary Note Primary Button */}
       <div className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white border-t border-gray-100 p-4 z-40">
         <button 
           onClick={handleSubmit}
-          className="w-full py-4 bg-primary text-white hover:bg-deep-purple active:scale-98 transition-all rounded-[1.8rem] text-sm font-black shadow-lg shadow-purple-100 flex items-center justify-center gap-2"
+          disabled={saving}
+          className="w-full py-4 bg-primary text-white hover:bg-deep-purple active:scale-98 transition-all rounded-[1.8rem] text-sm font-black shadow-lg shadow-purple-100 flex items-center justify-center gap-2 disabled:opacity-60"
         >
-          <Send size={16} strokeWidth={2.5} />
-          <span>Publish Diary Note</span>
+          {saving ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} strokeWidth={2.5} />}
+          <span>{saving ? 'Publishing...' : 'Publish Diary Note'}</span>
         </button>
       </div>
 
