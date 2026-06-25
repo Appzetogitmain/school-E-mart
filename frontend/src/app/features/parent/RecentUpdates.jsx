@@ -14,51 +14,7 @@ const RecentUpdates = ({ updates = [] }) => {
       navigate('/user/diary');
     }
   };
-  // Safe generic API-ready fallback placeholders to strictly comply with "no fake data" rule
-  const placeholderUpdates = [
-    {
-      id: 'attendance-1',
-      type: 'attendance',
-      title: 'Attendance marked Present',
-      description: '',
-      time: 'Today, 09:15 AM',
-      icon: <Check size={12} strokeWidth={3.5} />,
-      dotColor: 'bg-[#34A853]',
-      iconBg: 'bg-[#34A853]',
-    },
-    {
-      id: 'homework-1',
-      type: 'homework',
-      title: 'Maths homework added',
-      description: '',
-      time: 'Today, 11:30 AM',
-      icon: <BookOpen size={12} strokeWidth={2.5} />,
-      dotColor: 'bg-[#F2994A]',
-      iconBg: 'bg-[#F2994A]',
-    },
-    {
-      id: 'notice-1',
-      type: 'notice',
-      title: 'New notice published',
-      description: 'Annual Day on 25 May 2025',
-      time: 'Yesterday, 04:45 PM',
-      icon: <Megaphone size={13} strokeWidth={2.5} />,
-      dotColor: 'bg-[#7F56D9]',
-      iconBg: 'bg-[#7F56D9]',
-    },
-    {
-      id: 'message-1',
-      type: 'message',
-      title: 'Message from Class Teacher',
-      description: '"Aarav is doing great in class activities."',
-      time: 'Yesterday, 02:15 PM',
-      icon: <MessageSquare size={13} strokeWidth={2.5} />,
-      dotColor: 'bg-[#2E90FA]',
-      iconBg: 'bg-[#2E90FA]',
-    }
-  ];
-
-  const displayUpdates = updates.length > 0 ? updates : placeholderUpdates;
+  const displayUpdates = updates;
 
   return (
     <div className="px-6 mt-6 font-outfit">
@@ -72,7 +28,12 @@ const RecentUpdates = ({ updates = [] }) => {
 
         {/* Timeline Items List */}
         <div className="flex flex-col gap-4">
-          {displayUpdates.map((update) => (
+          {displayUpdates.length === 0 ? (
+            <div className="bg-white border border-gray-100 rounded-2xl p-6 text-center text-[11px] font-bold text-gray-400">
+              No recent updates yet. Attendance and homework activity will show here.
+            </div>
+          ) : (
+          displayUpdates.map((update) => (
             <div key={update.id} className="relative flex items-center group">
               {/* Timeline Indicator Dot */}
               <span className={`absolute -left-[23px] w-2.5 h-2.5 rounded-full ${update.dotColor} border-2 border-white shadow-sm z-10`}></span>
@@ -108,7 +69,8 @@ const RecentUpdates = ({ updates = [] }) => {
                 <ChevronRight size={16} className="text-gray-400 group-hover:text-gray-400 transition-colors shrink-0 ml-2" />
               </div>
             </div>
-          ))}
+          ))
+          )}
         </div>
       </div>
     </div>

@@ -100,101 +100,7 @@ const ParentNotices = () => {
     setScrolled(scrollPos > 50);
   };
 
-  // Static/Mock Notice Database
-  const [notices, setNotices] = useState([
-    {
-      id: 'notice-urgent-1',
-      type: 'urgent',
-      date: todayStr,
-      dateText: 'Today',
-      title: 'School Holiday on 26 May 2025',
-      content: 'School will remain closed on Monday, 26 May 2025 on account of Republic Day.',
-      warning: 'Please read the notice carefully.',
-      category: 'Urgent',
-      attachments: '1 Attachment',
-      accentColor: '#EF4444',
-      bgColor: 'bg-[#FEF2F2] border border-[#FEE2E2]',
-      iconColor: 'text-[#EF4444]',
-      icon: <Megaphone size={18} />,
-      pinned: true,
-      isImportantSpotlight: true
-    },
-    {
-      id: 'notice-1',
-      type: 'general',
-      date: getDateNDaysAgo(1),
-      dateText: '22 May 2025',
-      title: 'Summer Camp Registration Open',
-      content: 'Registration for the Summer Camp 2025 is now open. Interested students can give their names to the class teacher.',
-      category: 'General Notice',
-      attachments: '2 Attachments',
-      accentColor: '#34A853',
-      bgColor: 'bg-[#EBFBF0]',
-      iconColor: 'text-[#34A853]',
-      icon: <Megaphone size={18} />,
-      pinned: true
-    },
-    {
-      id: 'notice-2',
-      type: 'academic',
-      date: getDateNDaysAgo(2),
-      dateText: '21 May 2025',
-      title: 'Monthly Exam Schedule',
-      content: 'Please find the schedule for the Monthly Examination of May 2025. Ensure students arrive on time with complete geometry kits.',
-      category: 'Academic',
-      attachments: '1 Attachment',
-      accentColor: '#1A73E8',
-      bgColor: 'bg-[#E8F0FE]',
-      iconColor: 'text-[#1A73E8]',
-      icon: <BookOpen size={18} />,
-      pinned: true
-    },
-    {
-      id: 'notice-3',
-      type: 'event',
-      date: getDateNDaysAgo(3),
-      dateText: '20 May 2025',
-      title: 'PTM for Class 5 Parents',
-      content: 'PTM for Class 5 will be held on 28 May 2025 (Wednesday) from 10:00 AM to 1:00 PM.',
-      category: 'Event',
-      attachments: null,
-      accentColor: '#F2994A',
-      bgColor: 'bg-[#FFF6ED]',
-      iconColor: 'text-[#F2994A]',
-      icon: <Calendar size={18} />,
-      pinned: false
-    },
-    {
-      id: 'notice-4',
-      type: 'general',
-      date: getDateNDaysAgo(4),
-      dateText: '19 May 2025',
-      title: 'Uniform Change from 1 June 2025',
-      content: 'Students must wear the new summer uniform from 1 June 2025. Winter uniform bundles will no longer be allowed.',
-      category: 'General Notice',
-      attachments: '1 Attachment',
-      accentColor: '#7F56D9',
-      bgColor: 'bg-[#F9F5FF]',
-      iconColor: 'text-[#7F56D9]',
-      icon: <User size={18} />,
-      pinned: false
-    },
-    {
-      id: 'notice-5',
-      type: 'important',
-      date: getDateNDaysAgo(5),
-      dateText: '18 May 2025',
-      title: 'Important: Fee Payment Reminder',
-      content: 'This is a reminder to pay the pending tuition fee before 31 May 2025 to avoid late fee.',
-      category: 'Important',
-      attachments: null,
-      accentColor: '#F2994A',
-      bgColor: 'bg-[#FFF6ED]',
-      iconColor: 'text-[#D93025]',
-      icon: <AlertTriangle size={18} />,
-      pinned: false
-    }
-  ]);
+  const [notices] = useState([]);
 
   // Tab Filtering Logic
   // Tabs: All Notices, General, Academic, Events, Urgent
@@ -468,7 +374,7 @@ const ParentNotices = () => {
               <Megaphone size={40} className="text-gray-300 mb-2.5" />
               <h4 className="text-xs font-extrabold text-gray-700">No Notices Posted</h4>
               <p className="text-[10px] font-bold text-gray-400 mt-1 max-w-[200px] leading-normal">
-                There are no school announcements matching your active filters. Adjust your tabs to see other notifications.
+                School notices API is not connected yet. Notices from your school will appear here once available.
               </p>
               <button 
                 onClick={() => {

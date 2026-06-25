@@ -31,6 +31,14 @@ export const createAssignment = async (schoolId, courseId, payload) => {
   return unwrapData(response)?.assignment;
 };
 
+export const submitAssignment = async (schoolId, courseId, assignmentId, payload) => {
+  const response = await apiClient.post(
+    lmsPath(schoolId, `/courses/${courseId}/assignments/${assignmentId}/submissions`),
+    payload
+  );
+  return unwrapData(response)?.submission;
+};
+
 export const listSubmissions = async (schoolId, courseId, assignmentId, params = {}) => {
   const response = await apiClient.get(
     lmsPath(schoolId, `/courses/${courseId}/assignments/${assignmentId}/submissions`),

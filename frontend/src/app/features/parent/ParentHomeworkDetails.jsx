@@ -16,16 +16,20 @@ import {
   Bookmark,
   UploadCloud,
   Image,
-  Trash2
+  Trash2,
+  Loader2
 } from 'lucide-react';
+import { submitHomework } from '../../../services/parentApi';
+import { getErrorMessage } from '../../../utils/apiHelpers';
+import { setSubmissionCache } from '../../../utils/mappers/parentMapper';
 
-const ParentHomeworkDetails = ({ homework, onClose }) => {
+const ParentHomeworkDetails = ({ homework, childInfo, onClose, onSubmitted }) => {
   const [reminderSet, setReminderSet] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [error, setError] = useState('');
 
-  // Submission States
   const [uploadedFiles, setUploadedFiles] = useState([]);
-  const [submissionStatus, setSubmissionStatus] = useState('Not Submitted');
+  const [submissionStatus, setSubmissionStatus] = useState(homework?.submissionStatus || 'Not Submitted');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleDownload = () => {
@@ -60,17 +64,37 @@ const ParentHomeworkDetails = ({ homework, onClose }) => {
     setUploadedFiles(prev => prev.filter(f => f.id !== id));
   };
 
-  const handleUploadHomework = () => {
+  const handleUploadHomework = async () => {
     if (uploadedFiles.length === 0) {
-      alert('Please select or upload at least one completed homework image first.');
+      setError('Please select or upload at least one completed homework image first.');
       return;
     }
+
+    const schoolId = childInfo?.schoolId;
+    if (!schoolId || !homework?.courseId || !homework?.id) {
+      setError('School or homework context is missing.');
+      return;
+    }
+
     setIsSubmitting(true);
-    setTimeout(() => {
-      setIsSubmitting(false);
+    setError('');
+    try {
+      await submitHomework(schoolId, homework.courseId, homework.id, {
+        studentId: childInfo?.studentId || undefined,
+        content: `Submitted ${uploadedFiles.length} file(s) via parent portal`,
+      });
+
+      setSubmissionCache(childInfo?.studentId, homework.id, {
+        status: 'submitted',
+        submittedAt: new Date().toISOString(),
+      });
       setSubmissionStatus('Submitted');
-      alert('Homework uploaded successfully!');
-    }, 2000);
+      onSubmitted?.();
+    } catch (err) {
+      setError(getErrorMessage(err, 'Unable to submit homework. Course enrollment may be required.'));
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -425,6 +449,10 @@ const ParentHomeworkDetails = ({ homework, onClose }) => {
               </p>
             </div>
           </div>
+
+          {error && (
+            <p className="text-[11px] font-bold text-rose-500 text-center">{error}</p>
+          )}
 
           {/* Main Action Submit Button */}
           <button

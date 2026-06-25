@@ -107,102 +107,7 @@ const ParentDiary = () => {
     setScrolled(scrollPos > 50);
   };
 
-  // Backend Integration Hook for Diary Entries:
-  // Feed fetched API data directly into this hook to automatically populate the diary feed!
-  // E.g. setDiaryEntries(apiData)
-  const [diaryEntries, setDiaryEntries] = useState([
-    {
-      id: 'entry-1',
-      type: 'message',
-      date: getDateNDaysAgo(0),
-      title: 'Message from Class Teacher',
-      badgeText: 'New',
-      badgeColor: 'bg-[#F4EBFF] text-[#7F56D9] border-[#D6BBFB]',
-      timestamp: '10:30 AM',
-      content: 'Dear Parents, Please encourage your child to complete the Math worksheet. Let know if you need any help.',
-      sender: 'Class Teacher',
-      accentColor: '#7F56D9',
-      bgColor: 'bg-[#F9F5FF]',
-      iconColor: 'text-[#7F56D9]',
-      icon: <MessageSquare size={18} />
-    },
-    {
-      id: 'entry-2',
-      type: 'notice',
-      date: getDateNDaysAgo(0),
-      title: 'School Notice',
-      badgeText: 'Important',
-      badgeColor: 'bg-[#ECFDF5] text-[#047857] border-[#A7F3D0]',
-      timestamp: '09:15 AM',
-      content: 'School will remain closed on Monday, 26 May 2025 on account of Republic Day.',
-      sender: 'Admin',
-      accentColor: '#34A853',
-      bgColor: 'bg-[#EBFBF0]',
-      iconColor: 'text-[#34A853]',
-      icon: <Megaphone size={18} />
-    },
-    {
-      id: 'entry-3',
-      type: 'event',
-      date: getDateNDaysAgo(1),
-      title: 'Upcoming Event Reminder',
-      badgeText: '',
-      badgeColor: '',
-      timestamp: '04:30 PM',
-      content: 'PTM for Class 5 will be held on 28 May 2025 (Wednesday) from 10:00 AM to 1:00 PM.',
-      sender: 'School Admin',
-      accentColor: '#1A73E8',
-      bgColor: 'bg-[#E8F0FE]',
-      iconColor: 'text-[#1A73E8]',
-      icon: <Calendar size={18} />
-    },
-    {
-      id: 'entry-4',
-      type: 'circular',
-      date: getDateNDaysAgo(3),
-      title: 'Circular',
-      badgeText: '',
-      badgeColor: '',
-      timestamp: '11:00 AM',
-      content: 'Summer Camp registration is now open. Interested students can give their names to the class teacher.',
-      sender: '1 Attachment',
-      hasAttachment: true,
-      accentColor: '#F2994A',
-      bgColor: 'bg-[#FFF6ED]',
-      iconColor: 'text-[#F2994A]',
-      icon: <FileText size={18} />
-    },
-    {
-      id: 'entry-5',
-      type: 'homework',
-      date: getDateNDaysAgo(5),
-      title: 'Homework Update',
-      badgeText: '',
-      badgeColor: '',
-      timestamp: '02:15 PM',
-      content: 'Science project on "Parts of a Plant" is due on 28 May 2025.',
-      sender: 'Class Teacher',
-      accentColor: '#E04F5F',
-      bgColor: 'bg-[#FFF0F2]',
-      iconColor: 'text-[#E04F5F]',
-      icon: <BookOpen size={18} />
-    },
-    {
-      id: 'entry-6',
-      type: 'gallery',
-      date: getDateNDaysAgo(8),
-      title: 'Gallery Update',
-      badgeText: '',
-      badgeColor: '',
-      timestamp: '05:00 PM',
-      content: 'New photos from the Annual Sports Day have been added to the gallery.',
-      sender: 'School Admin',
-      accentColor: '#2F80ED',
-      bgColor: 'bg-[#EEF4FC]',
-      iconColor: 'text-[#2F80ED]',
-      icon: <Image size={18} />
-    }
-  ]);
+  const [diaryEntries] = useState([]);
 
   // Tab Filtering Logic
   // Tabs: All, Messages (message), Notices (notice), Events (event), Updates (circular, homework, gallery)
@@ -566,7 +471,7 @@ const ParentDiary = () => {
               <ClipboardList size={44} className="text-gray-300 mb-3" />
               <h4 className="text-sm font-extrabold text-gray-700">No Diary Entries Found</h4>
               <p className="text-[11px] font-bold text-gray-400 mt-1.5 max-w-[220px] mx-auto leading-relaxed">
-                We couldn't find any items matching your date range or filter settings. Clear or adjust your filters to view posts.
+                Diary entries API is not connected yet. Teacher messages and class updates will appear here once available.
               </p>
               <button 
                 onClick={() => {

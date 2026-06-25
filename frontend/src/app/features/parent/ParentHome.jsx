@@ -8,7 +8,8 @@ import {
   Grid, Layout, CheckCircle2, BookOpen, Check
 } from 'lucide-react';
 import AppHeader from '../../components/AppHeader';
-import apiClient from '../../../services/apiClient';
+import { getAttendanceHistory, fetchParentHomework } from '../../../services/parentApi';
+import { buildHomeworkStats, getSubmissionCache, mapAssignmentForParentHomework } from '../../../utils/mappers/parentMapper';
 import ProductCard from '../../components/ProductCard';
 import SectionHeader from '../../components/SectionHeader';
 import CategoryStory from '../../components/CategoryStory';
@@ -70,6 +71,7 @@ const ParentHome = () => {
       ];
 
   const [todayAttendance, setTodayAttendance] = useState(null);
+  const [pendingHomeworkCount, setPendingHomeworkCount] = useState(0);
 
   useEffect(() => {
     const handleUpdate = () => {
@@ -88,20 +90,33 @@ const ParentHome = () => {
 
       try {
         const today = new Date().toISOString().slice(0, 10);
-        const response = await apiClient.get(`/schools/${schoolId}/attendance/history`, {
-          params: { studentId, date: today }
-        });
-        const records = response.data.data.records || [];
-        if (records.length > 0) {
-          setTodayAttendance(records[0]);
-        } else {
-          setTodayAttendance(null);
-        }
+        const { data: records } = await getAttendanceHistory(schoolId, { studentId, date: today });
+        setTodayAttendance(records[0] || null);
       } catch (err) {
         console.error('Failed to fetch today attendance:', err);
       }
     };
     fetchTodayAttendance();
+  }, [childInfo]);
+
+  useEffect(() => {
+    const loadHomeworkSummary = async () => {
+      const schoolId = childInfo?.schoolId;
+      const studentId = childInfo?.studentId;
+      if (!schoolId || schoolId === 'explore-schools') return;
+
+      try {
+        const rows = await fetchParentHomework(schoolId, childInfo.grade);
+        const cache = getSubmissionCache(studentId);
+        const mapped = rows.map(({ assignment, course }) =>
+          mapAssignmentForParentHomework(assignment, course, cache)
+        );
+        setPendingHomeworkCount(buildHomeworkStats(mapped).pending);
+      } catch {
+        setPendingHomeworkCount(0);
+      }
+    };
+    loadHomeworkSummary();
   }, [childInfo]);
 
   const getTodayStatusDetails = () => {

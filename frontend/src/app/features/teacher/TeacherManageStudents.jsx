@@ -61,9 +61,6 @@ const TeacherManageStudents = () => {
   // Actions menu for specific student row
   const [activeActionsMenu, setActiveActionsMenu] = useState(null);
 
-  const user = useAuthStore((state) => state.user);
-  const schoolId = user?.tenantSchoolId;
-
   // Helpers
   const triggerToast = (msg) => {
     setToastMessage(msg);
@@ -157,7 +154,6 @@ const TeacherManageStudents = () => {
     }
   };
 
-  const handleSaveStudent = async (e) => {
   const handleSaveStudent = async (e) => {
     e.preventDefault();
     if (!formName.trim() || !formRollNo.trim()) {

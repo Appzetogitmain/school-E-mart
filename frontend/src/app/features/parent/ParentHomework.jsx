@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   ChevronDown, 
   BookOpen, 
@@ -8,94 +8,96 @@ import {
   Paperclip, 
   Eye, 
   ArrowRight,
-  ClipboardList
+  ClipboardList,
+  Loader2
 } from 'lucide-react';
 import AppHeader from '../../components/AppHeader';
 import ParentHomeworkDetails from './ParentHomeworkDetails';
 import LoginRequired from '../../components/LoginRequired';
+import { fetchParentHomework } from '../../../services/parentApi';
+import { getErrorMessage } from '../../../utils/apiHelpers';
+import {
+  buildHomeworkStats,
+  getSubmissionCache,
+  mapAssignmentForParentHomework,
+} from '../../../utils/mappers/parentMapper';
+import { getChildInfoFromStorage } from '../../../utils/parentContext';
 
 const ParentHomework = () => {
   const [activeTab, setActiveTab] = useState('Pending');
   const [scrolled, setScrolled] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [selectedHomework, setSelectedHomework] = useState(null);
+  const [homeworkItems, setHomeworkItems] = useState([]);
+  const [homeworkStats, setHomeworkStats] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  // Dropdown Sort States
   const [showSortDropdown, setShowSortDropdown] = useState(false);
   const [sortOrder, setSortOrder] = useState('Newest');
 
-  // Backend Integration State Hook for Homework Summary Stats:
-  // E.g. setHomeworkStats({ pending: 3, submitted: 2, completed: 8, overdue: 1 })
-  const [homeworkStats, setHomeworkStats] = useState(null);
-
-  const [childInfo] = useState(() => {
-    const saved = localStorage.getItem('childInfo');
-    return saved ? JSON.parse(saved) : {
-      name: "Priya Damodaran",
-      school: "St. Xavier's High School",
-      grade: "Class 2",
-      phone: "+91 79999 42772",
-      progress: { completed: 12, total: 18 }
-    };
+  const [childInfo] = useState(() => getChildInfoFromStorage() || {
+    name: "Guest",
+    school: "Explore Schools",
+    grade: "Select Grade",
+    phone: "",
   });
 
-  const handleScroll = (e) => {
-    if (e.target.scrollTop > 10) {
-      setScrolled(true);
-    } else {
-      setScrolled(false);
+  const loadHomework = useCallback(async () => {
+    const schoolId = childInfo?.schoolId;
+    const studentId = childInfo?.studentId;
+    if (!schoolId || schoolId === 'explore-schools') {
+      setLoading(false);
+      setHomeworkItems([]);
+      setHomeworkStats(buildHomeworkStats([]));
+      return;
     }
-  };
 
-  // Mock list items optimized to show pending items only by default
-  // Built structure-first with double-hyphens so that it is dead-easy to map to database fields later!
-  const homeworkItems = [
-    {
-      id: 'math',
-      subject: 'Mathematics',
-      description: 'Solve the given worksheet on Fractions (Page 45-46) in the notebook.',
-      image: '/assets/math_homework.png',
-      isHighPriority: true,
-      status: 'Due Soon',
-      statusColor: 'bg-[#FFF6ED] text-[#F2994A] border-[#F2994A]/10',
-      assignedDate: '-- -- ----',
-      dueDate: '-- -----',
-      daysRemaining: '-- Day Left',
-      teacher: '-- -.- --',
-      attachmentsCount: 1,
-      tabType: 'Pending'
-    },
-    {
-      id: 'english',
-      subject: 'English',
-      description: "Write a short story (150-200 words) on 'My Best Friend' in your English notebook.",
-      image: '/assets/english_homework.png',
-      isHighPriority: false,
-      status: 'Overdue',
-      statusColor: 'bg-[#FEF3F2] text-[#D93025] border-[#D93025]/10',
-      assignedDate: '-- -- ----',
-      dueDate: '-- -----',
-      daysRemaining: '-- Day Overdue',
-      teacher: '-- -.- --',
-      attachmentsCount: 1,
-      tabType: 'Pending'
-    },
-    {
-      id: 'science',
-      subject: 'Science',
-      description: 'Draw and label the parts of a plant in your notebook.',
-      image: '/assets/science_homework.png',
-      isHighPriority: false,
-      status: 'On Track',
-      statusColor: 'bg-[#EBFBF0] text-[#34A853] border-[#34A853]/10',
-      assignedDate: '-- -- ----',
-      dueDate: '-- -----',
-      daysRemaining: '-- Day Left',
-      teacher: '-- -.- --',
-      attachmentsCount: 1,
-      tabType: 'Pending'
+    setLoading(true);
+    setError('');
+    try {
+      const rows = await fetchParentHomework(schoolId, childInfo.grade);
+      const cache = getSubmissionCache(studentId);
+      const mapped = rows.map(({ assignment, course }) =>
+        mapAssignmentForParentHomework(assignment, course, cache)
+      );
+      setHomeworkItems(mapped);
+      setHomeworkStats(buildHomeworkStats(mapped));
+    } catch (err) {
+      setHomeworkItems([]);
+      setHomeworkStats(buildHomeworkStats([]));
+      setError(getErrorMessage(err, 'Unable to load homework'));
+    } finally {
+      setLoading(false);
     }
-  ];
+  }, [childInfo]);
+
+  useEffect(() => {
+    loadHomework();
+  }, [loadHomework]);
+
+  const filteredHomework = useMemo(() => {
+    let items = [...homeworkItems];
+    if (activeTab !== 'All') {
+      items = items.filter((item) => item.tabType === activeTab);
+    }
+
+    items.sort((a, b) => {
+      if (sortOrder === 'Oldest') {
+        return String(a.assignedDate).localeCompare(String(b.assignedDate));
+      }
+      if (sortOrder === 'Due Date') {
+        return String(a.dueDate).localeCompare(String(b.dueDate));
+      }
+      return String(b.assignedDate).localeCompare(String(a.assignedDate));
+    });
+
+    return items;
+  }, [homeworkItems, activeTab, sortOrder]);
+
+  const handleScroll = (e) => {
+    setScrolled(e.target.scrollTop > 10);
+  };
 
   const isGuest = !localStorage.getItem('childInfo');
 
@@ -270,9 +272,19 @@ const ParentHomework = () => {
 
           {/* 4. Homework Lists */}
           <div className="px-6 flex flex-col gap-4">
-            {/* Filtered mapping: By default, we show the pending cards when the 'Pending' or 'All' tab is active */}
-            {(activeTab === 'Pending' || activeTab === 'All') ? (
-              homeworkItems.map((item) => (
+            {error && (
+              <div className="px-4 py-3 bg-rose-50 border border-rose-100 rounded-2xl text-xs font-bold text-rose-600">
+                {error}
+              </div>
+            )}
+
+            {loading ? (
+              <div className="flex items-center justify-center gap-2 py-12 text-gray-400 text-xs font-bold">
+                <Loader2 size={16} className="animate-spin" />
+                Loading homework...
+              </div>
+            ) : filteredHomework.length > 0 ? (
+              filteredHomework.map((item) => (
                 <div 
                   key={item.id} 
                   className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.015)] hover:shadow-md transition-all duration-300"
@@ -344,12 +356,13 @@ const ParentHomework = () => {
                 </div>
               ))
             ) : (
-              // Clean Empty States for empty tabs - keeps mock data footprint virtually zero!
               <div className="bg-white border border-gray-100 rounded-2xl p-10 flex flex-col items-center justify-center text-center shadow-[0_2px_8px_rgba(0,0,0,0.01)] py-14">
                 <ClipboardList size={36} className="text-gray-300 mb-2" />
                 <h4 className="text-[13px] font-black text-gray-700">No {activeTab} Homework</h4>
                 <p className="text-[11px] font-semibold text-gray-400 mt-1 max-w-[200px] mx-auto leading-relaxed">
-                  All homework submitted by child or graded by teachers will show up here dynamically.
+                  {activeTab === 'All'
+                    ? 'Published assignments from your school will appear here.'
+                    : 'Switch tabs or check back when teachers assign new homework.'}
                 </p>
               </div>
             )}
@@ -360,7 +373,9 @@ const ParentHomework = () => {
         {selectedHomework && (
           <ParentHomeworkDetails 
             homework={selectedHomework}
+            childInfo={childInfo}
             onClose={() => setSelectedHomework(null)}
+            onSubmitted={loadHomework}
           />
         )}
       </div>

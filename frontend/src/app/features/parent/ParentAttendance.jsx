@@ -15,7 +15,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import AppHeader from '../../components/AppHeader';
 import LoginRequired from '../../components/LoginRequired';
-import apiClient from '../../../services/apiClient';
+import { getAttendanceHistory } from '../../../services/parentApi';
 
 const formatSelectedDate = (date) => {
   const weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -81,10 +81,10 @@ const ParentAttendance = () => {
       setLoading(true);
       setError('');
       try {
-        const response = await apiClient.get(`/schools/${schoolId}/attendance/history`, {
-          params: { studentId, limit: 100 }
+        const { data: fetchedRecords } = await getAttendanceHistory(schoolId, {
+          studentId,
+          limit: 100,
         });
-        const fetchedRecords = response.data.data.records || [];
         setRecords(fetchedRecords);
       } catch (err) {
         console.error('Failed to fetch attendance history:', err);
