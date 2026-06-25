@@ -31,6 +31,8 @@ const createApp = () => {
     express.raw({ type: 'application/json', limit: '1mb' }),
     razorpayWebhookRoutes
   );
+  const deliveryWebhookRoutes = require('./routes/deliveryWebhookRoutes');
+  app.use('/api/delivery', express.raw({ type: '*/*', limit: '1mb' }), deliveryWebhookRoutes);
 
   app.use(express.json({ limit: '1mb' }));
   app.use(express.urlencoded({ extended: true, limit: '1mb' }));

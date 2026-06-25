@@ -10,6 +10,7 @@ const {
 } = require('../utils/statusMachine');
 const Order = require('../../../database/models/Order');
 const OrderShipment = require('../../../database/models/OrderShipment');
+const { deliveryCancellationQueue } = require('../../../queues/deliveryQueues');
 
 const cancellationService = {
   async cancelOrder(orderId, { reason, cancelledBy }, { role = 'customer' } = {}) {
@@ -76,6 +77,12 @@ const cancellationService = {
           // refund initiation is best-effort when payment record missing
         }
       }
+
+      await deliveryCancellationQueue.add({
+        orderId: String(order.orderNumber),
+        orderMongoId: order._id,
+        shiprocketOrderId: order.orderNumber,
+      });
 
       return updated;
     });

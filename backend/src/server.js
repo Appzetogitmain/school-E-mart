@@ -7,6 +7,7 @@ const { startServer } = require('./app');
 const { disconnectDB } = require('./database/connection');
 const { connectStateStore, disconnectStateStore } = require('./common/stateStore');
 const { startOutboxWorker, stopOutboxWorker } = require('./services/outbox');
+const { registerDeliveryWorkers, stopDeliveryWorkers } = require('./modules/delivery/workers');
 const config = require('./config');
 const logger = require('./common/logger');
 
@@ -29,6 +30,7 @@ const shutdown = async (signal, exitCode = 0) => {
 
   try {
     stopOutboxWorker(outboxWorkerTimer);
+    stopDeliveryWorkers();
 
     if (server) {
       await new Promise((resolve, reject) => {
@@ -82,6 +84,8 @@ const bootstrap = async () => {
       batchSize: config.integrations.outbox.batchSize,
     });
   }
+
+  registerDeliveryWorkers();
 
   server = await startServer();
 };

@@ -10,6 +10,7 @@ const { generateOrderNumber } = require('../utils/orderNumber');
 const { runAtomic } = require('../utils/atomic');
 const { canTransition } = require('../utils/statusMachine');
 const settlementService = require('../../vendor/services/settlement.service');
+const { deliveryShipmentQueue } = require('../../../queues/deliveryQueues');
 
 const stripPaginationMeta = (query = {}) => {
   const paginationQuery = { ...query };
@@ -122,7 +123,34 @@ const orderService = {
 
       await cartService.clearCart(userId, audience);
 
-      return orderRepository.findById(order._id);
+      const hydratedOrder = await orderRepository.findById(order._id);
+      await deliveryShipmentQueue.add({
+        orderId: String(order.orderNumber),
+        orderMongoId: order._id,
+        pickup: {
+          name: 'School E-Mart',
+          phone: '9999999999',
+          address: 'Default pickup location',
+          pincode: payload.address?.pinCode || payload.address?.pincode || '',
+        },
+        drop: {
+          name: payload.address?.name || 'Customer',
+          phone: payload.address?.phone || '9999999999',
+          address: payload.address?.line1 || '',
+          pincode: payload.address?.pinCode || payload.address?.pincode || '',
+        },
+        items: summary.items.map((item) => ({
+          name: item.name,
+          qty: item.quantity,
+          weight: 0.5,
+          value: Math.round((item.lineTotalPaise || 0) / 100),
+        })),
+        paymentMode: paymentMethod === 'cod' ? 'COD' : 'PREPAID',
+        totalValue: Math.round((summary.totalPaise || 0) / 100),
+        weight: Math.max(0.5, summary.items.length * 0.5),
+        idempotencyKey: `shipment:create:${order.orderNumber}`,
+      });
+      return hydratedOrder;
     });
   },
 
