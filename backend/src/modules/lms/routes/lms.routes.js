@@ -196,6 +196,13 @@ router.post(
   lmsController.submitAssignment
 );
 router.get(
+  '/:schoolId/lms/courses/:courseId/assignments/:assignmentId/submissions/mine',
+  ...withLms(learner),
+  validateParams(validators.assignmentIdParam),
+  validateQuery(validators.studentIdQuerySchema),
+  lmsController.getMySubmission
+);
+router.get(
   '/:schoolId/lms/courses/:courseId/assignments/:assignmentId/submissions',
   ...withLms(lmsManage),
   validateParams(validators.assignmentIdParam),

@@ -40,9 +40,11 @@ export const setSubmissionCache = (studentId, assignmentId, data) => {
   localStorage.setItem(`parentHomeworkSubmissions_${studentId}`, JSON.stringify(cache));
 };
 
-export const mapAssignmentForParentHomework = (assignment, course, submissionCache = {}) => {
+export const mapAssignmentForParentHomework = (assignment, course, submissionOrCache = null) => {
   const id = assignment?._id?.toString?.() || assignment?.id;
-  const cached = submissionCache[id];
+  const cached = submissionOrCache?.status
+    ? submissionOrCache
+    : submissionOrCache?.[id] || submissionOrCache;
   const dueDate = assignment?.dueDate ? new Date(assignment.dueDate) : null;
   const now = new Date();
   const subject = course?.subject || 'General';
@@ -105,4 +107,87 @@ export const mapAttendanceStatus = (status) => {
   if (status === 'leave') return { label: 'Leave', color: 'text-[#7F56D9]' };
   if (status === 'holiday') return { label: 'Holiday', color: 'text-[#2E90FA]' };
   return { label: '—', color: 'text-gray-400' };
+};
+
+const toLocalDateString = (value) => {
+  if (!value) return '';
+  const date = new Date(value);
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const dd = String(date.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+};
+
+const formatShortDateText = (value) => {
+  if (!value) return '—';
+  return new Date(value).toLocaleDateString('en-IN', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+};
+
+const formatTimeText = (value) => {
+  if (!value) return '—';
+  return new Date(value).toLocaleTimeString('en-IN', {
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+};
+
+export const mapNoticeForParent = (notice) => {
+  const id = notice?._id?.toString?.() || notice?.id;
+  const publishedAt = notice?.publishDate || notice?.audit?.createdAt;
+  const date = toLocalDateString(publishedAt);
+
+  return {
+    id,
+    title: notice?.title || 'Notice',
+    content: notice?.content || '',
+    date,
+    dateText: formatShortDateText(publishedAt),
+    type: 'general',
+    category: 'General',
+    iconKey: 'megaphone',
+    bgColor: 'bg-[#EBFBF0]',
+    iconColor: 'text-[#34A853]',
+    attachments: notice?.attachments?.length || 0,
+    pinned: false,
+    isImportantSpotlight: false,
+    raw: notice,
+  };
+};
+
+export const mapDiaryEntryForParent = (entry) => {
+  const id = entry?._id?.toString?.() || entry?.id;
+  const createdAt = entry?.audit?.createdAt || entry?.createdAt;
+  const date = toLocalDateString(createdAt);
+
+  return {
+    id,
+    title: entry?.title || 'Diary Entry',
+    content: entry?.content || '',
+    date,
+    timestamp: formatTimeText(createdAt),
+    type: 'message',
+    sender: 'Class Teacher',
+    hasAttachment: (entry?.attachments?.length || 0) > 0,
+    badgeText: entry?.isReadByParent ? 'Read' : 'New',
+    badgeColor: entry?.isReadByParent
+      ? 'bg-gray-50 text-gray-500 border-gray-100'
+      : 'bg-[#F3EFFF] text-[#6A47DE] border-[#EAE3FF]',
+    iconKey: 'message',
+    bgColor: 'bg-[#F3EFFF]',
+    iconColor: 'text-[#6A47DE]',
+    accentColor: '#6A47DE',
+    isRead: Boolean(entry?.isReadByParent),
+    raw: entry,
+  };
+};
+
+export const mapAudienceToNoticePayload = (audience) => {
+  if (audience === 'teachers') return 'teachers';
+  if (audience === 'specific') return 'specific_classes';
+  if (audience === 'students') return 'parents';
+  return 'parents';
 };

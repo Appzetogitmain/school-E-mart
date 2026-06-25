@@ -16,11 +16,7 @@ import ParentHomeworkDetails from './ParentHomeworkDetails';
 import LoginRequired from '../../components/LoginRequired';
 import { fetchParentHomework } from '../../../services/parentApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
-import {
-  buildHomeworkStats,
-  getSubmissionCache,
-  mapAssignmentForParentHomework,
-} from '../../../utils/mappers/parentMapper';
+import { buildHomeworkStats, mapAssignmentForParentHomework } from '../../../utils/mappers/parentMapper';
 import { getChildInfoFromStorage } from '../../../utils/parentContext';
 
 const ParentHomework = () => {
@@ -56,10 +52,9 @@ const ParentHomework = () => {
     setLoading(true);
     setError('');
     try {
-      const rows = await fetchParentHomework(schoolId, childInfo.grade);
-      const cache = getSubmissionCache(studentId);
-      const mapped = rows.map(({ assignment, course }) =>
-        mapAssignmentForParentHomework(assignment, course, cache)
+      const rows = await fetchParentHomework(schoolId, childInfo.grade, studentId);
+      const mapped = rows.map(({ assignment, course, submission }) =>
+        mapAssignmentForParentHomework(assignment, course, submission)
       );
       setHomeworkItems(mapped);
       setHomeworkStats(buildHomeworkStats(mapped));

@@ -176,6 +176,10 @@ const certificateQuerySchema = paginationQuery.keys({
   studentId: objectId.optional(),
 });
 
+const studentIdQuerySchema = Joi.object({
+  studentId: objectId.optional(),
+});
+
 module.exports = {
   paginationQuery,
   schoolIdParam,
@@ -214,4 +218,5 @@ module.exports = {
   bookmarkSchema,
   generateCertificateSchema,
   certificateQuerySchema,
+  studentIdQuerySchema,
 };

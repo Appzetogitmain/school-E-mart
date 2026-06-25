@@ -214,6 +214,65 @@ const assignClassTeacherSchema = Joi.object({
   teacherProfileId: objectId.required(),
 });
 
+const targetClassSchema = Joi.object({
+  classGrade: Joi.string().trim().required(),
+  sections: Joi.array().items(Joi.string().trim()).default([]),
+});
+
+const createNoticeSchema = Joi.object({
+  title: Joi.string().trim().min(2).max(200).required(),
+  content: Joi.string().trim().min(2).max(20000).required(),
+  targetAudience: Joi.string()
+    .valid('all', 'parents', 'teachers', 'staff', 'specific_classes')
+    .required(),
+  targetClasses: Joi.array().items(targetClassSchema).optional(),
+  attachments: Joi.array().items(objectId).optional(),
+  publishDate: Joi.date().optional(),
+  expiryDate: Joi.date().optional(),
+  status: Joi.string().valid('draft', 'published', 'archived').optional(),
+});
+
+const updateNoticeSchema = createNoticeSchema.fork(
+  ['title', 'content', 'targetAudience'],
+  (schema) => schema.optional()
+);
+
+const noticeStatusSchema = Joi.object({
+  status: Joi.string().valid('draft', 'published', 'archived').required(),
+});
+
+const noticeQuerySchema = Joi.object({
+  ...paginationQuery,
+  status: Joi.string().valid('draft', 'published', 'archived').optional(),
+  targetAudience: Joi.string().valid('all', 'parents', 'teachers', 'staff', 'specific_classes').optional(),
+  studentId: objectId.optional(),
+});
+
+const createDiarySchema = Joi.object({
+  title: Joi.string().trim().min(2).max(200).required(),
+  content: Joi.string().trim().min(2).max(10000).required(),
+  classGrade: Joi.string().trim().required(),
+  section: Joi.string().trim().required(),
+  studentId: objectId.optional(),
+  attachments: Joi.array().items(objectId).optional(),
+});
+
+const updateDiarySchema = createDiarySchema.fork(
+  ['title', 'content', 'classGrade', 'section'],
+  (schema) => schema.optional()
+);
+
+const diaryQuerySchema = Joi.object({
+  ...paginationQuery,
+  classGrade: Joi.string().trim().optional(),
+  section: Joi.string().trim().optional(),
+  studentId: objectId.optional(),
+});
+
+const studentIdQuerySchema = Joi.object({
+  studentId: objectId.optional(),
+});
+
 module.exports = {
   paginationQuery: Joi.object(paginationQuery),
   schoolIdParam,
@@ -251,4 +310,14 @@ module.exports = {
   subjectCodeParam: schoolIdParam.keys({ code: Joi.string().trim().required() }),
   slotIdParam: schoolIdParam.keys({ slotId: objectId.required() }),
   attendanceIdParam: schoolIdParam.keys({ attendanceId: objectId.required() }),
+  noticeIdParam: schoolIdParam.keys({ noticeId: objectId.required() }),
+  diaryIdParam: schoolIdParam.keys({ entryId: objectId.required() }),
+  createNoticeSchema,
+  updateNoticeSchema,
+  noticeStatusSchema,
+  noticeQuerySchema,
+  createDiarySchema,
+  updateDiarySchema,
+  diaryQuerySchema,
+  studentIdQuerySchema,
 };

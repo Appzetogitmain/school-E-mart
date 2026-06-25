@@ -367,4 +367,117 @@ router.delete(
   schoolController.deleteTimetableSlot
 );
 
+const noticeRead = protectedRoute({
+  roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN, ROLES.TEACHER, ROLES.PARENT],
+  permissions: [PERMISSIONS.NOTICES_READ],
+  tenant: { requireTenantId: false },
+});
+const noticeWrite = protectedRoute({
+  roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN],
+  permissions: [PERMISSIONS.NOTICES_SEND],
+  tenant: { requireTenantId: false },
+});
+const diaryRead = protectedRoute({
+  roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN, ROLES.TEACHER, ROLES.PARENT],
+  permissions: [PERMISSIONS.DIARY_READ],
+  tenant: { requireTenantId: false },
+});
+const diaryWrite = protectedRoute({
+  roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN, ROLES.TEACHER],
+  permissions: [PERMISSIONS.DIARY_WRITE],
+  tenant: { requireTenantId: false },
+});
+
+router.post(
+  '/:schoolId/notices',
+  ...noticeWrite,
+  resolveSchool(),
+  validateBody(validators.createNoticeSchema),
+  schoolController.createNotice
+);
+router.get(
+  '/:schoolId/notices',
+  ...noticeRead,
+  resolveSchool(),
+  validateQuery(validators.noticeQuerySchema),
+  schoolController.listNotices
+);
+router.get(
+  '/:schoolId/notices/:noticeId',
+  ...noticeRead,
+  resolveSchool(),
+  validateParams(validators.noticeIdParam),
+  validateQuery(validators.studentIdQuerySchema),
+  schoolController.getNotice
+);
+router.patch(
+  '/:schoolId/notices/:noticeId',
+  ...noticeWrite,
+  resolveSchool(),
+  validateParams(validators.noticeIdParam),
+  validateBody(validators.updateNoticeSchema),
+  schoolController.updateNotice
+);
+router.patch(
+  '/:schoolId/notices/:noticeId/status',
+  ...noticeWrite,
+  resolveSchool(),
+  validateParams(validators.noticeIdParam),
+  validateBody(validators.noticeStatusSchema),
+  schoolController.setNoticeStatus
+);
+router.delete(
+  '/:schoolId/notices/:noticeId',
+  ...noticeWrite,
+  resolveSchool(),
+  validateParams(validators.noticeIdParam),
+  schoolController.deleteNotice
+);
+
+router.post(
+  '/:schoolId/diary',
+  ...diaryWrite,
+  resolveSchool(),
+  validateBody(validators.createDiarySchema),
+  schoolController.createDiaryEntry
+);
+router.get(
+  '/:schoolId/diary',
+  ...diaryRead,
+  resolveSchool(),
+  validateQuery(validators.diaryQuerySchema),
+  schoolController.listDiaryEntries
+);
+router.get(
+  '/:schoolId/diary/:entryId',
+  ...diaryRead,
+  resolveSchool(),
+  validateParams(validators.diaryIdParam),
+  validateQuery(validators.studentIdQuerySchema),
+  schoolController.getDiaryEntry
+);
+router.patch(
+  '/:schoolId/diary/:entryId/read',
+  ...protectedRoute({ roles: [ROLES.PARENT], permissions: [PERMISSIONS.DIARY_READ], tenant: { requireTenantId: false } }),
+  resolveSchool(),
+  validateParams(validators.diaryIdParam),
+  validateQuery(validators.studentIdQuerySchema),
+  schoolController.markDiaryRead
+);
+router.patch(
+  '/:schoolId/diary/:entryId',
+  ...diaryWrite,
+  resolveSchool(),
+  validateParams(validators.diaryIdParam),
+  validateBody(validators.updateDiarySchema),
+  schoolController.updateDiaryEntry
+);
+router.delete(
+  '/:schoolId/diary/:entryId',
+  ...diaryWrite,
+  resolveSchool(),
+  validateParams(validators.diaryIdParam),
+  schoolController.deleteDiaryEntry
+);
+
 module.exports = router;

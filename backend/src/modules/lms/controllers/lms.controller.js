@@ -231,6 +231,17 @@ const lmsController = {
     return paginated(res, { submissions: data }, pagination, 'Submissions fetched successfully', req);
   }),
 
+  getMySubmission: asyncHandler(async (req, res) => {
+    await assertEnrollmentAccess(req, req.params.courseId, req.query.studentId);
+    const submission = await assignmentService.getMySubmission(
+      req,
+      req.schoolId,
+      req.params.courseId,
+      req.params.assignmentId
+    );
+    return success(res, { submission }, 'Submission fetched successfully', undefined, req);
+  }),
+
   createQuiz: asyncHandler(async (req, res) => {
     const course = await withCourse(req);
     await assertManageAccess(req, course);

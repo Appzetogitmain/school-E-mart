@@ -1,5 +1,5 @@
 import apiClient from './apiClient';
-import { listCourses, listAssignments, submitAssignment } from './lmsApi';
+import { listCourses, listAssignments, submitAssignment, getMySubmission } from './lmsApi';
 import { parseClassGrade } from '../utils/mappers/teacherMapper';
 
 const extractRecords = (response) => response.data?.data?.records || [];
@@ -12,7 +12,7 @@ export const getAttendanceHistory = async (schoolId, params = {}) => {
   };
 };
 
-export const fetchParentHomework = async (schoolId, gradeLabel) => {
+export const fetchParentHomework = async (schoolId, gradeLabel, studentId) => {
   const classGrade = parseClassGrade(gradeLabel || '');
   const { data: courses } = await listCourses(schoolId, { limit: 50 });
 
@@ -31,12 +31,38 @@ export const fetchParentHomework = async (schoolId, gradeLabel) => {
       limit: 50,
       status: 'published',
     });
-    (rows || []).forEach((assignment) => {
-      assignments.push({ assignment, course });
-    });
+    for (const assignment of rows || []) {
+      const assignmentId = assignment._id || assignment.id;
+      let submission = null;
+      if (studentId) {
+        try {
+          submission = await getMySubmission(schoolId, courseId, assignmentId, { studentId });
+        } catch {
+          submission = null;
+        }
+      }
+      assignments.push({ assignment, course, submission });
+    }
   }
 
   return assignments;
+};
+
+export const listParentNotices = async (schoolId, params = {}) => {
+  const response = await apiClient.get(`/schools/${schoolId}/notices`, { params });
+  const { data, pagination } = response.data;
+  return { data: data?.notices || [], pagination: pagination || null };
+};
+
+export const listParentDiary = async (schoolId, params = {}) => {
+  const response = await apiClient.get(`/schools/${schoolId}/diary`, { params });
+  const { data, pagination } = response.data;
+  return { data: data?.entries || [], pagination: pagination || null };
+};
+
+export const markParentDiaryRead = async (schoolId, entryId, params = {}) => {
+  const response = await apiClient.patch(`/schools/${schoolId}/diary/${entryId}/read`, null, { params });
+  return response.data?.data?.entry;
 };
 
 export const submitHomework = async (schoolId, courseId, assignmentId, payload) =>

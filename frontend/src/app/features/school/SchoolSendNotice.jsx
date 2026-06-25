@@ -5,11 +5,16 @@ import {
   Bold, Italic, Underline, List, ListOrdered, 
   AlignLeft, AlignRight, Link2, Image as ImageIcon,
   Users, GraduationCap, Grid, Upload, FileText, 
-  X, Info, Send, Save, Check
+  X, Info, Send, Save, Check, Loader2
 } from 'lucide-react';
+import { createNotice } from '../../../services/schoolApi';
+import { mapAudienceToNoticePayload } from '../../../utils/mappers/parentMapper';
+import { getErrorMessage } from '../../../utils/apiHelpers';
+import { useSchoolId } from '../../../utils/schoolContext';
 
 const SchoolSendNotice = () => {
   const navigate = useNavigate();
+  const schoolId = useSchoolId();
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [audience, setAudience] = useState('parents');
@@ -18,6 +23,8 @@ const SchoolSendNotice = () => {
   ]);
   const [schedule, setSchedule] = useState('now');
   const [isSuccess, setIsSuccess] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
   const handleBack = () => {
     navigate('/school/admin');
@@ -41,12 +48,36 @@ const SchoolSendNotice = () => {
     }
   };
 
-  const handleSendNotice = () => {
-    setIsSuccess(true);
-    setTimeout(() => {
-      setIsSuccess(false);
-      navigate('/school/admin');
-    }, 2000);
+  const handleSendNotice = async () => {
+    if (!title.trim() || !content.trim()) {
+      setError('Please enter a title and notice content.');
+      return;
+    }
+    if (!schoolId) {
+      setError('School context is missing. Please sign in again.');
+      return;
+    }
+
+    setSaving(true);
+    setError('');
+    try {
+      await createNotice(schoolId, {
+        title: title.trim(),
+        content: content.trim(),
+        targetAudience: mapAudienceToNoticePayload(audience),
+        status: schedule === 'now' ? 'published' : 'draft',
+        publishDate: schedule === 'now' ? new Date().toISOString() : undefined,
+      });
+      setIsSuccess(true);
+      setTimeout(() => {
+        setIsSuccess(false);
+        navigate('/school/admin');
+      }, 2000);
+    } catch (err) {
+      setError(getErrorMessage(err, 'Unable to send notice'));
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -273,14 +304,18 @@ const SchoolSendNotice = () => {
 
       {/* Sticky Bottom Actions Footer Bar */}
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-150 p-4 flex flex-col gap-3 z-50 max-w-md mx-auto">
+        {error && (
+          <p className="text-[10px] font-bold text-red-500 text-center">{error}</p>
+        )}
         <div className="flex">
           <button 
             type="button"
             onClick={handleSendNotice}
-            className="w-full py-3 bg-primary text-white rounded-2xl text-xs font-black shadow-lg shadow-purple-100 flex items-center justify-center gap-1.5 active:scale-95 transition-all"
+            disabled={saving}
+            className="w-full py-3 bg-primary text-white rounded-2xl text-xs font-black shadow-lg shadow-purple-100 flex items-center justify-center gap-1.5 active:scale-95 transition-all disabled:opacity-60"
           >
-            <Send size={14} />
-            Send Notice
+            {saving ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+            {saving ? 'Sending...' : 'Send Notice'}
           </button>
         </div>
 

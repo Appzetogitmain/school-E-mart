@@ -110,6 +110,13 @@ const assignmentService = {
     await this.getAssignment(schoolId, courseId, assignmentId);
     return assignmentSubmissionRepository.paginateSubmissions({ schoolId, assignmentId }, query);
   },
+
+  async getMySubmission(req, schoolId, courseId, assignmentId) {
+    await this.getAssignment(schoolId, courseId, assignmentId);
+    const student = req.lmsStudent;
+    if (!student?._id) return null;
+    return assignmentSubmissionRepository.findByAssignmentAndStudent(assignmentId, student._id);
+  },
 };
 
 module.exports = assignmentService;

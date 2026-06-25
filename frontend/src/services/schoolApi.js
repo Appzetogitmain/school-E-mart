@@ -111,3 +111,28 @@ export const getMonthlyAttendanceSummary = async (schoolId, params) => {
   const response = await apiClient.get(schoolPath(schoolId, '/attendance/summary/monthly'), { params });
   return unwrapData(response)?.summary;
 };
+
+export const createNotice = async (schoolId, payload) => {
+  const response = await apiClient.post(schoolPath(schoolId, '/notices'), payload);
+  return unwrapData(response)?.notice;
+};
+
+export const listNotices = async (schoolId, params = {}) => {
+  const response = await apiClient.get(schoolPath(schoolId, '/notices'), { params });
+  return extractPaginated(response, 'notices');
+};
+
+export const createDiaryEntry = async (schoolId, payload) => {
+  const response = await apiClient.post(schoolPath(schoolId, '/diary'), payload);
+  return unwrapData(response)?.entry;
+};
+
+export const listDiaryEntries = async (schoolId, params = {}) => {
+  const response = await apiClient.get(schoolPath(schoolId, '/diary'), { params });
+  return extractPaginated(response, 'entries');
+};
+
+export const markDiaryRead = async (schoolId, entryId, params = {}) => {
+  const response = await apiClient.patch(schoolPath(schoolId, `/diary/${entryId}/read`), null, { params });
+  return unwrapData(response)?.entry;
+};
