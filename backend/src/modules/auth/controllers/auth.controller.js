@@ -325,7 +325,7 @@ const authController = {
       };
     }
 
-    return success(res, sessionResponse, 'Registration successful', 201, req);
+    return sendAuthResponse(res, req, sessionResponse, 'Registration successful');
   }),
 
   registerTeacher: asyncHandler(async (req, res) => {
@@ -373,7 +373,7 @@ const authController = {
     const { issueAuthenticatedSession } = require('../services/sessionIssue.service');
     const sessionResponse = await issueAuthenticatedSession(user, getRequestMeta(req), 'auth.register.teacher.success');
 
-    return success(res, sessionResponse, 'Teacher registration successful', 201, req);
+    return sendAuthResponse(res, req, sessionResponse, 'Teacher registration successful');
   }),
 };
 

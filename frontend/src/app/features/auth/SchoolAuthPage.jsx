@@ -123,20 +123,42 @@ const SchoolAuthPage = () => {
       return;
     }
 
-    // Signup remains local until school onboarding API is available
+    if (role === 'teacher') {
+      try {
+        const authData = await authApi.teacherRegister({
+          fullName: formData.fullName.trim(),
+          email: formData.email.trim(),
+          mobile: formData.mobile.replace(/\D/g, '').slice(-10),
+          schoolCode: formData.schoolCode.trim(),
+          password: formData.password,
+        });
+        loginFromAuthResponse(authData, 'teacher');
+        setSuccessInfo({
+          id: authData.user?.refId || '',
+          name: authData.user?.name || formData.fullName,
+          role: 'Teacher',
+        });
+        setStep(3);
+      } catch (err) {
+        setError(getErrorMessage(err, 'Registration failed. Please check your details and school code.'));
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
+    // School admin signup remains local until school onboarding API is available
     setTimeout(() => {
       setLoading(false);
 
-      const referenceId = role === 'admin'
-        ? `SEM-ADM-${Math.floor(100000 + Math.random() * 900000)}`
-        : `SEM-TCH-${Math.floor(100000 + Math.random() * 900000)}`;
+      const referenceId = `SEM-ADM-${Math.floor(100000 + Math.random() * 900000)}`;
 
-      const userDisplayName = formData.fullName || (role === 'admin' ? 'School Administrator' : 'Teacher');
+      const userDisplayName = formData.fullName || 'School Administrator';
 
       const mockUser = {
         name: userDisplayName,
-        school: role === 'admin' ? formData.schoolName : (formData.schoolCode || 'Associated School'),
-        role: role === 'admin' ? 'school' : 'teacher',
+        school: formData.schoolName,
+        role: 'school',
         phone: formData.mobile || '9876543210',
         email: formData.email,
         refId: referenceId,
@@ -145,7 +167,7 @@ const SchoolAuthPage = () => {
       setSuccessInfo({
         id: referenceId,
         name: userDisplayName,
-        role: role === 'admin' ? 'School Administrator' : 'Teacher',
+        role: 'School Administrator',
       });
       localStorage.setItem('childInfo', JSON.stringify(mockUser));
       setStep(3);

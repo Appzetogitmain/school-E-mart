@@ -54,8 +54,11 @@ const buildEnv = () => {
   COOKIE_SAME_SITE: process.env.COOKIE_SAME_SITE || 'strict',
   REFRESH_COOKIE_NAME: process.env.REFRESH_COOKIE_NAME || 'refreshToken',
 
-  CORS_ORIGIN: process.env.CORS_ORIGIN || 'http://localhost:5173',
-  CORS_ORIGINS: parseList(process.env.CORS_ORIGIN, ['http://localhost:5173']),
+  CORS_ORIGIN: process.env.CORS_ORIGIN || 'http://localhost:5173,http://127.0.0.1:5173',
+  CORS_ORIGINS: parseList(process.env.CORS_ORIGIN, [
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+  ]),
 
   MAX_LOGIN_ATTEMPTS: Number(process.env.MAX_LOGIN_ATTEMPTS) || 5,
   LOGIN_LOCKOUT_MINUTES: Number(process.env.LOGIN_LOCKOUT_MINUTES) || 15,

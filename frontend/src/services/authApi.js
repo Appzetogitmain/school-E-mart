@@ -36,6 +36,11 @@ export const teacherLogin = async (email, password) => {
   return unwrapData(response);
 };
 
+export const teacherRegister = async (payload) => {
+  const response = await apiClient.post('/auth/school/teacher/register', payload);
+  return unwrapData(response);
+};
+
 export const vendorLogin = async (email, password) => {
   const response = await apiClient.post('/auth/vendor/login', { email, password });
   return unwrapData(response);
