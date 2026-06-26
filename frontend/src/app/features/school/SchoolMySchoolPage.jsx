@@ -10,12 +10,16 @@ import SchoolHeader from '../../components/SchoolHeader';
 import SectionHeader from '../../components/SectionHeader';
 import ProductCard from '../../components/ProductCard';
 import { useDraggableScroll } from '../../hooks/useDraggableScroll';
-import { getSchool } from '../../../services/schoolApi';
+import { getSchool, listNotices } from '../../../services/schoolApi';
 import { useSchoolId } from '../../../utils/schoolContext';
+import { useProducts } from '../../../hooks/useProducts';
 
 const SchoolMySchoolPage = () => {
   const navigate = useNavigate();
   const schoolId = useSchoolId();
+  const { products: institutionalKits, loading: kitsLoading } = useProducts({ featured: true, limit: 6 });
+  const [announcements, setAnnouncements] = useState([]);
+  const [noticesLoading, setNoticesLoading] = useState(true);
   const kitsRef = useDraggableScroll();
   const [scrolled, setScrolled] = useState(false);
   const [schoolInfo, setSchoolInfo] = useState(() => {
@@ -41,14 +45,54 @@ const SchoolMySchoolPage = () => {
     loadSchool();
   }, [loadSchool]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadNotices = async () => {
+      if (!schoolId) {
+        setAnnouncements([]);
+        setNoticesLoading(false);
+        return;
+      }
+
+      setNoticesLoading(true);
+      try {
+        const { data } = await listNotices(schoolId, { limit: 5 });
+        if (!cancelled) {
+          setAnnouncements(
+            (data || []).map((notice) => ({
+              id: notice._id || notice.id,
+              title: notice.title,
+              date: notice.publishedAt || notice.createdAt
+                ? new Date(notice.publishedAt || notice.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
+                : '',
+            }))
+          );
+        }
+      } catch {
+        if (!cancelled) setAnnouncements([]);
+      } finally {
+        if (!cancelled) setNoticesLoading(false);
+      }
+    };
+
+    loadNotices();
+    return () => {
+      cancelled = true;
+    };
+  }, [schoolId]);
+
   const handleScroll = (e) => {
     const scrollPos = e.target.scrollTop;
     setScrolled(scrollPos > 50);
   };
 
-  const announcements = [];
-
-  const institutionalKits = [];
+  const kitCards = institutionalKits.map((kit) => ({
+    id: kit.id,
+    name: kit.name,
+    price: kit.price,
+    image: kit.image,
+  }));
 
   const renderProductCard = (product) => (
     <ProductCard key={product.id} product={product} />
@@ -108,7 +152,15 @@ const SchoolMySchoolPage = () => {
           <section>
             <SectionHeader title="Bulk Packages" className="px-0" />
             <div ref={kitsRef} className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide select-none active:cursor-grabbing">
-              {institutionalKits.map((kit) => (
+              {kitsLoading ? (
+                <p className="text-sm text-gray-400 py-4">Loading packages…</p>
+              ) : kitCards.length === 0 ? (
+                <div className="min-w-full text-center py-8 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
+                  <Package size={28} className="text-gray-300 mx-auto mb-2" />
+                  <p className="text-xs font-bold text-gray-400">No bulk packages available</p>
+                </div>
+              ) : (
+                kitCards.map((kit) => (
                 <div key={kit.id} className="min-w-[260px] bg-white rounded-[2rem] overflow-hidden shadow-sm border border-gray-50">
                   <div className="h-36 relative bg-gray-50">
                     <img src={kit.image} alt={kit.name} className="w-full h-full object-cover" />
@@ -124,7 +176,8 @@ const SchoolMySchoolPage = () => {
                     </div>
                   </div>
                 </div>
-              ))}
+                ))
+              )}
             </div>
           </section>
 
@@ -134,7 +187,12 @@ const SchoolMySchoolPage = () => {
               <h2 className="text-base font-bold text-deep-purple">Institutional Notices</h2>
             </div>
             <div className="space-y-4">
-              {announcements.map((msg) => (
+              {noticesLoading ? (
+                <p className="text-xs text-gray-400">Loading notices…</p>
+              ) : announcements.length === 0 ? (
+                <p className="text-xs text-gray-400 font-bold">No institutional notices yet</p>
+              ) : (
+                announcements.map((msg) => (
                 <div key={msg.id} className="flex items-start gap-3">
                   <div className="w-1.5 h-1.5 bg-primary rounded-full mt-1.5 shrink-0"></div>
                   <div>
@@ -142,7 +200,8 @@ const SchoolMySchoolPage = () => {
                     <p className="text-[10px] text-gray-400 mt-0.5 uppercase font-bold">{msg.date}</p>
                   </div>
                 </div>
-              ))}
+                ))
+              )}
             </div>
           </section>
 

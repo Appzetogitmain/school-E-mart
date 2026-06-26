@@ -32,14 +32,7 @@ const SchoolCreateRequest = () => {
   
   const [vendors, setVendors] = useState([]);
 
-  const [quotationRequirements, setQuotationRequirements] = useState([
-    { label: 'Sample Required', icon: '📦', checked: true },
-    { label: 'GST Included', icon: '🧾', checked: true },
-    { label: 'Delivery Timeline', icon: '🚚', checked: true },
-    { label: 'Fabric Details', icon: '🧶', checked: true },
-    { label: 'Size Chart', icon: '📏', checked: false },
-    { label: 'After Sales Support', icon: '🎧', checked: false }
-  ]);
+  const [quotationRequirements, setQuotationRequirements] = useState([]);
 
   const availableClasses = [
     { id: 'nursery', label: 'Nursery' },
@@ -55,52 +48,7 @@ const SchoolCreateRequest = () => {
     { id: 'class-8', label: 'Class 8' },
   ];
 
-  // STEP 2 STATES (Mock initial uniform sets list)
-  const [uniformSets, setUniformSets] = useState([
-    {
-      id: 1,
-      name: 'Regular School Uniform',
-      type: 'Primary Set',
-      boysQty: '1,200',
-      girlsQty: '1,100',
-      components: [
-        { label: 'Shirt', icon: '👕', checked: true },
-        { label: 'Trouser', icon: '👖', checked: true },
-        { label: 'Skirt', icon: '👗', checked: true },
-        { label: 'Tie', icon: '👔', checked: true },
-        { label: 'Belt', icon: '🎗️', checked: true },
-        { label: 'Blazer', icon: '🧥', checked: true },
-        { label: 'Socks', icon: '🧦', checked: true },
-        { label: 'Others', icon: '💬', checked: false }
-      ],
-      images: [
-        { label: 'Front View', file: null, preview: null },
-        { label: 'Back View', file: null, preview: null },
-        { label: 'Logo Placement', file: null, preview: null },
-        { label: 'Tie / Belt Design', file: null, preview: null }
-      ]
-    },
-    {
-      id: 2,
-      name: 'Sports / Activity Uniform',
-      type: 'Secondary Set',
-      boysQty: '1,200',
-      girlsQty: '1,100',
-      components: [
-        { label: 'Sports T-Shirt', icon: '👕', checked: true },
-        { label: 'Track Pant', icon: '👖', checked: true },
-        { label: 'Cap', icon: '🧢', checked: true },
-        { label: 'Socks', icon: '🧦', checked: true },
-        { label: 'Others', icon: '💬', checked: false }
-      ],
-      images: [
-        { label: 'T-Shirt Front', file: null, preview: null },
-        { label: 'T-Shirt Back', file: null, preview: null },
-        { label: 'Cap Design', file: null, preview: null },
-        { label: 'Fabric / Color Sample', file: null, preview: null }
-      ]
-    }
-  ]);
+  const [uniformSets, setUniformSets] = useState([]);
 
   const handleBack = () => {
     if (currentStep > 1) {
@@ -138,12 +86,7 @@ const SchoolCreateRequest = () => {
   };
 
   const handleViewMoreVendors = () => {
-    const newId = vendors.length + 1;
-    const additionalVendors = [
-      { id: newId, name: 'Unique Stitch Ltd', location: 'Ahmedabad, India', rating: 4.4, completed: 68, verified: true, checked: false, logo: 'UNIQUE', logoBg: 'bg-emerald-50 text-emerald-600' },
-      { id: newId + 1, name: 'Bright Colors Apparels', location: 'Hyderabad, India', rating: 4.3, completed: 62, verified: true, checked: false, logo: 'BRIGHT', logoBg: 'bg-yellow-50 text-yellow-600' }
-    ];
-    setVendors([...vendors, ...additionalVendors]);
+    // No vendor API yet — keep list as-is
   };
 
   const handleSaveDraft = () => {
@@ -639,7 +582,14 @@ const SchoolCreateRequest = () => {
           </div>
 
           {/* List of Uniform Sets */}
-          {uniformSets.map((set, setIndex) => (
+          {uniformSets.length === 0 ? (
+            <div className="text-center py-12 bg-white border border-dashed border-gray-200 rounded-[2.2rem]">
+              <Sparkles size={32} className="text-gray-300 mx-auto mb-2" />
+              <p className="text-xs font-black text-gray-500">No uniform sets added yet</p>
+              <p className="text-[10px] text-gray-400 font-bold mt-1">Tap &quot;Add Set&quot; to define uniform requirements.</p>
+            </div>
+          ) : (
+          uniformSets.map((set, setIndex) => (
             <div 
               key={set.id}
               className="bg-white border border-gray-200/80 rounded-[2.2rem] p-6 shadow-sm space-y-6 relative overflow-hidden animate-in fade-in slide-in-from-top-3 duration-300"
@@ -838,7 +788,7 @@ const SchoolCreateRequest = () => {
               </div>
 
             </div>
-          ))}
+          )))}
         </div>
       )}
 
@@ -873,7 +823,14 @@ const SchoolCreateRequest = () => {
 
             {/* Vendors List */}
             <div className="space-y-3">
-              {vendors
+              {vendors.length === 0 ? (
+                <div className="text-center py-10 bg-gray-50/50 border border-dashed border-gray-200 rounded-2xl">
+                  <Users size={32} className="text-gray-300 mx-auto mb-2" />
+                  <p className="text-xs font-black text-gray-500">No vendors available yet</p>
+                  <p className="text-[10px] text-gray-400 font-bold mt-1">Vendor directory API is not available.</p>
+                </div>
+              ) : (
+              vendors
                 .filter(v => v.name.toLowerCase().includes(searchQuery.toLowerCase()))
                 .map(v => (
                   <div 
@@ -930,7 +887,8 @@ const SchoolCreateRequest = () => {
                       </div>
                     )}
                   </div>
-                ))}
+                ))
+              )}
             </div>
 
             {/* Centered View More Button */}
@@ -983,7 +941,10 @@ const SchoolCreateRequest = () => {
               </label>
               
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                {quotationRequirements.map(req => (
+                {quotationRequirements.length === 0 ? (
+                  <p className="text-xs font-bold text-gray-400 col-span-2 py-2">No quotation requirements configured</p>
+                ) : (
+                quotationRequirements.map(req => (
                   <div 
                     key={req.label}
                     onClick={() => handleToggleRequirement(req.label)}
@@ -1005,7 +966,8 @@ const SchoolCreateRequest = () => {
                       <span className="truncate">{req.label}</span>
                     </span>
                   </div>
-                ))}
+                ))
+                )}
               </div>
             </div>
 
@@ -1057,28 +1019,28 @@ const SchoolCreateRequest = () => {
             <div className="space-y-3.5 pt-1 text-xs">
               <div className="flex items-start gap-4">
                 <span className="w-24 text-gray-400 font-bold shrink-0">Request Title</span>
-                <span className="text-deep-purple font-black">{requestTitle || 'Annual Uniform Requirement 2025-26'}</span>
+                <span className="text-deep-purple font-black">{requestTitle || '—'}</span>
               </div>
               <div className="flex items-start gap-4">
                 <span className="w-24 text-gray-400 font-bold shrink-0">Academic Year</span>
-                <span className="text-deep-purple font-bold">{academicYear || '2025 - 2026'}</span>
+                <span className="text-deep-purple font-bold">{academicYear || '—'}</span>
               </div>
               <div className="flex items-start gap-4">
                 <span className="w-24 text-gray-400 font-bold shrink-0">Classes</span>
                 <span className="text-deep-purple font-bold">
                   {selectedClasses.length > 0 
                     ? selectedClasses.map(id => availableClasses.find(c => c.id === id)?.label).filter(Boolean).join(', ') 
-                    : 'Nursery, LKG, UKG, 1st to 12th'}
+                    : 'None selected'}
                 </span>
               </div>
               <div className="flex items-start gap-4">
                 <span className="w-24 text-gray-400 font-bold shrink-0">Total Students</span>
-                <span className="text-deep-purple font-black">{totalStudents ? `${totalStudents} Students` : '2,300 Students'}</span>
+                <span className="text-deep-purple font-black">{totalStudents ? `${totalStudents} Students` : '—'}</span>
               </div>
               <div className="flex items-start gap-4">
                 <span className="w-24 text-gray-400 font-bold shrink-0">Notes</span>
                 <span className="text-deep-purple font-bold leading-relaxed">
-                  {specialInstructions || 'Please provide best quality fabric and stitching. Timely delivery is important.'}
+                  {specialInstructions || '—'}
                 </span>
               </div>
             </div>
@@ -1207,7 +1169,7 @@ const SchoolCreateRequest = () => {
             </div>
             <div className="flex items-center gap-1.5 text-xs font-black text-[#3b2d7d] bg-purple-50/50 px-3.5 py-2 rounded-xl border border-purple-100/60 shrink-0">
               <Calendar size={12} />
-              {deadlineDate ? new Date(deadlineDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '15 Dec 2025'}
+              {deadlineDate ? new Date(deadlineDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}
             </div>
           </div>
 

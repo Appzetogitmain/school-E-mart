@@ -1,10 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Check, ShoppingCart, 
-  Sparkles, ShieldCheck, ChevronRight,
-  Info, AlertCircle, Package, Truck,
-  Plus, X, Building2
+  ShieldCheck, Package, Truck,
+  Plus, Building2, Loader2
 } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
 import AuthPrompt from '../../components/AuthPrompt';
@@ -15,28 +14,16 @@ const SchoolKitDetailsPage = () => {
   const { addToCart } = useCart();
   const [isAuthPromptOpen, setIsAuthPromptOpen] = useState(false);
   const isGuest = !localStorage.getItem('childInfo');
+  const [loading, setLoading] = useState(true);
+  const [currentKitData, setCurrentKitData] = useState(null);
+  const [selectedItemIds, setSelectedItemIds] = useState([]);
 
-  // Initial Kit Data adapted for School
-  const [currentKitData, setCurrentKitData] = useState({
-    id: kitId || 1,
-    name: "Standardized Class 2 Bulk Kit",
-    description: "Optimized for institutional bulk supply. Includes standardized uniform sets, textbooks, and essential stationery for an entire class or grade section.",
-    image: "https://images.unsplash.com/photo-1503919545889-aef636e10ad4?q=80&w=600&h=800&fit=crop",
-    items: [
-      { id: 'u1', name: "Bulk School Blazers (Navy Blue)", price: 1450, quantity: 1, type: "Uniform", image: "https://images.unsplash.com/photo-1594932224491-ef2443e73bb5?q=80&w=200&h=200&fit=crop" },
-      { id: 'u2', name: "Bulk White Polo Shirts (Pack of 50)", price: 850, quantity: 1, type: "Uniform", image: "https://images.unsplash.com/photo-1596755094514-f87e34085b2c?q=80&w=200&h=200&fit=crop" },
-      { id: 'u3', name: "Bulk Grey Trousers (Pack of 30)", price: 650, quantity: 1, type: "Uniform", image: "https://images.unsplash.com/photo-1594633312681-425c7b97ccd1?q=80&w=200&h=200&fit=crop" },
-      { id: 'b1', name: "Institutional Textbook Sets", price: 980, quantity: 1, type: "Books", image: "https://images.unsplash.com/photo-1544947950-fa07a98d237f?q=80&w=200&h=200&fit=crop" },
-      { id: 'b2', name: "Mathematics Exam Practice Sets", price: 420, quantity: 1, type: "Books", image: "https://images.unsplash.com/photo-1543004629-ff569587207d?q=80&w=200&h=200&fit=crop" },
-      { id: 's1', name: "Bulk Stationery Supplies Box", price: 350, quantity: 1, type: "Stationery", image: "https://images.unsplash.com/photo-1634045550273-db9897ca800c?q=80&w=200&h=200&fit=crop" }
-    ],
-    addons: [
-      { id: 'a1', name: "Heavy Duty School Bags (Bulk)", price: 1250, type: "Bag", image: "https://images.unsplash.com/photo-1553062407-98eeb64c6a62?q=80&w=200&h=200&fit=crop" },
-      { id: 'a2', name: "Stainless Steel Water Bottles", price: 450, type: "Essentials", image: "https://images.unsplash.com/photo-1602143393494-116035655787?q=80&w=200&h=200&fit=crop" }
-    ]
-  });
-
-  const [selectedItemIds, setSelectedItemIds] = useState(currentKitData.items.map(i => i.id));
+  useEffect(() => {
+    setLoading(true);
+    setCurrentKitData(null);
+    const timer = setTimeout(() => setLoading(false), 300);
+    return () => clearTimeout(timer);
+  }, [kitId]);
 
   const toggleItem = (id) => {
     setSelectedItemIds(prev => 
@@ -70,15 +57,17 @@ const SchoolKitDetailsPage = () => {
   };
 
   const { currentTotal, isFullKit } = useMemo(() => {
+    if (!currentKitData) return { currentTotal: 0, isFullKit: false };
     const selectedItems = currentKitData.items.filter(item => selectedItemIds.includes(item.id));
     const current = selectedItems.reduce((sum, item) => sum + item.price, 0);
     return {
       currentTotal: current,
       isFullKit: selectedItemIds.length === currentKitData.items.length
     };
-  }, [selectedItemIds, currentKitData.items]);
+  }, [selectedItemIds, currentKitData]);
 
   const handleAddToCart = () => {
+    if (!currentKitData) return;
     if (isGuest) {
       setIsAuthPromptOpen(true);
       return;
@@ -87,6 +76,28 @@ const SchoolKitDetailsPage = () => {
     // Implementation note: In a real flow, we'd ensure all selected items are in cart
     navigate('/school/cart');
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#F8F7FF] flex flex-col items-center justify-center font-outfit">
+        <Loader2 size={32} className="animate-spin text-primary mb-3" />
+        <p className="text-sm text-gray-400">Loading kit details…</p>
+      </div>
+    );
+  }
+
+  if (!currentKitData) {
+    return (
+      <div className="min-h-screen bg-[#F8F7FF] flex flex-col items-center justify-center px-6 font-outfit text-center">
+        <Package size={48} className="text-gray-200 mb-4" />
+        <h2 className="text-lg font-black text-deep-purple mb-2">Kit not found</h2>
+        <p className="text-sm text-gray-400 mb-6">School kit details are not available yet.</p>
+        <button onClick={() => navigate(-1)} className="px-6 py-3 bg-primary text-white rounded-2xl text-sm font-bold">
+          Go Back
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#F8F7FF] pb-32 font-outfit relative">

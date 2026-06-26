@@ -9,21 +9,50 @@ import { registerStudent } from '../../../services/schoolApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 import { parseClassGrade, parseSection } from '../../../utils/mappers/teacherMapper';
 import { useTeacherSchoolId } from '../../../utils/teacherContext';
+import { useTeacherClassOptions } from '../../../hooks/useTeacherClassOptions';
+
+const parseCsvStudents = (text) => {
+  const lines = text.trim().split(/\r?\n/).filter(Boolean);
+  if (lines.length < 2) return [];
+  const headers = lines[0].split(',').map((h) => h.trim().toLowerCase());
+  const col = (keys) => headers.findIndex((h) => keys.some((k) => h.includes(k)));
+
+  return lines.slice(1).map((line, index) => {
+    const cols = line.split(',').map((c) => c.trim().replace(/^"|"$/g, ''));
+    const rollIdx = col(['roll']);
+    const nameIdx = col(['name', 'student']);
+    const parentIdx = col(['parent', 'guardian']);
+    const phoneIdx = col(['phone', 'mobile']);
+    return {
+      rollNo: rollIdx >= 0 ? cols[rollIdx] : String(index + 1),
+      name: nameIdx >= 0 ? cols[nameIdx] : '',
+      parentName: parentIdx >= 0 ? cols[parentIdx] : '',
+      phone: phoneIdx >= 0 ? cols[phoneIdx] : '',
+    };
+  });
+};
+
+const readStudentFile = (file) =>
+  new Promise((resolve, reject) => {
+    if (!file.name.endsWith('.csv')) {
+      reject(new Error('Please upload a .csv file'));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => resolve(parseCsvStudents(String(reader.result || '')));
+    reader.onerror = () => reject(new Error('Unable to read file'));
+    reader.readAsText(file);
+  });
 
 const TeacherBulkAddStudents = () => {
   const navigate = useNavigate();
   const schoolId = useTeacherSchoolId();
+  const { classLabels, getSections } = useTeacherClassOptions(schoolId);
 
-  const [selectedClass] = useState('Class 5');
-  const [selectedSection] = useState('A');
+  const [selectedClass, setSelectedClass] = useState('');
+  const [selectedSection, setSelectedSection] = useState('');
 
-  const [rows, setRows] = useState([
-    { rollNo: '1', name: '', parentName: '', phone: '' },
-    { rollNo: '2', name: '', parentName: '', phone: '' },
-    { rollNo: '3', name: '', parentName: '', phone: '' },
-    { rollNo: '4', name: '', parentName: '', phone: '' },
-    { rollNo: '5', name: '', parentName: '', phone: '' },
-  ]);
+  const [rows, setRows] = useState([]);
 
   // Tab State: 'excel' or 'manual'
   const [activeTab, setActiveTab] = useState('excel');
@@ -35,7 +64,15 @@ const TeacherBulkAddStudents = () => {
   const [selectedFileName, setSelectedFileName] = useState('');
 
   // 2. Real-time Roster Statistics
-  const [stats, setStats] = useState({ total: 5, valid: 3, empty: 2 });
+  const [stats, setStats] = useState({ total: 0, valid: 0, empty: 0 });
+
+  useEffect(() => {
+    if (classLabels.length > 0 && !selectedClass) {
+      setSelectedClass(classLabels[0]);
+      const sections = getSections(classLabels[0]);
+      if (sections.length > 0) setSelectedSection(sections[0]);
+    }
+  }, [classLabels, getSections, selectedClass]);
 
   useEffect(() => {
     const total = rows.length;
@@ -89,41 +126,39 @@ const TeacherBulkAddStudents = () => {
     }
   };
 
+  const importFile = async (file) => {
+    if (!file.name.endsWith('.csv')) {
+      triggerToast('Please upload a .csv file with student data');
+      return;
+    }
+    setSelectedFileName(file.name);
+    try {
+      const parsed = await readStudentFile(file);
+      if (parsed.length === 0) {
+        triggerToast('No student rows found in file');
+        setRows([]);
+        return;
+      }
+      setRows(parsed);
+      triggerToast('CSV data imported successfully');
+    } catch (err) {
+      triggerToast(err.message || 'Unable to import file');
+    }
+  };
+
   const handleDrop = (e) => {
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
-    
+
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      const file = e.dataTransfer.files[0];
-      if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls') || file.name.endsWith('.csv')) {
-        setSelectedFileName(file.name);
-        // Simulate reading Excel and pre-filling rows
-        const simulatedRows = [
-          { rollNo: '1', name: 'Kabir Mehta', parentName: 'Vikram Mehta', phone: '9511223344' },
-          { rollNo: '2', name: 'Nisha Gupta', parentName: 'Deepak Gupta', phone: '9622334455' },
-          { rollNo: '3', name: 'Aryan Goel', parentName: 'Raman Goel', phone: '9733445566' },
-        ];
-        setRows(simulatedRows);
-        triggerToast('Excel Data Imported Successfully!');
-      } else {
-        triggerToast('Invalid file format. Please upload .xlsx or .csv');
-      }
+      importFile(e.dataTransfer.files[0]);
     }
   };
 
   const handleFileSelect = (e) => {
     if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      setSelectedFileName(file.name);
-      // Simulate reading
-      const simulatedRows = [
-        { rollNo: '1', name: 'Kabir Mehta', parentName: 'Vikram Mehta', phone: '9511223344' },
-        { rollNo: '2', name: 'Nisha Gupta', parentName: 'Deepak Gupta', phone: '9622334455' },
-        { rollNo: '3', name: 'Aryan Goel', parentName: 'Raman Goel', phone: '9733445566' },
-      ];
-      setRows(simulatedRows);
-      triggerToast('Excel Data Imported Successfully!');
+      importFile(e.target.files[0]);
     }
   };
 
@@ -190,7 +225,9 @@ const TeacherBulkAddStudents = () => {
           </button>
           <div>
             <h1 className="text-lg font-black text-deep-purple leading-none">Bulk Add Students</h1>
-            <p className="text-[10px] text-gray-400 font-bold mt-1">Class 5 • Section A</p>
+            <p className="text-[10px] text-gray-400 font-bold mt-1">
+              {selectedClass && selectedSection ? `${selectedClass} • Section ${selectedSection}` : 'Select class and section'}
+            </p>
           </div>
         </div>
 

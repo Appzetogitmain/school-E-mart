@@ -6,7 +6,9 @@ import {
   Sparkles, ChevronDown
 } from 'lucide-react';
 import apiClient from '../../../services/apiClient';
+import { listSchools, listClasses } from '../../../services/schoolApi';
 import useAuthStore from '../../../store/useAuthStore';
+import { getErrorMessage } from '../../../utils/apiHelpers';
 
 const ProfileSetupPage = () => {
   const navigate = useNavigate();
@@ -29,18 +31,58 @@ const ProfileSetupPage = () => {
     firstInputRef.current?.focus();
   }, []);
 
-  const schools = [
-    { id: 'dps-indore', name: 'Delhi Public School' },
-    { id: 'st-xavier', name: "St. Xavier's High School" },
-    { id: 'greenwood', name: 'Greenwood International' },
-    { id: 'the-shishukunj', name: 'The Shishukunj International' }
-  ];
+  const [schools, setSchools] = useState([]);
+  const [grades, setGrades] = useState([]);
+  const [schoolsLoading, setSchoolsLoading] = useState(true);
 
-  const grades = [
-    'Nursery', 'KG 1', 'KG 2', 'Class 1', 'Class 2',
-    'Class 3', 'Class 4', 'Class 5', 'Class 6',
-    'Class 7', 'Class 8', 'Class 9', 'Class 10'
-  ];
+  useEffect(() => {
+    let cancelled = false;
+
+    listSchools({ limit: 50 })
+      .then(({ data }) => {
+        if (!cancelled) {
+          setSchools(
+            (data || []).map((school) => ({
+              id: school._id || school.id,
+              name: school.name,
+            }))
+          );
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setSchools([]);
+      })
+      .finally(() => {
+        if (!cancelled) setSchoolsLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!formData.schoolId) {
+      setGrades([]);
+      return undefined;
+    }
+
+    let cancelled = false;
+    listClasses(formData.schoolId)
+      .then((classes) => {
+        if (!cancelled) {
+          const labels = [...new Set((classes || []).map((c) => c.classGrade).filter(Boolean))];
+          setGrades(labels.length > 0 ? labels : []);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setGrades([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [formData.schoolId]);
 
   const handleInputChange = (field, value) => {
     let finalValue = value;

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Calendar, Clock, Bookmark, Edit2, 
@@ -10,14 +10,16 @@ import { getErrorMessage } from '../../../utils/apiHelpers';
 import { parseClassGrade, parseSection } from '../../../utils/mappers/teacherMapper';
 import { ensureCourse } from '../../../utils/teacherApiHelpers';
 import { useTeacherSchoolId } from '../../../utils/teacherContext';
+import { useTeacherClassOptions } from '../../../hooks/useTeacherClassOptions';
 
 const TeacherHomework = () => {
   const navigate = useNavigate();
   const schoolId = useTeacherSchoolId();
+  const { classLabels, getSections } = useTeacherClassOptions(schoolId);
+  const fileInputRef = React.useRef(null);
 
-  // 1. Core State (Starts completely empty for fresh input)
-  const [selectedClass, setSelectedClass] = useState('Class 5');
-  const [selectedSection, setSelectedSection] = useState('A');
+  const [selectedClass, setSelectedClass] = useState('');
+  const [selectedSection, setSelectedSection] = useState('');
   const [subject, setSubject] = useState('Mathematics');
   const [title, setTitle] = useState('');
   
@@ -40,9 +42,8 @@ const TeacherHomework = () => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  // Dropdown options
-  const classes = ['Class 5', 'Class 6', 'Class 7'];
-  const sections = ['A', 'B', 'C'];
+  const classes = classLabels;
+  const sections = getSections(selectedClass);
   const subjects = ['Mathematics', 'Science', 'English', 'Social Studies'];
   const homeworkTypes = ['Written', 'Reading', 'Project', 'Online Quiz'];
   const priorities = ['High', 'Medium', 'Low'];
@@ -59,16 +60,26 @@ const TeacherHomework = () => {
     setAttachments(prev => prev.filter(att => att.id !== id));
   };
 
+  useEffect(() => {
+    if (classLabels.length > 0 && !selectedClass) {
+      setSelectedClass(classLabels[0]);
+      const secs = getSections(classLabels[0]);
+      if (secs.length > 0) setSelectedSection(secs[0]);
+    }
+  }, [classLabels, getSections, selectedClass]);
+
   const handleAddAttachment = () => {
-    // Generate a random mock file
-    const fileNames = ['Homework_Reference.pdf', 'Chapter_Review.png', 'Formula_Sheet.pdf'];
-    const randomName = fileNames[Math.floor(Math.random() * fileNames.length)];
-    const randomSize = `${Math.floor(Math.random() * 500) + 100} KB`;
-    
-    setAttachments(prev => [
+    fileInputRef.current?.click();
+  };
+
+  const handleAttachmentSelected = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setAttachments((prev) => [
       ...prev,
-      { id: Date.now(), name: randomName, size: randomSize }
+      { id: Date.now(), name: file.name, size: `${Math.round(file.size / 1024)} KB`, file },
     ]);
+    e.target.value = '';
   };
 
   const handleAddHomework = async (e) => {
@@ -452,7 +463,13 @@ const TeacherHomework = () => {
               </div>
             )}
             
-            <button 
+            <input
+              ref={fileInputRef}
+              type="file"
+              className="hidden"
+              onChange={handleAttachmentSelected}
+            />
+            <button
               type="button"
               onClick={handleAddAttachment}
               className="w-32 py-2 border border-dashed border-primary/45 hover:border-primary active:scale-95 transition-all rounded-xl flex items-center justify-center gap-1.5 text-[10px] font-black text-primary bg-primary/5 shadow-sm"

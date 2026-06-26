@@ -5,48 +5,7 @@ import {
 } from 'lucide-react';
 
 const LMSManagement = () => {
-  // Pre-loaded active high-fidelity mock LMS courses
-  const [courses, setCourses] = useState([
-    {
-      id: 1,
-      title: 'Introduction to Solar Energy & Cells ☀️',
-      subject: 'Science',
-      gradeClass: 'Grade 5',
-      instructor: 'Dr. Sarah Jenkins',
-      concepts: 'Understanding solar radiation; Photovoltaic effect basics; Creating a simple solar cell; Renewable energy circuits.',
-      duration: '45 Mins',
-      videoUrl: 'https://assets.mixkit.co/videos/preview/mixkit-pouring-fresh-apple-juice-into-a-glass-41618-large.mp4',
-      thumbnailUrl: 'https://images.unsplash.com/photo-1509395062183-67c5ad6faff9?w=400&q=80',
-      status: 'Active',
-      studentsEnrolled: 1840
-    },
-    {
-      id: 2,
-      title: 'Fractions & Ratios Simplified 📐',
-      subject: 'Mathematics',
-      gradeClass: 'Grade 4',
-      instructor: 'Prof. Michael Chen',
-      concepts: 'Proper vs improper fractions; Simplifying ratios using GCF; Visually slicing geometry wholes; Real-world baking ratios.',
-      duration: '35 Mins',
-      videoUrl: 'https://assets.mixkit.co/videos/preview/mixkit-dripping-honey-from-a-wooden-spoon-41584-large.mp4',
-      thumbnailUrl: 'https://images.unsplash.com/photo-1453733190148-c44698c26588?w=400&q=80',
-      status: 'Active',
-      studentsEnrolled: 2450
-    },
-    {
-      id: 3,
-      title: 'Water Cycle & Atmospheric Rain 💧',
-      subject: 'Geography',
-      gradeClass: 'Grade 3',
-      instructor: 'Mrs. Emily Watson',
-      concepts: 'Evaporation mechanisms; Condensation cloud formations; Precipitation and rain runoff; Ground water filtration.',
-      duration: '30 Mins',
-      videoUrl: 'https://assets.mixkit.co/videos/preview/mixkit-milking-a-cow-on-a-dairy-farm-40618-large.mp4',
-      thumbnailUrl: 'https://images.unsplash.com/photo-1534274988757-a28bf1a57c17?w=400&q=80',
-      status: 'Draft',
-      studentsEnrolled: 0
-    }
-  ]);
+  const [courses, setCourses] = useState([]);
 
   // Subjects & Grades options
   const subjects = ['Science', 'Mathematics', 'English', 'Geography', 'Art & Craft', 'History'];
@@ -95,29 +54,6 @@ const LMSManagement = () => {
     }
   };
 
-  // Pre-load presets for swift test evaluations
-  const handleLoadPreset = (type) => {
-    if (type === 'solar') {
-      setCourseTitle('Introduction to Solar Energy & Cells ☀️');
-      setSubject('Science');
-      setGradeClass('Grade 5');
-      setInstructor('Dr. Sarah Jenkins');
-      setConcepts('Understanding solar radiation; Photovoltaic effect basics; Creating a simple solar cell; Renewable energy circuits.');
-      setDuration('45 Mins');
-      setVideoPreview('https://assets.mixkit.co/videos/preview/mixkit-pouring-fresh-apple-juice-into-a-glass-41618-large.mp4');
-      setCoverPreview('https://images.unsplash.com/photo-1509395062183-67c5ad6faff9?w=400&q=80');
-    } else if (type === 'math') {
-      setCourseTitle('Fractions & Ratios Simplified 📐');
-      setSubject('Mathematics');
-      setGradeClass('Grade 4');
-      setInstructor('Prof. Michael Chen');
-      setConcepts('Proper vs improper fractions; Simplifying ratios using GCF; Visually slicing geometry wholes; Real-world baking ratios.');
-      setDuration('35 Mins');
-      setVideoPreview('https://assets.mixkit.co/videos/preview/mixkit-dripping-honey-from-a-wooden-spoon-41584-large.mp4');
-      setCoverPreview('https://images.unsplash.com/photo-1453733190148-c44698c26588?w=400&q=80');
-    }
-  };
-
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!courseTitle.trim() || !instructor.trim() || !concepts.trim()) {
@@ -130,7 +66,11 @@ const LMSManagement = () => {
       return;
     }
 
-    const coverUrl = coverPreview || 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=400&q=80';
+    const coverUrl = coverPreview || '';
+    if (!coverUrl) {
+      alert('Please upload a course cover image.');
+      return;
+    }
 
     if (isEditing) {
       // UPDATE mode
@@ -290,29 +230,6 @@ const LMSManagement = () => {
             </h3>
             <GraduationCap size={16} className="text-indigo-600" />
           </div>
-
-          {/* Presets loader for rapid testing */}
-          {!isEditing && (
-            <div className="bg-indigo-50/50 border border-indigo-100/50 rounded-2xl p-3.5 space-y-2 select-none">
-              <span className="block text-[9px] font-black text-indigo-700 uppercase tracking-wider">⚡ Test Curriculum Presets</span>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => handleLoadPreset('solar')}
-                  className="bg-white hover:bg-indigo-50 border border-gray-200 hover:border-indigo-200 text-[8px] font-extrabold uppercase py-1.5 px-2 rounded-xl transition-all"
-                >
-                  ☀️ Solar Science
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleLoadPreset('math')}
-                  className="bg-white hover:bg-indigo-50 border border-gray-200 hover:border-indigo-200 text-[8px] font-extrabold uppercase py-1.5 px-2 rounded-xl transition-all"
-                >
-                  📐 Fractions Maths
-                </button>
-              </div>
-            </div>
-          )}
 
           <form onSubmit={handleSubmit} className="space-y-4 text-xs font-bold text-gray-700">
             

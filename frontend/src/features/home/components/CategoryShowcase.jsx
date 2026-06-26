@@ -1,7 +1,7 @@
 import React from 'react';
 import ProductCard from '../../../components/ui/ProductCard';
 
-const CategoryShowcase = ({ title, subtitle, products }) => {
+const CategoryShowcase = ({ title, subtitle, products = [] }) => {
   return (
     <div className="py-12 bg-gray-50 mb-16 last:mb-0">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -17,11 +17,15 @@ const CategoryShowcase = ({ title, subtitle, products }) => {
           </button>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
-          {products.map((product, index) => (
-            <ProductCard key={index} product={product} />
-          ))}
-        </div>
+        {products.length === 0 ? (
+          <p className="text-center text-gray-400 py-12">No products available yet.</p>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
+            {products.map((product) => (
+              <ProductCard key={product.id || product.title} product={product} />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

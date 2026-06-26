@@ -25,11 +25,14 @@ const SchoolCategoryPage = () => {
     setScrolled(scrollPos > 50);
   };
 
-  const manageByGrade = [
-    { grade: 'Pre-Primary', range: 'Institutional Supply', image: 'https://images.unsplash.com/photo-1503676260728-1c00da094a0b?q=80&w=400&h=200&fit=crop' },
-    { grade: 'Primary', range: 'Curriculum Kits', image: 'https://images.unsplash.com/photo-1456735190827-d1262f71b8a3?q=80&w=400&h=200&fit=crop' },
-    { grade: 'Secondary', range: 'Exam Essentials', image: 'https://images.unsplash.com/photo-1497633762265-9d179a990aa6?q=80&w=400&h=200&fit=crop' },
-  ];
+  const gradeCategories = mainCategories.flatMap((cat) =>
+    (cat.children || []).map((child) => ({
+      grade: child.name,
+      range: cat.name,
+      image: child.image || cat.image,
+      slug: child.slug || cat.slug,
+    }))
+  );
 
   const renderProductCard = (product) => (
     <ProductCard key={product.id} product={product} />
@@ -73,26 +76,30 @@ const SchoolCategoryPage = () => {
           </div>
 
           <div className="space-y-4">
-            {manageByGrade.map((item) => (
-              <Link
-                key={item.grade}
-                to={`/school/grade?group=${encodeURIComponent(item.grade)}`}
-                className="bg-white rounded-3xl overflow-hidden border border-gray-100 shadow-sm flex h-24 active:scale-[0.98] transition-all block"
-              >
-                <div className="w-32 h-full shrink-0">
-                  <img src={item.image} alt={item.grade} className="w-full h-full object-cover" />
-                </div>
-                <div className="flex-1 flex flex-col justify-center px-5">
-                  <h3 className="text-base font-bold text-deep-purple">{item.grade}</h3>
-                  <p className="text-xs text-gray-400 font-medium">{item.range}</p>
-                </div>
-                <div className="flex items-center pr-6">
-                  <div className="w-8 h-8 bg-gray-50 rounded-full flex items-center justify-center text-primary">
-                    <ArrowRight size={14} />
+            {gradeCategories.length === 0 ? (
+              <p className="text-sm text-gray-400 text-center py-6">No grade categories available</p>
+            ) : (
+              gradeCategories.map((item) => (
+                <Link
+                  key={item.grade}
+                  to={`/school/grade?group=${encodeURIComponent(item.grade)}`}
+                  className="bg-white rounded-3xl overflow-hidden border border-gray-100 shadow-sm flex h-24 active:scale-[0.98] transition-all block"
+                >
+                  <div className="w-32 h-full shrink-0">
+                    <img src={item.image} alt={item.grade} className="w-full h-full object-cover" />
                   </div>
-                </div>
-              </Link>
-            ))}
+                  <div className="flex-1 flex flex-col justify-center px-5">
+                    <h3 className="text-base font-bold text-deep-purple">{item.grade}</h3>
+                    <p className="text-xs text-gray-400 font-medium">{item.range}</p>
+                  </div>
+                  <div className="flex items-center pr-6">
+                    <div className="w-8 h-8 bg-gray-50 rounded-full flex items-center justify-center text-primary">
+                      <ArrowRight size={14} />
+                    </div>
+                  </div>
+                </Link>
+              ))
+            )}
           </div>
         </div>
 

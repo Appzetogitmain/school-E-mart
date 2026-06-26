@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Users, MessageSquare, Book, User, 
@@ -8,14 +8,15 @@ import { createDiaryEntry } from '../../../services/schoolApi';
 import { parseClassGrade, parseSection } from '../../../utils/mappers/teacherMapper';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 import { useTeacherSchoolId } from '../../../utils/teacherContext';
+import { useTeacherClassOptions } from '../../../hooks/useTeacherClassOptions';
 
 const TeacherDiary = () => {
   const navigate = useNavigate();
   const schoolId = useTeacherSchoolId();
+  const { classLabels, getSections } = useTeacherClassOptions(schoolId);
 
-  // 1. Core States
-  const [selectedClass, setSelectedClass] = useState('Class 5');
-  const [selectedSection, setSelectedSection] = useState('A');
+  const [selectedClass, setSelectedClass] = useState('');
+  const [selectedSection, setSelectedSection] = useState('');
   
   // Note Type: 'general', 'homework', 'behaviour', 'appreciation'
   const [noteType, setNoteType] = useState('general');
@@ -40,9 +41,16 @@ const TeacherDiary = () => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  // Lists & configs
-  const classes = ['Class 5', 'Class 6', 'Class 7'];
-  const sections = ['A', 'B', 'C'];
+  const classes = classLabels;
+  const sections = getSections(selectedClass);
+
+  useEffect(() => {
+    if (classLabels.length > 0 && !selectedClass) {
+      setSelectedClass(classLabels[0]);
+      const secs = getSections(classLabels[0]);
+      if (secs.length > 0) setSelectedSection(secs[0]);
+    }
+  }, [classLabels, getSections, selectedClass]);
 
   const [isClassOpen, setIsClassOpen] = useState(false);
   const [isSectionOpen, setIsSectionOpen] = useState(false);

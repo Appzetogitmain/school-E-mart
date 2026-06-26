@@ -3,6 +3,7 @@ import {
   Home, Edit3, Trash2, Plus, RefreshCw, X, ChevronRight, CheckCircle, Info, Loader2
 } from 'lucide-react';
 import { listCmsSections } from '../../../services/adminApi';
+import { getCategoryTree } from '../../../services/catalogApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 import { mapSectionForAdmin } from '../../../utils/mappers/adminCmsMapper';
 
@@ -30,18 +31,28 @@ const PromoHomeSections = () => {
     loadSections();
   }, [loadSections]);
 
-  // Master categories list for checkbox feed
-  const [allCategories, setAllCategories] = useState([
-    { name: 'Bread', checked: true },
-    { name: 'Buffalo Milk', checked: true },
-    { name: 'Buns', checked: false },
-    { name: 'Camel Milk', checked: true },
-    { name: 'Cow Milk', checked: true },
-    { name: 'Cheese', checked: false },
-    { name: 'Full Cream Milk', checked: false },
-    { name: 'Ghee', checked: false },
-    { name: 'Rusk', checked: false }
-  ]);
+  const [allCategories, setAllCategories] = useState([]);
+
+  const loadCategories = useCallback(async () => {
+    try {
+      const tree = await getCategoryTree();
+      setAllCategories(
+        (tree || []).flatMap((header) =>
+          (header.categories || []).map((cat) => ({
+            name: cat.name,
+            checked: false,
+            id: cat._id || cat.id,
+          }))
+        )
+      );
+    } catch {
+      setAllCategories([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadCategories();
+  }, [loadCategories]);
 
   // Form states
   const [isEditing, setIsEditing] = useState(false);

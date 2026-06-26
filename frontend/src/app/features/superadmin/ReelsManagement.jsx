@@ -1,48 +1,14 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import ReactDOM from 'react-dom';
 import { 
   Video, Film, Plus, Edit3, Trash2, Heart, Eye, Play, X, ChevronRight, CheckCircle, Info, Upload, Image as ImageIcon, ShoppingBag, Globe, EyeOff
 } from 'lucide-react';
+import { listVendors } from '../../../services/adminApi';
 
 const ReelsManagement = () => {
-  // Pre-loaded active high-fidelity mock reels to keep dashboard fully populated initially
-  const [reels, setReels] = useState([
-    {
-      id: 1,
-      title: 'Smart Kit Unboxing 📦',
-      description: 'Everything your Class 2 child needs for the upcoming 2026 academic year. Premium textbooks, notebooks, school kits, and stationery elements compiled in one solid bundle.',
-      videoUrl: 'https://assets.mixkit.co/videos/preview/mixkit-milking-a-cow-on-a-dairy-farm-40618-large.mp4',
-      thumbnailUrl: 'https://images.unsplash.com/photo-1527018601619-a508a2be00cd?w=400&q=80',
-      storeName: 'School E-Mart Official',
-      productTitle: 'Complete Class 2 Kit',
-      productPrice: 4299,
-      productMrp: 5499,
-      productUrl: 'https://schoolemart.com/products/class-2-kit',
-      productImageUrl: 'https://images.unsplash.com/photo-1588072432836-e10032774350?w=100&q=80',
-      likes: 12400,
-      views: 89300,
-      status: 'Active'
-    },
-    {
-      id: 2,
-      title: 'Premium Wooden Pencils Batch ✏️',
-      description: 'Watch the manufacturing and testing of our ultra-smooth natural dark lead wood pencils. Specially designed for smooth handwriting and clean erasures.',
-      videoUrl: 'https://assets.mixkit.co/videos/preview/mixkit-dripping-honey-from-a-wooden-spoon-41584-large.mp4',
-      thumbnailUrl: 'https://images.unsplash.com/photo-1587049352846-4a222e784d38?w=400&q=80',
-      storeName: 'nexus',
-      productTitle: 'HB Extra Dark Pencils Pack of 50',
-      productPrice: 199,
-      productMrp: 299,
-      productUrl: 'https://schoolemart.com/products/pencils-pack',
-      productImageUrl: 'https://images.unsplash.com/photo-1513542789411-b6a5d4f31634?w=100&q=80',
-      likes: 3140,
-      views: 28400,
-      status: 'Active'
-    }
-  ]);
+  const [reels, setReels] = useState([]);
 
-  // Dropdown options
-  const stores = ['School E-Mart Official', 'patidar store', 'nexus', 'Harsh\'s Hub', 'Test Factory'];
+  const [stores, setStores] = useState([]);
 
   // Form input states
   const [isEditing, setIsEditing] = useState(false);
@@ -51,7 +17,7 @@ const ReelsManagement = () => {
   // Text Fields
   const [reelTitle, setReelTitle] = useState('');
   const [reelDescription, setReelDescription] = useState('');
-  const [storeName, setStoreName] = useState('School E-Mart Official');
+  const [storeName, setStoreName] = useState('');
   const [productTitle, setProductTitle] = useState('');
   const [productPrice, setProductPrice] = useState('');
   const [productMrp, setProductMrp] = useState('');
@@ -104,32 +70,19 @@ const ReelsManagement = () => {
     }
   };
 
-  // Pre-load preset sample template for quick testing & visual checks
-  const handleLoadSample = (type) => {
-    if (type === 'class2') {
-      setReelTitle('Smart Kit Unboxing 📦');
-      setReelDescription('Everything your Class 2 child needs for the upcoming 2026 academic year. Premium textbooks, notebooks, school kits, and stationery elements compiled in one solid bundle.');
-      setVideoPreview('https://assets.mixkit.co/videos/preview/mixkit-milking-a-cow-on-a-dairy-farm-40618-large.mp4');
-      setCoverPreview('https://images.unsplash.com/photo-1527018601619-a508a2be00cd?w=400&q=80');
-      setStoreName('School E-Mart Official');
-      setProductTitle('Complete Class 2 Kit');
-      setProductPrice('4299');
-      setProductMrp('5499');
-      setProductUrl('https://schoolemart.com/products/class-2-kit');
-      setProductPreview('https://images.unsplash.com/photo-1588072432836-e10032774350?w=100&q=80');
-    } else if (type === 'unboxing') {
-      setReelTitle('Drawing Colors Review 🎨');
-      setReelDescription('Unboxing the new dual-tip organic paint markers! Features vibrant blendable shades, non-toxic premium ink, and customized carrying case.');
-      setVideoPreview('https://assets.mixkit.co/videos/preview/mixkit-dripping-honey-from-a-wooden-spoon-41584-large.mp4');
-      setCoverPreview('https://images.unsplash.com/photo-1587049352846-4a222e784d38?w=400&q=80');
-      setStoreName('nexus');
-      setProductTitle('Dual Tip Paint Markers');
-      setProductPrice('899');
-      setProductMrp('1200');
-      setProductUrl('https://schoolemart.com/products/paint-markers');
-      setProductPreview('https://images.unsplash.com/photo-1513542789411-b6a5d4f31634?w=100&q=80');
-    }
-  };
+  useEffect(() => {
+    const loadStores = async () => {
+      try {
+        const { data } = await listVendors({ limit: 100 });
+        const names = (data || []).map((v) => v.storeName || v.businessName || v.name).filter(Boolean);
+        setStores(names);
+        if (names.length && !storeName) setStoreName(names[0]);
+      } catch {
+        setStores([]);
+      }
+    };
+    loadStores();
+  }, []);
 
   // Form submit handler (Add / Update)
   const handleSubmit = (e) => {
@@ -146,8 +99,16 @@ const ReelsManagement = () => {
       return;
     }
 
-    const coverUrl = coverPreview || 'https://images.unsplash.com/photo-1498837167922-ddd27525d352?w=400&q=80';
-    const prodImgUrl = productPreview || 'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?w=100&q=80';
+    const coverUrl = coverPreview || '';
+    if (!coverUrl) {
+      alert('Please upload a cover image.');
+      return;
+    }
+    const prodImgUrl = productPreview || '';
+    if (!prodImgUrl) {
+      alert('Please upload a product image.');
+      return;
+    }
 
     if (isEditing) {
       // UPDATE mode
@@ -321,28 +282,6 @@ const ReelsManagement = () => {
             <Video size={16} className="text-indigo-600" />
           </div>
 
-          {/* Quick presets for swift evaluations */}
-          {!isEditing && (
-            <div className="bg-indigo-50/50 border border-indigo-100/50 rounded-2xl p-3.5 space-y-2 select-none">
-              <span className="block text-[9px] font-black text-indigo-700 uppercase tracking-wider">⚡ Quick Test Template Presets</span>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => handleLoadSample('class2')}
-                  className="bg-white hover:bg-indigo-50 border border-gray-200 hover:border-indigo-200 text-[8px] font-extrabold uppercase py-1.5 px-2 rounded-xl transition-all"
-                >
-                  🎒 Smart Class 2 Kit
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleLoadSample('unboxing')}
-                  className="bg-white hover:bg-indigo-50 border border-gray-200 hover:border-indigo-200 text-[8px] font-extrabold uppercase py-1.5 px-2 rounded-xl transition-all"
-                >
-                  🎨 Paint Markers Pack
-                </button>
-              </div>
-            </div>
-          )}
 
           <form onSubmit={handleSubmit} className="space-y-4 text-xs font-bold text-gray-700">
             

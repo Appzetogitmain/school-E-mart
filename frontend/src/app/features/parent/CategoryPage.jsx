@@ -26,11 +26,14 @@ const CategoryPage = () => {
     setScrolled(scrollPos > 50);
   };
 
-  const shopByGrade = [
-    { grade: 'Pre-Primary', range: 'Nursery - UKG', image: 'https://images.unsplash.com/photo-1503676260728-1c00da094a0b?q=80&w=400&h=200&fit=crop' },
-    { grade: 'Primary', range: 'Class 1 - 5', image: 'https://images.unsplash.com/photo-1456735190827-d1262f71b8a3?q=80&w=400&h=200&fit=crop' },
-    { grade: 'Secondary', range: 'Class 6 - 10', image: 'https://images.unsplash.com/photo-1497633762265-9d179a990aa6?q=80&w=400&h=200&fit=crop' },
-  ];
+  const shopByGrade = mainCategories.flatMap((cat) =>
+    (cat.children || []).map((child) => ({
+      grade: child.name,
+      range: cat.name,
+      image: child.image || cat.image,
+      slug: child.slug || cat.slug,
+    }))
+  );
 
   const renderProductCard = (product) => (
     <ProductCard key={product.id} product={product} />
@@ -73,7 +76,10 @@ const CategoryPage = () => {
           </div>
 
           <div className="space-y-4">
-            {shopByGrade.map((item) => (
+            {shopByGrade.length === 0 ? (
+              <p className="text-sm text-gray-400 text-center py-6">No grade categories available</p>
+            ) : (
+            shopByGrade.map((item) => (
               <Link
                 key={item.grade}
                 to={`/user/select-grade?group=${encodeURIComponent(item.grade)}`}
@@ -92,7 +98,8 @@ const CategoryPage = () => {
                   </div>
                 </div>
               </Link>
-            ))}
+            ))
+            )}
           </div>
         </div>
 

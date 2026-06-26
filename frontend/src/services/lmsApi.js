@@ -62,3 +62,23 @@ export const evaluateSubmission = async (schoolId, courseId, assignmentId, submi
   );
   return unwrapData(response)?.submission;
 };
+
+export const getLearningHistory = async (schoolId, params = {}) => {
+  const response = await apiClient.get(lmsPath(schoolId, '/learning-history'), { params });
+  return extractPaginated(response, 'history');
+};
+
+export const getResumeBookmark = async (schoolId, params = {}) => {
+  const response = await apiClient.get(lmsPath(schoolId, '/bookmarks/resume'), { params });
+  return unwrapData(response)?.bookmark || null;
+};
+
+export const listLessons = async (schoolId, courseId, params = {}) => {
+  const response = await apiClient.get(lmsPath(schoolId, `/courses/${courseId}/lessons`), { params });
+  return extractPaginated(response, 'lessons');
+};
+
+export const getCourseProgress = async (schoolId, courseId, params = {}) => {
+  const response = await apiClient.get(lmsPath(schoolId, `/courses/${courseId}/progress`), { params });
+  return unwrapData(response)?.progress || null;
+};

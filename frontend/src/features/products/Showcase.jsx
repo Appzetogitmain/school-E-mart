@@ -1,82 +1,40 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import ProductCard from '../../components/ui/ProductCard';
-
-const demoProducts = [
-  {
-    image: 'https://images.unsplash.com/photo-1588072432836-e10032774350?auto=format&fit=crop&q=80&w=600',
-    category: 'Furniture & Accessories',
-    title: 'Modern Ergonomic Classroom Student Desk & Chair Set',
-    currentPrice: 4971,
-    originalPrice: 5990,
-    discount: 17,
-    hasBulkQuote: true,
-  },
-  {
-    image: 'https://images.unsplash.com/photo-1503676260728-1c00da094a0b?auto=format&fit=crop&q=80&w=600',
-    category: 'Teaching & Learning',
-    title: 'Advanced STEM Robotics Kit for Middle School Students',
-    currentPrice: 8500,
-    originalPrice: 10000,
-    discount: 15,
-    hasBulkQuote: true,
-  },
-  {
-    image: 'https://images.unsplash.com/photo-1531346878377-a5be20888e57?auto=format&fit=crop&q=80&w=600',
-    category: 'Books & Stationery',
-    title: 'Premium Hardcover School Journal - Pack of 10',
-    currentPrice: 1200,
-    originalPrice: 1500,
-    discount: 20,
-    hasBulkQuote: false,
-  },
-  {
-    image: 'https://images.unsplash.com/photo-1617137984095-74e4e5e3613f?auto=format&fit=crop&q=80&w=600',
-    category: 'Uniform & Apparel',
-    title: 'Unisex Primary School Blazer - Navy Blue',
-    currentPrice: 2450,
-    originalPrice: 3000,
-    discount: 18,
-    hasBulkQuote: true,
-  },
-  {
-    image: 'https://images.unsplash.com/photo-1497633762265-9d179a990aa6?auto=format&fit=crop&q=80&w=600',
-    category: 'Library & Media',
-    title: 'World Atlas Encyclopedia - 2024 Collector\'s Edition',
-    currentPrice: 3200,
-    originalPrice: 4000,
-    discount: 20,
-    hasBulkQuote: true,
-  },
-  {
-    image: 'https://images.unsplash.com/photo-1585314062340-f1a5a7c9328d?auto=format&fit=crop&q=80&w=600',
-    category: 'Sports & Outdoors',
-    title: 'Professional Grade Basketball - Size 7 Official',
-    currentPrice: 1850,
-    originalPrice: 2200,
-    discount: 16,
-    hasBulkQuote: false,
-  },
-  {
-    image: 'https://images.unsplash.com/photo-1516533075015-a3838414c3ca?auto=format&fit=crop&q=80&w=600',
-    category: 'Art & Craft',
-    title: 'Professional Watercolor Paint Set - 48 Colors',
-    currentPrice: 2100,
-    originalPrice: 2800,
-    discount: 25,
-    hasBulkQuote: true,
-  },
-  {
-    image: 'https://images.unsplash.com/photo-1509062522246-3755977927d7?auto=format&fit=crop&q=80&w=600',
-    category: 'Technology',
-    title: 'Portable Interactive Whiteboard Projector System',
-    currentPrice: 45000,
-    originalPrice: 55000,
-    discount: 18,
-    hasBulkQuote: true,
-  }
-];
+import { listFeaturedProducts } from '../../services/catalogApi';
+import { mapProductForMarketingCard } from '../../utils/mappers/productMapper';
 
 const ProductShowcase = ({ role = 'parent' }) => {
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const load = async () => {
+      setLoading(true);
+      setError('');
+      try {
+        const { data } = await listFeaturedProducts({ limit: 8 });
+        if (!cancelled) {
+          setProducts((data || []).map((p) => mapProductForMarketingCard(p)));
+        }
+      } catch {
+        if (!cancelled) {
+          setProducts([]);
+          setError('Unable to load featured products');
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [role]);
+
   return (
     <div className="py-12 bg-white min-h-[600px]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -86,8 +44,8 @@ const ProductShowcase = ({ role = 'parent' }) => {
               {role === 'school' ? 'Institutional Grade Supplies' : 'Featured Student Essentials'}
             </h2>
             <p className="text-text-secondary mt-2 text-lg font-normal">
-              {role === 'school' 
-                ? 'High-quality equipment and furniture for modern educational infrastructure.' 
+              {role === 'school'
+                ? 'High-quality equipment and furniture for modern educational infrastructure.'
                 : 'Premium quality kits, uniforms and stationery for your child’s academic journey.'}
             </p>
           </div>
@@ -96,11 +54,19 @@ const ProductShowcase = ({ role = 'parent' }) => {
           </button>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
-          {demoProducts.map((product, index) => (
-            <ProductCard key={index} product={product} role={role} />
-          ))}
-        </div>
+        {loading ? (
+          <p className="text-center text-gray-400 py-16">Loading products…</p>
+        ) : error ? (
+          <p className="text-center text-gray-400 py-16">{error}</p>
+        ) : products.length === 0 ? (
+          <p className="text-center text-gray-400 py-16">No featured products available yet.</p>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
+            {products.map((product) => (
+              <ProductCard key={product.id} product={product} role={role} />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

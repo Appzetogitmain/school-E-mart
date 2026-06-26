@@ -155,11 +155,11 @@ const SchoolAuthPage = () => {
 
       const userDisplayName = formData.fullName || 'School Administrator';
 
-      const mockUser = {
+      const registeredProfile = {
         name: userDisplayName,
         school: formData.schoolName,
         role: 'school',
-        phone: formData.mobile || '9876543210',
+        phone: formData.mobile || '',
         email: formData.email,
         refId: referenceId,
       };
@@ -169,7 +169,7 @@ const SchoolAuthPage = () => {
         name: userDisplayName,
         role: 'School Administrator',
       });
-      localStorage.setItem('childInfo', JSON.stringify(mockUser));
+      localStorage.setItem('childInfo', JSON.stringify(registeredProfile));
       setStep(3);
     }, 1500);
   };

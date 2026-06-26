@@ -8,7 +8,7 @@ import {
   Grid, Layout, Building2, Users, ClipboardList,
   GraduationCap, Megaphone, Calendar, Store, Clock,
   Clipboard, MoreHorizontal, ChevronRight, ShieldAlert,
-  ArrowUpRight, CheckCircle2, FolderOpen
+  ArrowUpRight, CheckCircle2, FolderOpen, Loader2
 } from 'lucide-react';
 import SchoolHeader from '../../components/SchoolHeader';
 import InstitutionalPackages from './InstitutionalPackages';
@@ -18,6 +18,12 @@ import VendorSpotlights from './VendorSpotlights';
 import SchoolCaseStudies from './SchoolCaseStudies';
 import { useDraggableScroll } from '../../hooks/useDraggableScroll';
 import AuthPrompt from '../../components/AuthPrompt';
+import { listStudents, listTeachers, listNotices } from '../../../services/schoolApi';
+import { listOrders } from '../../../services/ordersApi';
+import { useCategoryTree } from '../../../hooks/useCategoryTree';
+import { useProducts } from '../../../hooks/useProducts';
+import { useSchoolId } from '../../../utils/schoolContext';
+import { getErrorMessage } from '../../../utils/apiHelpers';
 
 const SchoolHome = () => {
   const navigate = useNavigate();
@@ -60,39 +66,93 @@ const SchoolHome = () => {
     setScrolled(scrollPos > 50);
   };
 
-  const bulkPackages = [
-    {
-      id: 1,
-      name: "Standardized Class 2 Kit",
-      price: "₹3,850",
-      originalPrice: "₹5,200",
-      image: "https://images.unsplash.com/photo-1503919545889-aef636e10ad4?q=80&w=300&h=400&fit=crop",
-      badge: "Institutional Rate"
-    },
-    {
-      id: 2,
-      name: "Faculty Winter Uniforms",
-      price: "₹12,450",
-      originalPrice: "₹15,000",
-      image: "https://images.unsplash.com/photo-1516627145497-ae6968895b74?q=80&w=300&h=400&fit=crop",
-      badge: "Staff Exclusive"
-    }
-  ];
+  const schoolId = useSchoolId();
+  const { tree: categoryTree, loading: categoriesLoading } = useCategoryTree();
+  const { products: featuredPackages, loading: packagesLoading } = useProducts({ featured: true, limit: 4 });
+  const { products: essentialProducts, loading: productsLoading } = useProducts({ limit: 4, sort: 'popular' });
 
-  const categories = [
-    { name: "Bulk Uniforms", image: "/assets/uniforms.png" },
-    { name: "Lab Supplies", image: "/assets/books.png" },
-    { name: "Office Stationery", image: "/assets/stationary.png" },
-    { name: "Sports Gear", image: "/assets/toys_and_sports.png" },
-    { name: "IT Hardware", image: "/assets/technology.png" },
-  ];
+  const [stats, setStats] = useState({
+    students: 0,
+    teachers: 0,
+    notices: 0,
+    orders: 0,
+    ordersPending: 0,
+  });
+  const [statsLoading, setStatsLoading] = useState(true);
+  const [statsError, setStatsError] = useState('');
+  const [recentNotices, setRecentNotices] = useState([]);
 
-  const products = [
-    { id: 1, name: "Bulk A4 Paper Reams (10pk)", price: "₹2,150", originalPrice: "₹2,800", image: "https://images.unsplash.com/photo-1585336139118-132f08535091?q=80&w=200&h=200&fit=crop", type: "Office" },
-    { id: 2, name: "Scientific Calculator Set", price: "₹8,499", originalPrice: "₹10,500", image: "https://images.unsplash.com/photo-1549298916-b41d501d3772?q=80&w=200&h=200&fit=crop", type: "Lab" },
-    { id: 3, name: "Teacher's Planner 2026", price: "₹450", originalPrice: "₹650", image: "https://images.unsplash.com/photo-1544947950-fa07a98d237f?q=80&w=200&h=200&fit=crop", type: "Faculty" },
-    { id: 4, name: "Waterproof Staff Bags", price: "₹1,250", originalPrice: "₹1,800", image: "https://images.unsplash.com/photo-1553062407-98eeb64c6a62?q=80&w=200&h=200&fit=crop", type: "Faculty" },
-  ];
+  const categories = categoryTree.map((cat) => ({
+    name: cat.name,
+    image: cat.image,
+    slug: cat.slug,
+  }));
+
+  const bulkPackages = featuredPackages.map((product) => ({
+    id: product.id,
+    name: product.name,
+    price: product.price,
+    originalPrice: product.originalPrice,
+    image: product.image,
+    badge: 'Institutional Rate',
+  }));
+
+  const products = essentialProducts;
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadDashboardStats = async () => {
+      if (!schoolId) {
+        setStatsLoading(false);
+        return;
+      }
+
+      setStatsLoading(true);
+      setStatsError('');
+      try {
+        const [
+          studentsResult,
+          teachersResult,
+          noticesResult,
+          ordersResult,
+          recentNoticesResult,
+        ] = await Promise.all([
+          listStudents(schoolId, { limit: 1 }),
+          listTeachers(schoolId, { limit: 1 }),
+          listNotices(schoolId, { limit: 1 }),
+          listOrders({ limit: 1, schoolId }, { audience: 'school' }),
+          listNotices(schoolId, { limit: 4 }),
+        ]);
+
+        if (cancelled) return;
+
+        const pendingOrders = (ordersResult.data || []).filter(
+          (order) => order.status === 'pending' || order.status === 'processing'
+        ).length;
+
+        setStats({
+          students: studentsResult.pagination?.total ?? studentsResult.data?.length ?? 0,
+          teachers: teachersResult.pagination?.total ?? teachersResult.data?.length ?? 0,
+          notices: noticesResult.pagination?.total ?? noticesResult.data?.length ?? 0,
+          orders: ordersResult.pagination?.total ?? ordersResult.data?.length ?? 0,
+          ordersPending: pendingOrders,
+        });
+        setRecentNotices(recentNoticesResult.data || []);
+      } catch (err) {
+        if (!cancelled) {
+          setStatsError(getErrorMessage(err, 'Unable to load dashboard stats'));
+        }
+      } finally {
+        if (!cancelled) setStatsLoading(false);
+      }
+    };
+
+    loadDashboardStats();
+    return () => {
+      cancelled = true;
+    };
+  }, [schoolId]);
 
   const handleBuyKit = (e) => {
     e.preventDefault();
@@ -140,78 +200,82 @@ const SchoolHome = () => {
 
           {/* 6 Grid Overview Cards */}
           <div className="grid grid-cols-3 gap-3.5">
-            {/* Grid 1: Students */}
-            <div className="p-3.5 bg-white border border-gray-200 rounded-3xl shadow-sm flex flex-col justify-between min-h-[96px]">
-              <div className="w-9 h-9 rounded-xl bg-purple-50 flex items-center justify-center text-primary shrink-0">
-                <GraduationCap size={16} />
+            {statsLoading ? (
+              <div className="col-span-3 flex flex-col items-center justify-center py-8">
+                <Loader2 size={28} className="animate-spin text-primary mb-2" />
+                <p className="text-xs text-gray-400 font-bold">Loading overview…</p>
               </div>
-              <div className="mt-2.5">
-                <span className="text-xl font-black text-deep-purple block leading-none">1,248</span>
-                <span className="text-xs text-gray-450 font-bold block mt-1">Students</span>
-                <span className="text-[10px] text-emerald-500 font-bold block mt-1">↑ 3% this month</span>
-              </div>
-            </div>
+            ) : (
+              <>
+                <div className="p-3.5 bg-white border border-gray-200 rounded-3xl shadow-sm flex flex-col justify-between min-h-[96px]">
+                  <div className="w-9 h-9 rounded-xl bg-purple-50 flex items-center justify-center text-primary shrink-0">
+                    <GraduationCap size={16} />
+                  </div>
+                  <div className="mt-2.5">
+                    <span className="text-xl font-black text-deep-purple block leading-none">{stats.students}</span>
+                    <span className="text-xs text-gray-450 font-bold block mt-1">Students</span>
+                  </div>
+                </div>
 
-            {/* Grid 2: Teachers */}
-            <div className="p-3.5 bg-white border border-gray-200 rounded-3xl shadow-sm flex flex-col justify-between min-h-[96px]">
-              <div className="w-9 h-9 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-500 shrink-0">
-                <Users size={16} />
-              </div>
-              <div className="mt-2.5">
-                <span className="text-xl font-black text-deep-purple block leading-none">68</span>
-                <span className="text-xs text-gray-455 font-bold block mt-1">Teachers</span>
-                <span className="text-[10px] text-emerald-500 font-bold block mt-1">↑ 2% this month</span>
-              </div>
-            </div>
+                <div className="p-3.5 bg-white border border-gray-200 rounded-3xl shadow-sm flex flex-col justify-between min-h-[96px]">
+                  <div className="w-9 h-9 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-500 shrink-0">
+                    <Users size={16} />
+                  </div>
+                  <div className="mt-2.5">
+                    <span className="text-xl font-black text-deep-purple block leading-none">{stats.teachers}</span>
+                    <span className="text-xs text-gray-455 font-bold block mt-1">Teachers</span>
+                  </div>
+                </div>
 
-            {/* Grid 3: Active Notices */}
-            <div className="p-3.5 bg-white border border-gray-200 rounded-3xl shadow-sm flex flex-col justify-between min-h-[96px]">
-              <div className="w-9 h-9 rounded-xl bg-amber-50 flex items-center justify-center text-amber-500 shrink-0">
-                <Megaphone size={16} />
-              </div>
-              <div className="mt-2.5">
-                <span className="text-xl font-black text-deep-purple block leading-none">8</span>
-                <span className="text-xs text-gray-455 font-bold block mt-1">Active Notices</span>
-                <span className="text-[10px] text-primary font-bold hover:underline cursor-pointer block mt-1">View all</span>
-              </div>
-            </div>
+                <div className="p-3.5 bg-white border border-gray-200 rounded-3xl shadow-sm flex flex-col justify-between min-h-[96px]">
+                  <div className="w-9 h-9 rounded-xl bg-amber-50 flex items-center justify-center text-amber-500 shrink-0">
+                    <Megaphone size={16} />
+                  </div>
+                  <div className="mt-2.5">
+                    <span className="text-xl font-black text-deep-purple block leading-none">{stats.notices}</span>
+                    <span className="text-xs text-gray-455 font-bold block mt-1">Active Notices</span>
+                    <button type="button" onClick={() => navigate('/school/notifications')} className="text-[10px] text-primary font-bold hover:underline cursor-pointer block mt-1">View all</button>
+                  </div>
+                </div>
 
-            {/* Grid 4: Kit Orders */}
-            <div className="p-3.5 bg-white border border-gray-200 rounded-3xl shadow-sm flex flex-col justify-between min-h-[96px]">
-              <div className="w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center text-blue-500 shrink-0">
-                <Package size={16} />
-              </div>
-              <div className="mt-2.5">
-                <span className="text-xl font-black text-deep-purple block leading-none">156</span>
-                <span className="text-xs text-gray-455 font-bold block mt-1">Kit Orders</span>
-                <span className="text-[10px] text-primary font-bold block mt-1">12 Pending</span>
-              </div>
-            </div>
+                <div className="p-3.5 bg-white border border-gray-200 rounded-3xl shadow-sm flex flex-col justify-between min-h-[96px]">
+                  <div className="w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center text-blue-500 shrink-0">
+                    <Package size={16} />
+                  </div>
+                  <div className="mt-2.5">
+                    <span className="text-xl font-black text-deep-purple block leading-none">{stats.orders}</span>
+                    <span className="text-xs text-gray-455 font-bold block mt-1">Kit Orders</span>
+                    {stats.ordersPending > 0 && (
+                      <span className="text-[10px] text-primary font-bold block mt-1">{stats.ordersPending} Pending</span>
+                    )}
+                  </div>
+                </div>
 
-            {/* Grid 5: Purchase Requests */}
-            <div className="p-3.5 bg-white border border-gray-200 rounded-3xl shadow-sm flex flex-col justify-between min-h-[96px]">
-              <div className="w-9 h-9 rounded-xl bg-pink-50 flex items-center justify-center text-pink-500 shrink-0">
-                <ShoppingCart size={16} />
-              </div>
-              <div className="mt-2.5">
-                <span className="text-xl font-black text-deep-purple block leading-none">23</span>
-                <span className="text-xs text-gray-455 font-bold block mt-1">Purchase Requests</span>
-                <span className="text-[10px] text-red-500 font-bold block mt-1">5 Pending</span>
-              </div>
-            </div>
+                <div className="p-3.5 bg-white border border-gray-200 rounded-3xl shadow-sm flex flex-col justify-between min-h-[96px]">
+                  <div className="w-9 h-9 rounded-xl bg-pink-50 flex items-center justify-center text-pink-500 shrink-0">
+                    <ShoppingCart size={16} />
+                  </div>
+                  <div className="mt-2.5">
+                    <span className="text-xl font-black text-deep-purple block leading-none">0</span>
+                    <span className="text-xs text-gray-455 font-bold block mt-1">Purchase Requests</span>
+                  </div>
+                </div>
 
-            {/* Grid 6: Active Vendors */}
-            <div className="p-3.5 bg-white border border-gray-200 rounded-3xl shadow-sm flex flex-col justify-between min-h-[96px]">
-              <div className="w-9 h-9 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600 shrink-0">
-                <Store size={16} />
-              </div>
-              <div className="mt-2.5">
-                <span className="text-xl font-black text-deep-purple block leading-none">24</span>
-                <span className="text-xs text-gray-455 font-bold block mt-1">Active Vendors</span>
-                <span className="text-[10px] text-primary font-bold hover:underline cursor-pointer block mt-1">View all</span>
-              </div>
-            </div>
+                <div className="p-3.5 bg-white border border-gray-200 rounded-3xl shadow-sm flex flex-col justify-between min-h-[96px]">
+                  <div className="w-9 h-9 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600 shrink-0">
+                    <Store size={16} />
+                  </div>
+                  <div className="mt-2.5">
+                    <span className="text-xl font-black text-deep-purple block leading-none">0</span>
+                    <span className="text-xs text-gray-455 font-bold block mt-1">Active Vendors</span>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
+          {statsError && (
+            <p className="text-xs text-red-500 font-semibold text-center">{statsError}</p>
+          )}
 
           {/* Quick Actions Grid Container */}
           <div className="space-y-3.5">
@@ -315,87 +379,42 @@ const SchoolHome = () => {
             </div>
 
             <div className="bg-white border border-gray-200 rounded-[2rem] shadow-sm divide-y divide-gray-100/50 overflow-hidden">
-              {/* Activity 1 */}
-              <div className="p-4 flex items-center gap-3.5 hover:bg-gray-50/50 cursor-pointer active:bg-gray-50 transition-colors">
-                <div className="w-10 h-10 rounded-2xl bg-purple-50 text-primary flex items-center justify-center shrink-0">
-                  <Megaphone size={16} />
+              {recentNotices.length === 0 ? (
+                <div className="p-8 text-center">
+                  <Megaphone size={28} className="text-gray-200 mx-auto mb-2" />
+                  <p className="text-xs font-bold text-gray-400">No recent activity yet</p>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-black text-deep-purple block leading-tight">New Notice Published</span>
-                    <span className="text-[10px] text-gray-400 font-bold">10:30 AM</span>
+              ) : (
+                recentNotices.map((notice) => (
+                  <div
+                    key={notice._id || notice.id}
+                    className="p-4 flex items-center gap-3.5 hover:bg-gray-50/50 cursor-pointer active:bg-gray-50 transition-colors"
+                    onClick={() => navigate('/school/notifications')}
+                  >
+                    <div className="w-10 h-10 rounded-2xl bg-purple-50 text-primary flex items-center justify-center shrink-0">
+                      <Megaphone size={16} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-black text-deep-purple block leading-tight">{notice.title}</span>
+                        <span className="text-[10px] text-gray-400 font-bold">
+                          {notice.publishedAt || notice.createdAt
+                            ? new Date(notice.publishedAt || notice.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
+                            : ''}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-gray-450 font-bold truncate mt-1">
+                        {notice.body || notice.content || notice.summary || ''}
+                      </p>
+                    </div>
+                    <ChevronRight size={14} className="text-gray-400 shrink-0" />
                   </div>
-                  <p className="text-[11px] text-gray-450 font-bold truncate mt-1">Summer Vacation will begin from 21 May 2025.</p>
-                </div>
-                <ChevronRight size={14} className="text-gray-400 shrink-0" />
-              </div>
-
-              {/* Activity 2 */}
-              <div className="p-4 flex items-center gap-3.5 hover:bg-gray-50/50 cursor-pointer active:bg-gray-50 transition-colors">
-                <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-500 flex items-center justify-center shrink-0">
-                  <Package size={16} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-black text-deep-purple block leading-tight">Kit Order Received</span>
-                    <span className="text-[10px] text-gray-400 font-bold">Yesterday</span>
-                  </div>
-                  <p className="text-[11px] text-gray-455 font-bold truncate mt-1">Class 5 Academic Kit – 20 orders received</p>
-                </div>
-                <ChevronRight size={14} className="text-gray-400 shrink-0" />
-              </div>
-
-              {/* Activity 3 */}
-              <div className="p-4 flex items-center gap-3.5 hover:bg-gray-50/50 cursor-pointer active:bg-gray-50 transition-colors">
-                <div className="w-10 h-10 rounded-2xl bg-amber-50 text-amber-500 flex items-center justify-center shrink-0">
-                  <ShoppingCart size={16} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-black text-deep-purple block leading-tight">Quotation Received</span>
-                    <span className="text-[10px] text-gray-400 font-bold">14 May 2025</span>
-                  </div>
-                  <p className="text-[11px] text-gray-455 font-bold truncate mt-1">3 quotations received for Notebook Purchase</p>
-                </div>
-                <ChevronRight size={14} className="text-gray-400 shrink-0" />
-              </div>
-
-              {/* Activity 4 */}
-              <div className="p-4 flex items-center gap-3.5 hover:bg-gray-50/50 cursor-pointer active:bg-gray-50 transition-colors">
-                <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-500 flex items-center justify-center shrink-0">
-                  <Users size={16} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-black text-deep-purple block leading-tight">New Teacher Added</span>
-                    <span className="text-[10px] text-gray-400 font-bold">13 May 2025</span>
-                  </div>
-                  <p className="text-[11px] text-gray-455 font-bold truncate mt-1">Mrs. Neha Sharma has joined as Mathematics Teacher</p>
-                </div>
-                <ChevronRight size={14} className="text-gray-400 shrink-0" />
-              </div>
+                ))
+              )}
             </div>
           </div>
 
-          {/* Bottom Bid Progress Banner */}
-          <div className="bg-purple-50/70 border border-purple-100 rounded-[2rem] p-4 flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-11 h-11 rounded-2xl bg-primary/10 flex items-center justify-center text-primary shrink-0 shadow-inner">
-                <Clipboard size={20} />
-              </div>
-              <div>
-                <h4 className="text-sm font-black text-deep-purple leading-tight">Uniform Bid 2026–27 is in Progress</h4>
-                <p className="text-[11px] text-gray-455 font-bold mt-1">5 vendors have submitted their bids.</p>
-              </div>
-            </div>
-
-            <button 
-              type="button"
-              className="px-4 py-2 border-2 border-primary text-primary hover:bg-primary hover:text-white transition-all active:scale-95 rounded-2xl text-xs font-black shrink-0 shadow-sm"
-            >
-              View Bids
-            </button>
-          </div>
+          {/* Bottom Bid Progress Banner - hidden until procurement API exists */}
 
         </div>
 
@@ -405,36 +424,58 @@ const SchoolHome = () => {
         <div className="border-t border-gray-100/80 mt-2 pt-4">
           
           <div className="mt-4">
-            <div ref={notifRef} className="flex gap-4 overflow-x-auto px-6 pb-2 scrollbar-hide select-none active:cursor-grabbing">
-              {[
-                { id: 1, text: "GST Invoicing now available for bulk institutional orders.", icon: <ClipboardList size={16} className="text-accent-gold shrink-0" />, color: "bg-accent-gold/10 border-accent-gold/20" },
-                { id: 2, text: "Vendor applications open for Q3 supply cycle.", icon: <Users size={16} className="text-primary shrink-0" />, color: "bg-primary/10 border-primary/20" }
-              ].map((notif) => (
-                <div key={notif.id} className={`min-w-[280px] ${notif.color} border px-4 py-3 rounded-2xl flex items-center gap-3 active:scale-95 transition-all`}>
-                  {notif.icon}
-                  <p className="text-[11px] font-semibold text-deep-purple leading-tight">
-                    {notif.text}
-                  </p>
-                </div>
-              ))}
-            </div>
+            {recentNotices.length > 0 && (
+              <div ref={notifRef} className="flex gap-4 overflow-x-auto px-6 pb-2 scrollbar-hide select-none active:cursor-grabbing">
+                {recentNotices.slice(0, 2).map((notice) => (
+                  <div key={notice._id || notice.id} className="min-w-[280px] bg-primary/10 border border-primary/20 px-4 py-3 rounded-2xl flex items-center gap-3 active:scale-95 transition-all">
+                    <Megaphone size={16} className="text-primary shrink-0" />
+                    <p className="text-[11px] font-semibold text-deep-purple leading-tight line-clamp-2">
+                      {notice.title}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
-          <InstitutionalPackages 
-            packages={bulkPackages}
-            kitsRef={kitsRef}
-            onBuyClick={handleBuyKit}
-          />
+          {packagesLoading ? (
+            <div className="px-6 py-8 text-center text-sm text-gray-400">Loading packages…</div>
+          ) : bulkPackages.length > 0 ? (
+            <InstitutionalPackages
+              packages={bulkPackages}
+              kitsRef={kitsRef}
+              onBuyClick={handleBuyKit}
+            />
+          ) : (
+            <div className="px-6 py-8 text-center">
+              <Package size={32} className="text-gray-200 mx-auto mb-2" />
+              <p className="text-sm font-bold text-gray-400">No institutional packages available</p>
+            </div>
+          )}
 
-          <SchoolCategories 
-            categories={categories}
-          />
+          {categoriesLoading ? (
+            <div className="px-6 py-8 text-center text-sm text-gray-400">Loading categories…</div>
+          ) : categories.length > 0 ? (
+            <SchoolCategories categories={categories} />
+          ) : (
+            <div className="px-6 py-8 text-center">
+              <p className="text-sm font-bold text-gray-400">No categories available</p>
+            </div>
+          )}
 
-          <CategoryEssentials 
-            title="Office & Facility Essentials"
-            products={products}
-            onViewAll={() => navigate('/school/products')}
-          />
+          {productsLoading ? (
+            <div className="px-6 py-8 text-center text-sm text-gray-400">Loading products…</div>
+          ) : products.length > 0 ? (
+            <CategoryEssentials
+              title="Office & Facility Essentials"
+              products={products}
+              onViewAll={() => navigate('/school/products')}
+            />
+          ) : (
+            <div className="px-6 py-8 text-center">
+              <p className="text-sm font-bold text-gray-400">No products available</p>
+            </div>
+          )}
           <VendorSpotlights />
           <SchoolCaseStudies reelsRef={reelsRef} />
         </div>

@@ -69,6 +69,11 @@ export const listFaqs = async (params = {}) => {
   return extractPaginated(response, 'faqs');
 };
 
+export const getContactInfo = async () => {
+  const response = await apiClient.get('/admin/cms/contact');
+  return unwrapData(response)?.content || unwrapData(response);
+};
+
 export const createFaq = async (payload) => {
   const response = await apiClient.post('/admin/cms/faqs', payload);
   return unwrapData(response)?.faq;

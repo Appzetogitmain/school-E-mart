@@ -10,53 +10,7 @@ const WithdrawalsManagement = () => {
   // Input text references state
   const [txnRefs, setTxnRefs] = useState({});
 
-  // Seeded mock withdrawals data matching layout exactly
-  const [withdrawals, setWithdrawals] = useState([
-    {
-      id: 'WD3001',
-      dateTime: '21/5/2026, 3:04:15 pm',
-      user: 'Harsh',
-      role: 'Vendor',
-      amount: 300.00,
-      status: 'Completed',
-      paymentMethod: 'Bank Transfer',
-      bankDetails: 'Test - 123456789025 (undefined)',
-      transactionReference: 'xzcxcvcxvcvcxv'
-    },
-    {
-      id: 'WD3002',
-      dateTime: '30/05/2026, 10:45:12 am',
-      user: 'patidar store',
-      role: 'Vendor',
-      amount: 1500.00,
-      status: 'Pending',
-      paymentMethod: 'Bank Transfer',
-      bankDetails: 'SBI - 987654321098 (Indore Branch)',
-      transactionReference: ''
-    },
-    {
-      id: 'WD3003',
-      dateTime: '28/05/2026, 09:15:30 am',
-      user: 'nexus',
-      role: 'Vendor',
-      amount: 2500.00,
-      status: 'Completed',
-      paymentMethod: 'Bank Transfer',
-      bankDetails: 'HDFC - 112233445566 (Vijay Nagar)',
-      transactionReference: 'txn_nexus_987123'
-    },
-    {
-      id: 'WD3004',
-      dateTime: '27/05/2026, 14:22:18 pm',
-      user: 'Test Factory',
-      role: 'Vendor',
-      amount: 800.00,
-      status: 'Rejected',
-      paymentMethod: 'Bank Transfer',
-      bankDetails: 'ICICI - 889977665544 (Dewas Naka)',
-      transactionReference: 'Declined due to incorrect banking IFSC code'
-    }
-  ]);
+  const [withdrawals, setWithdrawals] = useState([]);
 
   // Handle Complete Payout
   const handleCompletePayout = (id) => {

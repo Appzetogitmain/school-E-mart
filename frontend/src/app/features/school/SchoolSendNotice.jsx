@@ -18,9 +18,7 @@ const SchoolSendNotice = () => {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [audience, setAudience] = useState('parents');
-  const [attachments, setAttachments] = useState([
-    { id: 1, name: 'PTM_Schedule_May2025.pdf', size: '245 KB' }
-  ]);
+  const [attachments, setAttachments] = useState([]);
   const [schedule, setSchedule] = useState('now');
   const [isSuccess, setIsSuccess] = useState(false);
   const [saving, setSaving] = useState(false);

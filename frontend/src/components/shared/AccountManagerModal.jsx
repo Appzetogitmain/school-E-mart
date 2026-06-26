@@ -1,31 +1,54 @@
-import React from 'react';
-import { X, Phone, Mail, MessageSquare, ShieldCheck, Clock, ExternalLink } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { X, Phone, Mail, MessageSquare, Clock, ExternalLink, Loader2, User } from 'lucide-react';
+import { getContactInfo } from '../../services/adminApi';
+import { getErrorMessage } from '../../utils/apiHelpers';
 
 const AccountManagerModal = ({ isOpen, onClose }) => {
+  const [contactInfo, setContactInfo] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!isOpen) return undefined;
+
+    let cancelled = false;
+    setLoading(true);
+    setError('');
+
+    getContactInfo()
+      .then((data) => {
+        if (!cancelled) setContactInfo(data);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setContactInfo(null);
+          setError(getErrorMessage(err, 'Unable to load contact details'));
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
-  const managerInfo = {
-    name: 'Prachi Sharma',
-    designation: 'Senior Institutional Relationship Manager',
-    phone: '+91 12345 67890',
-    email: 'prachi.sharma@schoolemart.com',
-    image: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=200',
-    experience: '8+ Years in Education Sector',
-    languages: ['English', 'Hindi', 'Bhojpuri']
-  };
+  const managerName = contactInfo?.accountManagerName || contactInfo?.managerName || 'Institutional Support';
+  const designation = contactInfo?.accountManagerTitle || 'School E-Mart Institutional Team';
+  const phone = contactInfo?.accountManagerPhone || contactInfo?.phone || contactInfo?.supportPhone;
+  const email = contactInfo?.accountManagerEmail || contactInfo?.email || contactInfo?.supportEmail;
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center px-4">
-      {/* Overlay */}
       <div
         className="absolute inset-0 bg-deep-purple/60 backdrop-blur-md animate-in fade-in duration-300"
         onClick={onClose}
       />
 
-      {/* Modal Content */}
       <div className="relative bg-white w-full max-w-md rounded-[3rem] shadow-2xl overflow-hidden animate-in zoom-in-95 fade-in duration-300">
-
-        {/* Header/Banner */}
         <div className="bg-primary pt-12 pb-20 px-8 text-center relative">
           <button
             onClick={onClose}
@@ -35,86 +58,97 @@ const AccountManagerModal = ({ isOpen, onClose }) => {
           </button>
 
           <div className="pt-4">
-            <h3 className="text-2xl font-bold text-white mb-1">{managerInfo.name}</h3>
-            <p className="text-white/70 text-xs font-medium uppercase tracking-widest">{managerInfo.designation}</p>
+            {loading ? (
+              <Loader2 size={32} className="animate-spin text-white mx-auto" />
+            ) : (
+              <>
+                <h3 className="text-2xl font-bold text-white mb-1">{managerName}</h3>
+                <p className="text-white/70 text-xs font-medium uppercase tracking-widest">{designation}</p>
+              </>
+            )}
           </div>
         </div>
 
-        {/* Info Body */}
         <div className="px-8 pb-10 -mt-10 relative z-10">
           <div className="bg-white rounded-[2rem] p-6 shadow-xl border border-gray-100 space-y-6">
+            {error && (
+              <p className="text-xs text-red-500 text-center">{error}</p>
+            )}
 
-            {/* Quick Stats */}
-            <div className="grid grid-cols-2 gap-4 pb-6 border-b border-gray-50">
-              <div className="text-center">
-                <p className="text-[10px] text-gray-400 font-bold uppercase mb-1">Expertise</p>
-                <p className="text-xs font-bold text-deep-purple">{managerInfo.experience}</p>
+            {!loading && !phone && !email && !error && (
+              <div className="text-center py-6">
+                <User size={36} className="text-gray-200 mx-auto mb-3" />
+                <p className="text-sm font-bold text-gray-400">Contact details not available yet</p>
               </div>
-              <div className="text-center border-l border-gray-100">
-                <p className="text-[10px] text-gray-400 font-bold uppercase mb-1">Languages</p>
-                <p className="text-xs font-bold text-deep-purple">{managerInfo.languages.join(', ')}</p>
-              </div>
-            </div>
+            )}
 
-            {/* Contact Actions */}
             <div className="space-y-3">
-              <a
-                href={`tel:${managerInfo.phone}`}
-                className="w-full flex items-center justify-between p-4 bg-blue-50 text-blue-600 rounded-2xl hover:bg-blue-600 hover:text-white transition-all group"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm">
-                    <Phone size={18} />
+              {phone && (
+                <a
+                  href={`tel:${phone}`}
+                  className="w-full flex items-center justify-between p-4 bg-blue-50 text-blue-600 rounded-2xl hover:bg-blue-600 hover:text-white transition-all group"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm">
+                      <Phone size={18} />
+                    </div>
+                    <div className="text-left">
+                      <p className="text-[10px] font-bold uppercase opacity-60">Call Manager</p>
+                      <p className="text-sm font-bold">{phone}</p>
+                    </div>
                   </div>
-                  <div className="text-left">
-                    <p className="text-[10px] font-bold uppercase opacity-60">Call Manager</p>
-                    <p className="text-sm font-bold">{managerInfo.phone}</p>
-                  </div>
-                </div>
-                <ExternalLink size={16} className="opacity-40 group-hover:opacity-100" />
-              </a>
+                  <ExternalLink size={16} className="opacity-40 group-hover:opacity-100" />
+                </a>
+              )}
 
-              <a
-                href={`mailto:${managerInfo.email}`}
-                className="w-full flex items-center justify-between p-4 bg-orange-50 text-orange-600 rounded-2xl hover:bg-orange-600 hover:text-white transition-all group"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm">
-                    <Mail size={18} />
+              {email && (
+                <a
+                  href={`mailto:${email}`}
+                  className="w-full flex items-center justify-between p-4 bg-orange-50 text-orange-600 rounded-2xl hover:bg-orange-600 hover:text-white transition-all group"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm">
+                      <Mail size={18} />
+                    </div>
+                    <div className="text-left">
+                      <p className="text-[10px] font-bold uppercase opacity-60">Send Email</p>
+                      <p className="text-sm font-bold">Email Directly</p>
+                    </div>
                   </div>
-                  <div className="text-left">
-                    <p className="text-[10px] font-bold uppercase opacity-60">Send Email</p>
-                    <p className="text-sm font-bold">Email Directly</p>
-                  </div>
-                </div>
-                <ExternalLink size={16} className="opacity-40 group-hover:opacity-100" />
-              </a>
+                  <ExternalLink size={16} className="opacity-40 group-hover:opacity-100" />
+                </a>
+              )}
 
-              <button
-                className="w-full flex items-center justify-between p-4 bg-green-50 text-green-600 rounded-2xl hover:bg-green-600 hover:text-white transition-all group"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm">
-                    <MessageSquare size={18} />
+              {contactInfo?.whatsapp && (
+                <a
+                  href={`https://wa.me/${String(contactInfo.whatsapp).replace(/\D/g, '')}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="w-full flex items-center justify-between p-4 bg-green-50 text-green-600 rounded-2xl hover:bg-green-600 hover:text-white transition-all group"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm">
+                      <MessageSquare size={18} />
+                    </div>
+                    <div className="text-left">
+                      <p className="text-[10px] font-bold uppercase opacity-60">WhatsApp</p>
+                      <p className="text-sm font-bold">Instant Support</p>
+                    </div>
                   </div>
-                  <div className="text-left">
-                    <p className="text-[10px] font-bold uppercase opacity-60">WhatsApp</p>
-                    <p className="text-sm font-bold">Instant Support</p>
-                  </div>
-                </div>
-                <ExternalLink size={16} className="opacity-40 group-hover:opacity-100" />
-              </button>
+                  <ExternalLink size={16} className="opacity-40 group-hover:opacity-100" />
+                </a>
+              )}
             </div>
 
-            {/* Availability */}
             <div className="pt-4 flex items-center justify-center gap-3 text-text-secondary">
               <Clock size={16} className="text-primary" />
-              <span className="text-[11px] font-medium uppercase tracking-wider">Available Mon - Sat, 9AM - 6PM</span>
+              <span className="text-[11px] font-medium uppercase tracking-wider">
+                {contactInfo?.weekdayHours || 'Available Mon - Sat, 9AM - 6PM'}
+              </span>
             </div>
           </div>
         </div>
 
-        {/* Footer Link */}
         <div className="bg-gray-50 px-8 py-4 text-center">
           <p className="text-[10px] text-text-secondary font-medium uppercase tracking-widest">School E-Mart Institutional Team</p>
         </div>

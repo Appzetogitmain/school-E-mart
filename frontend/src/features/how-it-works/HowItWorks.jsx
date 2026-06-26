@@ -26,6 +26,8 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { ROUTES } from '../../constants/routes';
 import VendorContactModal from '../../components/shared/VendorContactModal';
+import { listFaqs } from '../../services/adminApi';
+import { getErrorMessage } from '../../utils/apiHelpers';
 
 const StepCard = ({ number, title, desc, icon: Icon, image, color = "primary" }) => (
   <div className="group bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-500 flex flex-col h-full relative overflow-hidden">
@@ -107,55 +109,44 @@ const HowItWorks = () => {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  const schoolFaqs = [
-    {
-      question: "How to check the status of my order on schoolemart.com?",
-      answer: "Login to schoolemart.com with your credentials and click on the 'My Orders' tab to check order details. If your order has been shipped by the vendor, you can click on the 'Track' tab on schoolemart.com to track your order in real-time."
-    },
-    {
-      question: "How to check if schoolemart.com delivers to my pincode?",
-      answer: "To check pincode serviceability on schoolemart.com, go to any product page. You can enter your locality's pincode and click 'Verify' to check if schoolemart.com provides delivery services in your area."
-    },
-    {
-      question: "What if the committed delivery time for my schoolemart.com order is over?",
-      answer: "We try our best to have your schoolemart.com order delivered on or before the promise date. If delayed, our team contacts the vendor to expedite delivery. You may also reach out to schoolemart.com for updates. During this period, you can also cancel the order on schoolemart.com and request a full refund to your source account."
-    },
-    {
-      question: "How do I cancel my order on schoolemart.com?",
-      answer: "You can cancel your schoolemart.com order by logging into 'My Account'. Please note that orders on schoolemart.com can only be cancelled before they are 'packed' by the vendor."
-    },
-    {
-      question: "I just cancelled my order on schoolemart.com, when will I receive the refund?",
-      answer: "Once an order is cancelled on schoolemart.com, the amount should reflect in your source account within 7-10 business days. If the timeframe is over, please reach out to schoolemart.com support via 'Contact Admin' in your account."
-    },
-    {
-      question: "What are the cancellation timelines on schoolemart.com?",
-      answer: "You can cancel your schoolemart.com order before it is packed by the vendor without any charges. If you cancel after it is packed, charges for payment gateway, shipping (if already shipped), and associated GST will apply on schoolemart.com."
-    }
-  ];
+  const [schoolFaqs, setSchoolFaqs] = useState([]);
+  const [vendorFaqs, setVendorFaqs] = useState([]);
+  const [faqsLoading, setFaqsLoading] = useState(true);
 
-  const vendorFaqs = [
-    {
-      question: "Who can sell on schoolemart.com?",
-      answer: "Any vendor who wants to deliver products to schools can sell on schoolemart.com. schoolemart.com is an online platform for business-to-school sales. schoolemart.com helps local vendors sell to local schools. For example, a furniture vendor from Delhi can sell to schools in Delhi using schoolemart.com."
-    },
-    {
-      question: "How to register as a vendor on schoolemart.com?",
-      answer: "You can register on schoolemart.com as a vendor very easily. Just click on \"Sell with us\" on schoolemart.com and follow the simple steps to complete your registration."
-    },
-    {
-      question: "What documents are needed to register on schoolemart.com?",
-      answer: "To register on schoolemart.com, you will need to provide these documents: Address Proof, GST Certificate, Business PAN card, and a Cancelled Cheque."
-    },
-    {
-      question: "Is there a fee for listing products on schoolemart.com?",
-      answer: "No, schoolemart.com does not charge any fee for listing your products. You can list your products on schoolemart.com for free."
-    },
-    {
-      question: "When will I get payment for my orders on schoolemart.com?",
-      answer: "After your order is delivered on schoolemart.com, you will get your payment within 5 business days in your bank account."
-    }
-  ];
+  useEffect(() => {
+    let cancelled = false;
+
+    listFaqs({ limit: 100 })
+      .then(({ data }) => {
+        if (cancelled) return;
+        const school = [];
+        const vendor = [];
+        (data || []).forEach((faq) => {
+          const item = { question: faq.question, answer: faq.answer };
+          const cat = (faq.category || '').toLowerCase();
+          if (cat.includes('vendor') || cat.includes('seller')) {
+            vendor.push(item);
+          } else {
+            school.push(item);
+          }
+        });
+        setSchoolFaqs(school);
+        setVendorFaqs(vendor);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setSchoolFaqs([]);
+          setVendorFaqs([]);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setFaqsLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const faqs = activeTab === 'school' ? schoolFaqs : vendorFaqs;
 
@@ -417,7 +408,12 @@ const HowItWorks = () => {
           </div>
 
           <div className="space-y-4">
-            {faqs.map((faq, idx) => (
+            {faqsLoading ? (
+              <p className="text-center text-gray-400 py-8">Loading FAQs…</p>
+            ) : faqs.length === 0 ? (
+              <p className="text-center text-gray-400 py-8">No FAQs available yet.</p>
+            ) : (
+            faqs.map((faq, idx) => (
               <FAQItem
                 key={idx}
                 question={faq.question}
@@ -425,7 +421,8 @@ const HowItWorks = () => {
                 isOpen={openFAQ === idx}
                 onClick={() => setOpenFAQ(openFAQ === idx ? -1 : idx)}
               />
-            ))}
+            ))
+            )}
           </div>
         </div>
       </section>

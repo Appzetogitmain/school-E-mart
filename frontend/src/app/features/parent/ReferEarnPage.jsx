@@ -16,28 +16,12 @@ const ReferEarnPage = () => {
 
   const [showCopyToast, setShowCopyToast] = useState(false);
 
-  // Generate or retrieve unique referral code
-  const [referralCode] = useState(() => {
-    if (isGuest) return null;
-    const saved = localStorage.getItem('referral_code');
-    const isValid = saved && /^EMART\d{4}$/.test(saved);
-    if (isValid) return saved;
-
-    const digits = '0123456789';
-    let code = 'EMART';
-    for (let i = 0; i < 4; i++) {
-      code += digits.charAt(Math.floor(Math.random() * digits.length));
-    }
-    localStorage.setItem('referral_code', code);
-    return code;
-  });
-
   const referral = {
-    code: referralCode,
-    totalEarnings: "1,250",
-    monthlyEarnings: "450",
-    successfulReferrals: 12,
-    pendingReferrals: 5
+    code: null,
+    totalEarnings: '0',
+    monthlyEarnings: '0',
+    successfulReferrals: 0,
+    pendingReferrals: 0,
   };
 
   const handleCopyCode = () => {
@@ -119,27 +103,15 @@ const ReferEarnPage = () => {
               </button>
             </div>
           ) : (
-            <>
-              <div className="text-center space-y-4">
-                <p className="text-[10px] font-black text-gray-300 uppercase tracking-[0.2em]">Your Referral Code</p>
-                <div className="flex items-center justify-center gap-3">
-                  <span className="text-4xl font-black text-deep-purple tracking-tight">{referral.code}</span>
-                  <button
-                    onClick={handleCopyCode}
-                    className="w-10 h-10 rounded-xl bg-primary/5 flex items-center justify-center text-primary active:scale-90 transition-all"
-                  >
-                    <Copy size={20} />
-                  </button>
-                </div>
+            <div className="text-center py-4">
+              <div className="w-16 h-16 bg-primary/5 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                <Gift size={28} className="text-primary" />
               </div>
-
-              <button
-                onClick={handleShare}
-                className="w-full py-5 bg-primary text-white rounded-2xl text-sm font-medium shadow-lg shadow-primary/20 active:scale-95 transition-all flex items-center justify-center gap-3"
-              >
-                <Share2 size={18} /> Share & Invite Friends
-              </button>
-            </>
+              <h3 className="text-lg font-black text-deep-purple mb-2">Referral program coming soon</h3>
+              <p className="text-gray-400 text-xs font-medium mb-4 leading-relaxed max-w-[240px] mx-auto">
+                Referral rewards are not available yet. We&apos;ll notify you when you can start earning.
+              </p>
+            </div>
           )}
         </section>
 

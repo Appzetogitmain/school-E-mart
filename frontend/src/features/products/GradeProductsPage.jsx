@@ -20,37 +20,26 @@ import { useProducts } from '../../hooks/useProducts';
 import { findHeaderCategory } from '../../utils/mappers/categoryMapper';
 import { classIdToGradeQuery, sortKeyFromLabel } from '../../utils/mappers/productMapper';
 
-const MOCK_GRADE_DATA = {
-  nursery: { name: 'Nursery', focus: 'Early Learning & Comfort', age: '3-4 Years' },
-  lkg: { name: 'LKG', focus: 'Foundation & Creativity', age: '4-5 Years' },
-  ukg: { name: 'UKG', focus: 'Primary Readiness', age: '5-6 Years' },
-  '1': { name: 'Class 1', focus: 'Core Subjects', age: '6-7 Years' },
-  '2': { name: 'Class 2', focus: 'Language & Logic', age: '7-8 Years' },
-  '3': { name: 'Class 3', focus: 'Exploratory Learning', age: '8-9 Years' },
-  '4': { name: 'Class 4', focus: 'Intermediate Concepts', age: '9-10 Years' },
-  '5': { name: 'Class 5', focus: 'Primary Graduation', age: '10-11 Years' },
-  '6': { name: 'Class 6', focus: 'Secondary Foundation', age: '11-12 Years' },
-  '7': { name: 'Class 7', focus: 'Analytical Skills', age: '12-13 Years' },
-  '8': { name: 'Class 8', focus: 'Advanced Core', age: '13-14 Years' },
-  '9': { name: 'Class 9', focus: 'Secondary Excellence', age: '14-15 Years' },
-  '10': { name: 'Class 10', focus: 'Board Preparation', age: '15-16 Years' },
-  '11': { name: 'Class 11', focus: 'Stream Specialization', age: '16-17 Years' },
-  '12': { name: 'Class 12', focus: 'Higher Ed Transition', age: '17-18 Years' },
-};
+const GRADE_IDS = ['nursery', 'lkg', 'ukg', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'];
 
-const CATEGORY_HEADER_MAP = {
-  all: null,
-  books: 'books',
-  uniform: 'uniforms',
-  stationery: 'stationery',
-  sports: 'sports',
+const formatGradeLabel = (classId) => {
+  if (classId === 'nursery') return 'Nursery';
+  if (classId === 'lkg') return 'LKG';
+  if (classId === 'ukg') return 'UKG';
+  const num = Number(classId);
+  if (!Number.isNaN(num) && num >= 1 && num <= 12) return `Class ${num}`;
+  return String(classId);
 };
 
 const GradeProductsPage = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const classId = searchParams.get('class') || '1';
-  const gradeInfo = MOCK_GRADE_DATA[classId] || MOCK_GRADE_DATA['1'];
+  const gradeInfo = {
+    name: formatGradeLabel(classId),
+    focus: 'School Essentials',
+    age: '',
+  };
 
   const [activeCategory, setActiveCategory] = useState('all');
   const [sortBy, setSortBy] = useState('featured');
@@ -63,6 +52,14 @@ const GradeProductsPage = () => {
     { id: 'stationery', name: 'Stationery', icon: PenTool },
     { id: 'sports', name: 'Sports & PE', icon: Trophy },
   ];
+
+  const CATEGORY_HEADER_MAP = {
+    all: null,
+    books: 'books',
+    uniform: 'uniforms',
+    stationery: 'stationery',
+    sports: 'sports',
+  };
 
   const selectedHeader = useMemo(() => {
     const slug = CATEGORY_HEADER_MAP[activeCategory];
@@ -248,7 +245,7 @@ const GradeProductsPage = () => {
         <div className="max-w-7xl mx-auto">
           <h2 className="text-2xl font-bold text-deep-purple mb-10">Shopping for another child?</h2>
           <div className="flex flex-wrap justify-center gap-3">
-            {Object.keys(MOCK_GRADE_DATA).map((id) => (
+            {GRADE_IDS.map((id) => (
               <button
                 key={id}
                 onClick={() => navigate(`${ROUTES.SHOP_BY_GRADE}?class=${id}`)}

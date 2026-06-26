@@ -11,6 +11,11 @@ const extractPaginated = (response, key) => {
   };
 };
 
+export const listSchools = async (params = {}) => {
+  const response = await apiClient.get('/schools', { params });
+  return extractPaginated(response, 'schools');
+};
+
 export const getSchool = async (schoolId) => {
   const response = await apiClient.get(schoolPath(schoolId));
   return unwrapData(response)?.school;

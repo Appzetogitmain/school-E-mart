@@ -16,10 +16,14 @@ import {
   Copy, 
   Check, 
   X,
-  ArrowUpDown
+  ArrowUpDown,
+  Loader2
 } from 'lucide-react';
 import AppHeader from '../../components/AppHeader';
 import LoginRequired from '../../components/LoginRequired';
+import { listTeachers } from '../../../services/schoolApi';
+import { getChildInfoFromStorage } from '../../../utils/parentContext';
+import { getErrorMessage } from '../../../utils/apiHelpers';
 
 const ParentPhonebook = () => {
   // Header Scroll and SideMenu States
@@ -63,132 +67,75 @@ const ParentPhonebook = () => {
     setScrolled(scrollPos > 50);
   };
 
-  // Contacts Database
-  const contactsDatabase = useMemo(() => ({
-    important: [
-      {
-        id: 'imp-1',
-        title: 'Principal',
-        name: 'Dr. Evelyn Harris',
-        role: 'School Administration',
-        category: 'Administration',
-        phone: '+91 98765 43210',
-        email: 'principal@exploreschool.edu',
-        avatarBg: 'bg-[#F4EBFF]',
-        avatarColor: 'text-[#7F56D9]',
-        callBg: 'bg-[#F4EBFF]',
-        callColor: 'text-[#6A47DE]'
-      },
-      {
-        id: 'imp-2',
-        title: 'Vice Principal',
-        name: 'Mr. Ronald Davies',
-        role: 'School Administration',
-        category: 'Administration',
-        phone: '+91 98765 43211',
-        email: 'viceprincipal@exploreschool.edu',
-        avatarBg: 'bg-[#FFF6ED]',
-        avatarColor: 'text-[#F2994A]',
-        callBg: 'bg-[#FFF6ED]',
-        callColor: 'text-[#F2994A]'
-      },
-      {
-        id: 'imp-3',
-        title: 'Front Office',
-        name: 'Reception & Helpdesk',
-        role: 'School Administration',
-        category: 'Administration',
-        phone: '+91 98765 43212',
-        email: 'info@exploreschool.edu',
-        avatarBg: 'bg-[#EBFBF0]',
-        avatarColor: 'text-[#34A853]',
-        callBg: 'bg-[#EBFBF0]',
-        callColor: 'text-[#34A853]'
-      }
-    ],
-    all: [
-      {
-        id: 'all-1',
-        name: 'Academic Coordinator',
-        department: 'Academics Department',
-        phone: '011-2345678',
-        email: 'coordinator.academics@exploreschool.edu',
-        category: 'Academics',
-        avatarBg: 'bg-[#F4EBFF]',
-        avatarColor: 'text-[#7F56D9]'
-      },
-      {
-        id: 'all-2',
-        name: 'Account Office',
-        department: 'Finance Department',
-        phone: '011-2345679',
-        email: 'accounts@exploreschool.edu',
-        category: 'Other Services',
-        avatarBg: 'bg-[#FFF6ED]',
-        avatarColor: 'text-[#F2994A]'
-      },
-      {
-        id: 'all-3',
-        name: 'IT Support',
-        department: 'IT Department',
-        phone: '011-2345680',
-        email: 'itsupport@exploreschool.edu',
-        category: 'Support Staff',
-        avatarBg: 'bg-[#EBFBF0]',
-        avatarColor: 'text-[#34A853]'
-      },
-      {
-        id: 'all-4',
-        name: 'Transport Incharge',
-        department: 'Transport Department',
-        phone: '011-2345681',
-        email: 'transport@exploreschool.edu',
-        category: 'Other Services',
-        avatarBg: 'bg-[#E8F0FE]',
-        avatarColor: 'text-[#1A73E8]'
-      },
-      {
-        id: 'all-5',
-        name: 'School Nurse',
-        department: 'Medical Room',
-        phone: '011-2345682',
-        email: 'medical@exploreschool.edu',
-        category: 'Support Staff',
-        avatarBg: 'bg-[#FFF0F2]',
-        avatarColor: 'text-[#E04F5F]'
-      },
-      {
-        id: 'all-6',
-        name: 'Librarian',
-        department: 'Library',
-        phone: '011-2345683',
-        email: 'library@exploreschool.edu',
-        category: 'Academics',
-        avatarBg: 'bg-[#F4EBFF]',
-        avatarColor: 'text-[#7F56D9]'
-      },
-      {
-        id: 'all-7',
-        name: 'Admission Office',
-        department: 'Administration',
-        phone: '011-2345684',
-        email: 'admissions@exploreschool.edu',
-        category: 'Administration',
-        avatarBg: 'bg-[#E8F0FE]',
-        avatarColor: 'text-[#1A73E8]'
-      },
-      {
-        id: 'all-8',
-        name: 'Sports Coordinator',
-        department: 'Physical Education Dept',
-        phone: '011-2345685',
-        email: 'sports@exploreschool.edu',
-        category: 'Academics',
-        avatarBg: 'bg-[#EBFBF0]',
-        avatarColor: 'text-[#34A853]'
-      }
-    ]
-  }), []);
+  const [contactsLoading, setContactsLoading] = useState(true);
+  const [contactsError, setContactsError] = useState('');
+  const [teachers, setTeachers] = useState([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const childInfo = getChildInfoFromStorage();
+    const schoolId = childInfo?.schoolId;
+
+    if (!schoolId || schoolId === 'explore-schools') {
+      setTeachers([]);
+      setContactsLoading(false);
+      return undefined;
+    }
+
+    setContactsLoading(true);
+    setContactsError('');
+
+    listTeachers(schoolId, { limit: 100 })
+      .then(({ data }) => {
+        if (!cancelled) setTeachers(data || []);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setTeachers([]);
+          setContactsError(getErrorMessage(err, 'Unable to load contacts'));
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setContactsLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const avatarPalettes = [
+    { avatarBg: 'bg-[#F4EBFF]', avatarColor: 'text-[#7F56D9]', callBg: 'bg-[#F4EBFF]', callColor: 'text-[#6A47DE]' },
+    { avatarBg: 'bg-[#FFF6ED]', avatarColor: 'text-[#F2994A]', callBg: 'bg-[#FFF6ED]', callColor: 'text-[#F2994A]' },
+    { avatarBg: 'bg-[#EBFBF0]', avatarColor: 'text-[#34A853]', callBg: 'bg-[#EBFBF0]', callColor: 'text-[#34A853]' },
+    { avatarBg: 'bg-[#E8F0FE]', avatarColor: 'text-[#1A73E8]', callBg: 'bg-[#E8F0FE]', callColor: 'text-[#1A73E8]' },
+  ];
+
+  const mapTeacherToContact = (teacher, index) => {
+    const palette = avatarPalettes[index % avatarPalettes.length];
+    const name = teacher.name || teacher.fullName || 'Staff Member';
+    const role = teacher.designation || teacher.role || teacher.subject || 'Teacher';
+    const category = teacher.department?.includes('Admin') ? 'Administration' : 'Academics';
+
+    return {
+      id: teacher._id || teacher.id || `teacher-${index}`,
+      title: role,
+      name,
+      role: teacher.department || 'School Staff',
+      category,
+      phone: teacher.phone || teacher.mobile || '',
+      email: teacher.email || '',
+      department: teacher.department || role,
+      ...palette,
+    };
+  };
+
+  const contactsDatabase = useMemo(() => {
+    const mapped = teachers.map(mapTeacherToContact);
+    const important = mapped.slice(0, 3);
+    const all = mapped.slice(3);
+    return { important, all };
+  }, [teachers]);
 
   // Category Tab Meta
   const tabs = [

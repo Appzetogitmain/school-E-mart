@@ -6,21 +6,17 @@ import { ROUTES } from '../../constants/routes';
 import LoginPromptModal from '../shared/LoginPromptModal';
 
 const ProductCard = ({ 
-  product = {
-    image: 'https://images.unsplash.com/photo-1588072432836-e10032774350?auto=format&fit=crop&q=80&w=600',
-    category: 'Furniture & Accessories',
-    title: 'Modern Ergonomic Classroom Student Desk',
-    currentPrice: 4971,
-    originalPrice: 5990,
-    discount: 17,
-    hasBulkQuote: true,
-    moq: '10 Units'
-  },
+  product,
   role = 'parent'
 }) => {
   const navigate = useNavigate();
   const { isAuthenticated } = useAuthStore();
   const [showLoginModal, setShowLoginModal] = useState(false);
+
+  if (!product) {
+    return null;
+  }
+
   const {
     image,
     category,

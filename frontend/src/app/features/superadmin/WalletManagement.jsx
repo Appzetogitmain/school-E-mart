@@ -18,122 +18,11 @@ const WalletManagement = () => {
   // Transaction reference input dictionary for pending items
   const [txnRefs, setTxnRefs] = useState({});
 
-  // Seeded mock transactions data mapping your layout screenshot
-  const [transactions] = useState([
-    {
-      id: 'TX1001',
-      dateTime: '30/05/2026, 14:11:54',
-      user: "harsh's hub",
-      role: 'Vendor',
-      type: 'Credit',
-      description: 'Sale proceeds from Order #ORD1780130489670897',
-      amount: 63.00
-    },
-    {
-      id: 'TX1002',
-      dateTime: '30/05/2026, 13:02:15',
-      user: 'patidar store',
-      role: 'Vendor',
-      type: 'Credit',
-      description: 'Sale proceeds from Order #ORD1780130489670554',
-      amount: 145.50
-    },
-    {
-      id: 'TX1003',
-      dateTime: '29/05/2026, 18:45:00',
-      user: 'Rahul (Rider)',
-      role: 'Delivery Boy',
-      type: 'Debit',
-      description: 'Payout for Delivery Service #DEL983120',
-      amount: -45.00
-    },
-    {
-      id: 'TX1004',
-      dateTime: '29/05/2026, 11:20:10',
-      user: 'Test Factory',
-      role: 'Vendor',
-      type: 'Credit',
-      description: 'Sale proceeds from Order #ORD1780130489670221',
-      amount: 290.00
-    },
-    {
-      id: 'TX1005',
-      dateTime: '28/05/2026, 16:30:45',
-      user: 'nexus',
-      role: 'Vendor',
-      type: 'Debit',
-      description: 'Vendor Requested Bank Transfer withdrawal',
-      amount: -500.00
-    }
-  ]);
+  const [transactions] = useState([]);
 
-  // Seeded mock Admin Earnings entries
-  const [adminEarnings] = useState([
-    {
-      id: 'AE2001',
-      dateTime: '30/05/2026, 14:11:54',
-      orderId: '#ORD1780130489670897',
-      commissionRate: '10%',
-      orderTotal: 630.00,
-      adminCut: 63.00
-    },
-    {
-      id: 'AE2002',
-      dateTime: '30/05/2026, 13:02:15',
-      orderId: '#ORD1780130489670554',
-      commissionRate: '12%',
-      orderTotal: 516.60,
-      adminCut: 62.00
-    }
-  ]);
+  const [adminEarnings] = useState([]);
 
-  // Seeded mock Withdrawal Requests matching the user layout exactly
-  const [withdrawals, setWithdrawals] = useState([
-    {
-      id: 'WD3001',
-      dateTime: '21/5/2026, 3:04:15 pm',
-      user: 'Harsh',
-      role: 'Vendor',
-      amount: 300.00,
-      status: 'Completed',
-      paymentMethod: 'Bank Transfer',
-      bankDetails: 'Test - 123456789025 (undefined)',
-      transactionReference: 'xzcxcvcxvcvcxv'
-    },
-    {
-      id: 'WD3002',
-      dateTime: '30/05/2026, 10:45:12 am',
-      user: 'patidar store',
-      role: 'Vendor',
-      amount: 1500.00,
-      status: 'Pending',
-      paymentMethod: 'Bank Transfer',
-      bankDetails: 'SBI - 987654321098 (Indore Branch)',
-      transactionReference: ''
-    },
-    {
-      id: 'WD3003',
-      dateTime: '28/05/2026, 09:15:30 am',
-      user: 'nexus',
-      role: 'Vendor',
-      amount: 2500.00,
-      status: 'Completed',
-      paymentMethod: 'Bank Transfer',
-      bankDetails: 'HDFC - 112233445566 (Vijay Nagar)',
-      transactionReference: 'txn_nexus_987123'
-    },
-    {
-      id: 'WD3004',
-      dateTime: '27/05/2026, 14:22:18 pm',
-      user: 'Test Factory',
-      role: 'Vendor',
-      amount: 800.00,
-      status: 'Rejected',
-      paymentMethod: 'Bank Transfer',
-      bankDetails: 'ICICI - 889977665544 (Dewas Naka)',
-      transactionReference: 'Declined due to incorrect banking IFSC code'
-    }
-  ]);
+  const [withdrawals, setWithdrawals] = useState([]);
 
   // Handle Approve Withdrawal with custom transaction reference code
   const handleApproveWithdrawal = (id) => {
@@ -183,6 +72,23 @@ const WalletManagement = () => {
     return w.status === withdrawalStatusFilter;
   });
 
+  const totalPlatformEarning = transactions
+    .filter((t) => t.amount > 0)
+    .reduce((sum, t) => sum + t.amount, 0);
+  const totalAdminEarning = adminEarnings.reduce((sum, e) => sum + (e.adminCut || 0), 0);
+  const completedWithdrawals = withdrawals
+    .filter((w) => w.status === 'Completed')
+    .reduce((sum, w) => sum + (w.amount || 0), 0);
+  const pendingVendorPayouts = withdrawals
+    .filter((w) => w.status === 'Pending' && w.role === 'Vendor')
+    .reduce((sum, w) => sum + (w.amount || 0), 0);
+  const pendingDeliveryPayouts = withdrawals
+    .filter((w) => w.status === 'Pending' && w.role === 'Delivery Boy')
+    .reduce((sum, w) => sum + (w.amount || 0), 0);
+  const pendingFromDelivery = transactions
+    .filter((t) => t.role === 'Delivery Boy' && t.type === 'Debit')
+    .reduce((sum, t) => sum + Math.abs(t.amount || 0), 0);
+
   return (
     <div className="space-y-6 font-sans antialiased text-gray-800">
       
@@ -207,7 +113,7 @@ const WalletManagement = () => {
           </div>
           <div className="mt-4">
             <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Total Platform Earning</span>
-            <h2 className="text-2xl font-black text-[#0B1528] mt-1">₹1,674.5</h2>
+            <h2 className="text-2xl font-black text-[#0B1528] mt-1">₹{totalPlatformEarning.toFixed(2)}</h2>
             <p className="text-[9px] font-bold text-gray-400 mt-1 select-none">Total money collected</p>
           </div>
         </div>
@@ -224,7 +130,7 @@ const WalletManagement = () => {
           </div>
           <div className="mt-4">
             <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Total Admin Earning</span>
-            <h2 className="text-2xl font-black text-[#0B1528] mt-1">₹125</h2>
+            <h2 className="text-2xl font-black text-[#0B1528] mt-1">₹{totalAdminEarning.toFixed(2)}</h2>
             <p className="text-[9px] font-bold text-gray-400 mt-1 select-none">Net profit for platform</p>
           </div>
         </div>
@@ -241,7 +147,7 @@ const WalletManagement = () => {
           </div>
           <div className="mt-4">
             <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Current Platform Balance</span>
-            <h2 className="text-2xl font-black text-[#0B1528] mt-1">₹805.5</h2>
+            <h2 className="text-2xl font-black text-[#0B1528] mt-1">₹{currentBalance.toFixed(2)}</h2>
             <p className="text-[9px] font-bold text-gray-400 mt-1 select-none">Available for business</p>
           </div>
         </div>
@@ -258,7 +164,7 @@ const WalletManagement = () => {
           </div>
           <div className="mt-4">
             <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Pending from Delivery Boys</span>
-            <h2 className="text-2xl font-black text-[#0B1528] mt-1">₹3,346.5</h2>
+            <h2 className="text-2xl font-black text-[#0B1528] mt-1">₹{pendingFromDelivery.toFixed(2)}</h2>
             <p className="text-[9px] font-bold text-gray-400 mt-1 select-none">COD cash to be collected</p>
           </div>
         </div>
@@ -275,7 +181,7 @@ const WalletManagement = () => {
           </div>
           <div className="mt-4">
             <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Vendor Pending Payouts</span>
-            <h2 className="text-2xl font-black text-[#0B1528] mt-1">₹4,918.2</h2>
+            <h2 className="text-2xl font-black text-[#0B1528] mt-1">₹{pendingVendorPayouts.toFixed(2)}</h2>
             <p className="text-[9px] font-bold text-gray-400 mt-1 select-none">Owed to vendors</p>
           </div>
         </div>
@@ -292,7 +198,7 @@ const WalletManagement = () => {
           </div>
           <div className="mt-4">
             <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Delivery Boy Pending Payouts</span>
-            <h2 className="text-2xl font-black text-[#0B1528] mt-1">₹708.5</h2>
+            <h2 className="text-2xl font-black text-[#0B1528] mt-1">₹{pendingDeliveryPayouts.toFixed(2)}</h2>
             <p className="text-[9px] font-bold text-gray-400 mt-1 select-none">Owed to delivery partners</p>
           </div>
         </div>

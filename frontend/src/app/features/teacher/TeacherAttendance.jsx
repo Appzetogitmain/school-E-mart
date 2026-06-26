@@ -9,6 +9,7 @@ import { getDailyAttendance, markAttendance } from '../../../services/schoolApi'
 import { getErrorMessage } from '../../../utils/apiHelpers';
 import { mapAttendanceRow, mapUiStatusToApi, parseClassGrade, parseSection } from '../../../utils/mappers/teacherMapper';
 import { useTeacherSchoolId } from '../../../utils/teacherContext';
+import { useTeacherClassOptions } from '../../../hooks/useTeacherClassOptions';
 
 const formatDisplayDate = (date = new Date()) =>
   date.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric', weekday: 'long' });
@@ -16,13 +17,11 @@ const formatDisplayDate = (date = new Date()) =>
 const TeacherAttendance = () => {
   const navigate = useNavigate();
   const schoolId = useTeacherSchoolId();
+  const { classLabels, getSectionLabels } = useTeacherClassOptions(schoolId);
   const attendanceDate = new Date().toISOString().slice(0, 10);
 
-  // 1. Dropdown options & selection states
-  const classes = ['Class 5', 'Class 6', 'Class 7'];
-  const sections = ['Section A', 'Section B', 'Section C'];
-  const [selectedClass, setSelectedClass] = useState('Class 5');
-  const [selectedSection, setSelectedSection] = useState('Section A');
+  const [selectedClass, setSelectedClass] = useState('');
+  const [selectedSection, setSelectedSection] = useState('');
   const [isClassDropdownOpen, setIsClassDropdownOpen] = useState(false);
   const [isSectionDropdownOpen, setIsSectionDropdownOpen] = useState(false);
 
@@ -35,8 +34,19 @@ const TeacherAttendance = () => {
   const [remark, setRemark] = useState('');
   const [showSuccessToast, setShowSuccessToast] = useState(false);
 
+  const classes = classLabels;
+  const sections = getSectionLabels(selectedClass);
+
+  useEffect(() => {
+    if (classLabels.length > 0 && !selectedClass) {
+      setSelectedClass(classLabels[0]);
+      const labels = getSectionLabels(classLabels[0]);
+      if (labels.length > 0) setSelectedSection(labels[0]);
+    }
+  }, [classLabels, getSectionLabels, selectedClass]);
+
   const loadAttendance = useCallback(async () => {
-    if (!schoolId) {
+    if (!schoolId || !selectedClass || !selectedSection) {
       setLoading(false);
       setError('School context is missing. Please log in again.');
       setStudents([]);

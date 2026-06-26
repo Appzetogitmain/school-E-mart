@@ -56,265 +56,9 @@ const ParentCalendar = () => {
     setScrolled(scrollPos > 50);
   };
 
-  // Static/Mock Database of Events across the academic calendar (Dynamic relative to current system date)
-  const eventsDatabase = useMemo(() => {
-    const now = new Date();
-    const currYear = now.getFullYear();
-    const currMonth = now.getMonth(); // 0-indexed current month
-    
-    // Calculate a next month (for upcoming highlights/June events)
-    const nextMonthObj = new Date(currYear, currMonth + 1, 1);
-    const nextMonth = nextMonthObj.getMonth();
-    const nextMonthYear = nextMonthObj.getFullYear();
+  // No calendar API — events loaded as empty until backend support exists
+  const eventsDatabase = useMemo(() => [], []);
 
-    return [
-      // Current Month Day 5: Holiday
-      {
-        id: 'evt-1',
-        day: 5,
-        month: currMonth,
-        year: currYear,
-        time: 'All Day',
-        title: 'School Holiday - Buddha Purnima',
-        content: 'School will remain closed in observance of Buddha Purnima.',
-        location: 'Holiday',
-        category: 'Holiday',
-        icon: <CalendarIcon size={18} />,
-        bgColor: 'bg-[#FFF6ED]',
-        iconColor: 'text-[#F2994A]',
-        accentColor: '#F2994A',
-        dotColor: 'bg-[#F2994A]'
-      },
-      // Current Month Day 7: Academic Event
-      {
-        id: 'evt-2',
-        day: 7,
-        month: currMonth,
-        year: currYear,
-        time: '08:30 AM',
-        title: 'Maths Olympiad Briefing',
-        content: 'Important introductory class and syllabus review for the upcoming Maths Olympiad.',
-        location: 'Seminar Hall B',
-        category: 'Academic',
-        icon: <BookOpen size={18} />,
-        bgColor: 'bg-[#F4EBFF]',
-        iconColor: 'text-[#7F56D9]',
-        accentColor: '#7F56D9',
-        dotColor: 'bg-[#7F56D9]'
-      },
-      // Current Month Day 10: General Event
-      {
-        id: 'evt-3',
-        day: 10,
-        month: currMonth,
-        year: currYear,
-        time: '11:00 AM',
-        title: 'Inter-House Debate Contest',
-        content: 'Debate event for Class 5 to 8 students on contemporary environmental themes.',
-        location: 'Primary School Pavilion',
-        category: 'Event',
-        icon: <Megaphone size={18} />,
-        bgColor: 'bg-[#EBFBF0]',
-        iconColor: 'text-[#34A853]',
-        accentColor: '#34A853',
-        dotColor: 'bg-[#34A853]'
-      },
-      // Current Month Day 13: Exam
-      {
-        id: 'evt-4',
-        day: 13,
-        month: currMonth,
-        year: currYear,
-        time: '09:00 AM',
-        title: 'Monthly Test - Science',
-        content: 'Unit Assessment test covering Physics Chapter 1 & Chemistry Chapter 2.',
-        location: 'Classroom 5-A',
-        category: 'Exam',
-        icon: <BookOpen size={18} />,
-        bgColor: 'bg-[#FFF0F2]',
-        iconColor: 'text-[#E04F5F]',
-        accentColor: '#E04F5F',
-        dotColor: 'bg-[#E04F5F]'
-      },
-      // Current Month Day 16: PTM / Meeting
-      {
-        id: 'evt-5',
-        day: 16,
-        month: currMonth,
-        year: currYear,
-        time: '10:00 AM',
-        title: 'PTM for Class 5 Section B',
-        content: 'Parent-Teacher review for the final session preparation.',
-        location: 'Classroom 5-B',
-        category: 'PTM / Meeting',
-        icon: <CalendarIcon size={18} />,
-        bgColor: 'bg-[#E8F0FE]',
-        iconColor: 'text-[#1A73E8]',
-        accentColor: '#1A73E8',
-        dotColor: 'bg-[#1A73E8]'
-      },
-      // Current Month Day 20: Holiday
-      {
-        id: 'evt-6',
-        day: 20,
-        month: currMonth,
-        year: currYear,
-        time: 'All Day',
-        title: 'School Holiday - PTM Prep Day',
-        content: 'Administrative holiday for syllabus reviews and portfolio collections.',
-        location: 'Holiday',
-        category: 'Holiday',
-        icon: <CalendarIcon size={18} />,
-        bgColor: 'bg-[#FFF6ED]',
-        iconColor: 'text-[#F2994A]',
-        accentColor: '#F2994A',
-        dotColor: 'bg-[#F2994A]'
-      },
-      // Current Month Day 23 Events (Matching Mockup exactly!)
-      {
-        id: 'evt-7',
-        day: 23,
-        month: currMonth,
-        year: currYear,
-        time: '09:00 AM',
-        title: 'Monthly Test - Mathematics',
-        content: 'Class test for Chapter 3 & 4',
-        location: 'Classroom 5-A',
-        category: 'Academic',
-        icon: <BookOpen size={18} />,
-        bgColor: 'bg-[#F4EBFF]',
-        iconColor: 'text-[#7F56D9]',
-        accentColor: '#7F56D9',
-        dotColor: 'bg-[#7F56D9]'
-      },
-      {
-        id: 'evt-8',
-        day: 23,
-        month: currMonth,
-        year: currYear,
-        time: '10:30 AM',
-        title: 'PTM (Parent Teacher Meeting)',
-        content: 'Discuss student performance and progress',
-        location: 'Smart Classroom',
-        category: 'PTM / Meeting',
-        icon: <CalendarIcon size={18} />,
-        bgColor: 'bg-[#FFF6ED]',
-        iconColor: 'text-[#F2994A]',
-        accentColor: '#1A73E8',
-        dotColor: 'bg-[#1A73E8]'
-      },
-      {
-        id: 'evt-9',
-        day: 23,
-        month: currMonth,
-        year: currYear,
-        time: '02:00 PM',
-        title: 'Science Exhibition',
-        content: 'Annual Science Exhibition 2025',
-        location: 'School Auditorium',
-        category: 'Event',
-        icon: <Megaphone size={18} />,
-        bgColor: 'bg-[#EBFBF0]',
-        iconColor: 'text-[#34A853]',
-        accentColor: '#34A853',
-        dotColor: 'bg-[#34A853]'
-      },
-      // Current Month Day 26: Event
-      {
-        id: 'evt-10',
-        day: 26,
-        month: currMonth,
-        year: currYear,
-        time: '11:00 AM',
-        title: 'Environment Day Poster Making',
-        content: 'Students should bring their drawing supplies and colors.',
-        location: 'Art Room 2',
-        category: 'Event',
-        icon: <Megaphone size={18} />,
-        bgColor: 'bg-[#EBFBF0]',
-        iconColor: 'text-[#34A853]',
-        accentColor: '#34A853',
-        dotColor: 'bg-[#34A853]'
-      },
-      // Current Month Day 28: PTM / Meeting
-      {
-        id: 'evt-11',
-        day: 28,
-        month: currMonth,
-        year: currYear,
-        time: '10:00 AM - 01:00 PM',
-        title: 'PTM for Class 5 Parents',
-        content: 'Discuss unit test results and feedback with class teachers.',
-        location: 'School Auditorium',
-        category: 'PTM / Meeting',
-        icon: <CalendarIcon size={18} />,
-        bgColor: 'bg-[#E8F0FE]',
-        iconColor: 'text-[#1A73E8]',
-        accentColor: '#1A73E8',
-        dotColor: 'bg-[#1A73E8]',
-        isHighlight: true,
-        highlightDateText: '28 May'
-      },
-      // Current Month Day 30: Exam
-      {
-        id: 'evt-12',
-        day: 30,
-        month: currMonth,
-        year: currYear,
-        time: '09:00 AM',
-        title: 'Monthly Test - English Literature',
-        content: 'Assessment exam covering Prose chapters 1-3 and Poetry Chapter 2.',
-        location: 'Classroom 5-A',
-        category: 'Exam',
-        icon: <BookOpen size={18} />,
-        bgColor: 'bg-[#FFF0F2]',
-        iconColor: 'text-[#E04F5F]',
-        accentColor: '#E04F5F',
-        dotColor: 'bg-[#E04F5F]'
-      },
-      // Current Month Day 31: School Holiday
-      {
-        id: 'evt-13',
-        day: 31,
-        month: currMonth,
-        year: currYear,
-        time: 'All Day',
-        title: 'School Holiday - Summer Break Begins',
-        content: 'School closes for summer break. Re-opening schedule will be published shortly.',
-        location: 'Holiday',
-        category: 'Holiday',
-        icon: <CalendarIcon size={18} />,
-        bgColor: 'bg-[#FFF6ED]',
-        iconColor: 'text-[#F2994A]',
-        accentColor: '#F2994A',
-        dotColor: 'bg-[#F2994A]',
-        isHighlight: true,
-        highlightDateText: '31 May'
-      },
-      // Next Month Day 5: Upcoming Highlight (Environment Day)
-      {
-        id: 'evt-14',
-        day: 5,
-        month: nextMonth,
-        year: nextMonthYear,
-        time: 'All Day',
-        title: 'World Environment Day',
-        content: 'Elocution contests and plant sapling drives inside the school fields.',
-        location: 'School Grounds',
-        category: 'Event',
-        icon: <Compass size={18} />,
-        bgColor: 'bg-[#E8F0FE]',
-        iconColor: 'text-[#1A73E8]',
-        accentColor: '#1A73E8',
-        dotColor: 'bg-[#1A73E8]',
-        isHighlight: true,
-        highlightDateText: '05 Jun',
-        iconType: 'compass'
-      }
-    ];
-  }, []);
-
-  // Category Colors Definition
   const categoryStyles = {
     'Academic': { dot: 'bg-[#7F56D9]', label: 'Academic', text: 'text-[#7F56D9]', labelBg: 'bg-[#F9F5FF]' },
     'Event': { dot: 'bg-[#34A853]', label: 'Event', text: 'text-[#34A853]', labelBg: 'bg-[#EBFBF0]' },
@@ -634,6 +378,13 @@ const ParentCalendar = () => {
           </div>
 
           <div className="px-6 overflow-x-auto scrollbar-none pb-4">
+            {highlightEvents.length === 0 ? (
+              <div className="bg-white border border-dashed border-gray-200 rounded-3xl p-8 text-center">
+                <Sparkles size={28} className="text-gray-200 mx-auto mb-2" />
+                <p className="text-xs font-bold text-gray-400">No upcoming highlights</p>
+                <p className="text-[10px] text-gray-400 mt-1">School events will appear here when available.</p>
+              </div>
+            ) : (
             <div className="flex items-center gap-4 min-w-max">
               {highlightEvents.map((evt) => (
                 <div 
@@ -674,6 +425,7 @@ const ParentCalendar = () => {
                 </div>
               ))}
             </div>
+            )}
           </div>
         </div>
       </div>

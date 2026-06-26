@@ -8,7 +8,7 @@ import {
   Grid, Layout, CheckCircle2, BookOpen, Check
 } from 'lucide-react';
 import AppHeader from '../../components/AppHeader';
-import { getAttendanceHistory, fetchParentHomework } from '../../../services/parentApi';
+import { getAttendanceHistory, fetchParentHomework, listParentNotices } from '../../../services/parentApi';
 import { buildHomeworkStats, mapAssignmentForParentHomework } from '../../../utils/mappers/parentMapper';
 import ProductCard from '../../components/ProductCard';
 import SectionHeader from '../../components/SectionHeader';
@@ -56,22 +56,15 @@ const ParentHome = () => {
     { enabled: Boolean(stationeryHeader?.id) }
   );
 
-  const categories = categoryTree.length
-    ? categoryTree.map((cat) => ({
-        name: cat.name,
-        image: cat.image,
-        slug: cat.slug,
-      }))
-    : [
-        { name: 'Uniforms', image: '/assets/uniforms.png', slug: 'uniforms' },
-        { name: 'Books', image: '/assets/books.png', slug: 'books' },
-        { name: 'Stationery', image: '/assets/stationary.png', slug: 'stationery' },
-        { name: 'Sports', image: '/assets/toys_and_sports.png', slug: 'sports' },
-        { name: 'Technology', image: '/assets/technology.png', slug: 'technology' },
-      ];
+  const categories = categoryTree.map((cat) => ({
+    name: cat.name,
+    image: cat.image,
+    slug: cat.slug,
+  }));
 
   const [todayAttendance, setTodayAttendance] = useState(null);
   const [pendingHomeworkCount, setPendingHomeworkCount] = useState(0);
+  const [noticeAlerts, setNoticeAlerts] = useState([]);
 
   useEffect(() => {
     const handleUpdate = () => {
@@ -116,6 +109,28 @@ const ParentHome = () => {
       }
     };
     loadHomeworkSummary();
+  }, [childInfo]);
+
+  useEffect(() => {
+    const loadNoticeAlerts = async () => {
+      const schoolId = childInfo?.schoolId;
+      if (!schoolId || schoolId === 'explore-schools') {
+        setNoticeAlerts([]);
+        return;
+      }
+      try {
+        const { data } = await listParentNotices(schoolId, { limit: 3 });
+        setNoticeAlerts(
+          (data || []).slice(0, 2).map((notice) => ({
+            id: notice._id || notice.id,
+            text: notice.title || notice.summary || 'New school notice',
+          }))
+        );
+      } catch {
+        setNoticeAlerts([]);
+      }
+    };
+    loadNoticeAlerts();
   }, [childInfo]);
 
   const getTodayStatusDetails = () => {
@@ -248,27 +263,32 @@ const ParentHome = () => {
                 </div>
                 <div className="min-w-0 flex flex-col justify-center">
                   <p className="text-[11px] font-semibold text-gray-500 leading-none">Homework</p>
-                  <p className="text-[13px] font-black text-[#F2994A] leading-none mt-1.5 truncate">2 Pending</p>
-                  <p className="text-[9px] font-medium text-gray-400 leading-none mt-1 truncate">Due Tomorrow</p>
+                  <p className="text-[13px] font-black text-[#F2994A] leading-none mt-1.5 truncate">
+                    {pendingHomeworkCount} Pending
+                  </p>
+                  <p className="text-[9px] font-medium text-gray-400 leading-none mt-1 truncate">
+                    {pendingHomeworkCount > 0 ? 'Check homework' : 'All caught up'}
+                  </p>
                 </div>
               </div>
             </div>
           </div>
         )}
 
-        {!isGuest && (
+        {!isGuest && noticeAlerts.length > 0 && (
           <div className="mt-4">
             <div ref={notifRef} className="flex gap-4 overflow-x-auto px-6 pb-2 scrollbar-hide select-none active:cursor-grabbing">
-              {[
-                { id: 1, text: "New session starts from 15th June. Order your kits early!", icon: <Sparkles size={16} className="text-accent-gold shrink-0" />, color: "bg-accent-gold/10 border-accent-gold/20" },
-                { id: 2, text: "Winter uniform guidelines updated. Check categories.", icon: <Bell size={16} className="text-primary shrink-0" />, color: "bg-primary/10 border-primary/20" }
-              ].map((notif) => (
-                <button 
-                  key={notif.id} 
+              {noticeAlerts.map((notif, idx) => (
+                <button
+                  key={notif.id}
                   onClick={() => navigate('/user/notifications')}
-                  className={`min-w-[280px] ${notif.color} border px-4 py-3 rounded-2xl flex items-center gap-3 active:scale-95 transition-all cursor-pointer text-left`}
+                  className={`min-w-[280px] ${idx === 0 ? 'bg-accent-gold/10 border-accent-gold/20' : 'bg-primary/10 border-primary/20'} border px-4 py-3 rounded-2xl flex items-center gap-3 active:scale-95 transition-all cursor-pointer text-left`}
                 >
-                  {notif.icon}
+                  {idx === 0 ? (
+                    <Sparkles size={16} className="text-accent-gold shrink-0" />
+                  ) : (
+                    <Bell size={16} className="text-primary shrink-0" />
+                  )}
                   <p className="text-[11px] font-semibold text-deep-purple leading-tight">
                     {notif.text}
                   </p>
@@ -295,14 +315,18 @@ const ParentHome = () => {
         <div className="mt-8">
           <SectionHeader title="Categories" />
           <div className="flex gap-5 overflow-x-auto px-6 pb-2 scrollbar-hide">
-            {categories.map((cat) => (
-              <CategoryStory
-                key={cat.name}
-                name={cat.name}
-                image={cat.image}
-                to={`/user/category/${cat.slug || cat.name.toLowerCase()}`}
-              />
-            ))}
+            {categories.length === 0 ? (
+              <p className="text-sm text-gray-400 px-2 py-4">No categories available</p>
+            ) : (
+              categories.map((cat) => (
+                <CategoryStory
+                  key={cat.name}
+                  name={cat.name}
+                  image={cat.image}
+                  to={`/user/category/${cat.slug || cat.name.toLowerCase()}`}
+                />
+              ))
+            )}
           </div>
         </div>
 
@@ -328,7 +352,7 @@ const ParentHome = () => {
             <img src="/assets/category_banner1.png" className="w-full h-full object-cover" alt="Uniforms" />
           </div>
           <div className="grid grid-cols-2 gap-3">
-            {(uniformProducts.length ? uniformProducts : products.slice(0, 2)).map((product) => renderProductCard(product))}
+            {uniformProducts.map((product) => renderProductCard(product))}
           </div>
         </div>
 
@@ -338,7 +362,7 @@ const ParentHome = () => {
             <img src="/assets/category_banner3.png" className="w-full h-full object-cover" alt="Stationery" />
           </div>
           <div className="grid grid-cols-2 gap-3">
-            {(stationeryProducts.length ? stationeryProducts : products.slice(0, 2)).map((product) => renderProductCard(product))}
+            {stationeryProducts.map((product) => renderProductCard(product))}
           </div>
         </div>
 

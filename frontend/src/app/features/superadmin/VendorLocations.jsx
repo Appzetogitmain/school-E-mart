@@ -1,91 +1,55 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Search, MapPin, Phone, Mail, ChevronRight, Map, 
-  Layers, Compass, Info, CheckCircle, AlertCircle 
+  Layers, Compass, Info, CheckCircle, AlertCircle, Loader2
 } from 'lucide-react';
+import { listVendors } from '../../../services/adminApi';
+import { getErrorMessage } from '../../../utils/apiHelpers';
+
+const mapVendorLocation = (vendor) => ({
+  id: vendor._id || vendor.id,
+  storeName: vendor.storeName || vendor.businessName || vendor.name || 'Vendor',
+  ownerName: vendor.ownerName || vendor.contactName || '—',
+  address: vendor.address?.line1 || vendor.address || vendor.businessAddress || '—',
+  city: vendor.address?.city || vendor.city || '—',
+  latitude: vendor.address?.latitude || vendor.latitude || '',
+  longitude: vendor.address?.longitude || vendor.longitude || '',
+  phone: vendor.phone || vendor.mobile || '—',
+  email: vendor.email || '—',
+  status: vendor.status || vendor.approvalStatus || 'Pending',
+  serviceRadius: vendor.serviceRadius || '—',
+  mapOffset: { x: 0, y: 0 },
+});
 
 const VendorLocations = () => {
-  // Filter and search states
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
+  const [vendors, setVendors] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [selectedVendorId, setSelectedVendorId] = useState(null);
 
-  // Seeded premium vendors matching the list from your layout screenshots
-  const [vendors, setVendors] = useState([
-    {
-      id: '1',
-      storeName: 'patidar store',
-      ownerName: 'xxxxx',
-      address: 'Corporate House, HO-406, RNT Marg, Near D.A.V.V, Flim Colony, Chhoti Gwaltoli, Indore, Madhya Pradesh 452001, India',
-      city: 'Indore',
-      latitude: '22.717591',
-      longitude: '75.871987',
-      phone: '9399231681',
-      email: 'test@gmail.com',
-      status: 'Pending',
-      serviceRadius: '7',
-      mapOffset: { x: 0, y: 0 } // map center calibration
-    },
-    {
-      id: '2',
-      storeName: 'nexus',
-      ownerName: 'xyz',
-      address: 'Nexus Trade Complex, 12 G.S. Road, Indore, Madhya Pradesh 452010, India',
-      city: 'Indore',
-      latitude: '22.756201',
-      longitude: '75.890123',
-      phone: '7458947838',
-      email: 'testing@gmail.com',
-      status: 'Pending',
-      serviceRadius: '10',
-      mapOffset: { x: 25, y: -30 }
-    },
-    {
-      id: '3',
-      storeName: 'Test Factory',
-      ownerName: 'Rahul',
-      address: 'Sanwer Dist, HFF-05, Indus canalisa green city, near lasudiya thana, Dewas Naka, Indore, Madhya Pradesh 452010, India',
-      city: 'Indore',
-      latitude: '22.800853',
-      longitude: '75.891099',
-      phone: '9179815763',
-      email: 'testingdata475@gmail.com',
-      status: 'Pending',
-      serviceRadius: '5',
-      mapOffset: { x: 15, y: -70 }
-    },
-    {
-      id: '4',
-      storeName: 'zvczx',
-      ownerName: 'nb',
-      address: '22 Flat G, Annapurna Road, Indore, Madhya Pradesh 452009, India',
-      city: 'Indore',
-      latitude: '22.698421',
-      longitude: '75.842109',
-      phone: '2132152123',
-      email: 'a@gmail.com',
-      status: 'Pending',
-      serviceRadius: '8',
-      mapOffset: { x: -45, y: 20 }
-    },
-    {
-      id: '5',
-      storeName: "Harsh's Hub",
-      ownerName: 'Harsh Vardhan',
-      address: 'Vijay Nagar Square, Near Orbit Mall, Indore, Madhya Pradesh 452010, India',
-      city: 'Indore',
-      latitude: '22.744120',
-      longitude: '75.898432',
-      phone: '9827012345',
-      email: 'harsh@hub.com',
-      status: 'Approved',
-      serviceRadius: '9',
-      mapOffset: { x: 30, y: -15 }
+  const loadVendors = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const { data } = await listVendors({ limit: 100 });
+      const mapped = (data || []).map(mapVendorLocation);
+      setVendors(mapped);
+      setSelectedVendorId((prev) => prev || mapped[0]?.id || null);
+    } catch (err) {
+      setVendors([]);
+      setError(getErrorMessage(err, 'Unable to load vendors'));
+    } finally {
+      setLoading(false);
     }
-  ]);
+  }, []);
 
-  // Selected active vendor
-  const [selectedVendorId, setSelectedVendorId] = useState('1');
-  const selectedVendor = vendors.find(v => v.id === selectedVendorId) || vendors[0];
+  useEffect(() => {
+    loadVendors();
+  }, [loadVendors]);
+
+  const selectedVendor = vendors.find((v) => v.id === selectedVendorId) || vendors[0];
 
   // Filters mapping
   const filteredVendors = vendors.filter(v => {

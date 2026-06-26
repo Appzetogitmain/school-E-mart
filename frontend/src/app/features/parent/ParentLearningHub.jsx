@@ -1,10 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Play, Pause, Volume2, VolumeX, X,
   Sparkles, Award, BookOpen, Clock,
-  ArrowRight, GraduationCap, CheckCircle2
+  ArrowRight, GraduationCap, CheckCircle2, Loader2
 } from 'lucide-react';
+import { listCourses, getResumeBookmark } from '../../../services/lmsApi';
+import { getChildInfoFromStorage } from '../../../utils/parentContext';
+import { getErrorMessage } from '../../../utils/apiHelpers';
+import { mapCourseToLesson, mapResumeToContinueLesson } from '../../../utils/mappers/lmsMapper';
 
 const ParentLearningHub = () => {
   const navigate = useNavigate();
@@ -13,94 +17,58 @@ const ParentLearningHub = () => {
   const [isMuted, setIsMuted] = useState(false);
   const [videoProgress, setVideoProgress] = useState(0);
   const [activeTab, setActiveTab] = useState('All');
+  const [lessons, setLessons] = useState({ continue: null, featured: [] });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  // Interactive mockup lessons database
-  const [lessons, setLessons] = useState({
-    continue: {
-      id: 'cont-1',
-      title: "Fractions – Introduction",
-      subject: "Mathematics",
-      chapter: "Chapter 2 • Class 5",
-      progress: 65,
-      duration: "12:45",
-      image: "https://images.unsplash.com/photo-1497633762265-9d179a990aa6?q=80&w=500&fit=crop",
-      teacher: "Mrs. Neha Sharma",
-      notes: [
-        "A fraction represents a part of a whole.",
-        "Numerator: The top number, showing how many parts we have.",
-        "Denominator: The bottom number, showing the total equal parts."
-      ]
-    },
-    featured: [
-      {
-        id: 'feat-1',
-        title: "Parts of Plants",
-        subject: "Science",
-        chapter: "Chapter 3 • Class 5",
-        progress: 80,
-        duration: "10:30",
-        image: "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?q=80&w=400&fit=crop",
-        teacher: "Dr. Neha Sharma",
-        teacherImg: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=100&fit=crop",
-        notes: [
-          "Roots absorb water and nutrients from the soil.",
-          "Stems transport water to the leaves and support the plant.",
-          "Leaves perform photosynthesis to produce food using sunlight."
-        ]
-      },
-      {
-        id: 'feat-2',
-        title: "Types of Angles",
-        subject: "Mathematics",
-        chapter: "Chapter 4 • Class 5",
-        progress: 45,
-        duration: "14:20",
-        image: "https://images.unsplash.com/photo-1453733190148-c44698c265f8?q=80&w=400&fit=crop",
-        teacher: "Mr. Rohit Verma",
-        teacherImg: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?q=80&w=100&fit=crop",
-        notes: [
-          "Acute Angle: Less than 90 degrees.",
-          "Right Angle: Exactly 90 degrees.",
-          "Obtuse Angle: Greater than 90 degrees and less than 180 degrees.",
-          "Straight Angle: Exactly 180 degrees."
-        ]
-      },
-      {
-        id: 'feat-3',
-        title: "Water Cycle",
-        subject: "Science",
-        chapter: "Chapter 5 • Class 5",
-        progress: 60,
-        duration: "11:15",
-        image: "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?q=80&w=400&fit=crop",
-        teacher: "Ms. Pooja Singh",
-        teacherImg: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=100&fit=crop",
-        notes: [
-          "Evaporation: Water turns into vapor due to solar heat.",
-          "Condensation: Vapor cools down to form water droplets/clouds.",
-          "Precipitation: Water falls back to earth as rain or snow."
-        ]
-      },
-      {
-        id: 'feat-4',
-        title: "Noun & Its Types",
-        subject: "English",
-        chapter: "Chapter 1 • Class 5",
-        progress: 15,
-        duration: "08:40",
-        image: "https://images.unsplash.com/photo-1497633762265-9d179a990aa6?q=80&w=400&fit=crop",
-        teacher: "Mrs. Neha Sharma",
-        teacherImg: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=100&fit=crop",
-        notes: [
-          "Proper Noun: Specific name of a person, place, or thing.",
-          "Common Noun: General name for a class of items.",
-          "Collective Noun: Name for a group of items (e.g., herd, team)."
-        ]
+  useEffect(() => {
+    let cancelled = false;
+
+    const load = async () => {
+      setLoading(true);
+      setError('');
+      const childInfo = getChildInfoFromStorage();
+      const schoolId = childInfo?.schoolId;
+
+      if (!schoolId || schoolId === 'explore-schools') {
+        setLessons({ continue: null, featured: [] });
+        setLoading(false);
+        return;
       }
-    ]
-  });
 
-  const subjects = ['All', 'Mathematics', 'Science', 'English'];
+      try {
+        const [{ data: courses }, resume] = await Promise.all([
+          listCourses(schoolId, { limit: 20, status: 'published' }),
+          getResumeBookmark(schoolId).catch(() => null),
+        ]);
+
+        if (cancelled) return;
+
+        const published = (courses || []).filter((c) => c.status === 'published' || !c.status);
+        const featured = published.map((course) => mapCourseToLesson(course));
+        const continueLesson = mapResumeToContinueLesson(resume) || (featured[0] ? { ...featured[0] } : null);
+
+        setLessons({ continue: continueLesson, featured });
+      } catch (err) {
+        if (!cancelled) {
+          setLessons({ continue: null, featured: [] });
+          setError(getErrorMessage(err, 'Unable to load courses'));
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const subjects = useMemo(() => {
+    const unique = [...new Set(lessons.featured.map((l) => l.subject).filter(Boolean))];
+    return ['All', ...unique];
+  }, [lessons.featured]);
 
   // Filter featured list based on active tab
   const filteredFeatured = activeTab === 'All'
@@ -108,19 +76,18 @@ const ParentLearningHub = () => {
     : lessons.featured.filter(l => l.subject === activeTab);
 
   const updateLessonProgress = (id, newProg) => {
-    setLessons(prev => {
-      const isCont = prev.continue.id === id;
+    setLessons((prev) => {
+      const isCont = prev.continue?.id === id;
       if (isCont) {
         return {
           ...prev,
-          continue: { ...prev.continue, progress: newProg }
-        };
-      } else {
-        return {
-          ...prev,
-          featured: prev.featured.map(l => l.id === id ? { ...l, progress: newProg } : l)
+          continue: { ...prev.continue, progress: newProg },
         };
       }
+      return {
+        ...prev,
+        featured: prev.featured.map((l) => (l.id === id ? { ...l, progress: newProg } : l)),
+      };
     });
 
     // Update the selected video state too
@@ -156,8 +123,14 @@ const ParentLearningHub = () => {
         </div>
       </div>
 
-      {/* 2. Continue Learning banner (renders only if category matches) */}
-      {(activeTab === 'All' || activeTab === lessons.continue.subject) && (
+      {/* 2. Continue Learning banner */}
+      {loading ? (
+        <div className="flex items-center justify-center py-10 mb-6">
+          <Loader2 size={28} className="animate-spin text-[#7F56D9]" />
+        </div>
+      ) : error ? (
+        <p className="text-xs text-red-500 text-center mb-6">{error}</p>
+      ) : lessons.continue && (activeTab === 'All' || activeTab === lessons.continue.subject) ? (
         <div className="bg-[#FAF8FF] border border-[#F3EDFF] rounded-[2rem] p-5 shadow-[0_8px_25px_rgba(0,0,0,0.015)] relative overflow-hidden mb-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-[11.5px] font-black text-[#7F56D9] uppercase tracking-wider leading-none">
@@ -238,7 +211,7 @@ const ParentLearningHub = () => {
 
           </div>
         </div>
-      )}
+      ) : null}
 
       {/* 3. Featured Videos Grid List */}
       <div>
@@ -257,7 +230,14 @@ const ParentLearningHub = () => {
 
         {/* Scrollable list box */}
         <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide py-1">
-          {filteredFeatured.map((video) => (
+          {!loading && filteredFeatured.length === 0 ? (
+            <div className="min-w-full bg-white border border-dashed border-gray-200 rounded-[2rem] p-8 text-center">
+              <BookOpen size={32} className="text-gray-200 mx-auto mb-2" />
+              <p className="text-sm font-bold text-gray-400">No courses available yet</p>
+              <p className="text-xs text-gray-400 mt-1">Check back when your school publishes learning content.</p>
+            </div>
+          ) : (
+          filteredFeatured.map((video) => (
             <div
               key={video.id}
               className="min-w-[210px] max-w-[210px] bg-white border border-gray-100 rounded-[2rem] overflow-hidden shadow-lg shadow-gray-200/40 hover:shadow-xl hover:border-gray-200/50 group active:scale-[0.99] transition-all flex flex-col justify-between shrink-0"
@@ -333,7 +313,8 @@ const ParentLearningHub = () => {
 
               </div>
             </div>
-          ))}
+          ))
+          )}
         </div>
       </div>
 

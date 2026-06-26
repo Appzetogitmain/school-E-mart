@@ -10,6 +10,7 @@ import { listCourses, listAssignments } from '../../../services/lmsApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 import { parseClassGrade, parseSection } from '../../../utils/mappers/teacherMapper';
 import { useAuthUser, useTeacherSchoolId } from '../../../utils/teacherContext';
+import { useTeacherClassOptions } from '../../../hooks/useTeacherClassOptions';
 
 const TeacherDashboard = () => {
   const navigate = useNavigate();
@@ -32,8 +33,10 @@ const TeacherDashboard = () => {
     }
   }, [authUser]);
 
-  const [selectedClass, setSelectedClass] = useState('Class 5');
-  const [selectedSection, setSelectedSection] = useState('Section A');
+  const { classLabels, getSectionLabels, loading: classesLoading, hasClasses } = useTeacherClassOptions(schoolId);
+
+  const [selectedClass, setSelectedClass] = useState('');
+  const [selectedSection, setSelectedSection] = useState('');
   const [isClassDropdownOpen, setIsClassDropdownOpen] = useState(false);
   const [isSectionDropdownOpen, setIsSectionDropdownOpen] = useState(false);
 
@@ -53,9 +56,9 @@ const TeacherDashboard = () => {
   const [error, setError] = useState('');
 
   const loadDashboardData = useCallback(async () => {
-    if (!schoolId) {
+    if (!schoolId || !selectedClass || !selectedSection) {
       setLoading(false);
-      setError('School context is missing. Please log in again.');
+      if (!schoolId) setError('School context is missing. Please log in again.');
       return;
     }
 
@@ -109,13 +112,22 @@ const TeacherDashboard = () => {
   }, [schoolId, selectedClass, selectedSection]);
 
   useEffect(() => {
+    if (classLabels.length > 0 && !selectedClass) {
+      setSelectedClass(classLabels[0]);
+      const sectionLabels = getSectionLabels(classLabels[0]);
+      if (sectionLabels.length > 0) setSelectedSection(sectionLabels[0]);
+    }
+  }, [classLabels, getSectionLabels, selectedClass]);
+
+  useEffect(() => {
     loadDashboardData();
   }, [loadDashboardData]);
 
   const activeData = dashboardData;
-
-  const classes = ['Class 5', 'Class 6'];
-  const sections = ['Section A', 'Section B'];
+  const classes = classLabels;
+  const sections = getSectionLabels(selectedClass);
+  const attendanceStatus = activeData.attendance;
+  const attendanceCountLabel = activeData.attendanceCount;
 
   const handleNotificationClick = () => {};
 
@@ -241,7 +253,9 @@ const TeacherDashboard = () => {
         </div>
 
         <p className="text-[10px] text-gray-400 font-bold text-center mt-4">
-          Select a class & section to view and manage details
+          {classesLoading ? 'Loading classes…' : !hasClasses
+            ? 'No classes configured yet'
+            : 'Select a class & section to view and manage details'}
         </p>
       </div>
 
@@ -296,7 +310,7 @@ const TeacherDashboard = () => {
           <OverviewCard 
             color="bg-emerald-500 text-white" 
             icon={<Users size={20} />} 
-            count={studentsCount || activeData.studentsCount} 
+            count={activeData.studentsCount} 
             label="Total Students" 
           />
 

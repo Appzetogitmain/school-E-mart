@@ -5,72 +5,14 @@ import {
 } from 'lucide-react';
 
 const VendorTransactions = () => {
-  // Mock transaction list state
-  const [transactions, setTransactions] = useState([
-    {
-      id: '6B3WGY8B',
-      vendorName: "harsh's hub",
-      type: 'Credit',
-      amount: 63.00,
-      remarks: 'Sale proceeds from Order #ORD1780130489670897',
-      date: '30/05/2026'
-    },
-    {
-      id: '3A0A1VTI',
-      vendorName: "harsh's hub",
-      type: 'Credit',
-      amount: 45.00,
-      remarks: 'Sale proceeds from Order #ORD1780130489670554',
-      date: '30/05/2026'
-    },
-    {
-      id: 'HOZZ61MS',
-      vendorName: "harsh's hub",
-      type: 'Credit',
-      amount: 54.00,
-      remarks: 'Sale proceeds from Order #ORD1780126968345112',
-      date: '30/05/2026'
-    },
-    {
-      id: 'A59T8R80',
-      vendorName: "harsh's hub",
-      type: 'Credit',
-      amount: 54.00,
-      remarks: 'Sale proceeds from Order #ORD1780126968345998',
-      date: '30/05/2026'
-    },
-    {
-      id: '60EIVH9H',
-      vendorName: "harsh's hub",
-      type: 'Credit',
-      amount: 63.00,
-      remarks: 'Sale proceeds from Order #ORD1780126968345334',
-      date: '30/05/2026'
-    },
-    {
-      id: 'TX100982',
-      vendorName: 'patidar store',
-      type: 'Credit',
-      amount: 145.50,
-      remarks: 'Sale proceeds from Order #ORD1780130489670443',
-      date: '29/05/2026'
-    },
-    {
-      id: 'TX99281A',
-      vendorName: 'nexus',
-      type: 'Debit',
-      amount: 500.00,
-      remarks: 'Requested Bank Transfer withdrawal processed',
-      date: '28/05/2026'
-    }
-  ]);
+  const [transactions, setTransactions] = useState([]);
 
   // Modal open states
   const [showAddModal, setShowAddModal] = useState(false);
 
   // New transaction form state
   const [newTx, setNewTx] = useState({
-    vendorName: "harsh's hub",
+    vendorName: '',
     type: 'Credit',
     amount: '',
     remarks: ''

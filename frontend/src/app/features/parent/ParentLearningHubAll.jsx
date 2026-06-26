@@ -1,173 +1,83 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   ChevronLeft, Play, Pause, Volume2, VolumeX, X, 
   BookOpen, GraduationCap, ChevronDown, CheckCircle2, 
   Bookmark, MoreVertical, SlidersHorizontal, Clock, 
-  Globe, Video, Check
+  Globe, Video, Check, Loader2
 } from 'lucide-react';
+import { listCourses, getResumeBookmark } from '../../../services/lmsApi';
+import { getChildInfoFromStorage } from '../../../utils/parentContext';
+import { getErrorMessage } from '../../../utils/apiHelpers';
+import { mapCourseToLesson, mapResumeToContinueLesson } from '../../../utils/mappers/lmsMapper';
 
 const ParentLearningHubAll = () => {
   const navigate = useNavigate();
 
-  // Selected Video Player states
   const [selectedVideo, setSelectedVideo] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [videoProgress, setVideoProgress] = useState(0);
-
-  // Bookmark states
-  const [bookmarks, setBookmarks] = useState(new Set(['feat-1', 'feat-3']));
-
-  // Active Dropdowns state: 'subject' | 'class' | 'type' | 'language' | 'sort' | null
+  const [bookmarks, setBookmarks] = useState(new Set());
   const [openDropdown, setOpenDropdown] = useState(null);
-
-  // Filter state
   const [filters, setFilters] = useState({
     subject: 'All',
-    grade: 'All', // "Class 5", etc.
-    language: 'All' // "English", "Hindi"
+    grade: 'All',
+    language: 'All',
   });
+  const [lessons, setLessons] = useState({ continue: null, featured: [] });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  // Mock database
-  const [lessons, setLessons] = useState({
-    continue: {
-      id: 'cont-1',
-      title: "Fractions – Introduction",
-      subject: "Mathematics",
-      chapter: "Chapter 2 • Class 5",
-      progress: 65,
-      duration: "12:45",
-      image: "https://images.unsplash.com/photo-1497633762265-9d179a990aa6?q=80&w=500&fit=crop",
-      teacher: "Mrs. Neha Sharma",
-      teacherImg: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=100&fit=crop",
-      type: "Video",
-      language: "English",
-      notes: [
-        "A fraction represents a part of a whole.",
-        "Numerator: The top number, showing how many parts we have.",
-        "Denominator: The bottom number, showing the total equal parts."
-      ]
-    },
-    featured: [
-      {
-        id: 'feat-1',
-        title: "Parts of Plants",
-        subject: "Science",
-        chapter: "Chapter 3 • Class 5",
-        progress: 80,
-        duration: "10:30",
-        image: "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?q=80&w=400&fit=crop",
-        teacher: "Dr. Neha Sharma",
-        teacherImg: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=100&fit=crop",
-        type: "Video",
-        language: "English",
-        notes: [
-          "Roots absorb water and nutrients from the soil.",
-          "Stems transport water to the leaves and support the plant.",
-          "Leaves perform photosynthesis to produce food using sunlight."
-        ]
-      },
-      {
-        id: 'feat-2',
-        title: "Types of Angles",
-        subject: "Mathematics",
-        chapter: "Chapter 4 • Class 5",
-        progress: 45,
-        duration: "14:20",
-        image: "https://images.unsplash.com/photo-1453733190148-c44698c265f8?q=80&w=400&fit=crop",
-        teacher: "Mr. Rohit Verma",
-        teacherImg: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?q=80&w=100&fit=crop",
-        type: "Note",
-        language: "English",
-        notes: [
-          "Acute Angle: Less than 90 degrees.",
-          "Right Angle: Exactly 90 degrees.",
-          "Obtuse Angle: Greater than 90 degrees and less than 180 degrees.",
-          "Straight Angle: Exactly 180 degrees."
-        ]
-      },
-      {
-        id: 'feat-3',
-        title: "Water Cycle",
-        subject: "Science",
-        chapter: "Chapter 5 • Class 5",
-        progress: 60,
-        duration: "11:15",
-        image: "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?q=80&w=400&fit=crop",
-        teacher: "Ms. Pooja Singh",
-        teacherImg: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=100&fit=crop",
-        type: "Video",
-        language: "Hindi",
-        notes: [
-          "Evaporation: Water turns into vapor due to solar heat.",
-          "Condensation: Vapor cools down to form water droplets/clouds.",
-          "Precipitation: Water falls back to earth as rain or snow."
-        ]
-      },
-      {
-        id: 'feat-4',
-        title: "Nouns – The Naming Words",
-        subject: "English",
-        chapter: "Chapter 2 • Class 5",
-        progress: 30,
-        duration: "08:22",
-        image: "https://images.unsplash.com/photo-1497633762265-9d179a990aa6?q=80&w=400&fit=crop",
-        teacher: "Ms. Anjali Mehta",
-        teacherImg: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?q=80&w=100&fit=crop",
-        type: "Quiz",
-        language: "English",
-        notes: [
-          "Proper Noun: Specific name of a person, place, or thing.",
-          "Common Noun: General name for a class of items.",
-          "Collective Noun: Name for a group of items (e.g., herd, team)."
-        ]
-      },
-      {
-        id: 'feat-5',
-        title: "Introduction to Computers",
-        subject: "Computer Science",
-        chapter: "Chapter 1 • Class 5",
-        progress: 70,
-        duration: "07:45",
-        image: "https://images.unsplash.com/photo-1548345680-f5475ea5df84?q=80&w=400&fit=crop",
-        teacher: "Mr. Amit Patel",
-        teacherImg: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=100&fit=crop",
-        type: "Video",
-        language: "English",
-        notes: [
-          "Hardware refers to the physical components of a computer.",
-          "Software represents the programs and instructions that run on hardware.",
-          "Input Devices: Keyboard, Mouse. Output Devices: Monitor, Printer."
-        ]
-      },
-      {
-        id: 'feat-6',
-        title: "Algebraic Expressions",
-        subject: "Mathematics",
-        chapter: "Chapter 1 • Class 6",
-        progress: 20,
-        duration: "09:15",
-        image: "https://images.unsplash.com/photo-1453733190148-c44698c265f8?q=80&w=400&fit=crop",
-        teacher: "Mr. Rohit Verma",
-        teacherImg: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?q=80&w=100&fit=crop",
-        type: "Video",
-        language: "English",
-        notes: [
-          "Variables are symbols used to represent unknown quantities.",
-          "Constants are values that remain fixed.",
-          "Terms represent algebraic sections divided by addition or subtraction."
-        ]
+  useEffect(() => {
+    let cancelled = false;
+
+    const load = async () => {
+      setLoading(true);
+      setError('');
+      const childInfo = getChildInfoFromStorage();
+      const schoolId = childInfo?.schoolId;
+
+      if (!schoolId || schoolId === 'explore-schools') {
+        setLessons({ continue: null, featured: [] });
+        setLoading(false);
+        return;
       }
-    ]
-  });
 
-  // Filter list options
-  const filterOptions = {
-    subject: ['All', 'Mathematics', 'Science', 'English', 'Computer Science'],
-    grade: ['All', 'Class 5', 'Class 6'],
-    language: ['All', 'English', 'Hindi']
-  };
+      try {
+        const [{ data: courses }, resume] = await Promise.all([
+          listCourses(schoolId, { limit: 50, status: 'published' }),
+          getResumeBookmark(schoolId).catch(() => null),
+        ]);
+
+        if (cancelled) return;
+
+        const published = (courses || []).filter((c) => c.status === 'published' || !c.status);
+        const featured = published.map((course) => mapCourseToLesson(course));
+        const continueLesson = mapResumeToContinueLesson(resume) || (featured[0] ? { ...featured[0] } : null);
+
+        setLessons({ continue: continueLesson, featured });
+      } catch (err) {
+        if (!cancelled) {
+          setLessons({ continue: null, featured: [] });
+          setError(getErrorMessage(err, 'Unable to load courses'));
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const filterOptions = useMemo(() => ({
+    subject: ['All', ...new Set(lessons.featured.map((v) => v.subject).filter(Boolean))],
+    grade: ['All', ...new Set(lessons.featured.map((v) => v.chapter?.split('•')[0]?.trim()).filter(Boolean))],
+    language: ['All', ...new Set(lessons.featured.map((v) => v.language).filter(Boolean))],
+  }), [lessons.featured]);
 
   const getSubjectColor = (sub) => {
     if (sub === 'Science') return { bg: 'bg-[#EBFBF0]', text: 'text-[#34A853]' };
@@ -196,19 +106,18 @@ const ParentLearningHubAll = () => {
   };
 
   const updateLessonProgress = (id, newProg) => {
-    setLessons(prev => {
-      const isCont = prev.continue.id === id;
+    setLessons((prev) => {
+      const isCont = prev.continue?.id === id;
       if (isCont) {
         return {
           ...prev,
-          continue: { ...prev.continue, progress: newProg }
-        };
-      } else {
-        return {
-          ...prev,
-          featured: prev.featured.map(l => l.id === id ? { ...l, progress: newProg } : l)
+          continue: { ...prev.continue, progress: newProg },
         };
       }
+      return {
+        ...prev,
+        featured: prev.featured.map((l) => (l.id === id ? { ...l, progress: newProg } : l)),
+      };
     });
 
     if (selectedVideo && selectedVideo.id === id) {
@@ -266,7 +175,19 @@ const ParentLearningHubAll = () => {
             <ChevronLeft size={10} className="rotate-180" />
           </button>
         </div>
-        
+
+        {loading ? (
+          <div className="flex justify-center py-8">
+            <Loader2 size={28} className="animate-spin text-[#7F56D9]" />
+          </div>
+        ) : error ? (
+          <p className="text-xs text-red-500 text-center py-4">{error}</p>
+        ) : !lessons.continue ? (
+          <div className="text-center py-6">
+            <BookOpen size={32} className="text-gray-200 mx-auto mb-2" />
+            <p className="text-sm font-bold text-gray-400">No courses to continue</p>
+          </div>
+        ) : (
         <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
           
           {/* Visual Thumbnail Card */}
@@ -331,6 +252,7 @@ const ParentLearningHubAll = () => {
             </button>
           </div>
         </div>
+        )}
       </div>
 
       {/* 2. Interactive Filters Grid Row */}

@@ -5,58 +5,7 @@ import {
 } from 'lucide-react';
 
 const NotificationManagement = () => {
-  // Mock notifications list state matching your screenshot data
-  const [notifications, setNotifications] = useState([
-    {
-      id: 1,
-      users: 'All Users',
-      title: 'dkjwh',
-      message: 'csdoujd dfous',
-      date: '01-Jun-2026 11:47:30'
-    },
-    {
-      id: 2,
-      users: 'Delivery',
-      title: 'dscdxv',
-      message: 'xvcxcv',
-      date: '25-May-2026 22:28:20'
-    },
-    {
-      id: 3,
-      users: 'All Users',
-      title: 'vn',
-      message: 'fghfgh',
-      date: '25-May-2026 16:21:10'
-    },
-    {
-      id: 4,
-      users: 'All Users',
-      title: 'xbhvb',
-      message: 'bvcv',
-      date: '25-May-2026 16:17:51'
-    },
-    {
-      id: 5,
-      users: 'All Users',
-      title: 'zxcxc',
-      message: 'xzczxc',
-      date: '25-May-2026 16:12:19'
-    },
-    {
-      id: 6,
-      users: 'All Users',
-      title: 'sc',
-      message: 'xzc',
-      date: '25-May-2026 16:10:44'
-    },
-    {
-      id: 7,
-      users: 'All Users',
-      title: 'dfcv',
-      message: 'xvxcvcx',
-      date: '25-May-2026 16:01:37'
-    }
-  ]);
+  const [notifications, setNotifications] = useState([]);
 
   // Form states
   const [selectedUserType, setSelectedUserType] = useState('All Users');

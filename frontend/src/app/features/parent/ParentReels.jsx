@@ -19,154 +19,18 @@ const ParentReels = () => {
   const [floatingHearts, setFloatingHearts] = useState([]);
   const heartIdCounter = useRef(0);
 
-  // High fidelity real-time simulation reels data
-  const [reelsData, setReelsData] = useState([
-    {
-      id: 1,
-      title: "Smart Kit Unboxing 📦",
-      description: "Everything your Class 2 child needs for the upcoming 2026 academic year. Premium textbooks, notebooks, geometry set, and custom worksheets!",
-      views: "12.4k",
-      category: "Kits",
-      likes: 1240,
-      isLiked: false,
-      music: "Original Audio - School E-Mart",
-      thumb: "https://images.unsplash.com/photo-1503676260728-1c00da094a0b?q=80&w=600&h=1000&fit=crop",
-      comments: [
-        { id: 1, user: "Priya Sharma", text: "Got the class 2 kit yesterday, quality is amazing! 💯" },
-        { id: 2, user: "Rajesh K.", text: "Are all books matching the CBSE 2026 guidelines?" },
-        { id: 3, user: "Sonal Shah", text: "Highly recommend buying this early, very convenient!" }
-      ],
-      product: {
-        id: 1,
-        name: "Complete Class 2 Kit",
-        price: "₹4,299",
-        originalPrice: "₹5,499",
-        image: "https://images.unsplash.com/photo-1503919545889-aef636e10ad4?q=80&w=150&h=150&fit=crop",
-        badge: "Recommended"
-      }
-    },
-    {
-      id: 2,
-      title: "Uniform Stretch & Quality Test 👕",
-      description: "Putting our custom summer cotton polo shirts to the test. Stain-resistant, super breathable, and extremely stretchable for everyday playground action!",
-      views: "8.5k",
-      category: "Uniforms",
-      likes: 852,
-      isLiked: false,
-      music: "Uplifting Beats - Uniform Lab",
-      thumb: "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?q=80&w=600&h=1000&fit=crop",
-      comments: [
-        { id: 1, user: "Ananya Sen", text: "Doesn't shrink even after multiple machine washes!" },
-        { id: 2, user: "Meera Nair", text: "Can we order custom sizes for high schoolers?" }
-      ],
-      product: {
-        id: 201,
-        name: "Summer Polo Shirt",
-        price: "₹350",
-        originalPrice: "₹499",
-        image: "https://images.unsplash.com/photo-1596755094514-f87e34085b2c?q=80&w=150&h=150&fit=crop",
-        badge: "Stain Resistant"
-      }
-    },
-    {
-      id: 3,
-      title: "Advanced Drawing Set Demo 🎨",
-      description: "Unleash your child's creativity! Watch how smoothly these oil pastels and premium sketch pens glide. Non-toxic and completely washable.",
-      views: "15.1k",
-      category: "Stationery",
-      likes: 1902,
-      isLiked: false,
-      music: "Creative Spark - Studio LoFi",
-      thumb: "https://images.unsplash.com/photo-1513364776144-60967b0f800f?q=80&w=600&h=1000&fit=crop",
-      comments: [
-        { id: 1, user: "Kabir Malhotra", text: "My daughter loves this drawing set! Colors are extremely vibrant." },
-        { id: 2, user: "Preeti G.", text: "Perfect birthday gift item. Will order 3 more packs." }
-      ],
-      product: {
-        id: 301,
-        name: "Advanced Drawing Set",
-        price: "₹280",
-        originalPrice: "₹399",
-        image: "https://images.unsplash.com/photo-1513364776144-60967b0f800f?q=80&w=150&h=150&fit=crop",
-        badge: "Washable Ink"
-      }
-    },
-    {
-      id: 4,
-      title: "Interactive Chemistry Setup 🧪",
-      description: "Exploring safe science experiments at home. Learn how the STEM interactive science box helps kids master complex chemical reactions playfully!",
-      views: "21.6k",
-      category: "Activities",
-      likes: 3105,
-      isLiked: false,
-      music: "Synth Science - Future Lab",
-      thumb: "https://images.unsplash.com/photo-1532094349884-543bc11b234d?q=80&w=600&h=1000&fit=crop",
-      comments: [
-        { id: 1, user: "Dr. Verma", text: "Perfectly safe and supervised for middle school students." },
-        { id: 2, user: "Rohan Bhatia", text: "Does it come with an instructional handbook?" }
-      ],
-      product: {
-        id: 4,
-        name: "Science & Lab Setup",
-        price: "₹1,500",
-        originalPrice: "₹1,999",
-        image: "https://images.unsplash.com/photo-1634045550273-db9897ca800c?q=80&w=150&h=150&fit=crop",
-        badge: "STEM Approved"
-      }
-    }
-  ]);
+  // No reels API — empty until backend support exists
+  const [reelsData] = useState([]);
 
   const categories = ['All', 'Kits', 'Uniforms', 'Stationery', 'Activities'];
 
-  // Filter reels based on tab
   const filteredReels = activeTab === 'All' 
     ? reelsData 
     : reelsData.filter(reel => reel.category === activeTab);
 
-  // Set active reel
-  const currentReel = filteredReels[currentReelIndex] || filteredReels[0] || reelsData[0];
+  const currentReel = filteredReels[currentReelIndex] || filteredReels[0];
 
-  const handleLike = (id) => {
-    setReelsData(prev => prev.map(reel => {
-      if (reel.id === id) {
-        const willBeLiked = !reel.isLiked;
-        if (willBeLiked) {
-          // Trigger multiple floating heart animations
-          const newHearts = Array.from({ length: 5 }).map((_, i) => ({
-            id: ++heartIdCounter.current,
-            left: 30 + Math.random() * 40, // spread in 30%-70% of screen width
-            bottom: 40 + Math.random() * 20, // start height
-            scale: 0.6 + Math.random() * 0.6,
-            delay: i * 150
-          }));
-          setFloatingHearts(prevHearts => [...prevHearts, ...newHearts]);
-        }
-        return {
-          ...reel,
-          isLiked: willBeLiked,
-          likes: willBeLiked ? reel.likes + 1 : reel.likes - 1
-        };
-      }
-      return reel;
-    }));
-  };
-
-  // Auto clean floating hearts after animation completes
-  useEffect(() => {
-    if (floatingHearts.length > 0) {
-      const timer = setTimeout(() => {
-        setFloatingHearts([]);
-      }, 2500);
-      return () => clearTimeout(timer);
-    }
-  }, [floatingHearts]);
-
-  const toggleSave = (id) => {
-    setSavedReels(prev => ({
-      ...prev,
-      [id]: !prev[id]
-    }));
-  };
+  const handleLike = () => {};
 
   const handleShare = () => {
     navigator.clipboard.writeText(window.location.href);
@@ -174,42 +38,43 @@ const ParentReels = () => {
     setTimeout(() => setShowShareToast(false), 2000);
   };
 
-  const handleAddComment = (e) => {
-    e.preventDefault();
-    if (!newComment.trim()) return;
-
-    setReelsData(prev => prev.map(reel => {
-      if (reel.id === currentReel.id) {
-        return {
-          ...reel,
-          comments: [
-            ...reel.comments,
-            {
-              id: Date.now(),
-              user: "Parent (You)",
-              text: newComment.trim()
-            }
-          ]
-        };
-      }
-      return reel;
-    }));
-    setNewComment('');
-  };
-
   const nextReel = () => {
     if (filteredReels.length > 1) {
-      setCurrentReelIndex(prev => (prev + 1) % filteredReels.length);
+      setCurrentReelIndex((prev) => (prev + 1) % filteredReels.length);
       setIsPlaying(true);
     }
   };
 
   const prevReel = () => {
     if (filteredReels.length > 1) {
-      setCurrentReelIndex(prev => (prev - 1 + filteredReels.length) % filteredReels.length);
+      setCurrentReelIndex((prev) => (prev - 1 + filteredReels.length) % filteredReels.length);
       setIsPlaying(true);
     }
   };
+
+  const handleAddComment = (e) => {
+    e.preventDefault();
+  };
+
+  if (!currentReel) {
+    return (
+      <div className="relative h-full w-full bg-black flex flex-col font-outfit">
+        <div className="px-4 pt-4 pb-2">
+          <button 
+            onClick={() => navigate('/user/home')}
+            className="w-10 h-10 rounded-full bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center text-white"
+          >
+            <ChevronLeft size={20} />
+          </button>
+        </div>
+        <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
+          <Sparkles size={48} className="text-white/20 mb-4" />
+          <h2 className="text-white text-lg font-bold mb-2">No reels yet</h2>
+          <p className="text-white/60 text-sm">Check back later for school stories and product highlights.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="relative h-full w-full bg-black flex flex-col justify-between overflow-hidden font-outfit select-none">

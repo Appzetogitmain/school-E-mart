@@ -181,12 +181,20 @@ const SuperAdminDashboard = () => {
           <div className="bg-white rounded-[1.5rem] border border-gray-200 p-6 shadow-sm">
             <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4">Sales by Location</h3>
             <div className="flex items-center justify-between py-2 border-b border-gray-50">
-              <div className="flex items-center gap-2 text-sm font-semibold text-gray-800">
-                <MapPin size={16} className="text-gray-400" />
-                <span>Indore</span>
-              </div>
-              <span className="font-extrabold text-sm text-gray-900">₹0.00</span>
-            </div>
+            {(orderAnalytics?.salesByLocation || []).length === 0 ? (
+              <p className="text-xs font-bold text-gray-400 py-2">No location data available</p>
+            ) : (
+              orderAnalytics.salesByLocation.map((loc) => (
+                <div key={loc.city || loc.name} className="flex items-center justify-between py-2 border-b border-gray-50 w-full">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-gray-800">
+                    <MapPin size={16} className="text-gray-400" />
+                    <span>{loc.city || loc.name}</span>
+                  </div>
+                  <span className="font-extrabold text-sm text-gray-900">{formatRupee(loc.revenuePaise || 0)}</span>
+                </div>
+              ))
+            )}
+          </div>
           </div>
 
           {/* Average Order Value Card */}
