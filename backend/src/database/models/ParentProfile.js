@@ -23,8 +23,7 @@ parentProfileSchema.plugin(auditPlugin);
 parentProfileSchema.plugin(softDeletePlugin);
 
 // Indexes
-// userId is already unique
-parentProfileSchema.index({ referralCode: 1 }, { unique: true });
+// userId and referralCode are already unique via field definitions
 // Soft delete compound index
 parentProfileSchema.index({ 'softDelete.isDeleted': 1, 'audit.updatedAt': -1 });
 
