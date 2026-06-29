@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "245704085725",
+    "project_id": "school-e-mart",
+    "storage_bucket": "school-e-mart.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:245704085725:android:d5bece9a882fcb57238b34",
+        "android_client_info": {
+          "package_name": "com.schoolemart"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCr3E-w4exocvxOlJk2VpYrk_OkwO02PYk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
