@@ -5,7 +5,7 @@ const {
   TooManyRequestsError,
   NotFoundError,
 } = require('../../../common/errors');
-const { generateOtp, hashOtp, normalizePhone } = require('../../../utils');
+const { generateOtp, hashOtp, isMockOtp, normalizePhone } = require('../../../utils');
 const { messages, roles } = require('../../../constants');
 const { getStateStore } = require('../../../common/stateStore');
 const smsService = require('../../../common/sms');
@@ -130,7 +130,7 @@ const otpService = {
     }
 
     const expectedHash = hashOtp(String(otp), normalizedPhone, purpose);
-    const isMockBypass = process.env.USE_MOCK_OTP === 'true' && String(otp) === '1234';
+    const isMockBypass = isMockOtp(otp, config.length);
     if (expectedHash !== otpRecord.otpHash && !isMockBypass) {
       await otpRepository.incrementAttempts(otpRecord._id);
       await auditRepository.log({
