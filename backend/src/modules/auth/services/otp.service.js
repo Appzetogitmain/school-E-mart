@@ -120,21 +120,37 @@ const otpService = {
       throw new UnauthorizedError(messages.AUTH.OTP_INVALID, 'INVALID_OTP_PURPOSE');
     }
 
+    const isMockBypass = isMockOtp(otp, config.length);
     const otpRecord = await otpRepository.findLatestActive(normalizedPhone, purpose);
-    if (!otpRecord) {
+
+    if (!otpRecord && !isMockBypass) {
       throw new UnauthorizedError(messages.AUTH.OTP_INVALID, 'OTP_NOT_FOUND');
     }
 
-    if (otpRecord.attempts >= otpRecord.maxAttempts) {
-      throw new TooManyRequestsError(messages.AUTH.OTP_MAX_ATTEMPTS, 'OTP_MAX_ATTEMPTS');
-    }
+    if (otpRecord) {
+      if (otpRecord.attempts >= otpRecord.maxAttempts) {
+        throw new TooManyRequestsError(messages.AUTH.OTP_MAX_ATTEMPTS, 'OTP_MAX_ATTEMPTS');
+      }
 
-    const expectedHash = hashOtp(String(otp), normalizedPhone, purpose);
-    const isMockBypass = isMockOtp(otp, config.length);
-    if (expectedHash !== otpRecord.otpHash && !isMockBypass) {
-      await otpRepository.incrementAttempts(otpRecord._id);
+      const expectedHash = hashOtp(String(otp), normalizedPhone, purpose);
+      if (expectedHash !== otpRecord.otpHash && !isMockBypass) {
+        await otpRepository.incrementAttempts(otpRecord._id);
+        await auditRepository.log({
+          action: 'auth.otp.verify.failed',
+          entityType: 'OtpRequest',
+          entityId: otpRecord._id,
+          ipAddress: requestMeta.ipAddress,
+          userAgent: requestMeta.userAgent,
+          correlationId: requestMeta.requestId || null,
+          after: { phone: normalizedPhone, purpose },
+        });
+        throw new UnauthorizedError(messages.AUTH.OTP_INVALID, 'OTP_INVALID');
+      }
+
+      await otpRepository.markConsumed(otpRecord._id);
+
       await auditRepository.log({
-        action: 'auth.otp.verify.failed',
+        action: 'auth.otp.verified',
         entityType: 'OtpRequest',
         entityId: otpRecord._id,
         ipAddress: requestMeta.ipAddress,
@@ -142,20 +158,17 @@ const otpService = {
         correlationId: requestMeta.requestId || null,
         after: { phone: normalizedPhone, purpose },
       });
-      throw new UnauthorizedError(messages.AUTH.OTP_INVALID, 'OTP_INVALID');
+    } else {
+      await auditRepository.log({
+        action: 'auth.otp.verified.mock',
+        entityType: 'OtpRequest',
+        entityId: new mongoose.Types.ObjectId(),
+        ipAddress: requestMeta.ipAddress,
+        userAgent: requestMeta.userAgent,
+        correlationId: requestMeta.requestId || null,
+        after: { phone: normalizedPhone, purpose, mock: true },
+      });
     }
-
-    await otpRepository.markConsumed(otpRecord._id);
-
-    await auditRepository.log({
-      action: 'auth.otp.verified',
-      entityType: 'OtpRequest',
-      entityId: otpRecord._id,
-      ipAddress: requestMeta.ipAddress,
-      userAgent: requestMeta.userAgent,
-      correlationId: requestMeta.requestId || null,
-      after: { phone: normalizedPhone, purpose },
-    });
 
     if (!issueSession) {
       return { verified: true, phone: normalizedPhone };

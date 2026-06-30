@@ -5,6 +5,7 @@ import {
   ArrowRight, CheckCircle2, ChevronLeft, Building2
 } from 'lucide-react';
 import { ROUTES } from '../../constants/routes';
+import { ENV } from '../../config/env';
 import useAuthStore from '../../store/useAuthStore';
 import * as authApi from '../../services/authApi';
 import { getErrorMessage } from '../../utils/apiHelpers';
@@ -25,7 +26,7 @@ const AuthPage = () => {
   const [otpSent, setOtpSent] = useState(false);
 
   const [mobile, setMobile] = useState('');
-  const [otp, setOtp] = useState('');
+  const [otp, setOtp] = useState(ENV.USE_MOCK_OTP ? ENV.DEFAULT_OTP : '');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
@@ -287,6 +288,11 @@ const AuthPage = () => {
                         className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all tracking-[0.5em] font-mono"
                       />
                     </div>
+                    {ENV.USE_MOCK_OTP && (
+                      <p className="text-[11px] font-medium text-amber-600 ml-1">
+                        Test mode: use OTP {ENV.DEFAULT_OTP}
+                      </p>
+                    )}
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">

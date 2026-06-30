@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Phone, Lock, ArrowRight, ChevronLeft } from 'lucide-react';
 import useAuthStore from '../../../store/useAuthStore';
+import { ENV } from '../../../config/env';
 import * as authApi from '../../../services/authApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 import { getLoginRedirectPath } from '../../../utils/mappers/userMapper';
@@ -210,7 +211,7 @@ const ContactInput = ({ onSendOtp, onError, error, loading }) => {
 };
 
 const Verification = ({ phone, onVerifyOtp, onError, error, loading }) => {
-  const [value, setValue] = useState('');
+  const [value, setValue] = useState(ENV.USE_MOCK_OTP ? ENV.DEFAULT_OTP : '');
 
   const handleInputChange = (e) => {
     const val = e.target.value.replace(/\D/g, '').slice(0, 4);
@@ -247,6 +248,11 @@ const Verification = ({ phone, onVerifyOtp, onError, error, loading }) => {
               className="w-full pl-12 pr-4 py-4 bg-gray-50 border-none rounded-2xl text-base focus:ring-2 focus:ring-primary/10 outline-none tracking-[1em] font-mono"
             />
           </div>
+          {ENV.USE_MOCK_OTP && (
+            <p className="text-[11px] font-medium text-amber-600 ml-1">
+              Test mode: use OTP {ENV.DEFAULT_OTP}
+            </p>
+          )}
           {error && <p className="text-red-500 text-[11px] font-medium ml-1 mt-1">{error}</p>}
         </div>
         <button

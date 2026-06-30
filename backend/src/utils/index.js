@@ -33,7 +33,8 @@ const resolveMockOtp = (length = 4) => {
 const isMockOtp = (otp, length = 4) => {
   if (!env.USE_MOCK_OTP) return false;
   const normalized = String(otp);
-  return normalized === env.DEFAULT_OTP || normalized === resolveMockOtp(length);
+  if (normalized === env.DEFAULT_OTP) return true;
+  return normalized === resolveMockOtp(length);
 };
 
 const generateOtp = (length = 4) => {
