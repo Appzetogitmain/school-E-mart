@@ -79,6 +79,7 @@ const WalletManagement = () => {
   const completedWithdrawals = withdrawals
     .filter((w) => w.status === 'Completed')
     .reduce((sum, w) => sum + (w.amount || 0), 0);
+  const currentBalance = totalPlatformEarning - completedWithdrawals;
   const pendingVendorPayouts = withdrawals
     .filter((w) => w.status === 'Pending' && w.role === 'Vendor')
     .reduce((sum, w) => sum + (w.amount || 0), 0);
