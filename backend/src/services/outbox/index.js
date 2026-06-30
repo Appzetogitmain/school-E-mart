@@ -1,5 +1,6 @@
 const OutboxEvent = require('../../database/models/OutboxEvent');
 const logger = require('../../common/logger');
+const { notificationService } = require('../notification');
 
 const publishOutboxEvent = async (
   { aggregateType, aggregateId, eventType, payload },
@@ -23,10 +24,25 @@ const publishOutboxEvent = async (
 
 const DEFAULT_HANDLERS = {
   'notification.send': async (event) => {
-    logger.debug('Outbox handler not implemented', {
-      eventType: event.eventType,
-      aggregateType: event.aggregateType,
-      aggregateId: event.aggregateId?.toString(),
+    const { userId, userIds, topic, notification, data, type, channel } = event.payload || {};
+
+    if (topic) {
+      await notificationService.sendToTopic(topic, { notification, data });
+      return;
+    }
+
+    if (userIds?.length) {
+      await notificationService.sendToUsers(userIds, { notification, data, type, channel });
+      return;
+    }
+
+    if (userId) {
+      await notificationService.sendToUser(userId, { notification, data, type, channel });
+      return;
+    }
+
+    logger.warn('notification.send outbox event missing target', {
+      eventId: event._id?.toString(),
     });
   },
 };

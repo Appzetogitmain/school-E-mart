@@ -4,6 +4,7 @@ const Payment = require('../../database/models/Payment');
 const Order = require('../../database/models/Order');
 const paymentGateway = require('../../services/paymentGateway');
 const logger = require('../../common/logger');
+const { triggerService } = require('../../services/notification');
 
 const DUPLICATE_KEY_CODE = 11000;
 
@@ -29,6 +30,11 @@ const markPaymentCaptured = async (paymentEntity) => {
   });
 
   await Order.findByIdAndUpdate(payment.orderId, { $set: { paymentStatus: 'paid' } });
+
+  const order = await Order.findById(payment.orderId).lean();
+  if (order) {
+    triggerService.notifyPaymentSuccess(order);
+  }
 };
 
 const markPaymentFailed = async (paymentEntity) => {
@@ -41,6 +47,14 @@ const markPaymentFailed = async (paymentEntity) => {
       failureReason: paymentEntity.error_description || paymentEntity.error_reason || 'Payment failed',
     },
   });
+
+  const order = await Order.findById(payment.orderId).lean();
+  if (order) {
+    triggerService.notifyPaymentFailed(
+      order,
+      paymentEntity.error_description || paymentEntity.error_reason
+    );
+  }
 };
 
 const handleRefundCreated = async (refundEntity) => {

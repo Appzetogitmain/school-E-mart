@@ -2,6 +2,7 @@ const { NotFoundError, BadRequestError, ForbiddenError } = require('../../../com
 const orderRepository = require('../repositories/order.repository');
 const vendorAccessPolicy = require('../policies/vendorAccess.policy');
 const Order = require('../../../database/models/Order');
+const { triggerService } = require('../../../services/notification');
 
 const VENDOR_TRANSITIONS = {
   placed: ['accepted', 'cancelled'],
@@ -76,6 +77,7 @@ const vendorOrderService = {
       { new: true }
     ).lean();
 
+    triggerService.notifyVendorOrderAction(updated, vendorId, status);
     return this.getOrder(vendorId, updated._id);
   },
 

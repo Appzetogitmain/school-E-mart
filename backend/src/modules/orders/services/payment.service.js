@@ -3,6 +3,8 @@ const paymentRepository = require('../repositories/payment.repository');
 const paymentGateway = require('../../../services/paymentGateway');
 const { randomHex } = require('../../../utils/crypto');
 const Payment = require('../../../database/models/Payment');
+const Order = require('../../../database/models/Order');
+const { triggerService } = require('../../../services/notification');
 
 const paymentService = {
   async createPaymentForOrder(order, { method, session = null }) {
@@ -76,7 +78,7 @@ const paymentService = {
       gatewayPaymentId = capture.gatewayPaymentId;
     }
 
-    return Payment.findByIdAndUpdate(
+    const updated = await Payment.findByIdAndUpdate(
       payment._id,
       {
         $set: {
@@ -87,6 +89,13 @@ const paymentService = {
       },
       { new: true, ...opts }
     ).lean();
+
+    const order = await Order.findById(orderId).lean();
+    if (order) {
+      triggerService.notifyPaymentSuccess(order);
+    }
+
+    return updated;
   },
 
   async getPaymentByOrder(orderId) {

@@ -5,6 +5,7 @@ const orderService = require('../../orders/services/order.service');
 const { shiprocketService } = require('../providers/shiprocket/shiprocketService');
 const { deliveryTrackingQueue } = require('../../../queues/deliveryQueues');
 const { emitToCustomer, emitToSeller } = require('../../../services/orderSocketEmitter');
+const { triggerService } = require('../../../services/notification');
 
 const TERMINAL = new Set(['delivered', 'cancelled', 'returned']);
 
@@ -61,6 +62,10 @@ const processWebhookJob = async (job) => {
 
   await emitToCustomer(String(shipment.orderMongoId), { event: 'order:tracking_update', payload: { orderId: shipment.orderId, status: canonicalStatus, currentStatus: parsed.currentStatus, awbCode: shipment.awbCode, courierName: shipment.courierName, trackingUrl: shipment.trackingUrl } });
   await emitToSeller('admin', { event: 'delivery:status_change', payload: { orderId: shipment.orderId, awbCode: shipment.awbCode, oldStatus: null, newStatus: canonicalStatus, timestamp: new Date().toISOString() } });
+
+  if (canonicalStatus) {
+    triggerService.notifyDeliveryUpdate(shipment.orderMongoId, canonicalStatus, shipment.orderId);
+  }
 
   if (canonicalStatus && TERMINAL.has(canonicalStatus)) {
     const trackingJob = await deliveryTrackingQueue.getJob(`track:${shipment.orderId}`);

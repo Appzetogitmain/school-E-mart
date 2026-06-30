@@ -11,6 +11,7 @@ const {
 const Order = require('../../../database/models/Order');
 const OrderShipment = require('../../../database/models/OrderShipment');
 const { deliveryCancellationQueue } = require('../../../queues/deliveryQueues');
+const { triggerService } = require('../../../services/notification');
 
 const cancellationService = {
   async cancelOrder(orderId, { reason, cancelledBy }, { role = 'customer' } = {}) {
@@ -84,6 +85,7 @@ const cancellationService = {
         shiprocketOrderId: order.orderNumber,
       });
 
+      triggerService.notifyOrderCancelled(updated, role);
       return updated;
     });
   },

@@ -11,6 +11,7 @@ const { runAtomic } = require('../utils/atomic');
 const { canTransition } = require('../utils/statusMachine');
 const settlementService = require('../../vendor/services/settlement.service');
 const { deliveryShipmentQueue } = require('../../../queues/deliveryQueues');
+const { triggerService } = require('../../../services/notification');
 
 const stripPaginationMeta = (query = {}) => {
   const paginationQuery = { ...query };
@@ -150,6 +151,7 @@ const orderService = {
         weight: Math.max(0.5, summary.items.length * 0.5),
         idempotencyKey: `shipment:create:${order.orderNumber}`,
       });
+      triggerService.notifyOrderPlaced(hydratedOrder);
       return hydratedOrder;
     });
   },
@@ -262,6 +264,7 @@ const orderService = {
       }
     }
 
+    triggerService.notifyOrderStatusChange(updated, status, note);
     return updated;
   },
 };

@@ -1,6 +1,7 @@
 const { NotFoundError, ForbiddenError } = require('../../../common/errors');
 const { roles } = require('../../../constants');
 const noticeRepository = require('../repositories/notice.repository');
+const { triggerService } = require('../../../services/notification');
 
 const { ROLES } = roles;
 
@@ -64,12 +65,18 @@ const buildParentNoticeFilter = async (schoolId, userId, studentId) => {
 
 const noticeService = {
   async createNotice(schoolId, payload) {
-    return noticeRepository.create({
+    const notice = await noticeRepository.create({
       ...payload,
       schoolId,
       status: payload.status || 'draft',
       publishDate: payload.publishDate || new Date(),
     });
+
+    if (notice.status === 'published') {
+      triggerService.notifySchoolNoticePublished(schoolId, notice);
+    }
+
+    return notice;
   },
 
   async listNotices(req, schoolId, query) {
@@ -110,7 +117,11 @@ const noticeService = {
   },
 
   async setNoticeStatus(schoolId, noticeId, status) {
-    return this.updateNotice(schoolId, noticeId, { status });
+    const notice = await this.updateNotice(schoolId, noticeId, { status });
+    if (status === 'published') {
+      triggerService.notifySchoolNoticePublished(schoolId, notice);
+    }
+    return notice;
   },
 
   async deleteNotice(schoolId, noticeId, deletedBy) {

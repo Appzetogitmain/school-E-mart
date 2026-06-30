@@ -71,6 +71,11 @@ const buildEnv = () => {
   OTP_RESEND_COOLDOWN_MS: Number(process.env.OTP_RESEND_COOLDOWN_MS) || 60_000,
   OTP_MAX_PER_WINDOW: Number(process.env.OTP_MAX_PER_WINDOW) || 5,
   OTP_WINDOW_MS: Number(process.env.OTP_WINDOW_MS) || 15 * 60_000,
+  USE_MOCK_OTP:
+    process.env.USE_MOCK_OTP !== undefined
+      ? process.env.USE_MOCK_OTP === 'true'
+      : nodeEnv !== 'production',
+  DEFAULT_OTP: process.env.DEFAULT_OTP || '1234',
 
   PASSWORD_RESET_EXPIRY_MS: parseDurationMs(process.env.PASSWORD_RESET_EXPIRY || '24h', 24 * 3_600_000),
   EMAIL_VERIFICATION_EXPIRY: process.env.EMAIL_VERIFICATION_EXPIRY || '24h',
@@ -104,6 +109,12 @@ const buildEnv = () => {
   OUTBOX_WORKER_ENABLED: process.env.OUTBOX_WORKER_ENABLED === 'true',
   OUTBOX_POLL_INTERVAL_MS: Number(process.env.OUTBOX_POLL_INTERVAL_MS) || 5000,
   OUTBOX_BATCH_SIZE: Number(process.env.OUTBOX_BATCH_SIZE) || 20,
+
+  FIREBASE_PROJECT_ID: process.env.FIREBASE_PROJECT_ID || null,
+  FIREBASE_CLIENT_EMAIL: process.env.FIREBASE_CLIENT_EMAIL || null,
+  FIREBASE_PRIVATE_KEY: process.env.FIREBASE_PRIVATE_KEY
+    ? process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n')
+    : null,
   };
 };
 
@@ -136,6 +147,10 @@ const validateEnv = (config) => {
         throw new Error(`${key} must be at least ${minSecretLength} characters in production`);
       }
     });
+
+    if (config.USE_MOCK_OTP) {
+      throw new Error('USE_MOCK_OTP must not be enabled in production');
+    }
   }
 };
 

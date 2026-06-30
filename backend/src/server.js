@@ -78,10 +78,18 @@ const bootstrap = async () => {
   registerProcessHandlers();
   await connectStateStore();
 
+  try {
+    require('./config/firebase').getFirebaseApp();
+  } catch (error) {
+    logger.warn('Firebase initialization skipped', { message: error.message });
+  }
+
   if (config.integrations.outbox.workerEnabled) {
+    const { processOutboxBatch } = require('./services/outbox');
     outboxWorkerTimer = startOutboxWorker({
       pollIntervalMs: config.integrations.outbox.pollIntervalMs,
       batchSize: config.integrations.outbox.batchSize,
+      handlers: undefined,
     });
   }
 

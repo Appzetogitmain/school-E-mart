@@ -43,6 +43,18 @@ const useAuthStore = create(
           }
         }
 
+        try {
+          const { unregisterFcmToken } = await import('../services/notificationApi');
+          const deviceId = localStorage.getItem('fcm-device-id');
+          const registered = localStorage.getItem('fcm-registered-token');
+          if (registered) {
+            await unregisterFcmToken({ token: registered, deviceId });
+          }
+          localStorage.removeItem('fcm-registered-token');
+        } catch {
+          // Best-effort FCM cleanup
+        }
+
         set({ user: null, token: null, isAuthenticated: false, portal: null });
       },
 

@@ -6,6 +6,7 @@ const reportRepository = require('../repositories/report.repository');
 const { getStateStore } = require('../../../common/stateStore');
 const env = require('../../../config/env');
 const { runAtomic } = require('../../orders/utils/atomic');
+const { triggerService } = require('../../../services/notification');
 
 const USER_LOCK_PREFIX = 'auth:user-lock:';
 
@@ -34,6 +35,13 @@ const userManagementService = {
         after: { reason },
       });
 
+      triggerService.notifyUserAction(userId, {
+        title: 'Account Suspended',
+        body: reason || 'Your account has been suspended. Contact support for help.',
+        type: 'system',
+        route: '/login',
+      });
+
       return user;
     });
   },
@@ -51,6 +59,13 @@ const userManagementService = {
         action: 'user.activated',
         entityType: 'User',
         entityId: userId,
+      });
+
+      triggerService.notifyUserAction(userId, {
+        title: 'Account Reactivated',
+        body: 'Your account has been reactivated. You can log in again.',
+        type: 'system',
+        route: '/login',
       });
 
       return user;

@@ -14,4 +14,8 @@ module.exports = Object.freeze({
     pollIntervalMs: env.OUTBOX_POLL_INTERVAL_MS,
     batchSize: env.OUTBOX_BATCH_SIZE,
   }),
+  firebase: Object.freeze({
+    enabled: Boolean(env.FIREBASE_PROJECT_ID && env.FIREBASE_CLIENT_EMAIL && env.FIREBASE_PRIVATE_KEY),
+    projectId: env.FIREBASE_PROJECT_ID,
+  }),
 });
