@@ -12,10 +12,44 @@ const apiClient = axios.create({
   },
 });
 
-const AUTH_SKIP_REFRESH = ['/auth/refresh', '/auth/login', '/auth/logout'];
+const getRequestPath = (url = '') => url.split('?')[0];
 
-const shouldSkipRefresh = (url = '') =>
-  AUTH_SKIP_REFRESH.some((segment) => url.includes(segment));
+/**
+ * Unauthenticated auth flows where 401 means invalid credentials/OTP — not an expired session.
+ * Refresh must never run for these paths.
+ */
+const isUnauthenticatedAuthPath = (url = '') => {
+  const path = getRequestPath(url);
+
+  if (path === '/auth/refresh' || path === '/auth/logout') {
+    return true;
+  }
+
+  if (path.endsWith('/login') || path.endsWith('/register')) {
+    return true;
+  }
+
+  if (
+    path.startsWith('/auth/parent/otp/') ||
+    path.startsWith('/auth/parent/web/') ||
+    path === '/auth/forgot-password' ||
+    path === '/auth/reset-password' ||
+    path === '/auth/email/verify' ||
+    path === '/vendor/register'
+  ) {
+    return true;
+  }
+
+  return false;
+};
+
+const shouldAttemptTokenRefresh = (url = '') => {
+  if (isUnauthenticatedAuthPath(url)) {
+    return false;
+  }
+
+  return Boolean(useAuthStore.getState().token);
+};
 
 const redirectToLogin = () => {
   const { portal, logout } = useAuthStore.getState();
@@ -49,9 +83,11 @@ const tryRefreshToken = async () => {
 
 apiClient.interceptors.request.use(
   (config) => {
-    const token = useAuthStore.getState().token;
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+    if (!isUnauthenticatedAuthPath(config.url || '')) {
+      const token = useAuthStore.getState().token;
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
     }
     return config;
   },
@@ -67,7 +103,7 @@ apiClient.interceptors.response.use(
       error.response?.status === 401 &&
       originalRequest &&
       !originalRequest._retry &&
-      !shouldSkipRefresh(originalRequest.url || '')
+      shouldAttemptTokenRefresh(originalRequest.url || '')
     ) {
       originalRequest._retry = true;
 
