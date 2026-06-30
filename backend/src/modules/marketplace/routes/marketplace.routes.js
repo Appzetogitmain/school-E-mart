@@ -22,6 +22,7 @@ const customerAuth = protectedRoute({
 });
 
 router.get('/header-categories', validateQuery(validators.paginationQuery), marketplaceController.listHeaderCategories);
+router.get('/banners', validateQuery(validators.publicBannerQuery), marketplaceController.listPublicBanners);
 router.get('/categories/tree', marketplaceController.getCategoryTree);
 router.get('/categories', validateQuery(validators.paginationQuery), marketplaceController.listCategories);
 router.get('/subcategories', validateQuery(validators.paginationQuery), marketplaceController.listSubcategories);

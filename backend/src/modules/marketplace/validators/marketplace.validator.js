@@ -35,6 +35,12 @@ const audienceQuery = Joi.object({
   audience: Joi.string().valid('parent', 'school').default('parent'),
 });
 
+const publicBannerQuery = paginationQuery.keys({
+  audience: Joi.string().valid('parent', 'school', 'all').default('parent'),
+  position: Joi.string().valid('home_top', 'home_middle', 'category_top', 'cart').optional(),
+  isActive: Joi.string().valid('true', 'false').optional(),
+});
+
 const headerCategorySchema = Joi.object({
   name: Joi.string().trim().min(2).max(80).required(),
   imageUrl: Joi.string().trim().uri().optional(),
@@ -168,6 +174,7 @@ module.exports = {
   reviewIdParam,
   cartItemParam,
   audienceQuery,
+  publicBannerQuery,
   headerCategorySchema,
   updateHeaderCategorySchema,
   categorySchema,

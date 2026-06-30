@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { listBanners } from '../../services/adminApi';
+import { listPublicBanners } from '../../services/catalogApi';
 import { useCategoryTree } from '../../hooks/useCategoryTree';
 
 const PromoBanner = ({ banner, className = '' }) => {
@@ -52,7 +52,7 @@ const Hero = ({ role = 'parent' }) => {
     const load = async () => {
       setLoading(true);
       try {
-        const { data } = await listBanners({ limit: 20, isActive: true, audience: role });
+        const { data } = await listPublicBanners({ limit: 20, audience: role });
         const mapped = (data || [])
           .filter((b) => b.isActive !== false)
           .map((b) => ({

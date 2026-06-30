@@ -4,7 +4,13 @@ import { unwrapData } from '../utils/apiHelpers';
 const extractPaginated = (response) => {
   const { data, pagination } = response.data;
   return {
-    data: data?.products || data?.headerCategories || data?.categories || data?.subcategories || data,
+    data:
+      data?.products ||
+      data?.headerCategories ||
+      data?.categories ||
+      data?.subcategories ||
+      data?.banners ||
+      data,
     pagination: pagination || null,
   };
 };
@@ -16,6 +22,11 @@ export const getCategoryTree = async () => {
 
 export const listHeaderCategories = async (params = {}) => {
   const response = await apiClient.get('/catalog/header-categories', { params });
+  return extractPaginated(response);
+};
+
+export const listPublicBanners = async (params = {}) => {
+  const response = await apiClient.get('/catalog/banners', { params });
   return extractPaginated(response);
 };
 

@@ -7,6 +7,30 @@ const wishlistService = require('../services/wishlist.service');
 const reviewService = require('../services/review.service');
 const recommendationService = require('../services/recommendation.service');
 const marketplaceAccessPolicy = require('../policies/marketplaceAccess.policy');
+const cmsService = require('../../admin/services/cms.service');
+
+const resolveBannerImageUrl = (banner) => {
+  const storageKey = banner?.imageId?.storageKey;
+  if (typeof storageKey === 'string' && /^https?:\/\//i.test(storageKey)) {
+    return storageKey;
+  }
+  return storageKey || null;
+};
+
+const mapPublicBanner = (banner) => ({
+  id: banner._id,
+  title: banner.title,
+  imageUrl: resolveBannerImageUrl(banner),
+  linkUrl: banner.linkUrl || null,
+  targetUrl: banner.linkUrl || null,
+  link: banner.linkUrl || null,
+  targetAudience: banner.targetAudience,
+  position: banner.position,
+  placement: banner.position === 'home_top' ? 'main' : banner.position,
+  displayOrder: banner.displayOrder,
+  status: banner.status,
+  isActive: banner.status === 'active',
+});
 
 const marketplaceController = {
   listHeaderCategories: asyncHandler(async (req, res) => {
@@ -343,6 +367,12 @@ const marketplaceController = {
   deleteReview: asyncHandler(async (req, res) => {
     await reviewService.deleteReview(req.auth.userId, req.params.productId, req.params.reviewId, req.auth.userId);
     return success(res, null, 'Review deleted', undefined, req);
+  }),
+
+  listPublicBanners: asyncHandler(async (req, res) => {
+    const { data, pagination } = await cmsService.listPublicBanners(req.query);
+    const banners = (data || []).map(mapPublicBanner);
+    return paginated(res, { banners }, pagination, 'Banners fetched', req);
   }),
 };
 

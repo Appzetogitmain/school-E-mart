@@ -137,6 +137,25 @@ const cmsService = {
     return promoBannerRepository.paginate({}, query);
   },
 
+  listPublicBanners(query = {}) {
+    const now = new Date();
+    const filter = {
+      status: 'active',
+      validFrom: { $lte: now },
+      validUntil: { $gte: now },
+    };
+
+    if (query.position) {
+      filter.position = query.position;
+    }
+
+    if (query.audience && query.audience !== 'all') {
+      filter.targetAudience = { $in: [query.audience, 'all'] };
+    }
+
+    return promoBannerRepository.paginatePublic(filter, query);
+  },
+
   async getBanner(bannerId) {
     const banner = await promoBannerRepository.findById(bannerId);
     if (!banner) throw new NotFoundError('Banner not found', 'BANNER_NOT_FOUND');

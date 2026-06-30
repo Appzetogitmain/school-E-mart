@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { listBanners } from '../../../services/adminApi';
+import { listPublicBanners } from '../../../services/catalogApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 
 const PromoCategoryBanners = () => {
@@ -14,7 +14,7 @@ const PromoCategoryBanners = () => {
       setLoading(true);
       setError('');
       try {
-        const { data } = await listBanners({ limit: 10, isActive: true });
+        const { data } = await listPublicBanners({ limit: 10, audience: 'parent' });
         if (!cancelled) {
           setBanners(
             (data || [])
