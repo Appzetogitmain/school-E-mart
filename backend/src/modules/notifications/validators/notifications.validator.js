@@ -2,14 +2,12 @@ const Joi = require('joi');
 
 const registerTokenSchema = Joi.object({
   token: Joi.string().trim().min(20).required(),
-  platform: Joi.string().valid('web', 'android', 'ios').default('web'),
-  deviceId: Joi.string().trim().max(128).optional(),
+  platform: Joi.string().valid('web', 'app').default('web'),
 });
 
 const unregisterTokenSchema = Joi.object({
-  token: Joi.string().trim().optional(),
-  deviceId: Joi.string().trim().optional(),
-}).or('token', 'deviceId');
+  token: Joi.string().trim().required(),
+});
 
 const listNotificationsSchema = Joi.object({
   page: Joi.number().integer().min(1).default(1),

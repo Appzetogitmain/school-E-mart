@@ -45,10 +45,9 @@ const useAuthStore = create(
 
         try {
           const { unregisterFcmToken } = await import('../services/notificationApi');
-          const deviceId = localStorage.getItem('fcm-device-id');
           const registered = localStorage.getItem('fcm-registered-token');
           if (registered) {
-            await unregisterFcmToken({ token: registered, deviceId });
+            await unregisterFcmToken({ token: registered });
           }
           localStorage.removeItem('fcm-registered-token');
         } catch {

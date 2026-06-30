@@ -8,7 +8,6 @@ const notificationsController = {
       userId: req.auth.userId,
       token: req.body.token,
       platform: req.body.platform,
-      deviceId: req.body.deviceId,
       userAgent: req.headers['user-agent'],
     });
     return created(res, { token: record }, 'FCM token registered', req);
@@ -18,7 +17,6 @@ const notificationsController = {
     await tokenService.unregisterToken({
       userId: req.auth.userId,
       token: req.body.token,
-      deviceId: req.body.deviceId,
     });
     return success(res, null, 'FCM token removed', undefined, req);
   }),

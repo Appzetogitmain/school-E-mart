@@ -6,11 +6,10 @@ const deviceTokenSchema = new mongoose.Schema(
     token: { type: String, required: true },
     platform: {
       type: String,
-      enum: ['web', 'android', 'ios'],
+      enum: ['web', 'app'],
       required: true,
       default: 'web',
     },
-    deviceId: { type: String },
     userAgent: { type: String },
     isActive: { type: Boolean, required: true, default: true },
     lastUsedAt: { type: Date, default: Date.now },
@@ -21,6 +20,5 @@ const deviceTokenSchema = new mongoose.Schema(
 
 deviceTokenSchema.index({ userId: 1, isActive: 1 });
 deviceTokenSchema.index({ token: 1 }, { unique: true });
-deviceTokenSchema.index({ userId: 1, deviceId: 1 }, { sparse: true });
 
 module.exports = mongoose.model('DeviceToken', deviceTokenSchema);

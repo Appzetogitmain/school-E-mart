@@ -1,21 +1,4 @@
-const DEVICE_ID_KEY = 'fcm-device-id';
 const REGISTERED_TOKEN_KEY = 'fcm-registered-token';
-
-const generateDeviceId = () => {
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-    return crypto.randomUUID();
-  }
-  return `web-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-};
-
-export const getOrCreateDeviceId = () => {
-  let deviceId = localStorage.getItem(DEVICE_ID_KEY);
-  if (!deviceId) {
-    deviceId = generateDeviceId();
-    localStorage.setItem(DEVICE_ID_KEY, deviceId);
-  }
-  return deviceId;
-};
 
 export const getRegisteredToken = () => localStorage.getItem(REGISTERED_TOKEN_KEY);
 

@@ -6,7 +6,6 @@ import { ENV } from '../config/env';
 import * as notificationApi from '../services/notificationApi';
 import useAuthStore from '../store/useAuthStore';
 import {
-  getOrCreateDeviceId,
   getRegisteredToken,
   setRegisteredToken,
   isNotificationSupported,
@@ -49,7 +48,6 @@ export const useFcm = () => {
 
   const registerTokenWithBackend = useCallback(
     async (fcmToken) => {
-      const deviceId = getOrCreateDeviceId();
       const previous = getRegisteredToken();
 
       if (previous === fcmToken) return;
@@ -57,7 +55,6 @@ export const useFcm = () => {
       await notificationApi.registerFcmToken({
         token: fcmToken,
         platform: 'web',
-        deviceId,
       });
       setRegisteredToken(fcmToken);
     },
@@ -126,11 +123,10 @@ export const useFcm = () => {
   }, [isAuthenticated, authToken, registerTokenWithBackend]);
 
   const unregister = useCallback(async () => {
-    const deviceId = getOrCreateDeviceId();
     const registered = getRegisteredToken();
     try {
       if (registered) {
-        await notificationApi.unregisterFcmToken({ token: registered, deviceId });
+        await notificationApi.unregisterFcmToken({ token: registered });
       }
     } catch {
       // Best-effort cleanup

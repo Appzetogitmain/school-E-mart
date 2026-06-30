@@ -1,13 +1,13 @@
 import apiClient from './apiClient';
 
-export const registerFcmToken = async ({ token, platform = 'web', deviceId }) => {
-  const { data } = await apiClient.post('/notifications/tokens', { token, platform, deviceId });
+export const registerFcmToken = async ({ token, platform = 'web' }) => {
+  const { data } = await apiClient.post('/notifications/tokens', { token, platform });
   return data;
 };
 
-export const unregisterFcmToken = async ({ token, deviceId } = {}) => {
+export const unregisterFcmToken = async ({ token } = {}) => {
   const { data } = await apiClient.delete('/notifications/tokens', {
-    data: { token, deviceId },
+    data: { token },
   });
   return data;
 };

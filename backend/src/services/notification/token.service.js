@@ -1,7 +1,7 @@
 const DeviceToken = require('../../database/models/DeviceToken');
 
 const tokenService = {
-  async registerToken({ userId, token, platform = 'web', deviceId, userAgent }) {
+  async registerToken({ userId, token, platform = 'web', userAgent }) {
     const now = new Date();
     const existing = await DeviceToken.findOne({ token }).lean();
 
@@ -12,7 +12,6 @@ const tokenService = {
           $set: {
             userId,
             platform,
-            deviceId: deviceId || existing.deviceId,
             userAgent: userAgent || existing.userAgent,
             isActive: true,
             lastUsedAt: now,
@@ -27,7 +26,6 @@ const tokenService = {
         userId,
         token,
         platform,
-        deviceId,
         userAgent,
         isActive: true,
         lastUsedAt: now,
@@ -36,10 +34,9 @@ const tokenService = {
     return record.toObject();
   },
 
-  async unregisterToken({ userId, token, deviceId }) {
+  async unregisterToken({ userId, token }) {
     const filter = { userId, isActive: true };
     if (token) filter.token = token;
-    if (deviceId) filter.deviceId = deviceId;
 
     await DeviceToken.updateMany(filter, { $set: { isActive: false } });
     return { removed: true };
