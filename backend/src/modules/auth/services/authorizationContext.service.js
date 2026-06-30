@@ -42,6 +42,9 @@ const resolveAuthorizationContext = async (user) => {
       break;
     }
     case ROLES.SUPER_ADMIN: {
+      // Super admins must retain platform-wide access even if profile is missing.
+      permissions = permissions.length ? permissions : [permissionConstants.PERMISSIONS.PLATFORM_ADMIN];
+      scopes = ['*'];
       const adminProfile = await profileRepository.getAdminByUserId(user._id);
       if (adminProfile) {
         scopes = adminProfile.scopes?.length ? adminProfile.scopes : ['*'];

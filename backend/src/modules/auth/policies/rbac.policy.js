@@ -45,8 +45,13 @@ const hasAnyScope = (grantedScopes = [], requiredScopes = []) => {
   return requiredScopes.some((scope) => grantedScopes.includes(scope));
 };
 
-const hasRole = (userRole, allowedRoles = []) =>
-  Array.isArray(allowedRoles) && allowedRoles.includes(userRole);
+const normalizeRole = (role) => (typeof role === 'string' ? role.trim().toLowerCase() : role);
+
+const hasRole = (userRole, allowedRoles = []) => {
+  if (!Array.isArray(allowedRoles) || !allowedRoles.length) return false;
+  const normalizedUserRole = normalizeRole(userRole);
+  return allowedRoles.map(normalizeRole).includes(normalizedUserRole);
+};
 
 module.exports = {
   hasWildcardPermission,
