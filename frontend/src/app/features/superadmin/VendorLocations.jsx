@@ -21,6 +21,21 @@ const mapVendorLocation = (vendor) => ({
   mapOffset: { x: 0, y: 0 },
 });
 
+const FALLBACK_VENDOR = {
+  id: null,
+  storeName: 'No vendor selected',
+  ownerName: '—',
+  address: '—',
+  city: '—',
+  latitude: '—',
+  longitude: '—',
+  phone: '—',
+  email: '—',
+  status: 'Pending',
+  serviceRadius: 0,
+  mapOffset: { x: 0, y: 0 },
+};
+
 const VendorLocations = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
@@ -49,7 +64,10 @@ const VendorLocations = () => {
     loadVendors();
   }, [loadVendors]);
 
-  const selectedVendor = vendors.find((v) => v.id === selectedVendorId) || vendors[0];
+  const selectedVendor =
+    vendors.find((v) => v.id === selectedVendorId) ||
+    vendors[0] ||
+    FALLBACK_VENDOR;
 
   // Filters mapping
   const filteredVendors = vendors.filter(v => {
