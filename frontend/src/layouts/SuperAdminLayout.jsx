@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Layers, Box, Users, MapPin, Ticket, Truck,
   ChevronDown, ChevronRight, Search, Bell, User, LogOut, Menu, X, ShieldAlert,
   ArrowLeftRight, Wallet, TrendingUp, Coins, HelpCircle, ShoppingCart, Clock, CheckCircle,
-  FileText, Flag, XCircle, Package, Home, Store, Image, DollarSign, Video, GraduationCap
+  FileText, Flag, XCircle, Package, Home, Store, Image, DollarSign, Video, GraduationCap, School
 } from 'lucide-react';
 import useAuthStore from '../store/useAuthStore';
 
@@ -25,6 +25,7 @@ const SuperAdminLayout = () => {
     'Category': true, // Keep open by default as in screenshot
     'Product': true,
     'Manage Vendor': true,
+    'Manage School': true,
     'Manage Location': true,
     'Delivery Boy': true,
     'Order List': true,
@@ -93,6 +94,14 @@ const SuperAdminLayout = () => {
       icon: Users,
       items: [
         { label: 'Manage Vendor List', path: '/superadmin/vendor-list' }
+      ]
+    },
+    {
+      type: 'submenu',
+      label: 'Manage School',
+      icon: School,
+      items: [
+        { label: 'School List', path: '/superadmin/school-list' }
       ]
     },
     {

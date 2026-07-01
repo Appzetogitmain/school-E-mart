@@ -1,13 +1,31 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useSearchParams } from 'react-router-dom';
 import {
   Eye, Search, Download, ChevronRight, X, Calendar, User, MapPin, DollarSign, Clock, FileText
 } from 'lucide-react';
 import { listOrders } from '../../../services/ordersApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
-import { mapOrderForAdminList } from '../../../utils/mappers/orderMapper';
+import { mapOrderForAdminList, ORDER_STATUS_LABELS } from '../../../utils/mappers/orderMapper';
+
+const STATUS_QUERY_MAP = {
+  delivered: ORDER_STATUS_LABELS.delivered,
+  cancelled: ORDER_STATUS_LABELS.cancelled,
+  pending: 'Pending',
+};
+
+const PENDING_STATUS_LABELS = [
+  ORDER_STATUS_LABELS.placed,
+  ORDER_STATUS_LABELS.accepted,
+  ORDER_STATUS_LABELS.processed,
+  ORDER_STATUS_LABELS.packed,
+  ORDER_STATUS_LABELS.shipped,
+  ORDER_STATUS_LABELS.out_for_delivery,
+];
 
 const OrdersListManagement = () => {
+  const [searchParams] = useSearchParams();
+  const initialStatus = STATUS_QUERY_MAP[searchParams.get('status')] || 'All Status';
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState('');
@@ -16,12 +34,17 @@ const OrdersListManagement = () => {
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
   const [sellerFilter, setSellerFilter] = useState('All Sellers');
-  const [statusFilter, setStatusFilter] = useState('All Status');
+  const [statusFilter, setStatusFilter] = useState(initialStatus);
   const [perPage, setPerPage] = useState('10');
   const [searchQuery, setSearchQuery] = useState('');
 
   // Selected Order for Modal Details Invoice
   const [selectedOrder, setSelectedOrder] = useState(null);
+
+  useEffect(() => {
+    const mapped = STATUS_QUERY_MAP[searchParams.get('status')];
+    if (mapped) setStatusFilter(mapped);
+  }, [searchParams]);
 
   useEffect(() => {
     let cancelled = false;
@@ -56,7 +79,9 @@ const OrdersListManagement = () => {
 
   const statusOptions = useMemo(() => {
     const statuses = new Set(orders.map((order) => order.status).filter(Boolean));
-    return ['All Status', ...Array.from(statuses)];
+    const options = ['All Status', ...Array.from(statuses)];
+    if (!options.includes('Pending')) options.splice(1, 0, 'Pending');
+    return options;
   }, [orders]);
 
   // Export Order Ledger CSV
@@ -85,7 +110,11 @@ const OrdersListManagement = () => {
       o.amount.toString().includes(searchQuery);
 
     const matchesSeller = sellerFilter === 'All Sellers' || o.seller.toLowerCase() === sellerFilter.toLowerCase();
-    const matchesStatus = statusFilter === 'All Status' || o.status === statusFilter;
+    const matchesStatus =
+      statusFilter === 'All Status' ||
+      (statusFilter === 'Pending'
+        ? PENDING_STATUS_LABELS.includes(o.status)
+        : o.status === statusFilter);
 
     return matchesSearch && matchesSeller && matchesStatus;
   });

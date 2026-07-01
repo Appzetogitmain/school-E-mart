@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { useSearchParams } from 'react-router-dom';
 import { 
   Plus, Search, Edit, Trash2, X, ChevronRight, Upload, 
   Package, CheckCircle, AlertCircle, ShoppingBag, Check, Filter,
@@ -10,11 +11,14 @@ import { getErrorMessage } from '../../../utils/apiHelpers';
 import { mapProductForAdminList } from '../../../utils/mappers/vendorProductMapper';
 
 const ProductListManagement = () => {
+  const [searchParams] = useSearchParams();
+  const initialStockFilter = searchParams.get('stock') === 'low' ? 'Low Stock' : 'All';
   // Filter and search states
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('All'); // 'All' | 'Approved' | 'Pending Approval' | 'Rejected'
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [sortBy, setSortBy] = useState('Newest first');
+  const [stockFilter, setStockFilter] = useState(initialStockFilter);
 
   // Edit Modal States
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -39,6 +43,10 @@ const ProductListManagement = () => {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    setStockFilter(searchParams.get('stock') === 'low' ? 'Low Stock' : 'All');
+  }, [searchParams]);
 
   useEffect(() => {
     let cancelled = false;
@@ -168,7 +176,9 @@ const ProductListManagement = () => {
     let matchesCategory = true;
     if (selectedCategory !== 'All') matchesCategory = p.category === selectedCategory;
 
-    return matchesSearch && matchesTab && matchesCategory;
+    const matchesStock = stockFilter === 'All' || p.stockStatus === stockFilter;
+
+    return matchesSearch && matchesTab && matchesCategory && matchesStock;
   });
 
   // Calculate dynamic stats metrics

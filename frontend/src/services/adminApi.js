@@ -64,6 +64,41 @@ export const reactivateVendor = async (vendorId, payload = {}) => {
   return unwrapData(response)?.vendor;
 };
 
+export const listSchools = async (params = {}) => {
+  const response = await apiClient.get('/admin/schools', { params });
+  return extractPaginated(response, 'schools');
+};
+
+export const listPendingSchools = async (params = {}) => {
+  const response = await apiClient.get('/admin/schools/pending', { params });
+  return extractPaginated(response, 'schools');
+};
+
+export const getSchool = async (schoolId) => {
+  const response = await apiClient.get(`/admin/schools/${schoolId}`);
+  return unwrapData(response)?.school;
+};
+
+export const approveSchool = async (schoolId, payload = {}) => {
+  const response = await apiClient.post(`/admin/schools/${schoolId}/approve`, payload);
+  return unwrapData(response)?.school;
+};
+
+export const rejectSchool = async (schoolId, payload = {}) => {
+  const response = await apiClient.post(`/admin/schools/${schoolId}/reject`, payload);
+  return unwrapData(response)?.school;
+};
+
+export const suspendSchool = async (schoolId, payload = {}) => {
+  const response = await apiClient.post(`/admin/schools/${schoolId}/suspend`, payload);
+  return unwrapData(response)?.school;
+};
+
+export const reactivateSchool = async (schoolId, payload = {}) => {
+  const response = await apiClient.post(`/admin/schools/${schoolId}/reactivate`, payload);
+  return unwrapData(response)?.school;
+};
+
 export const listFaqs = async (params = {}) => {
   const response = await apiClient.get('/admin/cms/faqs', { params });
   return extractPaginated(response, 'faqs');

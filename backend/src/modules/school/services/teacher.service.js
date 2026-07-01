@@ -5,6 +5,7 @@ const User = require('../../../database/models/User');
 const teacherRepository = require('../repositories/teacher.repository');
 const membershipRepository = require('../repositories/membership.repository');
 const schoolRepository = require('../repositories/school.repository');
+const classService = require('./class.service');
 const { generateUserRefId } = require('../utils/refId');
 
 const teacherService = {
@@ -61,6 +62,10 @@ const teacherService = {
         { session }
       );
 
+      if (payload.classAssignments?.length) {
+        await classService.syncAssignmentsToSchoolConfig(schoolId, payload.classAssignments);
+      }
+
       return { user, profile };
     });
   },
@@ -74,6 +79,17 @@ const teacherService = {
   async getTeacher(schoolId, teacherProfileId) {
     const profile = await teacherRepository.findOne({ _id: teacherProfileId, schoolId });
     if (!profile) throw new NotFoundError('Teacher not found', 'TEACHER_NOT_FOUND');
+    const user = await User.findById(profile.userId).lean();
+    return { ...profile, user };
+  },
+
+  async getTeacherByUserId(schoolId, userId) {
+    const profile = await teacherRepository.findOne({
+      userId,
+      schoolId,
+      'softDelete.isDeleted': { $ne: true },
+    });
+    if (!profile) throw new NotFoundError('Teacher profile not found', 'TEACHER_PROFILE_NOT_FOUND');
     const user = await User.findById(profile.userId).lean();
     return { ...profile, user };
   },

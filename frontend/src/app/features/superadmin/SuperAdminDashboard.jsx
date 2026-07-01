@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   User, Layers, Box, Clipboard, CheckCircle, XCircle, AlertTriangle, TrendingDown, MapPin, Award,
   Eye, ChevronLeft, ChevronRight, Loader2
@@ -7,7 +8,10 @@ import { getDashboard, getOrderAnalytics } from '../../../services/adminApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 import { formatRupee } from '../../../utils/mappers/productMapper';
 
+const PENDING_ORDER_STATUSES = ['placed', 'accepted', 'processed', 'packed', 'shipped', 'out_for_delivery'];
+
 const SuperAdminDashboard = () => {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [overview, setOverview] = useState(null);
@@ -46,18 +50,22 @@ const SuperAdminDashboard = () => {
 
   const totals = overview?.totals || {};
   const statusBreakdown = orderAnalytics?.orderStatusBreakdown || {};
+  const pendingOrders = PENDING_ORDER_STATUSES.reduce(
+    (sum, status) => sum + (statusBreakdown[status] || 0),
+    0
+  );
 
   const stats = [
-    { label: 'Total User', value: String(totals.users ?? 0), icon: User, color: 'bg-blue-50 text-blue-600 border-blue-100' },
-    { label: 'Total Schools', value: String(totals.schools ?? 0), icon: Layers, color: 'bg-amber-50 text-amber-600 border-amber-100' },
-    { label: 'Total Vendors', value: String(totals.vendors ?? 0), icon: Layers, color: 'bg-pink-50 text-pink-600 border-pink-100' },
-    { label: 'Total Product', value: String(totals.products ?? 0), icon: Box, color: 'bg-rose-50 text-rose-600 border-rose-100' },
-    { label: 'Total Orders', value: String(totals.orders ?? 0), icon: Clipboard, color: 'bg-sky-50 text-sky-600 border-sky-100' },
-    { label: 'Completed Orders', value: String(statusBreakdown.delivered ?? 0), icon: CheckCircle, color: 'bg-emerald-50 text-emerald-600 border-emerald-100' },
-    { label: 'Pending Orders', value: String(statusBreakdown.placed ?? statusBreakdown.accepted ?? 0), icon: Clipboard, color: 'bg-purple-50 text-purple-600 border-purple-100' },
-    { label: 'Cancelled Orders', value: String(statusBreakdown.cancelled ?? 0), icon: XCircle, color: 'bg-red-50 text-red-600 border-red-100' },
-    { label: 'Active Courses', value: String(totals.activeCourses ?? 0), icon: Box, color: 'bg-fuchsia-50 text-fuchsia-600 border-fuchsia-100' },
-    { label: 'Product low on Stock', value: String(totals.lowStockProducts ?? 0), icon: AlertTriangle, color: 'bg-yellow-50 text-yellow-600 border-yellow-100' },
+    { key: 'users', label: 'Total User', value: String(totals.users ?? 0), icon: User, color: 'bg-blue-50 text-blue-600 border-blue-100', path: '/superadmin/users' },
+    { key: 'schools', label: 'Total Schools', value: String(totals.schools ?? 0), icon: Layers, color: 'bg-amber-50 text-amber-600 border-amber-100', path: '/superadmin/school-list' },
+    { key: 'vendors', label: 'Total Vendors', value: String(totals.vendors ?? 0), icon: Layers, color: 'bg-pink-50 text-pink-600 border-pink-100', path: '/superadmin/vendor-list' },
+    { key: 'products', label: 'Total Product', value: String(totals.products ?? 0), icon: Box, color: 'bg-rose-50 text-rose-600 border-rose-100', path: '/superadmin/product-list' },
+    { key: 'orders', label: 'Total Orders', value: String(totals.orders ?? 0), icon: Clipboard, color: 'bg-sky-50 text-sky-600 border-sky-100', path: '/superadmin/orders' },
+    { key: 'completed', label: 'Completed Orders', value: String(statusBreakdown.delivered ?? 0), icon: CheckCircle, color: 'bg-emerald-50 text-emerald-600 border-emerald-100', path: '/superadmin/orders?status=delivered' },
+    { key: 'pending', label: 'Pending Orders', value: String(pendingOrders), icon: Clipboard, color: 'bg-purple-50 text-purple-600 border-purple-100', path: '/superadmin/orders?status=pending' },
+    { key: 'cancelled', label: 'Cancelled Orders', value: String(statusBreakdown.cancelled ?? 0), icon: XCircle, color: 'bg-red-50 text-red-600 border-red-100', path: '/superadmin/orders?status=cancelled' },
+    { key: 'courses', label: 'Active Courses', value: String(totals.activeCourses ?? 0), icon: Box, color: 'bg-fuchsia-50 text-fuchsia-600 border-fuchsia-100', path: '/superadmin/lms' },
+    { key: 'lowStock', label: 'Product low on Stock', value: String(totals.lowStockProducts ?? 0), icon: AlertTriangle, color: 'bg-yellow-50 text-yellow-600 border-yellow-100', path: '/superadmin/product-list?stock=low' },
   ];
 
   const revenueDisplay = formatRupee(orderAnalytics?.totalRevenuePaise || totals.revenuePaise || 0);
@@ -102,12 +110,14 @@ const SuperAdminDashboard = () => {
       <>
       {/* 1. GRID CARDS SECTION */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-        {stats.map((stat, idx) => {
+        {stats.map((stat) => {
           const Icon = stat.icon;
           return (
-            <div
-              key={idx}
-              className="bg-white p-5 rounded-[1.25rem] border border-gray-200 shadow-sm flex flex-col justify-between min-h-[140px] hover:shadow-md transition-all group"
+            <button
+              key={stat.key}
+              type="button"
+              onClick={() => navigate(stat.path)}
+              className="bg-white p-5 rounded-[1.25rem] border border-gray-200 shadow-sm flex flex-col justify-between min-h-[140px] hover:shadow-md hover:border-indigo-200 active:scale-[0.98] transition-all group text-left cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
             >
               <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${stat.color} transition-transform group-hover:scale-105 duration-200`}>
                 <Icon size={20} strokeWidth={2.2} />
@@ -116,7 +126,7 @@ const SuperAdminDashboard = () => {
                 <span className="text-[11px] font-extrabold text-gray-400 uppercase tracking-wider block">{stat.label}</span>
                 <span className="text-2xl font-black text-gray-950 block mt-1 tracking-tight">{stat.value}</span>
               </div>
-            </div>
+            </button>
           );
         })}
       </div>

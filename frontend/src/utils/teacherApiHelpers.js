@@ -1,4 +1,4 @@
-import { listTeachers } from '../services/schoolApi';
+import { getMyTeacherProfile } from '../services/schoolApi';
 import { listCourses, createCourse } from '../services/lmsApi';
 import { parseClassGrade } from './mappers/teacherMapper';
 
@@ -9,15 +9,13 @@ export const gradeToScore = (grade) => {
   return Number.isFinite(num) ? num : 80;
 };
 
-export const resolveTeacherProfile = async (schoolId, userId) => {
-  if (!schoolId || !userId) return null;
-  const { data } = await listTeachers(schoolId, { limit: 200 });
-  return (data || []).find(
-    (teacher) =>
-      String(teacher.userId) === String(userId) ||
-      String(teacher.user?._id) === String(userId) ||
-      String(teacher.user?.id) === String(userId)
-  );
+export const resolveTeacherProfile = async (schoolId) => {
+  if (!schoolId) return null;
+  try {
+    return await getMyTeacherProfile(schoolId);
+  } catch {
+    return null;
+  }
 };
 
 export const ensureCourse = async (schoolId, { classGrade, section, subject }) => {

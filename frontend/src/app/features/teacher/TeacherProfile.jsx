@@ -60,7 +60,7 @@ const TeacherProfile = () => {
 
       setLoading(true);
       try {
-        const profile = await resolveTeacherProfile(schoolId, authUser.id);
+        const profile = await resolveTeacherProfile(schoolId);
         if (!profile) {
           setFullName(authUser.name || '');
           setEmail(authUser.email || '');

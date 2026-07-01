@@ -2,7 +2,10 @@ const { UnauthorizedError, ForbiddenError } = require('../../common/errors');
 const { verifyAccessToken } = require('../../common/tokens');
 const sessionRepository = require('../../modules/auth/repositories/session.repository');
 const userRepository = require('../../modules/auth/repositories/user.repository');
-const { assertAccountEligible } = require('../../modules/auth/services/authorizationContext.service');
+const {
+  assertAccountEligible,
+  resolveAuthorizationContext,
+} = require('../../modules/auth/services/authorizationContext.service');
 const { messages } = require('../../constants');
 
 const SESSION_TOUCH_INTERVAL_MS = 5 * 60 * 1000;
@@ -41,6 +44,8 @@ const authenticate = async (req, _res, next) => {
 
     await assertAccountEligible(user);
 
+    const authContext = await resolveAuthorizationContext(user);
+
     req.auth = {
       userId: user._id.toString(),
       jti: payload.jti,
@@ -48,9 +53,10 @@ const authenticate = async (req, _res, next) => {
       role: user.role,
       refId: user.refId,
       tenantSchoolId: user.tenantSchoolId?.toString() || null,
-      permissions: payload.permissions || [],
-      scopes: payload.scopes || [],
+      permissions: authContext.permissions,
+      scopes: authContext.scopes,
       roleScopes: user.roleScopes || [],
+      profile: authContext.profile || null,
     };
     req.user = user;
 

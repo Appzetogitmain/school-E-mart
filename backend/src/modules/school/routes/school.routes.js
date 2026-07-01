@@ -68,6 +68,12 @@ router.post(
   schoolController.createTeacher
 );
 router.get(
+  '/:schoolId/teachers/me',
+  ...protectedRoute({ roles: [ROLES.TEACHER], permissions: [PERMISSIONS.CLASSES_READ] }),
+  resolveSchool(),
+  schoolController.getMyTeacherProfile
+);
+router.get(
   '/:schoolId/teachers',
   ...protectedRoute({ roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN], permissions: [PERMISSIONS.TEACHERS_READ] }),
   resolveSchool(),

@@ -49,6 +49,11 @@ const schoolController = {
     return paginated(res, { teachers: data }, pagination, 'Teachers fetched successfully', req);
   }),
 
+  getMyTeacherProfile: asyncHandler(async (req, res) => {
+    const teacher = await teacherService.getTeacherByUserId(req.schoolId, req.auth.userId);
+    return success(res, { teacher }, 'Teacher profile fetched successfully', undefined, req);
+  }),
+
   getTeacher: asyncHandler(async (req, res) => {
     const teacher = await teacherService.getTeacher(req.schoolId, req.params.teacherId);
     return success(res, { teacher }, 'Teacher fetched successfully', undefined, req);
@@ -68,7 +73,9 @@ const schoolController = {
   }),
 
   listClasses: asyncHandler(async (req, res) => {
-    const classes = await classService.listClasses(req.schoolId);
+    const classes = await classService.listClasses(req.schoolId, {
+      userId: req.auth.role === 'teacher' ? req.auth.userId : undefined,
+    });
     return success(res, { classes }, 'Classes fetched successfully', undefined, req);
   }),
 

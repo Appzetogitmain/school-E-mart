@@ -126,6 +126,7 @@ const CategoryManagement = React.lazy(() => import('../app/features/superadmin/C
 const HeaderCategoryManagement = React.lazy(() => import('../app/features/superadmin/HeaderCategoryManagement'));
 const ProductListManagement = React.lazy(() => import('../app/features/superadmin/ProductListManagement'));
 const VendorListManagement = React.lazy(() => import('../app/features/superadmin/VendorListManagement'));
+const SchoolListManagement = React.lazy(() => import('../app/features/superadmin/SchoolListManagement'));
 const VendorLocations = React.lazy(() => import('../app/features/superadmin/VendorLocations'));
 const WalletManagement = React.lazy(() => import('../app/features/superadmin/WalletManagement'));
 const WithdrawalsManagement = React.lazy(() => import('../app/features/superadmin/WithdrawalsManagement'));
@@ -189,6 +190,7 @@ const AppRoutes = () => {
           <Route path="header-category" element={<HeaderCategoryManagement />} />
           <Route path="product-list" element={<ProductListManagement />} />
           <Route path="vendor-list" element={<VendorListManagement />} />
+          <Route path="school-list" element={<SchoolListManagement />} />
           <Route path="vendor-location" element={<VendorLocations />} />
 
 

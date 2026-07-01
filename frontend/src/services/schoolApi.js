@@ -58,6 +58,11 @@ export const listTeachers = async (schoolId, params = {}) => {
   return extractPaginated(response, 'teachers');
 };
 
+export const getMyTeacherProfile = async (schoolId) => {
+  const response = await apiClient.get(schoolPath(schoolId, '/teachers/me'));
+  return unwrapData(response)?.teacher;
+};
+
 export const setTeacherStatus = async (schoolId, teacherId, payload) => {
   const response = await apiClient.patch(
     schoolPath(schoolId, `/teachers/${teacherId}/status`),
