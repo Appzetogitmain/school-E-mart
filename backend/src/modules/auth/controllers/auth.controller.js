@@ -215,7 +215,7 @@ const authController = {
   }),
 
   registerParent: asyncHandler(async (req, res) => {
-    const { phone, studentName, grade, schoolRefNo } = req.body;
+    const { phone, studentName, grade, classGrade, schoolRefNo } = req.body;
     const { normalizePhone } = require('../../../utils');
     const { ConflictError, BadRequestError } = require('../../../common/errors');
     const { withTransaction } = require('../../../database');
@@ -228,6 +228,7 @@ const authController = {
     const School = require('../../../database/models/School');
 
     const normalizedPhone = normalizePhone(phone);
+    const selectedGrade = classGrade || grade;
 
     // 1. Check if user already exists
     const existingUser = await User.findOne({ phone: normalizedPhone, role: 'parent', 'softDelete.isDeleted': { $ne: true } });
@@ -292,7 +293,7 @@ const authController = {
           {
             parentUserId: user._id,
             name: studentName,
-            grade,
+            grade: selectedGrade,
             schoolId: school ? school._id : null,
             schoolRefNo: school ? school.schoolRefNo : null,
           },
@@ -318,7 +319,7 @@ const authController = {
     if (sessionResponse.user) {
       sessionResponse.user.childProfile = {
         name: studentName,
-        grade: grade,
+        grade: selectedGrade,
         schoolId: school ? school._id : 'explore-schools',
         schoolName: school ? school.name : 'Explore Schools',
         schoolRefNo: school ? school.schoolRefNo : null,

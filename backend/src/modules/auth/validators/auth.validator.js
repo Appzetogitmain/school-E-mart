@@ -90,6 +90,7 @@ const parentRegisterSchema = Joi.object({
   phone: schemas.indianMobile.required(),
   studentName: Joi.string().trim().max(80).required(),
   grade: Joi.string().trim().required(),
+  classGrade: Joi.string().trim().optional(),
   schoolRefNo: Joi.string().trim().allow('', null).optional(),
 });
 

@@ -45,6 +45,9 @@ const ProfileSetupPage = () => {
             (data || []).map((school) => ({
               id: school._id || school.id,
               name: school.name,
+              code: (school.code || '').toUpperCase(),
+              schoolRefNo: (school.schoolRefNo || '').toUpperCase(),
+              gradesOffered: Array.isArray(school.gradesOffered) ? school.gradesOffered : [],
             }))
           );
         }
@@ -62,6 +65,37 @@ const ProfileSetupPage = () => {
   }, []);
 
   useEffect(() => {
+    const normalizedRef = (formData.schoolRefNo || '').trim().toUpperCase();
+    if (!normalizedRef) {
+      setFormData((prev) => ({ ...prev, schoolId: '' }));
+      setGrades([]);
+      return;
+    }
+
+    const matchedSchool = schools.find(
+      (school) => school.schoolRefNo === normalizedRef || school.code === normalizedRef
+    );
+
+    setFormData((prev) => {
+      if (prev.schoolId === (matchedSchool?.id || '')) return prev;
+      return {
+        ...prev,
+        schoolId: matchedSchool?.id || '',
+        grade: matchedSchool ? prev.grade : '',
+      };
+    });
+
+    if (!matchedSchool) {
+      setGrades([]);
+      return;
+    }
+
+    if (!formData.schoolId && matchedSchool.gradesOffered.length > 0) {
+      setGrades([...new Set(matchedSchool.gradesOffered.filter(Boolean))]);
+    }
+  }, [formData.schoolRefNo, formData.schoolId, schools]);
+
+  useEffect(() => {
     if (!formData.schoolId) {
       setGrades([]);
       return undefined;
@@ -71,7 +105,9 @@ const ProfileSetupPage = () => {
     listClasses(formData.schoolId)
       .then((classes) => {
         if (!cancelled) {
-          const labels = [...new Set((classes || []).map((c) => c.classGrade).filter(Boolean))];
+          const labels = [
+            ...new Set((classes || []).map((c) => c.classGrade || c.class || c.grade).filter(Boolean)),
+          ];
           setGrades(labels.length > 0 ? labels : []);
         }
       })
@@ -121,6 +157,7 @@ const ProfileSetupPage = () => {
         phone: formData.phone,
         studentName: formData.studentName,
         grade: formData.grade,
+        classGrade: formData.grade,
         schoolRefNo: formData.schoolRefNo
       });
 
@@ -259,22 +296,32 @@ const ProfileSetupPage = () => {
                   {/* Dropdown Options - Opens upwards to prevent cutoff */}
                   <div className="absolute left-0 right-0 bottom-full mb-2 bg-white border border-gray-100 rounded-2xl shadow-2xl z-50 max-h-48 overflow-y-auto animate-in fade-in slide-in-from-bottom-2 duration-200">
                     <div className="py-2">
-                      {grades.map(g => (
-                        <button
-                          key={g}
-                          type="button"
-                          onClick={() => {
-                            handleInputChange('grade', g);
-                            setIsGradeDropdownOpen(false);
-                          }}
-                          className={`w-full text-left px-5 py-3 text-xs font-bold transition-all hover:bg-primary/5 active:bg-primary/10 ${formData.grade === g
-                              ? 'text-primary bg-primary/5 font-black'
-                              : 'text-deep-purple font-bold'
-                            }`}
-                        >
-                          {g}
-                        </button>
-                      ))}
+                      {grades.length > 0 ? (
+                        grades.map(g => (
+                          <button
+                            key={g}
+                            type="button"
+                            onClick={() => {
+                              handleInputChange('grade', g);
+                              setIsGradeDropdownOpen(false);
+                            }}
+                            className={`w-full text-left px-5 py-3 text-xs font-bold transition-all hover:bg-primary/5 active:bg-primary/10 ${formData.grade === g
+                                ? 'text-primary bg-primary/5 font-black'
+                                : 'text-deep-purple font-bold'
+                              }`}
+                          >
+                            {g}
+                          </button>
+                        ))
+                      ) : (
+                        <div className="px-5 py-3 text-xs font-semibold text-gray-400">
+                          {schoolsLoading
+                            ? 'Loading classes...'
+                            : formData.schoolRefNo
+                              ? 'No classes found for this school code'
+                              : 'Enter school ref no to load classes'}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </>
