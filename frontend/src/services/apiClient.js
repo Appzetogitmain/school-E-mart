@@ -32,6 +32,7 @@ const isUnauthenticatedAuthPath = (url = '') => {
   if (
     path.startsWith('/auth/parent/otp/') ||
     path.startsWith('/auth/parent/web/') ||
+    path === '/auth/parent/school-lookup' ||
     path === '/auth/forgot-password' ||
     path === '/auth/reset-password' ||
     path === '/auth/email/verify' ||

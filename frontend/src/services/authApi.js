@@ -79,3 +79,10 @@ export const getMe = async () => {
 export const changePassword = async (payload) => {
   await apiClient.post('/auth/change-password', payload);
 };
+
+export const lookupSchoolForRegistration = async (ref) => {
+  const response = await apiClient.get('/auth/parent/school-lookup', {
+    params: { ref: ref.trim() },
+  });
+  return unwrapData(response);
+};

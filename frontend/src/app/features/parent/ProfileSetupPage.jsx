@@ -6,7 +6,7 @@ import {
   Sparkles, ChevronDown
 } from 'lucide-react';
 import apiClient from '../../../services/apiClient';
-import { listSchools, listClasses } from '../../../services/schoolApi';
+import { lookupSchoolForRegistration } from '../../../services/authApi';
 import useAuthStore from '../../../store/useAuthStore';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 
@@ -31,94 +31,65 @@ const ProfileSetupPage = () => {
     firstInputRef.current?.focus();
   }, []);
 
-  const [schools, setSchools] = useState([]);
   const [grades, setGrades] = useState([]);
-  const [schoolsLoading, setSchoolsLoading] = useState(true);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    listSchools({ limit: 50 })
-      .then(({ data }) => {
-        if (!cancelled) {
-          setSchools(
-            (data || []).map((school) => ({
-              id: school._id || school.id,
-              name: school.name,
-              code: (school.code || '').toUpperCase(),
-              schoolRefNo: (school.schoolRefNo || '').toUpperCase(),
-              gradesOffered: Array.isArray(school.gradesOffered) ? school.gradesOffered : [],
-            }))
-          );
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setSchools([]);
-      })
-      .finally(() => {
-        if (!cancelled) setSchoolsLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const [classesLoading, setClassesLoading] = useState(false);
+  const [schoolLookupError, setSchoolLookupError] = useState('');
 
   useEffect(() => {
     const normalizedRef = (formData.schoolRefNo || '').trim().toUpperCase();
     if (!normalizedRef) {
-      setFormData((prev) => ({ ...prev, schoolId: '' }));
+      setFormData((prev) => (prev.schoolId ? { ...prev, schoolId: '', grade: '' } : prev));
       setGrades([]);
-      return;
-    }
-
-    const matchedSchool = schools.find(
-      (school) => school.schoolRefNo === normalizedRef || school.code === normalizedRef
-    );
-
-    setFormData((prev) => {
-      if (prev.schoolId === (matchedSchool?.id || '')) return prev;
-      return {
-        ...prev,
-        schoolId: matchedSchool?.id || '',
-        grade: matchedSchool ? prev.grade : '',
-      };
-    });
-
-    if (!matchedSchool) {
-      setGrades([]);
-      return;
-    }
-
-    if (!formData.schoolId && matchedSchool.gradesOffered.length > 0) {
-      setGrades([...new Set(matchedSchool.gradesOffered.filter(Boolean))]);
-    }
-  }, [formData.schoolRefNo, formData.schoolId, schools]);
-
-  useEffect(() => {
-    if (!formData.schoolId) {
-      setGrades([]);
+      setSchoolLookupError('');
+      setClassesLoading(false);
       return undefined;
     }
 
     let cancelled = false;
-    listClasses(formData.schoolId)
-      .then((classes) => {
-        if (!cancelled) {
+    setClassesLoading(true);
+    setSchoolLookupError('');
+
+    const timer = setTimeout(() => {
+      lookupSchoolForRegistration(normalizedRef)
+        .then(({ school, classes }) => {
+          if (cancelled) return;
+
           const labels = [
             ...new Set((classes || []).map((c) => c.classGrade || c.class || c.grade).filter(Boolean)),
           ];
-          setGrades(labels.length > 0 ? labels : []);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setGrades([]);
-      });
+
+          setFormData((prev) => ({
+            ...prev,
+            schoolId: school?.id || '',
+            grade: labels.includes(prev.grade) ? prev.grade : '',
+          }));
+          setGrades(labels);
+          setSchoolLookupError(
+            labels.length === 0 ? 'No classes found for this school code' : ''
+          );
+        })
+        .catch((err) => {
+          if (cancelled) return;
+
+          setFormData((prev) => ({ ...prev, schoolId: '', grade: '' }));
+          setGrades([]);
+          const code = err.response?.data?.code;
+          setSchoolLookupError(
+            code === 'INVALID_SCHOOL_REF'
+              ? 'Invalid school reference number'
+              : 'Unable to load classes for this school code'
+          );
+        })
+        .finally(() => {
+          if (!cancelled) setClassesLoading(false);
+        });
+    }, 300);
 
     return () => {
       cancelled = true;
+      clearTimeout(timer);
     };
-  }, [formData.schoolId]);
+  }, [formData.schoolRefNo]);
 
   const handleInputChange = (field, value) => {
     let finalValue = value;
@@ -315,11 +286,12 @@ const ProfileSetupPage = () => {
                         ))
                       ) : (
                         <div className="px-5 py-3 text-xs font-semibold text-gray-400">
-                          {schoolsLoading
+                          {classesLoading
                             ? 'Loading classes...'
-                            : formData.schoolRefNo
-                              ? 'No classes found for this school code'
-                              : 'Enter school ref no to load classes'}
+                            : schoolLookupError
+                              || (formData.schoolRefNo
+                                ? 'No classes found for this school code'
+                                : 'Enter school ref no to load classes')}
                         </div>
                       )}
                     </div>

@@ -94,6 +94,10 @@ const parentRegisterSchema = Joi.object({
   schoolRefNo: Joi.string().trim().allow('', null).optional(),
 });
 
+const schoolLookupQuerySchema = Joi.object({
+  ref: Joi.string().trim().min(3).max(40).required(),
+});
+
 const teacherRegisterSchema = Joi.object({
   fullName: Joi.string().trim().max(80).required(),
   email: schemas.email.required(),
@@ -131,6 +135,7 @@ module.exports = {
   emailVerifyRequestSchema,
   sessionIdParamSchema,
   parentRegisterSchema,
+  schoolLookupQuerySchema,
   teacherRegisterSchema,
   schoolAdminRegisterSchema,
 };

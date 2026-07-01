@@ -239,7 +239,11 @@ const authController = {
     // 2. Resolve schoolRefNo
     let school = null;
     if (schoolRefNo) {
-      school = await School.findOne({ schoolRefNo, 'softDelete.isDeleted': { $ne: true } });
+      const normalizedRef = schoolRefNo.trim().toUpperCase();
+      school = await School.findOne({
+        $or: [{ schoolRefNo: normalizedRef }, { code: normalizedRef }],
+        'softDelete.isDeleted': { $ne: true },
+      });
       if (!school) {
         throw new BadRequestError('Invalid school reference number', null, 'INVALID_SCHOOL_REF');
       }
@@ -379,6 +383,43 @@ const authController = {
     const sessionResponse = await issueAuthenticatedSession(user, getRequestMeta(req), 'auth.register.teacher.success');
 
     return sendAuthResponse(res, req, sessionResponse, 'Teacher registration successful');
+  }),
+
+  lookupSchoolForRegistration: asyncHandler(async (req, res) => {
+    const { BadRequestError } = require('../../../common/errors');
+    const School = require('../../../database/models/School');
+    const classService = require('../../school/services/class.service');
+
+    const normalizedRef = req.query.ref.trim().toUpperCase();
+    const school = await School.findOne({
+      $or: [{ schoolRefNo: normalizedRef }, { code: normalizedRef }],
+      'softDelete.isDeleted': { $ne: true },
+    }).select('_id name schoolRefNo code gradesOffered');
+
+    if (!school) {
+      throw new BadRequestError('Invalid school reference number', null, 'INVALID_SCHOOL_REF');
+    }
+
+    const classes = await classService.listClasses(school._id);
+    const classGrades = [
+      ...new Set(classes.map((item) => item.classGrade).filter(Boolean)),
+    ];
+
+    return success(
+      res,
+      {
+        school: {
+          id: school._id,
+          name: school.name,
+          schoolRefNo: school.schoolRefNo,
+          code: school.code,
+        },
+        classes: classGrades.map((classGrade) => ({ classGrade })),
+      },
+      undefined,
+      undefined,
+      req
+    );
   }),
 
   registerSchoolAdmin: asyncHandler(async (req, res) => {

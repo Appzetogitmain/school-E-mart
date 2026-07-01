@@ -1,7 +1,7 @@
 const express = require('express');
 const authController = require('../controllers/auth.controller');
 const authValidators = require('../validators/auth.validator');
-const { validateBody, validateParams } = require('../../../middlewares/validation');
+const { validateBody, validateParams, validateQuery } = require('../../../middlewares/validation');
 const { protectedRoute } = require('../../../middlewares/auth/guards');
 const { authLimiter, otpLimiter } = require('../../../middlewares/rateLimit');
 const { ROLES } = require('../../../constants/roles');
@@ -78,6 +78,13 @@ router.post(
   authLimiter,
   validateBody(authValidators.parentRegisterSchema),
   authController.registerParent
+);
+
+router.get(
+  '/parent/school-lookup',
+  authLimiter,
+  validateQuery(authValidators.schoolLookupQuerySchema),
+  authController.lookupSchoolForRegistration
 );
 
 router.post(
