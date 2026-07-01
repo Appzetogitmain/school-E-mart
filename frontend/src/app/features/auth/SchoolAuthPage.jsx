@@ -129,7 +129,7 @@ const SchoolAuthPage = () => {
           fullName: formData.fullName.trim(),
           email: formData.email.trim(),
           mobile: formData.mobile.replace(/\D/g, '').slice(-10),
-          schoolCode: formData.schoolCode.trim(),
+          schoolCode: formData.schoolCode.trim().toUpperCase(),
           password: formData.password,
         });
         loginFromAuthResponse(authData, 'teacher');
@@ -147,31 +147,29 @@ const SchoolAuthPage = () => {
       return;
     }
 
-    // School admin signup remains local until school onboarding API is available
-    setTimeout(() => {
-      setLoading(false);
-
-      const referenceId = `SEM-ADM-${Math.floor(100000 + Math.random() * 900000)}`;
-
-      const userDisplayName = formData.fullName || 'School Administrator';
-
-      const registeredProfile = {
-        name: userDisplayName,
-        school: formData.schoolName,
-        role: 'school',
-        phone: formData.mobile || '',
-        email: formData.email,
-        refId: referenceId,
-      };
-
-      setSuccessInfo({
-        id: referenceId,
-        name: userDisplayName,
-        role: 'School Administrator',
-      });
-      localStorage.setItem('childInfo', JSON.stringify(registeredProfile));
-      setStep(3);
-    }, 1500);
+    if (role === 'admin') {
+      try {
+        const authData = await authApi.schoolAdminRegister({
+          schoolName: formData.schoolName.trim(),
+          fullName: formData.fullName.trim(),
+          email: formData.email.trim(),
+          mobile: formData.mobile.replace(/\D/g, '').slice(-10),
+          password: formData.password,
+        });
+        loginFromAuthResponse(authData, 'school');
+        setSuccessInfo({
+          id: authData.user?.schoolRefNo || authData.user?.refId || '',
+          name: authData.user?.name || formData.fullName,
+          role: 'School Administrator',
+        });
+        setStep(3);
+      } catch (err) {
+        setError(getErrorMessage(err, 'Registration failed. Please check your details.'));
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
   };
 
   const selectRole = (selectedRole) => {

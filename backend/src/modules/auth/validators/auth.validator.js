@@ -101,6 +101,14 @@ const teacherRegisterSchema = Joi.object({
   password: schemas.password.required(),
 });
 
+const schoolAdminRegisterSchema = Joi.object({
+  schoolName: Joi.string().trim().max(120).required(),
+  fullName: Joi.string().trim().max(80).required(),
+  email: schemas.email.required(),
+  mobile: schemas.indianMobile.required(),
+  password: schemas.password.required(),
+});
+
 module.exports = {
   loginSchema,
   roleLoginSchema,
@@ -123,4 +131,5 @@ module.exports = {
   sessionIdParamSchema,
   parentRegisterSchema,
   teacherRegisterSchema,
+  schoolAdminRegisterSchema,
 };

@@ -88,6 +88,13 @@ router.post(
 );
 
 router.post(
+  '/school/admin/register',
+  authLimiter,
+  validateBody(authValidators.schoolAdminRegisterSchema),
+  authController.registerSchoolAdmin
+);
+
+router.post(
   '/parent/web/login',
   otpLimiter,
   validateBody(authValidators.parentWebLoginSchema),

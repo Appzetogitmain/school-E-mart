@@ -19,6 +19,9 @@ const generateSchoolCode = (name = 'SCH') => {
   return `${prefix}-${Date.now().toString().slice(-4)}`;
 };
 
+const generateSchoolRefNo = () =>
+  `SEM-ADM-${Math.floor(100000 + Math.random() * 900000)}`;
+
 const generateStudentRefNo = (schoolId, sequence = 1) => {
   const year = new Date().getFullYear();
   const schoolPart = String(schoolId).slice(-4).toUpperCase();
@@ -28,6 +31,7 @@ const generateStudentRefNo = (schoolId, sequence = 1) => {
 module.exports = {
   generateUserRefId,
   generateSchoolCode,
+  generateSchoolRefNo,
   generateStudentRefNo,
   randomSuffix,
 };

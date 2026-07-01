@@ -349,7 +349,11 @@ const authController = {
     }
 
     // 2. Resolve schoolCode
-    const school = await School.findOne({ schoolRefNo: schoolCode, 'softDelete.isDeleted': { $ne: true } });
+    const normalizedCode = schoolCode.trim().toUpperCase();
+    const school = await School.findOne({
+      $or: [{ schoolRefNo: normalizedCode }, { code: normalizedCode }],
+      'softDelete.isDeleted': { $ne: true },
+    });
     if (!school) {
       throw new BadRequestError('Invalid school code', null, 'INVALID_SCHOOL_REF');
     }
@@ -374,6 +378,20 @@ const authController = {
     const sessionResponse = await issueAuthenticatedSession(user, getRequestMeta(req), 'auth.register.teacher.success');
 
     return sendAuthResponse(res, req, sessionResponse, 'Teacher registration successful');
+  }),
+
+  registerSchoolAdmin: asyncHandler(async (req, res) => {
+    const schoolAdminRegistrationService = require('../../school/services/schoolAdminRegistration.service');
+    const { issueAuthenticatedSession } = require('../services/sessionIssue.service');
+
+    const { user, schoolRefNo } = await schoolAdminRegistrationService.register(req.body);
+    const sessionResponse = await issueAuthenticatedSession(user, getRequestMeta(req), 'auth.register.school.success');
+
+    if (sessionResponse.user) {
+      sessionResponse.user.schoolRefNo = schoolRefNo;
+    }
+
+    return sendAuthResponse(res, req, sessionResponse, 'School registration successful');
   }),
 };
 
