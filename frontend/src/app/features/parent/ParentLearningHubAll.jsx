@@ -477,6 +477,35 @@ const ParentLearningHubAll = () => {
             
             {/* Modal Screen / Video Container */}
             <div className="aspect-video relative bg-black shrink-0">
+              {selectedVideo.videoUrl ? (
+                <>
+                  <video
+                    src={selectedVideo.videoUrl}
+                    poster={selectedVideo.image}
+                    controls
+                    autoPlay
+                    muted={isMuted}
+                    playsInline
+                    className="w-full h-full object-contain bg-black"
+                    onPlay={() => setIsPlaying(true)}
+                    onPause={() => setIsPlaying(false)}
+                    onTimeUpdate={(e) => {
+                      const { currentTime, duration } = e.currentTarget;
+                      if (duration) setVideoProgress(Math.round((currentTime / duration) * 100));
+                    }}
+                  />
+                  <button
+                    onClick={() => {
+                      setIsPlaying(false);
+                      setSelectedVideo(null);
+                    }}
+                    className="absolute top-3 right-3 z-10 w-8 h-8 rounded-full bg-black/50 backdrop-blur-sm text-white/90 hover:text-white flex items-center justify-center hover:bg-black/70 transition-colors"
+                  >
+                    <X size={14} />
+                  </button>
+                </>
+              ) : (
+              <>
               <img 
                 src={selectedVideo.image} 
                 alt={selectedVideo.title}
@@ -532,6 +561,8 @@ const ParentLearningHubAll = () => {
                   </span>
                 </div>
               </div>
+              </>
+              )}
             </div>
 
             {/* Video Meta Info Panel */}
