@@ -11,6 +11,7 @@ import {
 } from '../../../services/adminApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 import { mapPlatformCourseForAdmin, mapAdminCourseToPayload } from '../../../utils/mappers/adminLmsMapper';
+import useAuthReady from '../../../hooks/useAuthReady';
 
 const readFileAsDataUrl = (file) =>
   new Promise((resolve, reject) => {
@@ -20,22 +21,46 @@ const readFileAsDataUrl = (file) =>
     reader.readAsDataURL(file);
   });
 
-const resolveMediaUrl = async (preview, file, label) => {
-  if (!preview) return '';
-  if (preview.startsWith('http://') || preview.startsWith('https://') || preview.startsWith('data:')) {
+const resolveMediaUrl = async (preview, file, label, urlInput = '') => {
+  const normalizedInput = urlInput?.trim();
+  if (normalizedInput) {
+    if (!/^https?:\/\//i.test(normalizedInput)) {
+      throw new Error(
+        `Please provide a valid ${label === 'cover' ? 'cover image' : 'video'} URL starting with http:// or https://`
+      );
+    }
+    return normalizedInput;
+  }
+
+  if (preview?.startsWith('http://') || preview?.startsWith('https://')) {
     return preview;
   }
-  if (file) {
-    const maxBytes = label === 'cover' ? 2 * 1024 * 1024 : 15 * 1024 * 1024;
-    if (file.size > maxBytes) {
-      throw new Error(`${label === 'cover' ? 'Cover image' : 'Video'} is too large to store. Please use a smaller file or an external URL.`);
+
+  if (label === 'video') {
+    throw new Error(
+      'Local video files cannot be saved to the server. Paste a direct video URL (https://...) in the Video URL field.'
+    );
+  }
+
+  if (preview?.startsWith('data:')) {
+    if (preview.length > 350_000) {
+      throw new Error('Cover image is too large. Use a smaller image or paste an image URL.');
+    }
+    return preview;
+  }
+
+  if (file && preview?.startsWith('blob:')) {
+    if (file.size > 350_000) {
+      throw new Error('Cover image is too large. Use a smaller image or paste an image URL.');
     }
     return readFileAsDataUrl(file);
   }
-  return preview;
+
+  return preview || '';
 };
 
 const LMSManagement = () => {
+  const authReady = useAuthReady();
   const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -57,6 +82,8 @@ const LMSManagement = () => {
   const [concepts, setConcepts] = useState('');
   const [duration, setDuration] = useState('');
   const [isActive, setIsActive] = useState(true);
+  const [videoUrlInput, setVideoUrlInput] = useState('');
+  const [thumbnailUrlInput, setThumbnailUrlInput] = useState('');
 
   // File Upload states (handles both raw files and local object previews)
   const [videoFile, setVideoFile] = useState(null);
@@ -86,8 +113,9 @@ const LMSManagement = () => {
   }, []);
 
   useEffect(() => {
+    if (!authReady) return;
     loadCourses();
-  }, [loadCourses]);
+  }, [authReady, loadCourses]);
 
   // Handlers
   const handleVideoFileChange = (e) => {
@@ -113,22 +141,21 @@ const LMSManagement = () => {
       return;
     }
 
-    if (!videoPreview) {
-      alert('Please select or upload a lecture Video File.');
+    if (!videoUrlInput.trim() && !videoPreview?.startsWith('http')) {
+      alert('Provide a lecture Video URL (https://...). Local video files are for preview only.');
       return;
     }
 
-    const coverUrl = coverPreview || '';
-    if (!coverUrl) {
-      alert('Please upload a course cover image.');
+    if (!thumbnailUrlInput.trim() && !coverPreview) {
+      alert('Please upload a course cover image or provide a cover image URL.');
       return;
     }
 
     setSaving(true);
     try {
       const [resolvedVideoUrl, resolvedCoverUrl] = await Promise.all([
-        resolveMediaUrl(videoPreview, videoFile, 'video'),
-        resolveMediaUrl(coverUrl, coverFile, 'cover'),
+        resolveMediaUrl(videoPreview, videoFile, 'video', videoUrlInput),
+        resolveMediaUrl(coverPreview, coverFile, 'cover', thumbnailUrlInput),
       ]);
 
       const payload = mapAdminCourseToPayload({
@@ -173,10 +200,12 @@ const LMSManagement = () => {
     setConcepts(course.concepts);
     setDuration(course.duration);
     setIsActive(course.status === 'Active');
+    setVideoUrlInput(course.videoUrl?.startsWith('http') ? course.videoUrl : '');
+    setThumbnailUrlInput(course.thumbnailUrl?.startsWith('http') ? course.thumbnailUrl : '');
 
     // Populate previews
-    setVideoPreview(course.videoUrl);
-    setCoverPreview(course.thumbnailUrl);
+    setVideoPreview(course.videoUrl || '');
+    setCoverPreview(course.thumbnailUrl || '');
   };
 
   const handleDelete = async (id) => {
@@ -200,6 +229,8 @@ const LMSManagement = () => {
     setConcepts('');
     setDuration('');
     setIsActive(true);
+    setVideoUrlInput('');
+    setThumbnailUrlInput('');
 
     // Reset upload previews
     setVideoFile(null);
@@ -400,6 +431,16 @@ const LMSManagement = () => {
                   )}
                 </div>
               </div>
+              <input
+                type="url"
+                placeholder="Video URL (required) — https://example.com/lecture.mp4"
+                value={videoUrlInput}
+                onChange={(e) => setVideoUrlInput(e.target.value)}
+                className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-500/25 font-bold text-[11px]"
+              />
+              <span className="block text-[8px] text-gray-400 font-medium">
+                Paste a hosted video link to save the lecture. Local file selection is preview-only.
+              </span>
             </div>
 
             {/* THUMBNAIL COVER IMAGE FILE UPLOAD ZONE */}
@@ -443,9 +484,17 @@ const LMSManagement = () => {
                   )}
                 </div>
               </div>
+              <input
+                type="url"
+                placeholder="Cover image URL (optional) — https://example.com/cover.jpg"
+                value={thumbnailUrlInput}
+                onChange={(e) => setThumbnailUrlInput(e.target.value)}
+                className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-500/25 font-bold text-[11px]"
+              />
+              <span className="block text-[8px] text-gray-400 font-medium">
+                Use a URL or upload a small cover image (under ~350KB).
+              </span>
             </div>
-
-            {/* Active Switch */}
             <label className="flex items-center gap-2.5 cursor-pointer text-xs select-none pt-1">
               <input
                 type="checkbox"
@@ -487,7 +536,7 @@ const LMSManagement = () => {
             Learning Catalog Directory
           </h3>
 
-          {loading ? (
+          {(!authReady || loading) ? (
             <div className="flex justify-center py-16">
               <Loader2 size={28} className="animate-spin text-indigo-600" />
             </div>

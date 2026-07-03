@@ -14,9 +14,13 @@ export const ProtectedRoute = ({ redirectTo = ROUTES.LOGIN }) => {
 };
 
 export const RoleRoute = ({ allowedRoles, redirectTo }) => {
-  const { user, isAuthenticated } = useAuthStore();
+  const { user, isAuthenticated, token, _hasHydrated } = useAuthStore();
 
-  if (!isAuthenticated) {
+  if (!_hasHydrated) {
+    return null;
+  }
+
+  if (!isAuthenticated || !token) {
     if (redirectTo) {
       return <Navigate to={redirectTo} replace />;
     }

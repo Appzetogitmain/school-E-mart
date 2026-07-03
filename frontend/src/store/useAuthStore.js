@@ -14,6 +14,8 @@ const useAuthStore = create(
       token: null,
       isAuthenticated: false,
       portal: null,
+      _hasHydrated: false,
+      setHasHydrated: (value) => set({ _hasHydrated: value }),
 
       login: (userData, token, portal = null) => {
         const user = mapUserForDisplay(userData);
@@ -100,8 +102,20 @@ const useAuthStore = create(
         isAuthenticated: state.isAuthenticated,
         portal: state.portal,
       }),
+      onRehydrateStorage: () => (state) => {
+        state?.setHasHydrated(true);
+      },
     }
   )
 );
+
+if (typeof window !== 'undefined') {
+  useAuthStore.persist.onFinishHydration(() => {
+    useAuthStore.getState().setHasHydrated(true);
+  });
+  if (useAuthStore.persist.hasHydrated()) {
+    useAuthStore.getState().setHasHydrated(true);
+  }
+}
 
 export default useAuthStore;

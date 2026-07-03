@@ -49,7 +49,8 @@ const shouldAttemptTokenRefresh = (url = '') => {
     return false;
   }
 
-  return Boolean(useAuthStore.getState().token);
+  const { token, isAuthenticated } = useAuthStore.getState();
+  return Boolean(token || isAuthenticated);
 };
 
 const redirectToLogin = () => {
