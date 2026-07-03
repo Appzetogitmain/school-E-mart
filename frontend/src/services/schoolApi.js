@@ -146,3 +146,8 @@ export const markDiaryRead = async (schoolId, entryId, params = {}) => {
   const response = await apiClient.patch(schoolPath(schoolId, `/diary/${entryId}/read`), null, { params });
   return unwrapData(response)?.entry;
 };
+
+export const listVendors = async (schoolId, params = {}) => {
+  const response = await apiClient.get(schoolPath(schoolId, '/vendors'), { params });
+  return extractPaginated(response, 'vendors');
+};

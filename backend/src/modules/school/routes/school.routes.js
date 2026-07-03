@@ -486,4 +486,12 @@ router.delete(
   schoolController.deleteDiaryEntry
 );
 
+router.get(
+  '/:schoolId/vendors',
+  ...schoolAdmin,
+  resolveSchool(),
+  validateQuery(validators.paginationQuery),
+  schoolController.listVendors
+);
+
 module.exports = router;

@@ -1,15 +1,20 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, HelpCircle, Calendar, Users, 
   Clipboard, Info, Check, ChevronDown, Save, 
   ArrowRight, Sparkles, Plus, Edit2, Trash2,
   Upload, Image as ImageIcon, Search, Star,
-  ShieldCheck
+  ShieldCheck, Loader2
 } from 'lucide-react';
+import { listVendors } from '../../../services/schoolApi';
+import { getErrorMessage } from '../../../utils/apiHelpers';
+import { mapSchoolVendorForInvite } from '../../../utils/mappers/schoolVendorMapper';
+import { useSchoolId } from '../../../utils/schoolContext';
 
 const SchoolCreateRequest = () => {
   const navigate = useNavigate();
+  const schoolId = useSchoolId();
   
   // Navigation State
   const [currentStep, setCurrentStep] = useState(1);
@@ -31,6 +36,11 @@ const SchoolCreateRequest = () => {
   const [additionalNotes, setAdditionalNotes] = useState('');
   
   const [vendors, setVendors] = useState([]);
+  const [vendorsLoading, setVendorsLoading] = useState(false);
+  const [vendorsError, setVendorsError] = useState('');
+  const [vendorPage, setVendorPage] = useState(1);
+  const [hasMoreVendors, setHasMoreVendors] = useState(false);
+  const [loadingMoreVendors, setLoadingMoreVendors] = useState(false);
 
   const [quotationRequirements, setQuotationRequirements] = useState([]);
 
@@ -79,6 +89,68 @@ const SchoolCreateRequest = () => {
     ));
   };
 
+  const mergeVendorList = (existing, incoming) => {
+    const checkedMap = new Map(existing.map((vendor) => [vendor.id, vendor.checked]));
+    return incoming.map((vendor) => ({
+      ...vendor,
+      checked: checkedMap.get(vendor.id) ?? vendor.checked,
+    }));
+  };
+
+  const loadVendors = useCallback(async ({ page = 1, append = false, search = '' } = {}) => {
+    if (!schoolId) {
+      setVendorsError('School context is missing. Please log in again.');
+      return;
+    }
+
+    if (append) {
+      setLoadingMoreVendors(true);
+    } else {
+      setVendorsLoading(true);
+      setVendorsError('');
+    }
+
+    try {
+      const { data, pagination } = await listVendors(schoolId, {
+        page,
+        limit: 10,
+        search: search.trim() || undefined,
+      });
+
+      const mapped = (data || []).map(mapSchoolVendorForInvite);
+
+      setVendors((prev) => {
+        if (!append) {
+          return mergeVendorList(prev, mapped);
+        }
+
+        const existingIds = new Set(prev.map((vendor) => vendor.id));
+        const uniqueNew = mapped.filter((vendor) => !existingIds.has(vendor.id));
+        return [...prev, ...uniqueNew];
+      });
+      setVendorPage(page);
+      setHasMoreVendors(Boolean(pagination?.hasNextPage));
+    } catch (err) {
+      if (!append) {
+        setVendors([]);
+      }
+      setVendorsError(getErrorMessage(err, 'Unable to load vendors'));
+    } finally {
+      setVendorsLoading(false);
+      setLoadingMoreVendors(false);
+    }
+  }, [schoolId]);
+
+  useEffect(() => {
+    if (currentStep !== 3) return undefined;
+
+    const timer = setTimeout(() => {
+      loadVendors({ page: 1, search: searchQuery });
+    }, searchQuery ? 300 : 0);
+
+    return () => clearTimeout(timer);
+  }, [currentStep, searchQuery, loadVendors]);
+
   const handleToggleRequirement = (label) => {
     setQuotationRequirements(quotationRequirements.map(req => 
       req.label === label ? { ...req, checked: !req.checked } : req
@@ -86,7 +158,8 @@ const SchoolCreateRequest = () => {
   };
 
   const handleViewMoreVendors = () => {
-    // No vendor API yet — keep list as-is
+    if (!hasMoreVendors || loadingMoreVendors) return;
+    loadVendors({ page: vendorPage + 1, append: true, search: searchQuery });
   };
 
   const handleSaveDraft = () => {
@@ -823,11 +896,18 @@ const SchoolCreateRequest = () => {
 
             {/* Vendors List */}
             <div className="space-y-3">
-              {vendors.length === 0 ? (
+              {vendorsLoading ? (
+                <div className="text-center py-10 bg-gray-50/50 border border-dashed border-gray-200 rounded-2xl">
+                  <Loader2 size={28} className="text-[#3b2d7d] mx-auto mb-2 animate-spin" />
+                  <p className="text-xs font-black text-gray-500">Loading vendors...</p>
+                </div>
+              ) : vendors.length === 0 ? (
                 <div className="text-center py-10 bg-gray-50/50 border border-dashed border-gray-200 rounded-2xl">
                   <Users size={32} className="text-gray-300 mx-auto mb-2" />
                   <p className="text-xs font-black text-gray-500">No vendors available yet</p>
-                  <p className="text-[10px] text-gray-400 font-bold mt-1">Vendor directory API is not available.</p>
+                  <p className="text-[10px] text-gray-400 font-bold mt-1">
+                    {vendorsError || 'Approved vendors will appear here once available.'}
+                  </p>
                 </div>
               ) : (
               vendors
@@ -892,15 +972,25 @@ const SchoolCreateRequest = () => {
             </div>
 
             {/* Centered View More Button */}
-            <div className="text-center pt-2">
-              <button 
-                type="button"
-                onClick={handleViewMoreVendors}
-                className="text-xs font-black text-[#3b2d7d] hover:text-[#2b2061] active:scale-95 transition-all inline-flex items-center gap-1.5 uppercase tracking-wider hover:underline"
-              >
-                + View More Vendors
-              </button>
-            </div>
+            {hasMoreVendors && (
+              <div className="text-center pt-2">
+                <button 
+                  type="button"
+                  onClick={handleViewMoreVendors}
+                  disabled={loadingMoreVendors}
+                  className="text-xs font-black text-[#3b2d7d] hover:text-[#2b2061] active:scale-95 transition-all inline-flex items-center gap-1.5 uppercase tracking-wider hover:underline disabled:opacity-60"
+                >
+                  {loadingMoreVendors ? (
+                    <>
+                      <Loader2 size={12} className="animate-spin" />
+                      Loading...
+                    </>
+                  ) : (
+                    '+ View More Vendors'
+                  )}
+                </button>
+              </div>
+            )}
 
           </div>
 

@@ -10,6 +10,7 @@ const attendanceService = require('../services/attendance.service');
 const timetableService = require('../services/timetable.service');
 const noticeService = require('../services/notice.service');
 const diaryService = require('../services/diary.service');
+const vendorDirectoryService = require('../services/vendorDirectory.service');
 
 const schoolController = {
   createSchool: asyncHandler(async (req, res) => {
@@ -334,6 +335,11 @@ const schoolController = {
   deleteDiaryEntry: asyncHandler(async (req, res) => {
     await diaryService.deleteEntry(req, req.schoolId, req.params.entryId, req.auth.userId);
     return success(res, null, 'Diary entry deleted successfully', undefined, req);
+  }),
+
+  listVendors: asyncHandler(async (req, res) => {
+    const { data, pagination } = await vendorDirectoryService.listApprovedVendors(req.query);
+    return paginated(res, { vendors: data }, pagination, 'Vendors fetched successfully', req);
   }),
 };
 
