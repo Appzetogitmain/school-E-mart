@@ -14,6 +14,15 @@ const rfqSchema = new mongoose.Schema({
     quantity: { type: Number, required: true, min: 1 },
     uom: { type: String, required: true } // Unit of Measure
   }],
+  // Optional descriptive fields captured by the school "create request" wizard.
+  academicYear: { type: String },
+  classes: [{ type: String }],
+  totalStudents: { type: Number, min: 0 },
+  quotationDeadline: { type: Date }, // Deadline for vendors to submit quotes
+  meta: { type: mongoose.Schema.Types.Mixed }, // Rich uniform-set data for display
+  publishedAt: { type: Date },
+  awardedVendorId: { type: mongoose.Schema.Types.ObjectId, ref: 'VendorProfile' },
+  awardedQuoteId: { type: mongoose.Schema.Types.ObjectId, ref: 'Quote' },
   targetDeliveryDate: { type: Date },
   attachments: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Attachment' }],
   status: {

@@ -11,6 +11,7 @@ const timetableService = require('../services/timetable.service');
 const noticeService = require('../services/notice.service');
 const diaryService = require('../services/diary.service');
 const vendorDirectoryService = require('../services/vendorDirectory.service');
+const rfqService = require('../../rfq/services/rfq.service');
 
 const schoolController = {
   createSchool: asyncHandler(async (req, res) => {
@@ -340,6 +341,26 @@ const schoolController = {
   listVendors: asyncHandler(async (req, res) => {
     const { data, pagination } = await vendorDirectoryService.listApprovedVendors(req.query);
     return paginated(res, { vendors: data }, pagination, 'Vendors fetched successfully', req);
+  }),
+
+  createRfq: asyncHandler(async (req, res) => {
+    const rfq = await rfqService.createRfq(req.schoolId, req.body);
+    return created(res, { rfq }, 'Quotation request published successfully', req);
+  }),
+
+  listRfqs: asyncHandler(async (req, res) => {
+    const { data, pagination } = await rfqService.listSchoolRfqs(req.schoolId, req.query);
+    return paginated(res, { rfqs: data }, pagination, 'RFQs fetched successfully', req);
+  }),
+
+  getRfq: asyncHandler(async (req, res) => {
+    const rfq = await rfqService.getSchoolRfq(req.schoolId, req.params.rfqId);
+    return success(res, { rfq }, 'RFQ fetched successfully', undefined, req);
+  }),
+
+  awardRfqQuote: asyncHandler(async (req, res) => {
+    const rfq = await rfqService.awardQuote(req.schoolId, req.params.rfqId, req.params.quoteId);
+    return success(res, { rfq }, 'Contract awarded successfully', undefined, req);
   }),
 };
 

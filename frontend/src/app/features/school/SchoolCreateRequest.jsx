@@ -8,8 +8,10 @@ import {
   ShieldCheck, Loader2
 } from 'lucide-react';
 import { listVendors } from '../../../services/schoolApi';
+import { createRfq } from '../../../services/rfqApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 import { mapSchoolVendorForInvite } from '../../../utils/mappers/schoolVendorMapper';
+import { buildCreateRfqPayload } from '../../../utils/mappers/rfqMapper';
 import { useSchoolId } from '../../../utils/schoolContext';
 
 const SchoolCreateRequest = () => {
@@ -20,6 +22,8 @@ const SchoolCreateRequest = () => {
   const [currentStep, setCurrentStep] = useState(1);
   const [isSuccess, setIsSuccess] = useState(false);
   const [showDraftModal, setShowDraftModal] = useState(false);
+  const [isPublishing, setIsPublishing] = useState(false);
+  const [publishError, setPublishError] = useState('');
 
   // STEP 1 STATES
   const [requestTitle, setRequestTitle] = useState('');
@@ -69,18 +73,62 @@ const SchoolCreateRequest = () => {
     }
   };
 
-  const handleNext = (e) => {
+  const handleNext = async (e) => {
     e.preventDefault();
     if (currentStep < 4) {
       setCurrentStep(currentStep + 1);
       window.scrollTo(0, 0);
-    } else {
+      return;
+    }
+
+    const validationError = validatePublishForm();
+    if (validationError) {
+      setPublishError(validationError);
+      return;
+    }
+
+    setPublishError('');
+    setIsPublishing(true);
+
+    try {
+      await createRfq(schoolId, buildCreateRfqPayload({
+        requestTitle,
+        academicYear,
+        requiredDate,
+        deadlineDate,
+        selectedClasses,
+        totalStudents,
+        specialInstructions,
+        additionalNotes,
+        uniformSets,
+        vendors,
+        status: 'open',
+      }));
+
       setIsSuccess(true);
       setTimeout(() => {
         setIsSuccess(false);
-        navigate('/school/admin');
+        navigate('/school/quotations');
       }, 2000);
+    } catch (err) {
+      setPublishError(getErrorMessage(err, 'Unable to publish request'));
+    } finally {
+      setIsPublishing(false);
     }
+  };
+
+  const validatePublishForm = () => {
+    if (!requestTitle.trim()) return 'Request title is required';
+    if (!academicYear) return 'Academic year is required';
+    if (!requiredDate) return 'Required by date is required';
+    if (!selectedClasses.length) return 'Select at least one class';
+    if (!uniformSets.length) return 'Add at least one uniform set';
+    if (!uniformSets.some((set) => (parseInt(set.boysQty, 10) || 0) + (parseInt(set.girlsQty, 10) || 0) > 0)) {
+      return 'Enter quantity for at least one uniform set';
+    }
+    if (!vendors.some((v) => v.checked)) return 'Select at least one vendor';
+    if (!deadlineDate) return 'Quotation submission deadline is required';
+    return '';
   };
 
   const handleToggleVendor = (vendorId) => {
@@ -162,8 +210,40 @@ const SchoolCreateRequest = () => {
     loadVendors({ page: vendorPage + 1, append: true, search: searchQuery });
   };
 
-  const handleSaveDraft = () => {
-    setShowDraftModal(true);
+  const handleSaveDraft = async () => {
+    if (!requestTitle.trim()) {
+      setPublishError('Request title is required to save a draft');
+      return;
+    }
+
+    if (!schoolId) {
+      setPublishError('School context is missing. Please log in again.');
+      return;
+    }
+
+    setPublishError('');
+    setIsPublishing(true);
+
+    try {
+      await createRfq(schoolId, buildCreateRfqPayload({
+        requestTitle,
+        academicYear,
+        requiredDate,
+        deadlineDate,
+        selectedClasses,
+        totalStudents,
+        specialInstructions,
+        additionalNotes,
+        uniformSets,
+        vendors,
+        status: 'draft',
+      }));
+      setShowDraftModal(true);
+    } catch (err) {
+      setPublishError(getErrorMessage(err, 'Unable to save draft'));
+    } finally {
+      setIsPublishing(false);
+    }
   };
 
   const handleClassToggle = (classId) => {
@@ -326,6 +406,13 @@ const SchoolCreateRequest = () => {
             </div>
 
           </div>
+        </div>
+      )}
+
+      {/* Publish error banner */}
+      {publishError && (
+        <div className="mx-6 mt-4 p-4 bg-red-50 border border-red-100 rounded-2xl text-xs font-bold text-red-600">
+          {publishError}
         </div>
       )}
 
@@ -1297,7 +1384,8 @@ const SchoolCreateRequest = () => {
         <button 
           type="button"
           onClick={handleSaveDraft}
-          className="w-full xs:w-auto px-6 py-4 border-2 border-[#3b2d7d] text-[#3b2d7d] hover:bg-[#3b2d7d]/5 active:scale-95 rounded-2xl text-sm font-black flex items-center justify-center gap-2 transition-all tracking-wider uppercase bg-white shadow-sm flex-1"
+          disabled={isPublishing}
+          className="w-full xs:w-auto px-6 py-4 border-2 border-[#3b2d7d] text-[#3b2d7d] hover:bg-[#3b2d7d]/5 active:scale-95 rounded-2xl text-sm font-black flex items-center justify-center gap-2 transition-all tracking-wider uppercase bg-white shadow-sm flex-1 disabled:opacity-60"
         >
           <Save size={16} />
           Save Draft
@@ -1306,10 +1394,20 @@ const SchoolCreateRequest = () => {
         <button 
           type="button"
           onClick={handleNext}
-          className="w-full xs:flex-1 py-4 bg-[#3b2d7d] text-white hover:bg-[#2b2061] active:scale-95 rounded-2xl text-sm font-black flex items-center justify-center gap-2 transition-all shadow-lg shadow-purple-100/50 tracking-wider uppercase flex-1"
+          disabled={isPublishing}
+          className="w-full xs:flex-1 py-4 bg-[#3b2d7d] text-white hover:bg-[#2b2061] active:scale-95 rounded-2xl text-sm font-black flex items-center justify-center gap-2 transition-all shadow-lg shadow-purple-100/50 tracking-wider uppercase flex-1 disabled:opacity-60"
         >
-          {currentStep === 4 ? 'Publish' : 'Save & Next'}
-          <ArrowRight size={16} />
+          {isPublishing ? (
+            <>
+              <Loader2 size={16} className="animate-spin" />
+              {currentStep === 4 ? 'Publishing...' : 'Saving...'}
+            </>
+          ) : (
+            <>
+              {currentStep === 4 ? 'Publish' : 'Save & Next'}
+              <ArrowRight size={16} />
+            </>
+          )}
         </button>
       </div>
     </div>

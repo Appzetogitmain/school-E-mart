@@ -16,6 +16,7 @@ const quoteSchema = new mongoose.Schema({
   taxPaise: { type: Number, required: true, min: 0 },
   totalPaise: { type: Number, required: true, min: 0 },
   termsAndConditions: { type: String },
+  deliveryTimeline: { type: String }, // Free-text fulfilment timeline provided by vendor
   validUntil: { type: Date, required: true },
   attachments: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Attachment' }],
   status: {

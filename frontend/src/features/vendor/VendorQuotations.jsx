@@ -1,10 +1,13 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { 
   FileText, Award, XCircle, Search, SlidersHorizontal, ArrowUpDown, 
   ChevronRight, HelpCircle, Trophy, FileCheck, FileClock, 
   MapPin, Clock, Calendar, CheckCircle2, ChevronLeft, Building2,
   AlertCircle
 } from 'lucide-react';
+import { listVendorRfqs, submitVendorQuote } from '../../services/rfqApi';
+import { getErrorMessage } from '../../utils/apiHelpers';
+import { mapVendorRfqForList } from '../../utils/mappers/rfqMapper';
 
 const VendorQuotations = () => {
   // States
@@ -16,9 +19,30 @@ const VendorQuotations = () => {
   const [bidDelivery, setBidDelivery] = useState('');
   const [bidNotes, setBidNotes] = useState('');
   const [bidSubmitted, setBidSubmitted] = useState(false);
+  const [submitError, setSubmitError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [rfqs, setRfqs] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [loadError, setLoadError] = useState('');
+
+  const loadRfqs = useCallback(async () => {
+    setIsLoading(true);
+    setLoadError('');
+    try {
+      const { data } = await listVendorRfqs({ limit: 50 });
+      setRfqs((data || []).map(mapVendorRfqForList));
+    } catch (err) {
+      setRfqs([]);
+      setLoadError(getErrorMessage(err, 'Unable to load quotation requests'));
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadRfqs();
+  }, [loadRfqs]);
 
   // Dynamic counter computations based on live RFQs list
   const pendingCount = useMemo(() => rfqs.filter(r => r.status.toLowerCase() === 'pending').length, [rfqs]);
@@ -42,16 +66,36 @@ const VendorQuotations = () => {
     });
   }, [rfqs, activeTab, searchQuery]);
 
-  const handleBidSubmit = (e) => {
+  const handleBidSubmit = async (e) => {
     e.preventDefault();
-    setBidSubmitted(true);
-    setTimeout(() => {
-      setSelectedRfq(null);
-      setBidSubmitted(false);
-      setBidPrice('');
-      setBidDelivery('');
-      setBidNotes('');
-    }, 2000);
+    if (!selectedRfq?.rfqId) return;
+
+    setSubmitError('');
+    setIsSubmitting(true);
+
+    try {
+      await submitVendorQuote(selectedRfq.rfqId, {
+        unitPrice: Number(bidPrice),
+        deliveryTimeline: bidDelivery,
+        termsAndConditions: bidNotes,
+        remarks: bidNotes,
+      });
+
+      setBidSubmitted(true);
+      await loadRfqs();
+
+      setTimeout(() => {
+        setSelectedRfq(null);
+        setBidSubmitted(false);
+        setBidPrice('');
+        setBidDelivery('');
+        setBidNotes('');
+      }, 2000);
+    } catch (err) {
+      setSubmitError(getErrorMessage(err, 'Unable to submit quote'));
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -121,6 +165,12 @@ const VendorQuotations = () => {
         </div>
 
       </div>
+
+      {loadError && (
+        <div className="p-4 bg-red-50 border border-red-100 rounded-2xl text-xs font-bold text-red-600">
+          {loadError}
+        </div>
+      )}
 
       {/* 3. Controls / Filters Row */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pt-2">
@@ -463,9 +513,10 @@ const VendorQuotations = () => {
 
                   <button 
                     type="submit"
-                    className="w-full py-3 bg-[#5B3FD6] hover:bg-[#492eb3] text-white font-extrabold rounded-xl text-xs uppercase tracking-wider transition-all shadow-md shadow-purple-100"
+                    disabled={isSubmitting}
+                    className="w-full py-3 bg-[#5B3FD6] hover:bg-[#492eb3] text-white font-extrabold rounded-xl text-xs uppercase tracking-wider transition-all shadow-md shadow-purple-100 disabled:opacity-60"
                   >
-                    Submit Quotation Bid
+                    {isSubmitting ? 'Submitting...' : 'Submit Quotation Bid'}
                   </button>
 
                 </form>
@@ -477,8 +528,27 @@ const VendorQuotations = () => {
                   <AlertCircle size={16} className="text-[#5B3FD6] shrink-0 mt-0.5" />
                   <div>
                     <p className="font-bold text-gray-800 uppercase tracking-wide text-[10px]">Quotation Status: {selectedRfq.status}</p>
-                    <p className="mt-1 font-semibold">You submitted a bidding rate of <span className="text-gray-900 font-bold">₹245.00/unit</span> with 15-day delivery terms. This request is now closed for bidding.</p>
+                    {selectedRfq.vendorQuote ? (
+                      <p className="mt-1 font-semibold">
+                        You submitted a bidding rate of{' '}
+                        <span className="text-gray-900 font-bold">
+                          ₹{selectedRfq.vendorQuote.items?.[0]?.unitPrice || selectedRfq.vendorQuote.items?.[0]?.unitPricePaise / 100 || '—'}/unit
+                        </span>
+                        {selectedRfq.vendorQuote.deliveryTimeline
+                          ? ` with ${selectedRfq.vendorQuote.deliveryTimeline} delivery terms.`
+                          : '.'}
+                        {' '}This request is closed for bidding.
+                      </p>
+                    ) : (
+                      <p className="mt-1 font-semibold">This request is closed for bidding.</p>
+                    )}
                   </div>
+                </div>
+              )}
+
+              {submitError && (
+                <div className="p-3 bg-red-50 border border-red-100 rounded-xl text-xs font-bold text-red-600">
+                  {submitError}
                 </div>
               )}
 

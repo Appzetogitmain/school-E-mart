@@ -11,6 +11,7 @@ const analyticsService = require('../services/analytics.service');
 const verificationService = require('../services/verification.service');
 const vendorAccessPolicy = require('../policies/vendorAccess.policy');
 const productService = require('../../marketplace/services/product.service');
+const rfqService = require('../../rfq/services/rfq.service');
 
 const vendorController = {
   register: asyncHandler(async (req, res) => {
@@ -361,6 +362,24 @@ const vendorController = {
       req.body.note
     );
     return success(res, { vendor }, 'Vendor sent for re-verification', undefined, req);
+  }),
+
+  listRfqs: asyncHandler(async (req, res) => {
+    const vendorId = await vendorAccessPolicy.resolveApprovedVendorId(req.auth);
+    const { data, pagination } = await rfqService.listVendorRfqs(vendorId, req.query);
+    return paginated(res, { rfqs: data }, pagination, 'RFQs fetched successfully', req);
+  }),
+
+  getRfq: asyncHandler(async (req, res) => {
+    const vendorId = await vendorAccessPolicy.resolveApprovedVendorId(req.auth);
+    const rfq = await rfqService.getVendorRfq(vendorId, req.params.rfqId);
+    return success(res, { rfq }, 'RFQ fetched successfully', undefined, req);
+  }),
+
+  submitQuote: asyncHandler(async (req, res) => {
+    const vendorId = await vendorAccessPolicy.resolveApprovedVendorId(req.auth);
+    const quote = await rfqService.submitQuote(vendorId, req.params.rfqId, req.body);
+    return created(res, { quote }, 'Quote submitted successfully', req);
   }),
 };
 

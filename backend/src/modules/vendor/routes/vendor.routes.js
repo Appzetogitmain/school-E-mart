@@ -1,6 +1,7 @@
 const express = require('express');
 const vendorController = require('../controllers/vendor.controller');
 const validators = require('../validators/vendor.validator');
+const rfqValidators = require('../../rfq/validators/rfq.validator');
 const { validateBody, validateParams, validateQuery } = require('../../../middlewares/validation');
 const { protectedRoute } = require('../../../middlewares/auth/guards');
 const { PERMISSIONS } = require('../../../constants/permissions');
@@ -259,6 +260,22 @@ router.get(
   ...vendorApproved,
   validateQuery(validators.paginationQuery),
   vendorController.getRevenueSummary
+);
+
+// RFQ / Quotations
+router.get('/rfqs', ...vendorApproved, validateQuery(rfqValidators.paginationQuery), vendorController.listRfqs);
+router.get(
+  '/rfqs/:rfqId',
+  ...vendorApproved,
+  validateParams(rfqValidators.rfqIdParam),
+  vendorController.getRfq
+);
+router.post(
+  '/rfqs/:rfqId/quotes',
+  ...vendorApproved,
+  validateParams(rfqValidators.rfqIdParam),
+  validateBody(rfqValidators.submitQuoteSchema),
+  vendorController.submitQuote
 );
 
 // Admin verification

@@ -2,6 +2,7 @@ const express = require('express');
 const { Joi } = require('../../../common/validation');
 const schoolController = require('../controllers/school.controller');
 const validators = require('../validators/school.validator');
+const rfqValidators = require('../../rfq/validators/rfq.validator');
 const { validateBody, validateParams, validateQuery } = require('../../../middlewares/validation');
 const { protectedRoute } = require('../../../middlewares/auth/guards');
 const { PERMISSIONS } = require('../../../constants/permissions');
@@ -492,6 +493,38 @@ router.get(
   resolveSchool(),
   validateQuery(validators.paginationQuery),
   schoolController.listVendors
+);
+
+router.post(
+  '/:schoolId/rfqs',
+  ...schoolAdmin,
+  resolveSchool(),
+  validateBody(rfqValidators.createRfqSchema),
+  schoolController.createRfq
+);
+
+router.get(
+  '/:schoolId/rfqs',
+  ...schoolAdmin,
+  resolveSchool(),
+  validateQuery(rfqValidators.paginationQuery),
+  schoolController.listRfqs
+);
+
+router.get(
+  '/:schoolId/rfqs/:rfqId',
+  ...schoolAdmin,
+  resolveSchool(),
+  validateParams(rfqValidators.rfqIdParam),
+  schoolController.getRfq
+);
+
+router.post(
+  '/:schoolId/rfqs/:rfqId/quotes/:quoteId/award',
+  ...schoolAdmin,
+  resolveSchool(),
+  validateParams(rfqValidators.quoteIdParam),
+  schoolController.awardRfqQuote
 );
 
 module.exports = router;

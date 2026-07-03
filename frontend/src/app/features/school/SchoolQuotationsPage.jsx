@@ -1,14 +1,19 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Filter, ChevronRight, Calendar, Users, 
   FileText, Clipboard, CheckCircle, Clock, Check, X,
   Plus, AlertCircle, Shirt, BookOpen, FlaskConical, Snowflake,
-  Building, Star, ShieldCheck, HelpCircle, MessageSquare
+  Building, Star, ShieldCheck, HelpCircle, MessageSquare, Loader2
 } from 'lucide-react';
+import { listSchoolRfqs, getSchoolRfq, awardRfqQuote } from '../../../services/rfqApi';
+import { getErrorMessage } from '../../../utils/apiHelpers';
+import { mapSchoolRfqForList, mapSchoolQuoteForCompare } from '../../../utils/mappers/rfqMapper';
+import { useSchoolId } from '../../../utils/schoolContext';
 
 const SchoolQuotationsPage = () => {
   const navigate = useNavigate();
+  const schoolId = useSchoolId();
 
   // Tab filter selection state
   const [activeTab, setActiveTab] = useState('All');
@@ -16,8 +21,53 @@ const SchoolQuotationsPage = () => {
   // Modal states
   const [selectedRequirement, setSelectedRequirement] = useState(null);
   const [quoteSuccessMsg, setQuoteSuccessMsg] = useState(null);
+  const [requirements, setRequirements] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [loadingQuotes, setLoadingQuotes] = useState(false);
+  const [awardingQuoteId, setAwardingQuoteId] = useState(null);
 
-  const requirements = [];
+  const loadRequirements = useCallback(async () => {
+    if (!schoolId) {
+      setLoadError('School context is missing. Please log in again.');
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    setLoadError('');
+
+    try {
+      const { data } = await listSchoolRfqs(schoolId, { limit: 50 });
+      setRequirements((data || []).map(mapSchoolRfqForList));
+    } catch (err) {
+      setRequirements([]);
+      setLoadError(getErrorMessage(err, 'Unable to load quotations'));
+    } finally {
+      setLoading(false);
+    }
+  }, [schoolId]);
+
+  useEffect(() => {
+    loadRequirements();
+  }, [loadRequirements]);
+
+  const handleOpenCompare = async (req) => {
+    if (!schoolId) return;
+
+    setLoadingQuotes(true);
+    try {
+      const rfq = await getSchoolRfq(schoolId, req.id);
+      setSelectedRequirement({
+        ...req,
+        quotes: (rfq.quotes || []).map(mapSchoolQuoteForCompare),
+      });
+    } catch (err) {
+      setLoadError(getErrorMessage(err, 'Unable to load quotes'));
+    } finally {
+      setLoadingQuotes(false);
+    }
+  };
 
   const pendingQuotesCount = requirements.filter((r) => r.status === 'Pending').length;
   const receivedQuotesCount = requirements.filter((r) => r.status === 'Received').length;
@@ -30,9 +80,20 @@ const SchoolQuotationsPage = () => {
     return req.status === activeTab;
   });
 
-  const handleAwardContract = (vendorName, reqTitle) => {
-    setQuoteSuccessMsg(`Contract for ${reqTitle} awarded to ${vendorName} successfully!`);
-    setSelectedRequirement(null);
+  const handleAwardContract = async (quote, reqTitle) => {
+    if (!schoolId || !selectedRequirement) return;
+
+    setAwardingQuoteId(quote.quoteId);
+    try {
+      await awardRfqQuote(schoolId, selectedRequirement.id, quote.quoteId);
+      setQuoteSuccessMsg(`Contract for ${reqTitle} awarded to ${quote.vendorName} successfully!`);
+      setSelectedRequirement(null);
+      await loadRequirements();
+    } catch (err) {
+      setLoadError(getErrorMessage(err, 'Unable to award contract'));
+    } finally {
+      setAwardingQuoteId(null);
+    }
   };
 
   return (
@@ -121,13 +182,24 @@ const SchoolQuotationsPage = () => {
 
       {/* Requirement Cards List */}
       <div className="px-6 py-5 space-y-4">
-        {requirements.length === 0 && (
+        {loadError && (
+          <div className="p-4 bg-red-50 border border-red-100 rounded-2xl text-xs font-bold text-red-600">
+            {loadError}
+          </div>
+        )}
+
+        {loading ? (
+          <div className="text-center py-16 bg-white border border-gray-150 rounded-[2.2rem] p-6 shadow-sm">
+            <Loader2 size={36} className="text-[#3b2d7d] mx-auto animate-spin" />
+            <span className="text-xs font-black text-gray-500 block mt-3">Loading quotations...</span>
+          </div>
+        ) : requirements.length === 0 ? (
           <div className="text-center py-16 bg-white border border-gray-150 rounded-[2.2rem] p-6 shadow-sm">
             <FileText size={44} className="text-gray-300 mx-auto block stroke-[1.5]" />
             <span className="text-xs font-black text-gray-500 block mt-3">No quotation requirements yet</span>
-            <span className="text-[10px] text-gray-400 font-bold block mt-1">RFQ quotations API is not available yet.</span>
+            <span className="text-[10px] text-gray-400 font-bold block mt-1">Create a request and invite vendors to get started.</span>
           </div>
-        )}
+        ) : null}
 
         {filteredRequirements.map((req) => (
           <div 
@@ -138,7 +210,7 @@ const SchoolQuotationsPage = () => {
             {/* Header info row inside requirement card */}
             <div className="flex items-center gap-4">
               <div className={`w-12 h-12 rounded-2xl ${req.iconBg} flex items-center justify-center shrink-0`}>
-                {req.icon}
+                <Shirt size={20} className="text-[#3b2d7d]" />
               </div>
               <div className="min-w-0 pr-4">
                 <h3 className="text-xs font-black text-deep-purple leading-tight block hover:text-[#3b2d7d] cursor-pointer">
@@ -189,10 +261,11 @@ const SchoolQuotationsPage = () => {
               
               {req.quotesReceived > 0 ? (
                 <button 
-                  onClick={() => setSelectedRequirement(req)}
-                  className="px-4 py-2 border border-purple-250 text-[#3b2d7d] hover:bg-purple-50 bg-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 shadow-sm"
+                  onClick={() => handleOpenCompare(req)}
+                  disabled={loadingQuotes}
+                  className="px-4 py-2 border border-purple-250 text-[#3b2d7d] hover:bg-purple-50 bg-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 shadow-sm disabled:opacity-60"
                 >
-                  Compare Quotes
+                  {loadingQuotes ? 'Loading...' : 'Compare Quotes'}
                 </button>
               ) : (
                 <button 
@@ -281,7 +354,7 @@ const SchoolQuotationsPage = () => {
               <div className="space-y-4">
                 {selectedRequirement.quotes.map((quote, idx) => (
                   <div 
-                    key={idx}
+                    key={quote.quoteId || idx}
                     className="border border-purple-100 rounded-3xl p-5 bg-purple-50/20 hover:bg-purple-50/45 transition-all shadow-sm space-y-3.5 relative overflow-hidden"
                   >
                     {/* Rank Badge */}
@@ -333,11 +406,12 @@ const SchoolQuotationsPage = () => {
 
                     {/* Award Contract Button inside bid card */}
                     <button 
-                      onClick={() => handleAwardContract(quote.vendorName, selectedRequirement.title)}
-                      className="w-full py-3 bg-[#3b2d7d] hover:bg-emerald-600 text-white font-black rounded-2xl text-[10px] uppercase tracking-widest transition-all active:scale-95 shadow-md flex items-center justify-center gap-1.5"
+                      onClick={() => handleAwardContract(quote, selectedRequirement.title)}
+                      disabled={awardingQuoteId === quote.quoteId}
+                      className="w-full py-3 bg-[#3b2d7d] hover:bg-emerald-600 text-white font-black rounded-2xl text-[10px] uppercase tracking-widest transition-all active:scale-95 shadow-md flex items-center justify-center gap-1.5 disabled:opacity-60"
                     >
                       <Check size={13} className="stroke-[3]" />
-                      Award Contract
+                      {awardingQuoteId === quote.quoteId ? 'Awarding...' : 'Award Contract'}
                     </button>
 
                   </div>
