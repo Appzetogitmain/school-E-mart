@@ -9,6 +9,8 @@ const reportsService = require('../services/reports.service');
 const cmsService = require('../services/cms.service');
 const settingsService = require('../services/settings.service');
 const adminLmsService = require('../services/lms.service');
+const attachmentService = require('../services/attachment.service');
+const reelsService = require('../services/reels.service');
 
 const actorFrom = (req) => ({ userId: req.auth.userId, role: req.auth.role });
 
@@ -494,6 +496,37 @@ const adminController = {
   setPlatformCourseStatus: asyncHandler(async (req, res) => {
     const course = await adminLmsService.setPlatformCourseStatus(req.params.courseId, req.body.status);
     return success(res, { course }, 'Platform course status updated', undefined, req);
+  }),
+
+  uploadAttachment: asyncHandler(async (req, res) => {
+    const purpose = req.body?.purpose || 'banner_image';
+    const attachment = await attachmentService.createFromUpload({
+      ownerUserId: req.auth.userId,
+      purpose,
+      file: req.file,
+    });
+    return created(res, { attachment }, 'File uploaded', req);
+  }),
+
+  // Reels
+  listReels: asyncHandler(async (req, res) => {
+    const { data, pagination } = await reelsService.listReels(req.query);
+    return paginated(res, { reels: data }, pagination, 'Reels fetched', req);
+  }),
+
+  createReel: asyncHandler(async (req, res) => {
+    const reel = await reelsService.createReel(req.body);
+    return created(res, { reel }, 'Reel created', req);
+  }),
+
+  updateReel: asyncHandler(async (req, res) => {
+    const reel = await reelsService.updateReel(req.params.reelId, req.body);
+    return success(res, { reel }, 'Reel updated', undefined, req);
+  }),
+
+  deleteReel: asyncHandler(async (req, res) => {
+    await reelsService.deleteReel(req.params.reelId, req.auth.userId);
+    return success(res, null, 'Reel deleted', undefined, req);
   }),
 };
 

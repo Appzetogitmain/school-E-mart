@@ -5,6 +5,8 @@ import {
   Play, Pause, ChevronLeft, ShoppingBag, Send, X, 
   Bookmark, CheckCircle2, Music, Sparkles
 } from 'lucide-react';
+import { listPublicReels } from '../../../services/catalogApi';
+import { mapPublicReel } from '../../../utils/mappers/adminReelsMapper';
 
 const ParentReels = () => {
   const navigate = useNavigate();
@@ -19,8 +21,31 @@ const ParentReels = () => {
   const [floatingHearts, setFloatingHearts] = useState([]);
   const heartIdCounter = useRef(0);
 
-  // No reels API — empty until backend support exists
-  const [reelsData] = useState([]);
+  const [reelsData, setReelsData] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const load = async () => {
+      setLoading(true);
+      try {
+        const { data } = await listPublicReels({ limit: 50 });
+        if (!cancelled) {
+          setReelsData((data || []).map(mapPublicReel));
+        }
+      } catch {
+        if (!cancelled) setReelsData([]);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const categories = ['All', 'Kits', 'Uniforms', 'Stationery', 'Activities'];
 
@@ -55,6 +80,14 @@ const ParentReels = () => {
   const handleAddComment = (e) => {
     e.preventDefault();
   };
+
+  if (loading) {
+    return (
+      <div className="relative h-full w-full bg-black flex items-center justify-center text-white/70 text-sm font-semibold">
+        Loading reels…
+      </div>
+    );
+  }
 
   if (!currentReel) {
     return (

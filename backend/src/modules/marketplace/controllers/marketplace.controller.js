@@ -8,6 +8,7 @@ const reviewService = require('../services/review.service');
 const recommendationService = require('../services/recommendation.service');
 const marketplaceAccessPolicy = require('../policies/marketplaceAccess.policy');
 const cmsService = require('../../admin/services/cms.service');
+const reelsService = require('../../admin/services/reels.service');
 
 const resolveBannerImageUrl = (banner) => {
   const storageKey = banner?.imageId?.storageKey;
@@ -373,6 +374,11 @@ const marketplaceController = {
     const { data, pagination } = await cmsService.listPublicBanners(req.query);
     const banners = (data || []).map(mapPublicBanner);
     return paginated(res, { banners }, pagination, 'Banners fetched', req);
+  }),
+
+  listPublicReels: asyncHandler(async (req, res) => {
+    const { data, pagination } = await reelsService.listPublicReels(req.query);
+    return paginated(res, { reels: data }, pagination, 'Reels fetched', req);
   }),
 };
 

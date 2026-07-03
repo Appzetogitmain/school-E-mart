@@ -9,6 +9,18 @@ const reelSchema = new mongoose.Schema({
   videoId: { type: mongoose.Schema.Types.ObjectId, ref: 'Attachment', required: true },
   thumbnailId: { type: mongoose.Schema.Types.ObjectId, ref: 'Attachment' },
   durationSec: { type: Number },
+  storeName: { type: String },
+  category: { type: String, default: 'All' },
+  musicLabel: { type: String },
+  linkedProduct: {
+    title: { type: String },
+    price: { type: Number },
+    mrp: { type: Number },
+    url: { type: String },
+    imageId: { type: mongoose.Schema.Types.ObjectId, ref: 'Attachment' },
+    imageUrl: { type: String },
+    badge: { type: String, default: 'RECOMMENDED' },
+  },
   tags: [{ type: String }],
   relatedProducts: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Product' }],
   metrics: {

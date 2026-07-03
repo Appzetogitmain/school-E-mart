@@ -1,12 +1,46 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Play, Video } from 'lucide-react';
 import { useDraggableScroll } from '../../hooks/useDraggableScroll';
+import { listPublicReels } from '../../../services/catalogApi';
+import { mapPublicReel } from '../../../utils/mappers/adminReelsMapper';
 
 const ReelsRow = () => {
   const navigate = useNavigate();
   const reelsRef = useDraggableScroll();
-  const reels = [];
+  const [reels, setReels] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const load = async () => {
+      setLoading(true);
+      try {
+        const { data } = await listPublicReels({ limit: 8 });
+        if (!cancelled) {
+          setReels((data || []).map(mapPublicReel));
+        }
+      } catch {
+        if (!cancelled) setReels([]);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="px-6 pb-8 select-none text-left">
+        <div className="text-sm text-gray-400 font-semibold py-8">Loading reels…</div>
+      </div>
+    );
+  }
 
   if (!reels.length) {
     return (

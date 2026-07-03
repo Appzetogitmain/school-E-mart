@@ -41,6 +41,10 @@ const publicBannerQuery = paginationQuery.keys({
   isActive: Joi.string().valid('true', 'false').optional(),
 });
 
+const publicReelQuery = paginationQuery.keys({
+  category: Joi.string().trim().max(80).optional(),
+});
+
 const headerCategorySchema = Joi.object({
   name: Joi.string().trim().min(2).max(80).required(),
   imageUrl: Joi.string().trim().uri().optional(),
@@ -175,6 +179,7 @@ module.exports = {
   cartItemParam,
   audienceQuery,
   publicBannerQuery,
+  publicReelQuery,
   headerCategorySchema,
   updateHeaderCategorySchema,
   categorySchema,

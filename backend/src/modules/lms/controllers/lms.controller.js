@@ -17,6 +17,10 @@ const noteService = require('../services/note.service');
 const commentService = require('../services/comment.service');
 const bookmarkService = require('../services/bookmark.service');
 
+const PLATFORM_CONSUMER_ROLES = [ROLES.PARENT, ROLES.TEACHER, ROLES.SCHOOL_ADMIN];
+
+const shouldIncludePlatformCourses = (role) => PLATFORM_CONSUMER_ROLES.includes(role);
+
 const withCourse = async (req) => {
   const course = await assertCourseInSchool(req.schoolId, req.params.courseId);
   req.lmsCourse = course;
@@ -30,7 +34,7 @@ const lmsController = {
   }),
 
   listCourses: asyncHandler(async (req, res) => {
-    const includePlatform = req.auth.role === ROLES.PARENT;
+    const includePlatform = shouldIncludePlatformCourses(req.auth.role);
     const { data, pagination } = await courseService.listCourses(req.schoolId, req.query, {
       includePlatform,
     });
@@ -38,7 +42,9 @@ const lmsController = {
   }),
 
   getCourse: asyncHandler(async (req, res) => {
-    const course = await courseService.getCourse(req.schoolId, req.params.courseId);
+    const course = await courseService.getCourse(req.schoolId, req.params.courseId, {
+      includePlatform: shouldIncludePlatformCourses(req.auth.role),
+    });
     return success(res, { course }, 'Course fetched successfully', undefined, req);
   }),
 

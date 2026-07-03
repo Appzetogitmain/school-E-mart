@@ -3,10 +3,20 @@ import ReactDOM from 'react-dom';
 import { 
   Video, Film, Plus, Edit3, Trash2, Heart, Eye, Play, X, ChevronRight, CheckCircle, Info, Upload, Image as ImageIcon, ShoppingBag, Globe, EyeOff
 } from 'lucide-react';
-import { listVendors } from '../../../services/adminApi';
+import { listVendors, listReels, createReel, updateReel, deleteReel, uploadAdminFile, uploadAdminMedia } from '../../../services/adminApi';
+import { getErrorMessage } from '../../../utils/apiHelpers';
+import { mapReelForAdmin, mapAdminReelToPayload } from '../../../utils/mappers/adminReelsMapper';
+
+const getAttachmentId = (ref) => {
+  if (!ref) return null;
+  if (typeof ref === 'object') return ref._id || ref.id;
+  return ref;
+};
 
 const ReelsManagement = () => {
   const [reels, setReels] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
   const [stores, setStores] = useState([]);
 
@@ -84,8 +94,34 @@ const ReelsManagement = () => {
     loadStores();
   }, []);
 
+  const loadReels = useCallback(async () => {
+    setLoading(true);
+    try {
+      const { data } = await listReels({ limit: 100 });
+      setReels((data || []).map(mapReelForAdmin));
+    } catch {
+      setReels([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadReels();
+  }, [loadReels]);
+
+  const uploadFile = async (file, purpose, useMedia = false) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('purpose', purpose);
+    const attachment = useMedia
+      ? await uploadAdminMedia(formData)
+      : await uploadAdminFile(formData);
+    return attachment?._id || attachment?.id;
+  };
+
   // Form submit handler (Add / Update)
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     
     // Validate required fields
@@ -94,7 +130,7 @@ const ReelsManagement = () => {
       return;
     }
 
-    if (!videoPreview) {
+    if (!videoPreview && !videoFile) {
       alert('Please select or upload a Video File.');
       return;
     }
@@ -110,52 +146,61 @@ const ReelsManagement = () => {
       return;
     }
 
-    if (isEditing) {
-      // UPDATE mode
-      setReels(prev => prev.map(r => {
-        if (r.id === editId) {
-          return {
-            ...r,
-            title: reelTitle.trim(),
-            description: reelDescription.trim(),
-            videoUrl: videoPreview,
-            thumbnailUrl: coverUrl,
-            storeName,
-            productTitle: productTitle.trim() || 'N/A',
-            productPrice: parseFloat(productPrice) || 0,
-            productMrp: parseFloat(productMrp) || 0,
-            productUrl: productUrl.trim() || '#',
-            productImageUrl: prodImgUrl,
-            status: isActive ? 'Active' : 'Draft'
-          };
-        }
-        return r;
-      }));
-      alert('Reel updated successfully!');
-      resetForm();
-    } else {
-      // ADD mode
-      const nextId = reels.length > 0 ? Math.max(...reels.map(r => r.id)) + 1 : 1;
-      const newReel = {
-        id: nextId,
-        title: reelTitle.trim(),
-        description: reelDescription.trim(),
-        videoUrl: videoPreview,
-        thumbnailUrl: coverUrl,
-        storeName,
-        productTitle: productTitle.trim() || 'Linked Product',
-        productPrice: parseFloat(productPrice) || 0,
-        productMrp: parseFloat(productMrp) || 0,
-        productUrl: productUrl.trim() || '#',
-        productImageUrl: prodImgUrl,
-        likes: 0,
-        views: 0,
-        status: isActive ? 'Active' : 'Draft'
-      };
+    setSaving(true);
+    try {
+      const existingReel = isEditing ? reels.find((r) => r.id === editId) : null;
+      let videoId = getAttachmentId(existingReel?.raw?.videoId);
+      let thumbnailId = getAttachmentId(existingReel?.raw?.thumbnailId);
+      let productImageId = getAttachmentId(existingReel?.raw?.linkedProduct?.imageId);
 
-      setReels(prev => [newReel, ...prev]);
-      alert('Reel uploaded and published to the customer feed!');
-      resetForm();
+      if (videoFile) {
+        videoId = await uploadFile(videoFile, 'reel_video', true);
+      }
+      if (coverFile) {
+        thumbnailId = await uploadFile(coverFile, 'reel_thumb');
+      }
+      if (productFile) {
+        productImageId = await uploadFile(productFile, 'reel_thumb');
+      }
+
+      if (!videoId) {
+        alert('Please upload a video file.');
+        return;
+      }
+      if (!thumbnailId) {
+        alert('Please upload a cover image.');
+        return;
+      }
+
+      const payload = mapAdminReelToPayload({
+        title: reelTitle,
+        description: reelDescription,
+        videoId,
+        thumbnailId,
+        storeName,
+        productTitle,
+        productPrice,
+        productMrp,
+        productUrl,
+        productImageId,
+        isActive,
+      });
+
+      if (isEditing) {
+        const updated = await updateReel(existingReel?.mongoId || editId, payload);
+        setReels((prev) => prev.map((r) => (r.id === editId ? mapReelForAdmin(updated) : r)));
+        alert('Reel updated successfully!');
+        resetForm();
+      } else {
+        const created = await createReel(payload);
+        setReels((prev) => [mapReelForAdmin(created), ...prev]);
+        alert('Reel uploaded and published to the customer feed!');
+        resetForm();
+      }
+    } catch (err) {
+      alert(getErrorMessage(err, 'Unable to save reel'));
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -179,9 +224,13 @@ const ReelsManagement = () => {
   };
 
   // Delete handler
-  const handleDelete = (id) => {
-    if (window.confirm('Are you sure you want to delete this video reel?')) {
-      setReels(prev => prev.filter(r => r.id !== id));
+  const handleDelete = async (reel) => {
+    if (!window.confirm('Are you sure you want to delete this video reel?')) return;
+    try {
+      await deleteReel(reel.mongoId || reel.id);
+      setReels((prev) => prev.filter((r) => r.id !== reel.id));
+    } catch (err) {
+      alert(getErrorMessage(err, 'Unable to delete reel'));
     }
   };
 
@@ -518,9 +567,10 @@ const ReelsManagement = () => {
             <div className="pt-4 space-y-2 select-none">
               <button
                 type="submit"
-                className="w-full flex items-center justify-center gap-2 bg-[#0B1528] hover:bg-[#15253F] text-white text-xs font-black uppercase tracking-wider py-3 rounded-xl transition-all shadow-xs"
+                disabled={saving}
+                className="w-full flex items-center justify-center gap-2 bg-[#0B1528] hover:bg-[#15253F] disabled:opacity-60 text-white text-xs font-black uppercase tracking-wider py-3 rounded-xl transition-all shadow-xs"
               >
-                {isEditing ? 'Update Reel Details' : 'Upload Reel'}
+                {saving ? 'Saving…' : isEditing ? 'Update Reel Details' : 'Upload Reel'}
               </button>
 
               <button
@@ -543,7 +593,9 @@ const ReelsManagement = () => {
             Active Reels Directory
           </h3>
 
-          {/* Cards Grid */}
+          {loading ? (
+            <div className="text-center text-sm text-gray-400 font-bold py-12">Loading reels…</div>
+          ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-2 gap-6">
             {reels.map((r) => (
               <div 
@@ -638,7 +690,7 @@ const ReelsManagement = () => {
 
                     <button
                       type="button"
-                      onClick={() => handleDelete(r.id)}
+                      onClick={() => handleDelete(r)}
                       className="bg-white hover:bg-rose-50 border border-gray-200 text-gray-700 hover:text-rose-600 p-2 rounded-xl shadow-xs transition-colors"
                       title="Delete"
                     >
@@ -650,6 +702,7 @@ const ReelsManagement = () => {
               </div>
             ))}
           </div>
+          )}
 
         </div>
 

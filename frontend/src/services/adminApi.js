@@ -134,6 +134,50 @@ export const deleteBanner = async (bannerId) => {
   return unwrapData(response);
 };
 
+export const createBanner = async (payload) => {
+  const response = await apiClient.post('/admin/cms/banners', payload);
+  return unwrapData(response)?.banner;
+};
+
+export const updateBanner = async (bannerId, payload) => {
+  const response = await apiClient.patch(`/admin/cms/banners/${bannerId}`, payload);
+  return unwrapData(response)?.banner;
+};
+
+export const uploadAdminFile = async (formData) => {
+  const response = await apiClient.post('/admin/uploads', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return unwrapData(response)?.attachment;
+};
+
+export const uploadAdminMedia = async (formData) => {
+  const response = await apiClient.post('/admin/uploads/media', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return unwrapData(response)?.attachment;
+};
+
+export const listReels = async (params = {}) => {
+  const response = await apiClient.get('/admin/reels', { params });
+  return extractPaginated(response, 'reels');
+};
+
+export const createReel = async (payload) => {
+  const response = await apiClient.post('/admin/reels', payload);
+  return unwrapData(response)?.reel;
+};
+
+export const updateReel = async (reelId, payload) => {
+  const response = await apiClient.patch(`/admin/reels/${reelId}`, payload);
+  return unwrapData(response)?.reel;
+};
+
+export const deleteReel = async (reelId) => {
+  const response = await apiClient.delete(`/admin/reels/${reelId}`);
+  return unwrapData(response);
+};
+
 export const listCmsSections = async (params = {}) => {
   const response = await apiClient.get('/admin/cms/sections', { params });
   return extractPaginated(response, 'sections');

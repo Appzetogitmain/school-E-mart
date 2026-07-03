@@ -3,13 +3,14 @@ import ReactDOM from 'react-dom';
 import { 
   Plus, Edit3, Trash2, X, Upload, Image as ImageIcon, CheckCircle, ChevronRight, Link as LinkIcon, Tag, Trash 
 } from 'lucide-react';
-import { listBanners, deleteBanner } from '../../../services/adminApi';
+import { listBanners, deleteBanner, createBanner, updateBanner, uploadAdminFile } from '../../../services/adminApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
-import { mapBannerForAdmin } from '../../../utils/mappers/adminCmsMapper';
+import { mapBannerForAdmin, mapBannerPayload } from '../../../utils/mappers/adminCmsMapper';
 
 const PromoHomeBanners = () => {
   const [banners, setBanners] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
 
@@ -114,8 +115,24 @@ const PromoHomeBanners = () => {
     setIsModalOpen(true);
   };
 
+  const resolveImageId = async (img) => {
+    if (!img?.file) return null;
+    const formData = new FormData();
+    formData.append('file', img.file);
+    formData.append('purpose', 'banner_image');
+    const attachment = await uploadAdminFile(formData);
+    return attachment?._id || attachment?.id;
+  };
+
+  const getExistingImageId = (banner) => {
+    const imageRef = banner?.raw?.imageId;
+    if (!imageRef) return null;
+    if (typeof imageRef === 'object') return imageRef._id || imageRef.id;
+    return imageRef;
+  };
+
   // Form submission
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
     if (!bannerSlug.trim()) {
@@ -128,42 +145,65 @@ const PromoHomeBanners = () => {
       return;
     }
 
-    if (isEditing) {
-      // Edit Update mode (Updates the single banner)
-      const finalImage = uploadedImages[0].previewUrl;
-      setBanners(prev => prev.map(b => {
-        if (b.id === editId) {
-          return {
-            ...b,
-            slug: bannerSlug.trim().toLowerCase().replace(/\s+/g, '_'),
-            category: targetCategory,
-            orderRank: parseInt(orderRank) || 0,
-            imageUrl: finalImage,
-            targetUrl: targetUrl.trim() || '#',
-            status: isActive ? 'Active' : 'Draft'
-          };
+    setSaving(true);
+    try {
+      if (isEditing) {
+        const existingBanner = banners.find((b) => b.id === editId);
+        let imageId = getExistingImageId(existingBanner);
+
+        if (uploadedImages[0]?.file) {
+          imageId = await resolveImageId(uploadedImages[0]);
         }
-        return b;
-      }));
-      alert('Promotional banner updated successfully!');
-    } else {
-      // Add New mode (Supports batch adding multiple banners!)
-      const startRank = parseInt(orderRank) || 0;
-      const newBannersList = uploadedImages.map((img, idx) => ({
-        id: Date.now() + idx + Math.random(),
-        slug: bannerSlug.trim().toLowerCase().replace(/\s+/g, '_'),
-        category: targetCategory,
-        orderRank: startRank + idx, // Auto-increment sequence ranks cleanly!
-        imageUrl: img.previewUrl,
-        targetUrl: targetUrl.trim() || '#',
-        status: isActive ? 'Active' : 'Draft'
-      }));
 
-      setBanners(prev => [...prev, ...newBannersList]);
-      alert(`Successfully uploaded ${newBannersList.length} promotional banners for category "${targetCategory}"!`);
+        const payload = mapBannerPayload({
+          slug: bannerSlug,
+          category: targetCategory,
+          orderRank,
+          targetUrl,
+          isActive,
+          imageId,
+        });
+
+        const updated = await updateBanner(existingBanner?.mongoId || editId, payload);
+        setBanners((prev) =>
+          prev.map((b) => (b.id === editId ? mapBannerForAdmin(updated) : b))
+        );
+        alert('Promotional banner updated successfully!');
+      } else {
+        const startRank = parseInt(orderRank, 10) || 0;
+        const createdBanners = [];
+
+        for (let idx = 0; idx < uploadedImages.length; idx += 1) {
+          const imageId = await resolveImageId(uploadedImages[idx]);
+          const payload = mapBannerPayload({
+            slug:
+              uploadedImages.length > 1
+                ? `${bannerSlug.trim().toLowerCase().replace(/\s+/g, '_')}_${idx + 1}`
+                : bannerSlug,
+            category: targetCategory,
+            orderRank: startRank + idx,
+            targetUrl,
+            isActive,
+            imageId,
+          });
+          const created = await createBanner(payload);
+          createdBanners.push(mapBannerForAdmin(created));
+        }
+
+        setBanners((prev) => [...createdBanners, ...prev]);
+        alert(
+          `Successfully uploaded ${createdBanners.length} promotional banner${
+            createdBanners.length > 1 ? 's' : ''
+          } for category "${targetCategory}"!`
+        );
+      }
+
+      setIsModalOpen(false);
+    } catch (err) {
+      alert(getErrorMessage(err, 'Unable to save banner'));
+    } finally {
+      setSaving(false);
     }
-
-    setIsModalOpen(false);
   };
 
   const handleDelete = (banner) => {
@@ -197,6 +237,15 @@ const PromoHomeBanners = () => {
       </div>
 
       {/* BANNERS CATALOG GRID */}
+      {error && (
+        <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs font-bold text-rose-700">
+          {error}
+        </div>
+      )}
+
+      {loading ? (
+        <div className="text-center text-sm text-gray-400 font-bold py-12">Loading banners…</div>
+      ) : (
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
         {banners.map((b) => (
           <div 
@@ -277,6 +326,7 @@ const PromoHomeBanners = () => {
           </div>
         ))}
       </div>
+      )}
 
       {/* FLOATING ADD / EDIT BANNER MODAL PORTAL */}
       {isModalOpen && ReactDOM.createPortal(
@@ -453,9 +503,10 @@ const PromoHomeBanners = () => {
               <div className="pt-3 flex gap-3">
                 <button
                   type="submit"
-                  className="flex-1 bg-[#0B1528] hover:bg-[#15253F] text-white text-xs font-black uppercase tracking-wider py-3 rounded-xl transition-all shadow-xs"
+                  disabled={saving}
+                  className="flex-1 bg-[#0B1528] hover:bg-[#15253F] disabled:opacity-60 text-white text-xs font-black uppercase tracking-wider py-3 rounded-xl transition-all shadow-xs"
                 >
-                  {isEditing ? 'Update Banner' : 'Create Banners'}
+                  {saving ? 'Saving…' : isEditing ? 'Update Banner' : 'Create Banners'}
                 </button>
                 <button
                   type="button"

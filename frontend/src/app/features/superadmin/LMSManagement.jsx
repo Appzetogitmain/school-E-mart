@@ -8,20 +8,24 @@ import {
   createPlatformCourse,
   updatePlatformCourse,
   deletePlatformCourse,
+  uploadAdminFile,
+  uploadAdminMedia,
 } from '../../../services/adminApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 import { mapPlatformCourseForAdmin, mapAdminCourseToPayload } from '../../../utils/mappers/adminLmsMapper';
 import useAuthReady from '../../../hooks/useAuthReady';
 
-const readFileAsDataUrl = (file) =>
-  new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
+const uploadLmsFile = async (file, purpose, useMedia = false) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('purpose', purpose);
+  const attachment = useMedia
+    ? await uploadAdminMedia(formData)
+    : await uploadAdminFile(formData);
+  return attachment?.url || attachment?.storageKey || '';
+};
 
-const resolveMediaUrl = async (preview, file, label, urlInput = '') => {
+const resolveMediaUrl = async (preview, file, label, urlInput = '', existingUrl = '') => {
   const normalizedInput = urlInput?.trim();
   if (normalizedInput) {
     if (!/^https?:\/\//i.test(normalizedInput)) {
@@ -32,31 +36,20 @@ const resolveMediaUrl = async (preview, file, label, urlInput = '') => {
     return normalizedInput;
   }
 
-  if (preview?.startsWith('http://') || preview?.startsWith('https://')) {
+  if (
+    preview?.startsWith('http://') ||
+    preview?.startsWith('https://') ||
+    preview?.startsWith('/uploads/')
+  ) {
     return preview;
   }
 
-  if (label === 'video') {
-    throw new Error(
-      'Local video files cannot be saved to the server. Paste a direct video URL (https://...) in the Video URL field.'
-    );
+  if (file) {
+    const purpose = label === 'video' ? 'lms_video' : 'lms_thumb';
+    return uploadLmsFile(file, purpose, label === 'video');
   }
 
-  if (preview?.startsWith('data:')) {
-    if (preview.length > 350_000) {
-      throw new Error('Cover image is too large. Use a smaller image or paste an image URL.');
-    }
-    return preview;
-  }
-
-  if (file && preview?.startsWith('blob:')) {
-    if (file.size > 350_000) {
-      throw new Error('Cover image is too large. Use a smaller image or paste an image URL.');
-    }
-    return readFileAsDataUrl(file);
-  }
-
-  return preview || '';
+  return existingUrl || '';
 };
 
 const LMSManagement = () => {
@@ -141,8 +134,8 @@ const LMSManagement = () => {
       return;
     }
 
-    if (!videoUrlInput.trim() && !videoPreview?.startsWith('http')) {
-      alert('Provide a lecture Video URL (https://...). Local video files are for preview only.');
+    if (!videoUrlInput.trim() && !videoFile && !videoPreview) {
+      alert('Please upload a lecture video or provide a video URL.');
       return;
     }
 
@@ -153,9 +146,22 @@ const LMSManagement = () => {
 
     setSaving(true);
     try {
+      const existingCourse = isEditing ? courses.find((c) => c.id === editId) : null;
       const [resolvedVideoUrl, resolvedCoverUrl] = await Promise.all([
-        resolveMediaUrl(videoPreview, videoFile, 'video', videoUrlInput),
-        resolveMediaUrl(coverPreview, coverFile, 'cover', thumbnailUrlInput),
+        resolveMediaUrl(
+          videoPreview,
+          videoFile,
+          'video',
+          videoUrlInput,
+          existingCourse?.videoUrl
+        ),
+        resolveMediaUrl(
+          coverPreview,
+          coverFile,
+          'cover',
+          thumbnailUrlInput,
+          existingCourse?.thumbnailUrl
+        ),
       ]);
 
       const payload = mapAdminCourseToPayload({
@@ -433,13 +439,13 @@ const LMSManagement = () => {
               </div>
               <input
                 type="url"
-                placeholder="Video URL (required) — https://example.com/lecture.mp4"
+                placeholder="Video URL (optional) — https://example.com/lecture.mp4"
                 value={videoUrlInput}
                 onChange={(e) => setVideoUrlInput(e.target.value)}
                 className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-500/25 font-bold text-[11px]"
               />
               <span className="block text-[8px] text-gray-400 font-medium">
-                Paste a hosted video link to save the lecture. Local file selection is preview-only.
+                Upload a video file or paste a hosted video link to save the lecture.
               </span>
             </div>
 
@@ -492,7 +498,7 @@ const LMSManagement = () => {
                 className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-500/25 font-bold text-[11px]"
               />
               <span className="block text-[8px] text-gray-400 font-medium">
-                Use a URL or upload a small cover image (under ~350KB).
+                Use a URL or upload a cover image file.
               </span>
             </div>
             <label className="flex items-center gap-2.5 cursor-pointer text-xs select-none pt-1">

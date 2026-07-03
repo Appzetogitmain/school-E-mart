@@ -7,6 +7,7 @@ const { protectedRoute } = require('../../../middlewares/auth/guards');
 const { PERMISSIONS } = require('../../../constants/permissions');
 const { ROLES } = require('../../../constants/roles');
 const lmsValidators = require('../../lms/validators/lms.validator');
+const { uploadImage, uploadMedia } = require('../middlewares/upload.middleware');
 
 const router = express.Router();
 
@@ -358,6 +359,10 @@ router.delete(
   adminController.deleteFaq
 );
 
+// File uploads (superadmin)
+router.post('/uploads', ...adminOnly, uploadImage, adminController.uploadAttachment);
+router.post('/uploads/media', ...adminOnly, uploadMedia, adminController.uploadAttachment);
+
 // CMS - Banners
 router.get('/cms/banners', ...adminOnly, validateQuery(validators.paginationQuery), adminController.listBanners);
 router.post('/cms/banners', ...adminOnly, validateBody(validators.bannerSchema), adminController.createBanner);
@@ -464,6 +469,23 @@ router.patch(
   validateParams(validators.courseIdParam),
   validateBody(lmsValidators.courseStatusSchema),
   adminController.setPlatformCourseStatus
+);
+
+// Platform Reels
+router.get('/reels', ...adminOnly, validateQuery(validators.paginationQuery), adminController.listReels);
+router.post('/reels', ...adminOnly, validateBody(validators.reelSchema), adminController.createReel);
+router.patch(
+  '/reels/:reelId',
+  ...adminOnly,
+  validateParams(validators.reelIdParam),
+  validateBody(validators.updateReelSchema),
+  adminController.updateReel
+);
+router.delete(
+  '/reels/:reelId',
+  ...adminOnly,
+  validateParams(validators.reelIdParam),
+  adminController.deleteReel
 );
 
 module.exports = router;

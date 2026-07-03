@@ -1,4 +1,5 @@
 const http = require('http');
+const path = require('path');
 const express = require('express');
 const compression = require('compression');
 const cors = require('cors');
@@ -41,6 +42,7 @@ const createApp = () => {
 
   // Infra probe endpoint (load balancers); versioned API lives under API_PREFIX
   app.get('/health', getHealth);
+  app.use('/uploads', express.static(path.resolve(__dirname, '../uploads')));
   app.use(config.env.API_PREFIX, routes);
 
   app.use(middlewares.notFoundHandler);

@@ -1,4 +1,5 @@
 const { NotFoundError, ConflictError } = require('../../../common/errors');
+const PromoBanner = require('../../../database/models/PromoBanner');
 const {
   cmsPageRepository,
   faqRepository,
@@ -16,6 +17,19 @@ const CMS_ENTITY_TYPES = {
   section: 'PromoHomeSection',
   landing: 'LandingContent',
 };
+
+const resolveBannerImageUrl = (banner) => {
+  const storageKey = banner?.imageId?.storageKey;
+  if (typeof storageKey === 'string' && /^https?:\/\//i.test(storageKey)) {
+    return storageKey;
+  }
+  return storageKey || null;
+};
+
+const withBannerImageUrl = (banner) => ({
+  ...banner,
+  imageUrl: resolveBannerImageUrl(banner),
+});
 
 const getRepo = (type) => {
   const map = {
@@ -133,8 +147,12 @@ const cmsService = {
   },
 
   // Banners
-  listBanners(query) {
-    return promoBannerRepository.paginate({}, query);
+  async listBanners(query) {
+    const { data, pagination } = await promoBannerRepository.paginate({}, query);
+    return {
+      data: data.map(withBannerImageUrl),
+      pagination,
+    };
   },
 
   listPublicBanners(query = {}) {
@@ -163,13 +181,20 @@ const cmsService = {
   },
 
   async createBanner(payload, actor = {}) {
-    return promoBannerRepository.create(payload);
+    const banner = await promoBannerRepository.create(payload);
+    const populated = await PromoBanner.findById(banner._id)
+      .populate('imageId', 'storageKey mime')
+      .lean();
+    return withBannerImageUrl(populated);
   },
 
   async updateBanner(bannerId, payload) {
     const banner = await promoBannerRepository.updateById(bannerId, { $set: payload });
     if (!banner) throw new NotFoundError('Banner not found', 'BANNER_NOT_FOUND');
-    return banner;
+    const populated = await PromoBanner.findById(bannerId)
+      .populate('imageId', 'storageKey mime')
+      .lean();
+    return withBannerImageUrl(populated);
   },
 
   async deleteBanner(bannerId) {

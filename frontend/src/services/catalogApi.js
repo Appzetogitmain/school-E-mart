@@ -10,6 +10,7 @@ const extractPaginated = (response) => {
       data?.categories ||
       data?.subcategories ||
       data?.banners ||
+      data?.reels ||
       data,
     pagination: pagination || null,
   };
@@ -27,6 +28,11 @@ export const listHeaderCategories = async (params = {}) => {
 
 export const listPublicBanners = async (params = {}) => {
   const response = await apiClient.get('/catalog/banners', { params });
+  return extractPaginated(response);
+};
+
+export const listPublicReels = async (params = {}) => {
+  const response = await apiClient.get('/catalog/reels', { params });
   return extractPaginated(response);
 };
 

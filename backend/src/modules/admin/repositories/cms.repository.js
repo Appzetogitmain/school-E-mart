@@ -68,10 +68,22 @@ class PromoBannerRepository extends BaseRepository {
     if (queryString.audience && queryString.audience !== 'all') {
       merged.targetAudience = { $in: [queryString.audience, 'all'] };
     }
-    return executePaginatedQuery(PromoBanner, merged, queryString, {
-      defaultSort: 'displayOrder',
-      ...options,
-    });
+
+    const { parsePagination, buildPaginationMeta } = require('../../../common/pagination');
+    const { page, limit, skip } = parsePagination(queryString, options);
+
+    return Promise.all([
+      PromoBanner.find(merged)
+        .sort({ displayOrder: 1, _id: 1 })
+        .skip(skip)
+        .limit(limit)
+        .populate('imageId', 'storageKey mime')
+        .lean(),
+      PromoBanner.countDocuments(merged),
+    ]).then(([data, total]) => ({
+      data,
+      pagination: buildPaginationMeta({ total, page, limit }),
+    }));
   }
 
   async paginatePublic(filter, queryString, options = {}) {

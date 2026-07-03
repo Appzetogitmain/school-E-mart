@@ -106,6 +106,32 @@ const updateBannerSchema = bannerSchema.fork(['title', 'imageId', 'position', 'v
   s.optional()
 );
 
+const reelIdParam = Joi.object({ reelId: objectId.required() });
+
+const linkedProductSchema = Joi.object({
+  title: Joi.string().trim().max(200).optional(),
+  price: Joi.number().min(0).optional(),
+  mrp: Joi.number().min(0).optional(),
+  url: Joi.string().trim().max(500).optional(),
+  imageId: objectId.optional(),
+  imageUrl: Joi.string().trim().max(500).optional(),
+  badge: Joi.string().trim().max(40).optional(),
+});
+
+const reelSchema = Joi.object({
+  title: Joi.string().trim().min(1).max(200).required(),
+  description: Joi.string().trim().max(2000).optional(),
+  videoId: objectId.required(),
+  thumbnailId: objectId.optional(),
+  storeName: Joi.string().trim().max(160).optional(),
+  category: Joi.string().trim().max(80).optional(),
+  musicLabel: Joi.string().trim().max(200).optional(),
+  linkedProduct: linkedProductSchema.optional(),
+  status: Joi.string().valid('draft', 'published', 'archived').default('draft'),
+});
+
+const updateReelSchema = reelSchema.fork(['title', 'videoId'], (s) => s.optional());
+
 const sectionSchema = Joi.object({
   title: Joi.string().trim().min(1).max(200).required(),
   type: Joi.string()
@@ -232,6 +258,7 @@ module.exports = {
   pageIdParam,
   faqIdParam,
   bannerIdParam,
+  reelIdParam,
   sectionIdParam,
   courseIdParam,
   settingsSectionParam,
@@ -247,6 +274,8 @@ module.exports = {
   updateFaqSchema,
   bannerSchema,
   updateBannerSchema,
+  reelSchema,
+  updateReelSchema,
   sectionSchema,
   updateSectionSchema,
   landingContentSchema,
