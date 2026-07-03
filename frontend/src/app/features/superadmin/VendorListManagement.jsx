@@ -24,6 +24,7 @@ const VendorListManagement = () => {
   // Edit modal states
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingVendorId, setEditingVendorId] = useState(null);
+  const [editingVendor, setEditingVendor] = useState(null);
   
   // Modal input fields
   const [editName, setEditName] = useState('');
@@ -93,6 +94,11 @@ const VendorListManagement = () => {
       if (action === 'suspend') await suspendVendor(vendor.mongoId, { reason: 'Suspended by admin' });
       if (action === 'reactivate') await reactivateVendor(vendor.mongoId, {});
       await loadVendors();
+      if (editingVendor?.mongoId === vendor.mongoId) {
+        setIsEditModalOpen(false);
+        setEditingVendor(null);
+        setEditingVendorId(null);
+      }
     } catch (err) {
       alert(getErrorMessage(err, `Unable to ${action} vendor`));
     } finally {
@@ -103,6 +109,7 @@ const VendorListManagement = () => {
 
   // Open Edit Modal & populate details
   const openEditModal = (v) => {
+    setEditingVendor(v);
     setEditingVendorId(v.id);
     setEditName(v.name);
     setEditStoreName(v.storeName);
@@ -442,6 +449,53 @@ const VendorListManagement = () => {
                           <Edit size={12} className="stroke-[2.5]" />
                         </button>
 
+                        {v.statusRaw === 'pending' && (
+                          <>
+                            <button
+                              type="button"
+                              disabled={actionId === v.mongoId}
+                              onClick={() => runVendorAction(v, 'approve')}
+                              title="Approve vendor"
+                              className="w-7 h-7 rounded-xl border border-emerald-200 text-emerald-600 hover:bg-emerald-50 flex items-center justify-center transition-all shrink-0 disabled:opacity-50"
+                            >
+                              {actionId === v.mongoId ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={actionId === v.mongoId}
+                              onClick={() => runVendorAction(v, 'reject')}
+                              title="Reject vendor"
+                              className="w-7 h-7 rounded-xl border border-rose-200 text-rose-500 hover:bg-rose-50 flex items-center justify-center transition-all shrink-0 disabled:opacity-50"
+                            >
+                              <X size={12} />
+                            </button>
+                          </>
+                        )}
+
+                        {v.statusRaw === 'approved' && (
+                          <button
+                            type="button"
+                            disabled={actionId === v.mongoId}
+                            onClick={() => runVendorAction(v, 'suspend')}
+                            title="Suspend vendor"
+                            className="w-7 h-7 rounded-xl border border-rose-200 text-rose-500 hover:bg-rose-50 flex items-center justify-center transition-all shrink-0 disabled:opacity-50"
+                          >
+                            <AlertCircle size={12} />
+                          </button>
+                        )}
+
+                        {v.statusRaw === 'suspended' && (
+                          <button
+                            type="button"
+                            disabled={actionId === v.mongoId}
+                            onClick={() => runVendorAction(v, 'reactivate')}
+                            title="Reactivate vendor"
+                            className="w-7 h-7 rounded-xl border border-emerald-200 text-emerald-600 hover:bg-emerald-50 flex items-center justify-center transition-all shrink-0 disabled:opacity-50"
+                          >
+                            <RefreshCw size={12} />
+                          </button>
+                        )}
+
                         {/* Delete Button */}
                         <button 
                           onClick={() => handleDeleteVendor(v.id)}
@@ -474,7 +528,11 @@ const VendorListManagement = () => {
               </div>
               <button 
                 type="button"
-                onClick={() => setIsEditModalOpen(false)}
+                onClick={() => {
+                  setIsEditModalOpen(false);
+                  setEditingVendor(null);
+                  setEditingVendorId(null);
+                }}
                 className="p-1.5 rounded-xl hover:bg-gray-100 text-gray-400 hover:text-gray-900 transition-all border border-gray-100"
               >
                 <X size={18} />
@@ -494,28 +552,50 @@ const VendorListManagement = () => {
               </span>
 
               <div className="flex items-center gap-2">
-                <button 
-                  type="button"
-                  onClick={() => {
-                    setEditStatus('Approved');
-                    setEditNeedApproval('No');
-                  }}
-                  className="bg-[#0B1528] hover:bg-emerald-600 text-white font-extrabold text-xs px-4 py-2 rounded-xl flex items-center gap-1.5 transition-all shadow-sm"
-                >
-                  <Check size={14} className="stroke-[3]" />
-                  <span>Approve</span>
-                </button>
-                <button 
-                  type="button"
-                  onClick={() => {
-                    setEditStatus('Suspended');
-                    setEditNeedApproval('Yes');
-                  }}
-                  className="bg-red-600 hover:bg-red-700 text-white font-extrabold text-xs px-4 py-2 rounded-xl flex items-center gap-1.5 transition-all shadow-sm"
-                >
-                  <X size={14} className="stroke-[3]" />
-                  <span>Reject</span>
-                </button>
+                {editingVendor?.statusRaw === 'pending' && (
+                  <>
+                    <button 
+                      type="button"
+                      disabled={actionId === editingVendor?.mongoId}
+                      onClick={() => runVendorAction(editingVendor, 'approve')}
+                      className="bg-[#0B1528] hover:bg-emerald-600 text-white font-extrabold text-xs px-4 py-2 rounded-xl flex items-center gap-1.5 transition-all shadow-sm disabled:opacity-50"
+                    >
+                      {actionId === editingVendor?.mongoId ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} className="stroke-[3]" />}
+                      <span>Approve</span>
+                    </button>
+                    <button 
+                      type="button"
+                      disabled={actionId === editingVendor?.mongoId}
+                      onClick={() => runVendorAction(editingVendor, 'reject')}
+                      className="bg-red-600 hover:bg-red-700 text-white font-extrabold text-xs px-4 py-2 rounded-xl flex items-center gap-1.5 transition-all shadow-sm disabled:opacity-50"
+                    >
+                      <X size={14} className="stroke-[3]" />
+                      <span>Reject</span>
+                    </button>
+                  </>
+                )}
+                {editingVendor?.statusRaw === 'approved' && (
+                  <button
+                    type="button"
+                    disabled={actionId === editingVendor?.mongoId}
+                    onClick={() => runVendorAction(editingVendor, 'suspend')}
+                    className="bg-red-600 hover:bg-red-700 text-white font-extrabold text-xs px-4 py-2 rounded-xl flex items-center gap-1.5 transition-all shadow-sm disabled:opacity-50"
+                  >
+                    <AlertCircle size={14} />
+                    <span>Suspend</span>
+                  </button>
+                )}
+                {editingVendor?.statusRaw === 'suspended' && (
+                  <button
+                    type="button"
+                    disabled={actionId === editingVendor?.mongoId}
+                    onClick={() => runVendorAction(editingVendor, 'reactivate')}
+                    className="bg-[#0B1528] hover:bg-emerald-600 text-white font-extrabold text-xs px-4 py-2 rounded-xl flex items-center gap-1.5 transition-all shadow-sm disabled:opacity-50"
+                  >
+                    <RefreshCw size={14} />
+                    <span>Reactivate</span>
+                  </button>
+                )}
               </div>
             </div>
 
@@ -867,7 +947,11 @@ const VendorListManagement = () => {
             <div className="p-5 border-t border-gray-150 flex items-center justify-end gap-2.5 bg-white px-6 shrink-0 shadow-[0_-4px_12px_rgba(0,0,0,0.02)]">
               <button 
                 type="button"
-                onClick={() => setIsEditModalOpen(false)}
+                onClick={() => {
+                  setIsEditModalOpen(false);
+                  setEditingVendor(null);
+                  setEditingVendorId(null);
+                }}
                 className="border border-gray-200 hover:bg-gray-50 text-gray-600 font-black text-xs px-5 py-2.5 rounded-xl transition-all"
               >
                 Close

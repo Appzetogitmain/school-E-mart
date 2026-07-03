@@ -4,7 +4,11 @@ import useAuthStore from '../store/useAuthStore';
 import { ROUTES } from '../constants/routes';
 
 export const ProtectedRoute = ({ redirectTo = ROUTES.LOGIN }) => {
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, _hasHydrated } = useAuthStore();
+
+  if (!_hasHydrated) {
+    return null;
+  }
 
   if (!isAuthenticated) {
     return <Navigate to={redirectTo} replace />;
