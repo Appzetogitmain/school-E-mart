@@ -19,6 +19,9 @@ const lmsCourseSchema = new mongoose.Schema({
   },
   instructorName: { type: String },
   instructorUserId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  thumbnailUrl: { type: String },
+  videoUrl: { type: String },
+  durationLabel: { type: String },
   tags: [{ type: String }],
   status: {
     type: String,

@@ -14,22 +14,26 @@ const withLms = (guards) => [...guards, resolveSchoolLms()];
 const lmsManage = protectedRoute({
   roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN, ROLES.TEACHER],
   permissions: [PERMISSIONS.LMS_MANAGE],
-  tenant: { requireTenantId: false },
+  tenant: {
+    requireTenantId: false,
+    roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN, ROLES.TEACHER],
+  },
 });
 const lmsRead = protectedRoute({
   roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN, ROLES.TEACHER, ROLES.PARENT],
   permissions: [PERMISSIONS.LMS_READ],
-  tenant: { requireTenantId: false },
 });
 const lmsWrite = protectedRoute({
   roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN, ROLES.TEACHER],
   permissions: [PERMISSIONS.LMS_WRITE],
-  tenant: { requireTenantId: false },
+  tenant: {
+    requireTenantId: false,
+    roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN, ROLES.TEACHER],
+  },
 });
 const learner = protectedRoute({
   roles: [ROLES.PARENT],
   permissions: [PERMISSIONS.LMS_READ],
-  tenant: { requireTenantId: false },
 });
 
 router.post(

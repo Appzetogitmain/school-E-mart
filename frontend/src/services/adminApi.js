@@ -148,3 +148,28 @@ export const updateMarketplaceSettings = async (payload) => {
   const response = await apiClient.put('/admin/settings/marketplace', payload);
   return unwrapData(response)?.settings;
 };
+
+export const listPlatformCourses = async (params = {}) => {
+  const response = await apiClient.get('/admin/lms/courses', { params });
+  return extractPaginated(response, 'courses');
+};
+
+export const createPlatformCourse = async (payload) => {
+  const response = await apiClient.post('/admin/lms/courses', payload);
+  return unwrapData(response)?.course;
+};
+
+export const updatePlatformCourse = async (courseId, payload) => {
+  const response = await apiClient.patch(`/admin/lms/courses/${courseId}`, payload);
+  return unwrapData(response)?.course;
+};
+
+export const deletePlatformCourse = async (courseId) => {
+  const response = await apiClient.delete(`/admin/lms/courses/${courseId}`);
+  return unwrapData(response);
+};
+
+export const setPlatformCourseStatus = async (courseId, status) => {
+  const response = await apiClient.patch(`/admin/lms/courses/${courseId}/status`, { status });
+  return unwrapData(response)?.course;
+};

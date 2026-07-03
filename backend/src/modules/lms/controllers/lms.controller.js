@@ -1,5 +1,6 @@
 const { success, created, paginated } = require('../../../common/response');
 const asyncHandler = require('../../../utils/asyncHandler');
+const { ROLES } = require('../../../constants/roles');
 const {
   assertCourseInSchool,
   assertManageAccess,
@@ -29,7 +30,10 @@ const lmsController = {
   }),
 
   listCourses: asyncHandler(async (req, res) => {
-    const { data, pagination } = await courseService.listCourses(req.schoolId, req.query);
+    const includePlatform = req.auth.role === ROLES.PARENT;
+    const { data, pagination } = await courseService.listCourses(req.schoolId, req.query, {
+      includePlatform,
+    });
     return paginated(res, { courses: data }, pagination, 'Courses fetched successfully', req);
   }),
 

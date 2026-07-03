@@ -1,11 +1,45 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import ReactDOM from 'react-dom';
 import { 
-  GraduationCap, Film, Plus, Edit3, Trash2, BookOpen, Clock, Play, X, ChevronRight, CheckCircle, Info, Upload, Image as ImageIcon, User, Award, Tag
+  GraduationCap, Film, Plus, Edit3, Trash2, BookOpen, Clock, Play, X, ChevronRight, CheckCircle, Info, Upload, Image as ImageIcon, User, Award, Tag, Loader2
 } from 'lucide-react';
+import {
+  listPlatformCourses,
+  createPlatformCourse,
+  updatePlatformCourse,
+  deletePlatformCourse,
+} from '../../../services/adminApi';
+import { getErrorMessage } from '../../../utils/apiHelpers';
+import { mapPlatformCourseForAdmin, mapAdminCourseToPayload } from '../../../utils/mappers/adminLmsMapper';
+
+const readFileAsDataUrl = (file) =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+
+const resolveMediaUrl = async (preview, file, label) => {
+  if (!preview) return '';
+  if (preview.startsWith('http://') || preview.startsWith('https://') || preview.startsWith('data:')) {
+    return preview;
+  }
+  if (file) {
+    const maxBytes = label === 'cover' ? 2 * 1024 * 1024 : 15 * 1024 * 1024;
+    if (file.size > maxBytes) {
+      throw new Error(`${label === 'cover' ? 'Cover image' : 'Video'} is too large to store. Please use a smaller file or an external URL.`);
+    }
+    return readFileAsDataUrl(file);
+  }
+  return preview;
+};
 
 const LMSManagement = () => {
   const [courses, setCourses] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
   // Subjects & Grades options
   const subjects = ['Science', 'Mathematics', 'English', 'Geography', 'Art & Craft', 'History'];
@@ -37,6 +71,24 @@ const LMSManagement = () => {
   // Playing Video Modal Portal state
   const [playingCourse, setPlayingCourse] = useState(null);
 
+  const loadCourses = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const { data } = await listPlatformCourses({ limit: 100 });
+      setCourses((data || []).map(mapPlatformCourseForAdmin));
+    } catch (err) {
+      setCourses([]);
+      setError(getErrorMessage(err, 'Unable to load LMS courses'));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadCourses();
+  }, [loadCourses]);
+
   // Handlers
   const handleVideoFileChange = (e) => {
     const file = e.target.files[0];
@@ -54,7 +106,7 @@ const LMSManagement = () => {
     }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!courseTitle.trim() || !instructor.trim() || !concepts.trim()) {
       alert('Please fill out Course Title, Instructor, and Key Concepts.');
@@ -72,47 +124,42 @@ const LMSManagement = () => {
       return;
     }
 
-    if (isEditing) {
-      // UPDATE mode
-      setCourses(prev => prev.map(c => {
-        if (c.id === editId) {
-          return {
-            ...c,
-            title: courseTitle.trim(),
-            subject,
-            gradeClass,
-            instructor: instructor.trim(),
-            concepts: concepts.trim(),
-            duration: duration.trim() || '30 Mins',
-            videoUrl: videoPreview,
-            thumbnailUrl: coverUrl,
-            status: isActive ? 'Active' : 'Draft'
-          };
-        }
-        return c;
-      }));
-      alert('LMS course updated successfully!');
-      resetForm();
-    } else {
-      // ADD mode
-      const nextId = courses.length > 0 ? Math.max(...courses.map(c => c.id)) + 1 : 1;
-      const newCourse = {
-        id: nextId,
-        title: courseTitle.trim(),
+    setSaving(true);
+    try {
+      const [resolvedVideoUrl, resolvedCoverUrl] = await Promise.all([
+        resolveMediaUrl(videoPreview, videoFile, 'video'),
+        resolveMediaUrl(coverUrl, coverFile, 'cover'),
+      ]);
+
+      const payload = mapAdminCourseToPayload({
+        title: courseTitle,
         subject,
         gradeClass,
-        instructor: instructor.trim(),
-        concepts: concepts.trim(),
-        duration: duration.trim() || '30 Mins',
-        videoUrl: videoPreview,
-        thumbnailUrl: coverUrl,
-        status: isActive ? 'Active' : 'Draft',
-        studentsEnrolled: 0
-      };
+        instructor,
+        concepts,
+        duration,
+        videoUrl: resolvedVideoUrl,
+        thumbnailUrl: resolvedCoverUrl,
+        isActive,
+      });
 
-      setCourses(prev => [newCourse, ...prev]);
-      alert('LMS course lecture successfully published to the Student Learning Hub!');
-      resetForm();
+      if (isEditing) {
+        const updated = await updatePlatformCourse(editId, payload);
+        setCourses((prev) =>
+          prev.map((c) => (c.id === editId ? mapPlatformCourseForAdmin(updated) : c))
+        );
+        alert('LMS course updated successfully!');
+        resetForm();
+      } else {
+        const created = await createPlatformCourse(payload);
+        setCourses((prev) => [mapPlatformCourseForAdmin(created), ...prev]);
+        alert('LMS course lecture successfully published to the Student Learning Hub!');
+        resetForm();
+      }
+    } catch (err) {
+      alert(getErrorMessage(err, 'Unable to save LMS course'));
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -132,9 +179,14 @@ const LMSManagement = () => {
     setCoverPreview(course.thumbnailUrl);
   };
 
-  const handleDelete = (id) => {
-    if (window.confirm('Are you sure you want to delete this LMS course?')) {
-      setCourses(prev => prev.filter(c => c.id !== id));
+  const handleDelete = async (id) => {
+    if (!window.confirm('Are you sure you want to delete this LMS course?')) return;
+
+    try {
+      await deletePlatformCourse(id);
+      setCourses((prev) => prev.filter((c) => c.id !== id));
+    } catch (err) {
+      alert(getErrorMessage(err, 'Unable to delete LMS course'));
     }
   };
 
@@ -408,9 +460,11 @@ const LMSManagement = () => {
             <div className="pt-4 space-y-2 select-none">
               <button
                 type="submit"
-                className="w-full flex items-center justify-center gap-2 bg-[#0B1528] hover:bg-[#15253F] text-white text-xs font-black uppercase tracking-wider py-3 rounded-xl transition-all shadow-xs"
+                disabled={saving}
+                className="w-full flex items-center justify-center gap-2 bg-[#0B1528] hover:bg-[#15253F] disabled:opacity-60 text-white text-xs font-black uppercase tracking-wider py-3 rounded-xl transition-all shadow-xs"
               >
-                {isEditing ? 'Update Lecture Details' : 'Upload Lecture'}
+                {saving ? <Loader2 size={14} className="animate-spin" /> : null}
+                <span>{isEditing ? 'Update Lecture Details' : 'Upload Lecture'}</span>
               </button>
 
               <button
@@ -433,6 +487,15 @@ const LMSManagement = () => {
             Learning Catalog Directory
           </h3>
 
+          {loading ? (
+            <div className="flex justify-center py-16">
+              <Loader2 size={28} className="animate-spin text-indigo-600" />
+            </div>
+          ) : error ? (
+            <p className="text-sm text-red-500 text-center py-8">{error}</p>
+          ) : courses.length === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-8">No platform lectures yet. Create one using the form.</p>
+          ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             {courses.map((c) => (
               <div 
@@ -540,6 +603,7 @@ const LMSManagement = () => {
               </div>
             ))}
           </div>
+          )}
 
         </div>
 

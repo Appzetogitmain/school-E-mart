@@ -8,6 +8,7 @@ const schoolApprovalService = require('../services/schoolApproval.service');
 const reportsService = require('../services/reports.service');
 const cmsService = require('../services/cms.service');
 const settingsService = require('../services/settings.service');
+const adminLmsService = require('../services/lms.service');
 
 const actorFrom = (req) => ({ userId: req.auth.userId, role: req.auth.role });
 
@@ -467,6 +468,32 @@ const adminController = {
       actorFrom(req)
     );
     return success(res, { section }, 'Settings updated', undefined, req);
+  }),
+
+  // Platform LMS (Super Admin)
+  listPlatformCourses: asyncHandler(async (req, res) => {
+    const { data, pagination } = await adminLmsService.listPlatformCourses(req.query);
+    return paginated(res, { courses: data }, pagination, 'Platform courses fetched', req);
+  }),
+
+  createPlatformCourse: asyncHandler(async (req, res) => {
+    const course = await adminLmsService.createPlatformCourse(req.body);
+    return created(res, { course }, 'Platform course created', req);
+  }),
+
+  updatePlatformCourse: asyncHandler(async (req, res) => {
+    const course = await adminLmsService.updatePlatformCourse(req.params.courseId, req.body);
+    return success(res, { course }, 'Platform course updated', undefined, req);
+  }),
+
+  deletePlatformCourse: asyncHandler(async (req, res) => {
+    await adminLmsService.deletePlatformCourse(req.params.courseId, req.auth.userId);
+    return success(res, null, 'Platform course deleted', undefined, req);
+  }),
+
+  setPlatformCourseStatus: asyncHandler(async (req, res) => {
+    const course = await adminLmsService.setPlatformCourseStatus(req.params.courseId, req.body.status);
+    return success(res, { course }, 'Platform course status updated', undefined, req);
   }),
 };
 

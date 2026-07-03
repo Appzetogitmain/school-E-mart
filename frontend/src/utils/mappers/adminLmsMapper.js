@@ -1,0 +1,36 @@
+export const mapPlatformCourseForAdmin = (course) => ({
+  id: course?._id || course?.id,
+  title: course?.title || '',
+  subject: course?.subject || 'General',
+  gradeClass: course?.gradeClass || '',
+  instructor: course?.instructorName || '',
+  concepts: course?.description || '',
+  duration: course?.durationLabel || '30 Mins',
+  videoUrl: course?.videoUrl || '',
+  thumbnailUrl: course?.thumbnailUrl || '',
+  status: course?.status === 'published' ? 'Active' : 'Draft',
+  studentsEnrolled: course?.studentsEnrolled || 0,
+});
+
+export const mapAdminCourseToPayload = ({
+  title,
+  subject,
+  gradeClass,
+  instructor,
+  concepts,
+  duration,
+  videoUrl,
+  thumbnailUrl,
+  isActive,
+}) => ({
+  title: title?.trim(),
+  subject,
+  gradeClass,
+  instructorName: instructor?.trim(),
+  description: concepts?.trim(),
+  durationLabel: duration?.trim() || '30 Mins',
+  videoUrl: videoUrl || undefined,
+  thumbnailUrl: thumbnailUrl || undefined,
+  targetAudience: 'parents',
+  status: isActive ? 'published' : 'draft',
+});

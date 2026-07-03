@@ -34,6 +34,7 @@ const pageIdParam = Joi.object({ pageId: objectId.required() });
 const faqIdParam = Joi.object({ faqId: objectId.required() });
 const bannerIdParam = Joi.object({ bannerId: objectId.required() });
 const sectionIdParam = Joi.object({ sectionId: objectId.required() });
+const courseIdParam = Joi.object({ courseId: objectId.required() });
 const settingsSectionParam = Joi.object({
   section: Joi.string()
     .valid('general', 'marketplace', 'orders', 'school', 'security', 'billing')
@@ -232,6 +233,7 @@ module.exports = {
   faqIdParam,
   bannerIdParam,
   sectionIdParam,
+  courseIdParam,
   settingsSectionParam,
   landingSlugParam,
   recentQuery,

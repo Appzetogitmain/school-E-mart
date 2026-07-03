@@ -15,17 +15,18 @@ export const mapCourseToLesson = (course, progress = 0) => {
     subject: course?.subject || category || 'General',
     chapter: gradeClass ? `${gradeClass} • ${category}` : category,
     progress: Number(progress) || 0,
-    duration: course?.duration || '—',
+    duration: course?.durationLabel || course?.duration || '—',
     image:
       course?.thumbnailUrl ||
       course?.thumbnail?.url ||
       course?.imageUrl ||
       DEFAULT_LESSON_IMAGE,
+    videoUrl: course?.videoUrl || '',
     teacher: instructor,
     teacherImg: course?.instructorAvatarUrl || defaultAvatar(instructor),
     type: course?.contentType || 'Video',
     language: course?.language || 'English',
-    notes: course?.description ? [course.description] : [],
+    notes: course?.description ? course.description.split(';').map((n) => n.trim()).filter(Boolean) : [],
   };
 };
 

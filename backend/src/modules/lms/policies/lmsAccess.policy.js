@@ -51,7 +51,10 @@ const assertSchoolLmsAccess = async (req) => {
 };
 
 const assertCourseInSchool = async (schoolId, courseId) => {
-  const course = await courseRepository.findOne({ _id: courseId, schoolId });
+  let course = await courseRepository.findOne({ _id: courseId, schoolId });
+  if (!course && schoolId) {
+    course = await courseRepository.findOne({ _id: courseId, schoolId: null });
+  }
   if (!course) {
     throw new NotFoundError('Course not found', 'COURSE_NOT_FOUND');
   }

@@ -138,7 +138,7 @@ const ParentLearningHubAll = () => {
   // Filter computation
   const filteredVideos = lessons.featured.filter(video => {
     const subjectMatch = filters.subject === 'All' || video.subject === filters.subject;
-    const gradeMatch = filters.grade === 'All' || video.chapter.includes(filters.grade);
+    const gradeMatch = filters.grade === 'All' || (video.chapter || '').includes(filters.grade);
     const langMatch = filters.language === 'All' || video.language === filters.language;
     return subjectMatch && gradeMatch && langMatch;
   });

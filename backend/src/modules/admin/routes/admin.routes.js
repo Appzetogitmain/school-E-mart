@@ -6,6 +6,7 @@ const { validate } = require('../../../common/validation');
 const { protectedRoute } = require('../../../middlewares/auth/guards');
 const { PERMISSIONS } = require('../../../constants/permissions');
 const { ROLES } = require('../../../constants/roles');
+const lmsValidators = require('../../lms/validators/lms.validator');
 
 const router = express.Router();
 
@@ -429,6 +430,40 @@ router.put(
   validateParams(validators.settingsSectionParam),
   validateSettingsBody,
   adminController.updateSettingsSection
+);
+
+// Platform LMS
+router.get(
+  '/lms/courses',
+  ...adminOnly,
+  validateQuery(lmsValidators.paginationQuery),
+  adminController.listPlatformCourses
+);
+router.post(
+  '/lms/courses',
+  ...adminOnly,
+  validateBody(lmsValidators.createCourseSchema),
+  adminController.createPlatformCourse
+);
+router.patch(
+  '/lms/courses/:courseId',
+  ...adminOnly,
+  validateParams(validators.courseIdParam),
+  validateBody(lmsValidators.updateCourseSchema),
+  adminController.updatePlatformCourse
+);
+router.delete(
+  '/lms/courses/:courseId',
+  ...adminOnly,
+  validateParams(validators.courseIdParam),
+  adminController.deletePlatformCourse
+);
+router.patch(
+  '/lms/courses/:courseId/status',
+  ...adminOnly,
+  validateParams(validators.courseIdParam),
+  validateBody(lmsValidators.courseStatusSchema),
+  adminController.setPlatformCourseStatus
 );
 
 module.exports = router;
