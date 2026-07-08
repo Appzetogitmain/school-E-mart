@@ -1,28 +1,54 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Copy, Share2,
   Users, Gift, ShoppingBag,
   CheckCircle2, Clock, Sparkles, LogIn
 } from 'lucide-react';
+import { getMyReferral } from '../../../services/walletApi';
+import useAuthStore from '../../../store/useAuthStore';
+
+const formatRupees = (paise) =>
+  ((paise || 0) / 100).toLocaleString('en-IN', { maximumFractionDigits: 0 });
 
 const ReferEarnPage = () => {
   const navigate = useNavigate();
-  // We'll mock the auth state for now or use localStorage
-  const [isGuest] = useState(() => {
-    const saved = localStorage.getItem('childInfo');
-    return !saved;
-  });
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const isGuest = !isAuthenticated;
 
   const [showCopyToast, setShowCopyToast] = useState(false);
-
-  const referral = {
+  const [referral, setReferral] = useState({
     code: null,
     totalEarnings: '0',
     monthlyEarnings: '0',
     successfulReferrals: 0,
     pendingReferrals: 0,
-  };
+  });
+
+  useEffect(() => {
+    if (isGuest) return undefined;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await getMyReferral();
+        if (cancelled || !data) return;
+        const { referral: ref, stats } = data;
+        setReferral({
+          code: ref?.referralCode || null,
+          totalEarnings: formatRupees(stats?.earnedPaise),
+          monthlyEarnings: formatRupees(stats?.earnedPaise),
+          successfulReferrals: stats?.rewarded || 0,
+          pendingReferrals: (stats?.invited || 0) - (stats?.rewarded || 0),
+        });
+      } catch {
+        // Leave defaults; the page still renders the program explainer.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isGuest]);
 
   const handleCopyCode = () => {
     if (!referral.code) return;
@@ -104,13 +130,32 @@ const ReferEarnPage = () => {
             </div>
           ) : (
             <div className="text-center py-4">
-              <div className="w-16 h-16 bg-primary/5 rounded-2xl flex items-center justify-center mx-auto mb-6">
-                <Gift size={28} className="text-primary" />
-              </div>
-              <h3 className="text-lg font-black text-deep-purple mb-2">Referral program coming soon</h3>
-              <p className="text-gray-400 text-xs font-medium mb-4 leading-relaxed max-w-[240px] mx-auto">
-                Referral rewards are not available yet. We&apos;ll notify you when you can start earning.
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4">
+                Your Referral Code
               </p>
+              <div className="bg-primary/5 border-2 border-dashed border-primary/30 rounded-2xl py-5 px-4 mb-6">
+                <span className="text-2xl font-black text-deep-purple tracking-[0.3em]">
+                  {referral.code || '········'}
+                </span>
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleCopyCode}
+                  disabled={!referral.code}
+                  className="flex-1 py-4 bg-white border-2 border-primary/20 text-primary rounded-2xl text-sm font-bold active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  <Copy size={16} />
+                  Copy Code
+                </button>
+                <button
+                  onClick={handleShare}
+                  disabled={!referral.code}
+                  className="flex-1 py-4 bg-primary text-white rounded-2xl text-sm font-bold shadow-lg shadow-primary/20 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  <Share2 size={16} />
+                  Share
+                </button>
+              </div>
             </div>
           )}
         </section>

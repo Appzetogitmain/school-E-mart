@@ -837,7 +837,7 @@ const ReelsManagement = () => {
       {/* FOOTER COPYRIGHT BAR */}
       <div className="pt-8 pb-4 text-center border-t border-gray-200 select-none">
         <p className="text-[10px] font-bold text-gray-400">
-          Copyright © 2026. Developed By <span className="text-[#0B1528] font-black">Healthy Delight</span>
+          Copyright © 2026. Developed By <span className="text-[#0B1528] font-black">School E-Mart</span>
         </p>
       </div>
 

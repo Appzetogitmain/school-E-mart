@@ -301,20 +301,26 @@ const SchoolAuthPage = () => {
           {step === 2 && (
             <div className="animate-in fade-in slide-in-from-right-4 duration-500">
               {/* Tab Selector */}
-              <div className="inline-flex bg-gray-50 p-1.5 rounded-2xl w-full mb-6 border border-gray-100">
-                <button
-                  onClick={() => { setMode('login'); setError(''); }}
-                  className={`flex-1 py-3 rounded-xl text-sm font-black transition-all ${mode === 'login' ? 'bg-white text-primary shadow-sm shadow-gray-100' : 'text-gray-400 hover:text-deep-purple'}`}
-                >
-                  Log In
-                </button>
-                <button
-                  onClick={() => { setMode('signup'); setError(''); }}
-                  className={`flex-1 py-3 rounded-xl text-sm font-black transition-all ${mode === 'signup' ? 'bg-white text-primary shadow-sm shadow-gray-100' : 'text-gray-400 hover:text-deep-purple'}`}
-                >
-                  Sign Up
-                </button>
-              </div>
+              {role !== 'teacher' ? (
+                <div className="inline-flex bg-gray-50 p-1.5 rounded-2xl w-full mb-6 border border-gray-100">
+                  <button
+                    onClick={() => { setMode('login'); setError(''); }}
+                    className={`flex-1 py-3 rounded-xl text-sm font-black transition-all ${mode === 'login' ? 'bg-white text-primary shadow-sm shadow-gray-100' : 'text-gray-400 hover:text-deep-purple'}`}
+                  >
+                    Log In
+                  </button>
+                  <button
+                    onClick={() => { setMode('signup'); setError(''); }}
+                    className={`flex-1 py-3 rounded-xl text-sm font-black transition-all ${mode === 'signup' ? 'bg-white text-primary shadow-sm shadow-gray-100' : 'text-gray-400 hover:text-deep-purple'}`}
+                  >
+                    Sign Up
+                  </button>
+                </div>
+              ) : (
+                <div className="mb-6 p-4 bg-purple-50 border border-purple-100 rounded-2xl text-xs font-bold text-[#3b2d7d] leading-relaxed">
+                  Teachers must be registered by their school administrator. Please contact your school admin to get your account created.
+                </div>
+              )}
 
               <div className="mb-6">
                 <h2 className="text-2xl font-black text-deep-purple">

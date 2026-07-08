@@ -11,6 +11,9 @@ const settingsService = require('../services/settings.service');
 const adminLmsService = require('../services/lms.service');
 const attachmentService = require('../services/attachment.service');
 const reelsService = require('../services/reels.service');
+const walletService = require('../services/wallet.service');
+const notificationCampaignService = require('../services/notificationCampaign.service');
+const adminProfileService = require('../services/adminProfile.service');
 
 const actorFrom = (req) => ({ userId: req.auth.userId, role: req.auth.role });
 
@@ -527,6 +530,71 @@ const adminController = {
   deleteReel: asyncHandler(async (req, res) => {
     await reelsService.deleteReel(req.params.reelId, req.auth.userId);
     return success(res, null, 'Reel deleted', undefined, req);
+  }),
+
+  // Wallet & payouts
+  getWalletOverview: asyncHandler(async (req, res) => {
+    const overview = await walletService.getOverview();
+    return success(res, { overview }, 'Wallet overview fetched', undefined, req);
+  }),
+
+  listVendorTransactions: asyncHandler(async (req, res) => {
+    const { data, pagination } = await walletService.listVendorTransactions(req.query);
+    return paginated(res, { transactions: data }, pagination, 'Transactions fetched', req);
+  }),
+
+  createVendorAdjustment: asyncHandler(async (req, res) => {
+    const transaction = await walletService.createAdjustment(req.body, req.auth.userId);
+    return created(res, { transaction }, 'Adjustment recorded', req);
+  }),
+
+  adjustUserWallet: asyncHandler(async (req, res) => {
+    const userWalletService = require('../../wallet/services/wallet.service');
+    const transaction = await userWalletService.postTransaction(req.params.userId, {
+      type: req.body.direction === 'debit' ? 'debit' : 'credit',
+      category: 'adjustment',
+      amountPaise: req.body.amountPaise,
+      reference: { kind: 'AdminAdjustment', id: req.auth.userId },
+      description: req.body.remarks || 'Administrative wallet adjustment',
+    });
+    return created(res, { transaction }, 'Wallet adjusted', req);
+  }),
+
+  listPayoutRequests: asyncHandler(async (req, res) => {
+    const { data, pagination } = await walletService.listPayoutRequests(req.query);
+    return paginated(res, { payouts: data }, pagination, 'Payout requests fetched', req);
+  }),
+
+  approvePayout: asyncHandler(async (req, res) => {
+    const payout = await walletService.approvePayout(req.params.payoutId, req.auth.userId, req.body);
+    return success(res, { payout }, 'Payout approved', undefined, req);
+  }),
+
+  rejectPayout: asyncHandler(async (req, res) => {
+    const payout = await walletService.rejectPayout(req.params.payoutId, req.auth.userId, req.body);
+    return success(res, { payout }, 'Payout rejected', undefined, req);
+  }),
+
+  // Notification campaigns
+  listNotificationCampaigns: asyncHandler(async (req, res) => {
+    const { data, pagination } = await notificationCampaignService.listCampaigns(req.query);
+    return paginated(res, { campaigns: data }, pagination, 'Campaigns fetched', req);
+  }),
+
+  createNotificationCampaign: asyncHandler(async (req, res) => {
+    const campaign = await notificationCampaignService.createCampaign(req.body, req.auth.userId);
+    return created(res, { campaign }, 'Campaign created', req);
+  }),
+
+  // Admin profile
+  getAdminProfile: asyncHandler(async (req, res) => {
+    const profile = await adminProfileService.getProfile(req.auth.userId);
+    return success(res, { profile }, 'Profile fetched', undefined, req);
+  }),
+
+  updateAdminProfile: asyncHandler(async (req, res) => {
+    const profile = await adminProfileService.updateProfile(req.auth.userId, req.body);
+    return success(res, { profile }, 'Profile updated', undefined, req);
   }),
 };
 

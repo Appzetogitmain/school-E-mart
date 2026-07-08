@@ -12,6 +12,8 @@ const noticeService = require('../services/notice.service');
 const diaryService = require('../services/diary.service');
 const vendorDirectoryService = require('../services/vendorDirectory.service');
 const rfqService = require('../../rfq/services/rfq.service');
+const parentService = require('../services/parent.service');
+const attachmentService = require('../../admin/services/attachment.service');
 
 const schoolController = {
   createSchool: asyncHandler(async (req, res) => {
@@ -72,6 +74,11 @@ const schoolController = {
       approvedBy: req.auth.userId,
     });
     return success(res, { teacher }, 'Teacher status updated successfully', undefined, req);
+  }),
+
+  deleteTeacher: asyncHandler(async (req, res) => {
+    await teacherService.deleteTeacher(req.schoolId, req.params.teacherId);
+    return success(res, null, 'Teacher deleted successfully', undefined, req);
   }),
 
   listClasses: asyncHandler(async (req, res) => {
@@ -358,9 +365,48 @@ const schoolController = {
     return success(res, { rfq }, 'RFQ fetched successfully', undefined, req);
   }),
 
+  updateRfq: asyncHandler(async (req, res) => {
+    const rfq = await rfqService.updateRfq(req.schoolId, req.params.rfqId, req.body);
+    return success(res, { rfq }, 'RFQ updated successfully', undefined, req);
+  }),
+
   awardRfqQuote: asyncHandler(async (req, res) => {
     const rfq = await rfqService.awardQuote(req.schoolId, req.params.rfqId, req.params.quoteId);
     return success(res, { rfq }, 'Contract awarded successfully', undefined, req);
+  }),
+
+  createParent: asyncHandler(async (req, res) => {
+    const result = await parentService.createParent(req.schoolId, req.body);
+    return created(res, result, 'Parent created successfully', req);
+  }),
+
+  listParents: asyncHandler(async (req, res) => {
+    const { data, pagination } = await parentService.listParents(req.schoolId, req.query);
+    return paginated(res, { parents: data }, pagination, 'Parents fetched successfully', req);
+  }),
+
+  getParent: asyncHandler(async (req, res) => {
+    const parent = await parentService.getParent(req.schoolId, req.params.parentId);
+    return success(res, { parent }, 'Parent fetched successfully', undefined, req);
+  }),
+
+  updateParent: asyncHandler(async (req, res) => {
+    const parent = await parentService.updateParent(req.schoolId, req.params.parentId, req.body);
+    return success(res, { parent }, 'Parent updated successfully', undefined, req);
+  }),
+
+  deleteParent: asyncHandler(async (req, res) => {
+    await parentService.deleteParent(req.schoolId, req.params.parentId);
+    return success(res, null, 'Parent deleted successfully', undefined, req);
+  }),
+
+  uploadAttachment: asyncHandler(async (req, res) => {
+    const attachment = await attachmentService.createFromUpload({
+      ownerUserId: req.auth.userId,
+      purpose: req.body.purpose || 'kit_image',
+      file: req.file,
+    });
+    return created(res, { attachment }, 'File uploaded successfully', req);
   }),
 };
 

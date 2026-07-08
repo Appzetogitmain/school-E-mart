@@ -151,7 +151,9 @@ const AppAuthPage = () => {
           )}
           <div className="flex-1">{renderStep()}</div>
           <div className="mt-auto py-2 text-center shrink-0">
-            <p className="text-gray-400 text-sm font-medium">Don't have an account?<button onClick={() => navigate('/user/signup')} className="ml-2 font-black text-primary hover:underline">Sign Up</button></p>
+            <p className="text-gray-400 text-xs font-bold leading-relaxed">
+              To register, please contact your school administrator.
+            </p>
           </div>
         </div>
       </div>

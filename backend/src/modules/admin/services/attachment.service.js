@@ -8,6 +8,9 @@ const ALLOWED_PURPOSES = new Set([
   'lms_video',
   'lms_thumb',
   'product_image',
+  'category_image',
+  'kit_image',
+  'notice_attachment',
 ]);
 
 const attachmentService = {

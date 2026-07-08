@@ -1,16 +1,49 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  ArrowLeft, SlidersHorizontal, Megaphone, Calendar, 
+import {
+  ArrowLeft, SlidersHorizontal, Megaphone, Calendar,
   FileText, Palmtree, Users, AlertTriangle, ShieldCheck,
   ChevronRight, Paperclip
 } from 'lucide-react';
+import {
+  listNotifications,
+  markNotificationAsRead,
+} from '../../../services/notificationApi';
+import { getErrorMessage } from '../../../utils/apiHelpers';
+
+const TYPE_MAP = {
+  campaign: 'Notice',
+  notice: 'Notice',
+  event: 'Event',
+  exam: 'Exam',
+  holiday: 'Holiday',
+  ptm: 'PTM',
+  urgent: 'Urgent',
+};
+
+const mapNotification = (n) => {
+  const created = n.createdAt ? new Date(n.createdAt) : null;
+  return {
+    id: n._id,
+    type: TYPE_MAP[(n.type || '').toLowerCase()] || 'Notice',
+    read: Boolean(n.isRead),
+    isNew: !n.isRead,
+    title: n.title || 'Notification',
+    description: n.body || '',
+    sender: 'School Administration',
+    date: created ? created.toLocaleDateString('en-GB') : '',
+    time: created ? created.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '',
+    hasAttachment: false,
+  };
+};
 
 const TeacherNotifications = () => {
   const navigate = useNavigate();
   const [activeFilter, setActiveFilter] = useState('All');
 
   const [notifications, setNotifications] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   const filters = [
     { name: 'All', icon: <Users size={14} /> },
@@ -22,8 +55,36 @@ const TeacherNotifications = () => {
     { name: 'Urgent', icon: <AlertTriangle size={14} /> }
   ];
 
-  const handleToggleRead = (id) => {
+  const loadNotifications = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const res = await listNotifications({ limit: 50 });
+      const items = res?.data || res?.items || [];
+      setNotifications(items.map(mapNotification));
+    } catch (err) {
+      setNotifications([]);
+      setError(getErrorMessage(err, 'Unable to load notifications'));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadNotifications();
+  }, [loadNotifications]);
+
+  const handleToggleRead = async (id) => {
+    const target = notifications.find((n) => n.id === id);
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: !n.read, isNew: false } : n));
+    // Persist only when transitioning to read.
+    if (target && !target.read) {
+      try {
+        await markNotificationAsRead(id);
+      } catch {
+        // Non-fatal; local state already reflects the change.
+      }
+    }
   };
 
   const filteredNotifications = notifications.filter(n => {
@@ -248,11 +309,15 @@ const TeacherNotifications = () => {
         {/* Empty State */}
         {filteredNotifications.length === 0 && (
           <div className="flex flex-col items-center justify-center py-16 text-center">
-            <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center text-gray-400 mb-4 animate-bounce">
+            <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center text-gray-400 mb-4">
               <Megaphone size={28} />
             </div>
-            <h3 className="text-xs font-black text-deep-purple">No notifications yet</h3>
-            <p className="text-[10px] text-gray-400 font-bold mt-1">School notifications API is not connected yet</p>
+            <h3 className="text-xs font-black text-deep-purple">
+              {loading ? 'Loading notifications…' : error ? 'Unable to load notifications' : 'No notifications yet'}
+            </h3>
+            {error && !loading && (
+              <p className="text-[10px] text-rose-500 font-bold mt-1">{error}</p>
+            )}
           </div>
         )}
 

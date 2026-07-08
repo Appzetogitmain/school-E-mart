@@ -1,7 +1,35 @@
-import React, { useState } from 'react';
-import { 
-  ChevronRight, Info, Search, Calendar, Landmark, Check, X, ShieldAlert 
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  ChevronRight, Info, Search, Calendar, Landmark, Check, X, ShieldAlert
 } from 'lucide-react';
+import {
+  listPayoutRequests,
+  approvePayoutRequest,
+  rejectPayoutRequest,
+} from '../../../services/adminApi';
+import { getErrorMessage } from '../../../utils/apiHelpers';
+
+const STATUS_LABEL = {
+  pending: 'Pending',
+  processing: 'Approved',
+  completed: 'Completed',
+  rejected: 'Rejected',
+  failed: 'Rejected',
+};
+
+const mapPayout = (p) => ({
+  id: p._id,
+  role: 'Vendor',
+  user: p.vendor?.storeName || 'Vendor',
+  dateTime: p.audit?.createdAt ? new Date(p.audit.createdAt).toLocaleString() : '—',
+  amount: (p.amountPaise || 0) / 100,
+  status: STATUS_LABEL[p.status] || 'Pending',
+  paymentMethod: 'Bank Transfer',
+  bankDetails: p.bankDetailsSnapshot
+    ? `${p.bankDetailsSnapshot.bankName || ''} ${p.bankDetailsSnapshot.ifsc || ''}`.trim() || 'Registered account'
+    : 'Registered account',
+  transactionReference: p.transactionReference || p.rejectionReason || '',
+});
 
 const WithdrawalsManagement = () => {
   // Status filter pill state
@@ -11,27 +39,46 @@ const WithdrawalsManagement = () => {
   const [txnRefs, setTxnRefs] = useState({});
 
   const [withdrawals, setWithdrawals] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const loadWithdrawals = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const { data } = await listPayoutRequests({ limit: 100 });
+      setWithdrawals((data || []).map(mapPayout));
+    } catch (err) {
+      setError(getErrorMessage(err, 'Unable to load withdrawal requests'));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadWithdrawals();
+  }, [loadWithdrawals]);
 
   // Handle Complete Payout
-  const handleCompletePayout = (id) => {
-    const enteredRef = txnRefs[id]?.trim() || `txn_auto_${Math.random().toString(36).substr(2, 9)}`;
-    setWithdrawals(prev => prev.map(w => 
-      w.id === id 
-        ? { ...w, status: 'Completed', transactionReference: enteredRef } 
-        : w
-    ));
-    alert(`Withdrawal Approved and Completed! Transaction Code: ${enteredRef}`);
+  const handleCompletePayout = async (id) => {
+    const enteredRef = txnRefs[id]?.trim();
+    try {
+      await approvePayoutRequest(id, enteredRef);
+      await loadWithdrawals();
+    } catch (err) {
+      setError(getErrorMessage(err, 'Unable to approve payout'));
+    }
   };
 
   // Handle Reject Payout
-  const handleRejectPayout = (id) => {
+  const handleRejectPayout = async (id) => {
     const enteredReason = txnRefs[id]?.trim() || 'Rejected by super administrator';
-    setWithdrawals(prev => prev.map(w => 
-      w.id === id 
-        ? { ...w, status: 'Rejected', transactionReference: enteredReason } 
-        : w
-    ));
-    alert('Withdrawal Request marked as Rejected.');
+    try {
+      await rejectPayoutRequest(id, enteredReason);
+      await loadWithdrawals();
+    } catch (err) {
+      setError(getErrorMessage(err, 'Unable to reject payout'));
+    }
   };
 
   // Handle Input text changes
@@ -96,9 +143,19 @@ const WithdrawalsManagement = () => {
         })}
       </div>
 
+      {error && (
+        <div className="px-4 py-3 rounded-2xl bg-rose-50 border border-rose-100 text-xs font-bold text-rose-600">
+          {error}
+        </div>
+      )}
+
       {/* CARDS LIST CONTAINER */}
       <div className="space-y-4">
-        {filteredWithdrawals.length === 0 ? (
+        {loading ? (
+          <div className="py-12 text-center text-xs font-black text-gray-400 select-none border border-dashed border-gray-200 rounded-3xl bg-white">
+            Loading withdrawal requests…
+          </div>
+        ) : filteredWithdrawals.length === 0 ? (
           <div className="py-12 text-center text-xs font-black text-gray-400 select-none border border-dashed border-gray-200 rounded-3xl bg-white">
             No withdrawal requests matching status '{statusFilter}'.
           </div>
@@ -215,7 +272,7 @@ const WithdrawalsManagement = () => {
       {/* FOOTER COPYRIGHT BAR */}
       <div className="pt-8 pb-4 text-center border-t border-gray-200 select-none">
         <p className="text-[10px] font-bold text-gray-400">
-          Copyright © 2026. Developed By <span className="text-[#0B1528] font-black">Healthy Delight</span>
+          Copyright © 2026. Developed By <span className="text-[#0B1528] font-black">School E-Mart</span>
         </p>
       </div>
 

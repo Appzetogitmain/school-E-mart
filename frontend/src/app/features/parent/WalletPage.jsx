@@ -1,66 +1,87 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  ArrowLeft, Wallet, TrendingUp, 
-  ArrowUpRight, ArrowDownLeft, 
+import {
+  ArrowLeft, Wallet, TrendingUp,
+  ArrowUpRight, ArrowDownLeft,
   Clock, CheckCircle2, AlertCircle,
   HelpCircle, ChevronRight
 } from 'lucide-react';
+import { getMyWallet, listMyWalletTransactions } from '../../../services/walletApi';
+
+const CATEGORY_TITLES = {
+  referral: 'Referral Bonus',
+  order_refund: 'Refund Processed',
+  order_payment: 'Purchase Payment',
+  adjustment: 'Wallet Adjustment',
+  payout: 'Payout',
+  commission: 'Commission',
+};
+
+const formatRupees = (paise) =>
+  ((paise || 0) / 100).toLocaleString('en-IN', { maximumFractionDigits: 0 });
 
 const WalletPage = () => {
   const navigate = useNavigate();
-  const [wallet] = useState({
-    balance: "1,250",
-    monthlyEarnings: "450",
-    totalEarnings: "3,850",
-    transactions: [
-      {
-        id: "TXN10293",
-        title: "Referral Bonus",
-        subtitle: "Invited: Rohan Sharma",
-        amount: "50",
-        type: "credit",
-        date: "Today, 02:45 pm",
-        status: "success"
-      },
-      {
-        id: "TXN10284",
-        title: "Order Cashback",
-        subtitle: "Order ID: #SH8291",
-        amount: "25",
-        type: "credit",
-        date: "Yesterday, 11:20 am",
-        status: "success"
-      },
-      {
-        id: "TXN10271",
-        title: "Purchase Payment",
-        subtitle: "Order ID: #SH7162",
-        amount: "150",
-        type: "debit",
-        date: "28 Apr 2026",
-        status: "success"
-      },
-      {
-        id: "TXN10265",
-        title: "Referral Bonus",
-        subtitle: "Invited: Priya Verma",
-        amount: "50",
-        type: "credit",
-        date: "25 Apr 2026",
-        status: "success"
-      },
-      {
-        id: "TXN10259",
-        title: "Refund Processed",
-        subtitle: "Order ID: #SH6155",
-        amount: "899",
-        type: "credit",
-        date: "20 Apr 2026",
-        status: "pending"
-      }
-    ]
+  const [wallet, setWallet] = useState({
+    balance: '0',
+    monthlyEarnings: '0',
+    totalEarnings: '0',
+    transactions: [],
   });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [balance, txns] = await Promise.all([
+          getMyWallet(),
+          listMyWalletTransactions({ limit: 50 }),
+        ]);
+        if (cancelled) return;
+
+        const monthStart = new Date();
+        monthStart.setDate(1);
+        monthStart.setHours(0, 0, 0, 0);
+        const monthlyPaise = (txns.data || [])
+          .filter(
+            (t) =>
+              t.type === 'credit' &&
+              t.audit?.createdAt &&
+              new Date(t.audit.createdAt) >= monthStart
+          )
+          .reduce((sum, t) => sum + (t.amountPaise || 0), 0);
+
+        setWallet({
+          balance: formatRupees(balance?.balancePaise),
+          monthlyEarnings: formatRupees(monthlyPaise),
+          totalEarnings: formatRupees(balance?.lifetimeCreditPaise),
+          transactions: (txns.data || []).map((t) => ({
+            id: t._id,
+            title: CATEGORY_TITLES[t.category] || t.description || 'Transaction',
+            subtitle: t.description || '',
+            amount: formatRupees(t.amountPaise),
+            type: t.type,
+            date: t.audit?.createdAt
+              ? new Date(t.audit.createdAt).toLocaleDateString('en-GB', {
+                  day: '2-digit',
+                  month: 'short',
+                  year: 'numeric',
+                })
+              : '—',
+            status: t.status === 'posted' ? 'success' : t.status,
+          })),
+        });
+      } catch {
+        // Keep zeros — the wallet simply has no activity yet.
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
     <div className="min-h-screen bg-[#F8F7FF] pb-32 font-outfit">

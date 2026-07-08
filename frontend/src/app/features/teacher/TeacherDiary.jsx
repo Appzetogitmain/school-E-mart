@@ -4,7 +4,7 @@ import {
   ArrowLeft, Users, MessageSquare, Book, User, 
   Star, Check, Volume2, Send, Loader2
 } from 'lucide-react';
-import { createDiaryEntry } from '../../../services/schoolApi';
+import { createDiaryEntry, listStudents } from '../../../services/schoolApi';
 import { parseClassGrade, parseSection } from '../../../utils/mappers/teacherMapper';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 import { useTeacherSchoolId } from '../../../utils/teacherContext';
@@ -26,6 +26,11 @@ const TeacherDiary = () => {
   
   // Visibility: 'class' (Entire Class), 'students' (Selected Students)
   const [visibility, setVisibility] = useState('class');
+
+  // Per-student targeting
+  const [students, setStudents] = useState([]);
+  const [selectedStudentIds, setSelectedStudentIds] = useState([]);
+  const [loadingStudents, setLoadingStudents] = useState(false);
   
   // Priority: 'normal', 'important', 'urgent'
   const [priority, setPriority] = useState('important');
@@ -55,6 +60,44 @@ const TeacherDiary = () => {
   const [isClassOpen, setIsClassOpen] = useState(false);
   const [isSectionOpen, setIsSectionOpen] = useState(false);
 
+  // Load the class roster when the teacher wants to pick specific students.
+  useEffect(() => {
+    if (visibility !== 'students' || !schoolId || !selectedClass) return undefined;
+
+    let cancelled = false;
+    setLoadingStudents(true);
+    (async () => {
+      try {
+        const { data } = await listStudents(schoolId, {
+          classGrade: parseClassGrade(selectedClass),
+          section: parseSection(selectedSection),
+          limit: 100,
+        });
+        if (!cancelled) setStudents(data || []);
+      } catch {
+        if (!cancelled) setStudents([]);
+      } finally {
+        if (!cancelled) setLoadingStudents(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [visibility, schoolId, selectedClass, selectedSection]);
+
+  // Reset selection when class/section changes.
+  useEffect(() => {
+    setSelectedStudentIds([]);
+  }, [selectedClass, selectedSection]);
+
+  const toggleStudent = (studentId) => {
+    setSelectedStudentIds((prev) =>
+      prev.includes(studentId)
+        ? prev.filter((id) => id !== studentId)
+        : [...prev, studentId]
+    );
+  };
+
   // Note type metadata helper
   const getNoteTypeDetails = () => {
     switch (noteType) {
@@ -77,8 +120,8 @@ const TeacherDiary = () => {
       setError('Please enter a title and diary message.');
       return;
     }
-    if (visibility === 'students') {
-      setError('Selected-student notes are not available yet. Use Entire Class.');
+    if (visibility === 'students' && selectedStudentIds.length === 0) {
+      setError('Select at least one student for a student-specific note.');
       return;
     }
     if (!schoolId) {
@@ -89,12 +132,21 @@ const TeacherDiary = () => {
     setSaving(true);
     setError('');
     try {
-      await createDiaryEntry(schoolId, {
+      const basePayload = {
         title: title.trim(),
         content: message.trim(),
         classGrade: parseClassGrade(selectedClass),
         section: parseSection(selectedSection),
-      });
+      };
+
+      if (visibility === 'students') {
+        // Backend stores one target student per entry — create one per selection.
+        for (const studentId of selectedStudentIds) {
+          await createDiaryEntry(schoolId, { ...basePayload, studentId });
+        }
+      } else {
+        await createDiaryEntry(schoolId, basePayload);
+      }
       setToastMessage('Diary note published successfully.');
       setShowToast(true);
       setTitle('');
@@ -358,6 +410,54 @@ const TeacherDiary = () => {
             </div>
           </button>
         </div>
+
+        {/* 7b. Student Picker (visible when targeting specific students) */}
+        {visibility === 'students' && (
+          <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm">
+            <div className="flex items-center justify-between mb-2.5">
+              <label className="text-[10px] font-bold text-gray-400 block">
+                Select Students <span className="text-red-500">*</span>
+              </label>
+              <span className="text-[9px] font-black text-primary">
+                {selectedStudentIds.length} selected
+              </span>
+            </div>
+
+            {loadingStudents ? (
+              <div className="flex items-center justify-center gap-2 py-6 text-gray-400">
+                <Loader2 size={14} className="animate-spin" />
+                <span className="text-[10px] font-bold">Loading class roster…</span>
+              </div>
+            ) : students.length === 0 ? (
+              <p className="text-[10px] font-bold text-gray-400 text-center py-4">
+                No students found for {selectedClass} {selectedSection}.
+              </p>
+            ) : (
+              <div className="flex flex-wrap gap-2 max-h-44 overflow-y-auto">
+                {students.map((student) => {
+                  const id = student._id || student.id;
+                  const isSelected = selectedStudentIds.includes(id);
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => toggleStudent(id)}
+                      className={`px-3 py-1.5 rounded-full text-[10px] font-black border transition-all flex items-center gap-1.5 ${
+                        isSelected
+                          ? 'bg-primary text-white border-primary shadow-sm'
+                          : 'bg-gray-50 text-deep-purple border-gray-200 hover:bg-gray-100'
+                      }`}
+                    >
+                      {isSelected && <Check size={10} strokeWidth={3} />}
+                      {student.name}
+                      {student.rollNo ? ` · ${student.rollNo}` : ''}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* 8. Priority Capsules & 9. Notify Parents toggle side-by-side/grid */}
         <div className="grid grid-cols-2 gap-4">

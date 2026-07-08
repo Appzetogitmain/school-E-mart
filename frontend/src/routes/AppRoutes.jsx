@@ -84,6 +84,7 @@ const SchoolCreateKit = React.lazy(() => import('../app/features/school/SchoolCr
 const SchoolCreateRequest = React.lazy(() => import('../app/features/school/SchoolCreateRequest'));
 const SchoolDraftRequests = React.lazy(() => import('../app/features/school/SchoolDraftRequests'));
 const SchoolTeacherApprovals = React.lazy(() => import('../app/features/school/SchoolTeacherApprovals'));
+const SchoolParentsPage = React.lazy(() => import('../app/features/school/SchoolParentsPage'));
 const SchoolMorePage = React.lazy(() => import('../app/features/school/SchoolMorePage'));
 const SchoolStudentsPage = React.lazy(() => import('../app/features/school/SchoolStudentsPage'));
 const SchoolVendorsPage = React.lazy(() => import('../app/features/school/SchoolVendorsPage'));
@@ -255,89 +256,103 @@ const AppRoutes = () => {
         {/* Mobile App Experience Routes */}
         <Route path="/user" element={<AppLayout />}>
           <Route index element={<Navigate to="home" replace />} />
+
+          {/* Public — browsing allowed without login (skip-login flow) */}
           <Route path="login" element={<AppAuthPage />} />
-          <Route path="signup" element={<ProfileSetupPage />} />
           <Route path="home" element={<ParentHome />} />
           <Route path="categories" element={<AppCategoryPage />} />
-          <Route path="my-school" element={<MySchoolPage />} />
           <Route path="category/:categoryId" element={<SubcategoryPage />} />
-          <Route path="checkout" element={<CheckoutPage />} />
-          <Route path="order-success" element={<OrderSuccessPage />} />
-          <Route path="track-order/:orderId" element={<OrderTrackingPage />} />
-          <Route path="orders" element={<OrderHistoryPage />} />
           <Route path="select-grade" element={<SelectGradePage />} />
           <Route path="products" element={<ParentGradeProductsPage />} />
           <Route path="product/:productId" element={<ProductDetailsPage />} />
           <Route path="kit/:kitId" element={<KitDetailsPage />} />
           <Route path="cart" element={<CartPage />} />
-          <Route path="edit-profile" element={<EditProfilePage />} />
-          <Route path="wishlist" element={<WishlistPage />} />
-          <Route path="notifications" element={<NotificationsPage />} />
           <Route path="contact" element={<ContactUsPage />} />
           <Route path="about" element={<AboutUsPage />} />
-          <Route path="refer" element={<ReferEarnPage />} />
-          <Route path="wallet" element={<WalletPage />} />
-          <Route path="attendance" element={<ParentAttendance />} />
-          <Route path="homework" element={<ParentHomework />} />
-          <Route path="diary" element={<ParentDiary />} />
-          <Route path="notices" element={<ParentNotices />} />
-          <Route path="calendar" element={<ParentCalendar />} />
-          <Route path="phonebook" element={<ParentPhonebook />} />
           <Route path="reels" element={<ParentReels />} />
           <Route path="learning-hub" element={<ParentLearningHubAll />} />
-          <Route path="profile" element={<ProfilePage />} />
           <Route path="terms" element={<ParentTermsAndConditions />} />
           <Route path="privacy" element={<ParentPrivacyPolicy />} />
+
+          {/* Protected — account, checkout and student-linked features (parent login required) */}
+          <Route element={<RoleRoute allowedRoles={[ROLES.PARENT]} redirectTo="/user/login" />}>
+            <Route path="my-school" element={<MySchoolPage />} />
+            <Route path="checkout" element={<CheckoutPage />} />
+            <Route path="order-success" element={<OrderSuccessPage />} />
+            <Route path="track-order/:orderId" element={<OrderTrackingPage />} />
+            <Route path="orders" element={<OrderHistoryPage />} />
+            <Route path="edit-profile" element={<EditProfilePage />} />
+            <Route path="wishlist" element={<WishlistPage />} />
+            <Route path="notifications" element={<NotificationsPage />} />
+            <Route path="refer" element={<ReferEarnPage />} />
+            <Route path="wallet" element={<WalletPage />} />
+            <Route path="attendance" element={<ParentAttendance />} />
+            <Route path="homework" element={<ParentHomework />} />
+            <Route path="diary" element={<ParentDiary />} />
+            <Route path="notices" element={<ParentNotices />} />
+            <Route path="calendar" element={<ParentCalendar />} />
+            <Route path="phonebook" element={<ParentPhonebook />} />
+            <Route path="profile" element={<ProfilePage />} />
+          </Route>
         </Route>
 
         <Route path="/school" element={<SchoolLayout />}>
-          <Route index element={<Navigate to="admin" replace />} />
-          <Route path="admin" element={<SchoolHome />} />
-          <Route path="add-class" element={<SchoolAddClass />} />
-          <Route path="send-notice" element={<SchoolSendNotice />} />
-          <Route path="create-event" element={<SchoolCreateEvent />} />
-          <Route path="create-kit" element={<SchoolCreateKit />} />
-          <Route path="create-request" element={<SchoolCreateRequest />} />
-          <Route path="draft-requests" element={<SchoolDraftRequests />} />
-          <Route path="teacher-approvals" element={<SchoolTeacherApprovals />} />
-          <Route path="more" element={<SchoolMorePage />} />
-          <Route path="students" element={<SchoolStudentsPage />} />
-          <Route path="vendors" element={<SchoolVendorsPage />} />
-          <Route path="quotations" element={<SchoolQuotationsPage />} />
-          <Route path="kits" element={<SchoolKitsPage />} />
-          <Route path="grade" element={<SchoolGradePage />} />
-          <Route path="categories" element={<SchoolCategoryPage />} />
-          <Route path="cart" element={<SchoolCartPage />} />
-          <Route path="edit-profile" element={<SchoolEditProfilePage />} />
-          <Route path="change-password" element={<SchoolChangePasswordPage />} />
-          <Route path="wishlist" element={<SchoolWishlistPage />} />
-          <Route path="my-school" element={<SchoolMySchoolPage />} />
-          <Route path="orders" element={<SchoolOrderHistoryPage />} />
-          <Route path="category/:categoryName" element={<SchoolSubcategoryPage />} />
-          <Route path="notifications" element={<SchoolNotificationsPage />} />
-          <Route path="products" element={<SchoolProductsPage />} />
-          <Route path="refer" element={<SchoolReferEarnPage />} />
-          <Route path="partner" element={<SchoolPartnerPage />} />
-          <Route path="wallet" element={<SchoolWalletPage />} />
-          <Route path="contact" element={<SchoolContactUsPage />} />
-          <Route path="about" element={<SchoolAboutUsPage />} />
-          <Route path="checkout" element={<SchoolCheckoutPage />} />
-          <Route path="kit/:kitId" element={<SchoolKitDetailsPage />} />
+          {/* Public auth pages */}
           <Route path="login" element={<SchoolAuthPage />} />
           <Route path="signup" element={<SchoolAuthPage />} />
+
+          {/* Protected — school portal (school login required) */}
+          <Route element={<RoleRoute allowedRoles={[ROLES.SCHOOL]} redirectTo="/school/login" />}>
+            <Route index element={<Navigate to="admin" replace />} />
+            <Route path="admin" element={<SchoolHome />} />
+            <Route path="add-class" element={<SchoolAddClass />} />
+            <Route path="send-notice" element={<SchoolSendNotice />} />
+            <Route path="create-event" element={<SchoolCreateEvent />} />
+            <Route path="create-kit" element={<SchoolCreateKit />} />
+            <Route path="create-request" element={<SchoolCreateRequest />} />
+            <Route path="draft-requests" element={<SchoolDraftRequests />} />
+            <Route path="teacher-approvals" element={<SchoolTeacherApprovals />} />
+            <Route path="parents" element={<SchoolParentsPage />} />
+            <Route path="more" element={<SchoolMorePage />} />
+            <Route path="students" element={<SchoolStudentsPage />} />
+            <Route path="vendors" element={<SchoolVendorsPage />} />
+            <Route path="quotations" element={<SchoolQuotationsPage />} />
+            <Route path="kits" element={<SchoolKitsPage />} />
+            <Route path="grade" element={<SchoolGradePage />} />
+            <Route path="categories" element={<SchoolCategoryPage />} />
+            <Route path="cart" element={<SchoolCartPage />} />
+            <Route path="edit-profile" element={<SchoolEditProfilePage />} />
+            <Route path="change-password" element={<SchoolChangePasswordPage />} />
+            <Route path="wishlist" element={<SchoolWishlistPage />} />
+            <Route path="my-school" element={<SchoolMySchoolPage />} />
+            <Route path="orders" element={<SchoolOrderHistoryPage />} />
+            <Route path="category/:categoryName" element={<SchoolSubcategoryPage />} />
+            <Route path="notifications" element={<SchoolNotificationsPage />} />
+            <Route path="products" element={<SchoolProductsPage />} />
+            <Route path="refer" element={<SchoolReferEarnPage />} />
+            <Route path="partner" element={<SchoolPartnerPage />} />
+            <Route path="wallet" element={<SchoolWalletPage />} />
+            <Route path="contact" element={<SchoolContactUsPage />} />
+            <Route path="about" element={<SchoolAboutUsPage />} />
+            <Route path="checkout" element={<SchoolCheckoutPage />} />
+            <Route path="kit/:kitId" element={<SchoolKitDetailsPage />} />
+          </Route>
         </Route>
 
         <Route path="/school/teacher" element={<TeacherLayout />}>
-          <Route index element={<Navigate to="dashboard" replace />} />
-          <Route path="dashboard" element={<TeacherDashboard />} />
-          <Route path="students" element={<TeacherManageStudents />} />
-          <Route path="students/bulk" element={<TeacherBulkAddStudents />} />
-          <Route path="attendance" element={<TeacherAttendance />} />
-          <Route path="homework" element={<TeacherHomework />} />
-          <Route path="homework/check" element={<TeacherCheckHomework />} />
-          <Route path="diary" element={<TeacherDiary />} />
-          <Route path="profile" element={<TeacherProfile />} />
-          <Route path="notifications" element={<TeacherNotifications />} />
+          {/* Protected — teacher portal (teacher login required, via school auth) */}
+          <Route element={<RoleRoute allowedRoles={[ROLES.TEACHER]} redirectTo="/school/login" />}>
+            <Route index element={<Navigate to="dashboard" replace />} />
+            <Route path="dashboard" element={<TeacherDashboard />} />
+            <Route path="students" element={<TeacherManageStudents />} />
+            <Route path="students/bulk" element={<TeacherBulkAddStudents />} />
+            <Route path="attendance" element={<TeacherAttendance />} />
+            <Route path="homework" element={<TeacherHomework />} />
+            <Route path="homework/check" element={<TeacherCheckHomework />} />
+            <Route path="diary" element={<TeacherDiary />} />
+            <Route path="profile" element={<TeacherProfile />} />
+            <Route path="notifications" element={<TeacherNotifications />} />
+          </Route>
         </Route>
 
         {/* 404 Route */}

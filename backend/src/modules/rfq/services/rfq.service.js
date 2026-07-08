@@ -119,6 +119,74 @@ const rfqService = {
     return serializeRfq(rfq, { school });
   },
 
+  async updateRfq(schoolId, rfqId, payload) {
+    const isDraft = payload.status === 'draft';
+    const items = buildUniformItems(payload.uniformSets || []);
+
+    if (!isDraft && payload.uniformSets && !items.length) {
+      throw new BadRequestError('At least one uniform set with quantity is required', null, 'RFQ_ITEMS_REQUIRED');
+    }
+
+    const invitedVendorIds = payload.invitedVendorIds ? (payload.invitedVendorIds || []).map(toObjectId).filter(Boolean) : undefined;
+    if (!isDraft && invitedVendorIds && !invitedVendorIds.length) {
+      throw new BadRequestError('At least one vendor must be invited', null, 'RFQ_VENDORS_REQUIRED');
+    }
+
+    if (invitedVendorIds && invitedVendorIds.length) {
+      const approvedVendors = await VendorProfile.countDocuments({
+        _id: { $in: invitedVendorIds },
+        approvalStatus: 'approved',
+        'softDelete.isDeleted': { $ne: true },
+      });
+      if (approvedVendors !== invitedVendorIds.length) {
+        throw new BadRequestError('One or more selected vendors are not approved', null, 'RFQ_INVALID_VENDORS');
+      }
+    }
+
+    const descriptionParts = [
+      payload.specialInstructions !== undefined ? payload.specialInstructions : null,
+      payload.additionalNotes !== undefined ? payload.additionalNotes : null,
+      payload.academicYear ? `Academic Year: ${payload.academicYear}` : null,
+      payload.classes?.length ? `Classes: ${payload.classes.join(', ')}` : null,
+    ].filter(Boolean);
+
+    const updateData = {
+      title: payload.title,
+      academicYear: payload.academicYear,
+      classes: payload.classes,
+      totalStudents: payload.totalStudents ? Number(payload.totalStudents) : undefined,
+      targetDeliveryDate: payload.requiredDate,
+      quotationDeadline: payload.quotationDeadline,
+      status: payload.status,
+      additionalNotes: payload.additionalNotes,
+    };
+
+    if (invitedVendorIds) updateData.invitedVendorIds = invitedVendorIds;
+    if (payload.title || payload.specialInstructions || payload.additionalNotes || payload.academicYear || payload.classes) {
+      updateData.description = descriptionParts.join('\n');
+    }
+    if (payload.uniformSets) {
+      updateData['meta.uniformSets'] = payload.uniformSets;
+      updateData.items = items.length ? items : [{ name: payload.title || 'Uniform Request', quantity: 1, uom: 'sets' }];
+    }
+    if (payload.status === 'open') {
+      updateData.publishedAt = new Date();
+    }
+
+    // Strip undefined keys
+    Object.keys(updateData).forEach(key => updateData[key] === undefined && delete updateData[key]);
+
+    const rfq = await Rfq.findOneAndUpdate(
+      { _id: rfqId, schoolId, 'softDelete.isDeleted': { $ne: true } },
+      { $set: updateData },
+      { new: true }
+    );
+    if (!rfq) throw new NotFoundError('RFQ not found', 'RFQ_NOT_FOUND');
+
+    const school = await loadSchool(schoolId);
+    return serializeRfq(rfq, { school });
+  },
+
   async listSchoolRfqs(schoolId, query = {}) {
     const filter = { schoolId };
     if (query.status) filter.status = query.status;

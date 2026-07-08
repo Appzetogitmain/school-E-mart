@@ -1,13 +1,56 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  ArrowLeft, Wallet, Plus, ArrowUpRight, 
+import {
+  ArrowLeft, Wallet, Plus, ArrowUpRight,
   ArrowDownLeft, History, Filter, Building2,
   ChevronRight, Receipt
 } from 'lucide-react';
+import { getMyWallet, listMyWalletTransactions } from '../../../services/walletApi';
+
+const formatRupees = (paise) =>
+  ((paise || 0) / 100).toLocaleString('en-IN', { minimumFractionDigits: 2 });
 
 const SchoolWalletPage = () => {
   const navigate = useNavigate();
+  const [balance, setBalance] = useState(0);
+  const [transactions, setTransactions] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [wallet, txns] = await Promise.all([
+          getMyWallet(),
+          listMyWalletTransactions({ limit: 30 }),
+        ]);
+        if (cancelled) return;
+        setBalance(wallet?.balancePaise || 0);
+        setTransactions(
+          (txns.data || []).map((t) => ({
+            id: t._id,
+            title: t.description || 'Transaction',
+            amount: `${t.type === 'credit' ? '+' : '-'} ₹${formatRupees(t.amountPaise)}`,
+            date: t.audit?.createdAt
+              ? new Date(t.audit.createdAt).toLocaleDateString('en-GB', {
+                  day: '2-digit',
+                  month: 'short',
+                  year: 'numeric',
+                })
+              : '—',
+            status: t.type,
+          }))
+        );
+      } catch {
+        // Keep zero balance — wallet has no activity yet.
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
     <div className="min-h-screen bg-[#F8F7FF] pb-20 font-outfit">
@@ -26,53 +69,46 @@ const SchoolWalletPage = () => {
             <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center backdrop-blur-md border border-white/10">
               <Building2 size={24} />
             </div>
-            <button className="bg-white/10 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest backdrop-blur-md border border-white/10">Manage Credits</button>
           </div>
           <p className="text-white/60 text-[10px] font-black uppercase tracking-[0.2em] mb-1">Available Credits</p>
           <div className="flex items-baseline gap-2">
-            <span className="text-4xl font-black">₹12,450.00</span>
+            <span className="text-4xl font-black">₹{formatRupees(balance)}</span>
           </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-4 mb-8">
-          <button className="bg-white p-5 rounded-[2rem] border border-gray-100 flex flex-col items-center gap-3 active:scale-95 transition-all shadow-sm">
-            <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center text-primary">
-              <Plus size={20} />
-            </div>
-            <span className="text-[11px] font-black text-deep-purple uppercase tracking-widest">Add Credits</span>
-          </button>
-          <button className="bg-white p-5 rounded-[2rem] border border-gray-100 flex flex-col items-center gap-3 active:scale-95 transition-all shadow-sm">
-            <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center text-blue-500">
-              <Receipt size={20} />
-            </div>
-            <span className="text-[11px] font-black text-deep-purple uppercase tracking-widest">Invoices</span>
-          </button>
         </div>
 
         <div className="space-y-4">
           <div className="flex items-center justify-between mb-2">
             <h3 className="text-sm font-black text-deep-purple uppercase tracking-widest">Transaction History</h3>
-            <button className="text-[10px] font-black text-primary uppercase tracking-widest flex items-center gap-1">Filter <Filter size={10} /></button>
           </div>
 
-          {[
-            { title: "Bulk Stationery Proc.", amount: "- ₹4,500", date: "Today, 11:30 am", status: "debit" },
-            { title: "Partner Referral Credit", amount: "+ ₹2,500", date: "02 May 2026", status: "credit" },
-            { title: "Uniform Batch Order", amount: "- ₹18,200", date: "28 Apr 2026", status: "debit" }
-          ].map((tx, i) => (
-            <div key={i} className="bg-white p-4 rounded-3xl border border-gray-100 flex items-center justify-between shadow-sm">
-              <div className="flex items-center gap-4">
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${tx.status === 'credit' ? 'bg-green-50 text-green-500' : 'bg-red-50 text-red-500'}`}>
-                  {tx.status === 'credit' ? <ArrowDownLeft size={18} /> : <ArrowUpRight size={18} />}
-                </div>
-                <div>
-                  <h4 className="text-[13px] font-bold text-deep-purple">{tx.title}</h4>
-                  <p className="text-[10px] text-gray-400 font-medium">{tx.date}</p>
-                </div>
-              </div>
-              <span className={`text-sm font-black ${tx.status === 'credit' ? 'text-green-500' : 'text-deep-purple'}`}>{tx.amount}</span>
+          {loading ? (
+            <div className="bg-white p-8 rounded-3xl border border-gray-100 text-center shadow-sm">
+              <span className="text-xs font-bold text-gray-400">Loading transactions…</span>
             </div>
-          ))}
+          ) : transactions.length === 0 ? (
+            <div className="bg-white p-8 rounded-3xl border border-gray-100 text-center shadow-sm">
+              <History size={32} className="text-gray-300 mx-auto mb-3" />
+              <span className="text-xs font-bold text-gray-400 block">No transactions yet</span>
+              <span className="text-[10px] text-gray-300 font-medium block mt-1">
+                Wallet credits and procurement payments will appear here.
+              </span>
+            </div>
+          ) : (
+            transactions.map((tx) => (
+              <div key={tx.id} className="bg-white p-4 rounded-3xl border border-gray-100 flex items-center justify-between shadow-sm">
+                <div className="flex items-center gap-4">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${tx.status === 'credit' ? 'bg-green-50 text-green-500' : 'bg-red-50 text-red-500'}`}>
+                    {tx.status === 'credit' ? <ArrowDownLeft size={18} /> : <ArrowUpRight size={18} />}
+                  </div>
+                  <div>
+                    <h4 className="text-[13px] font-bold text-deep-purple">{tx.title}</h4>
+                    <p className="text-[10px] text-gray-400 font-medium">{tx.date}</p>
+                  </div>
+                </div>
+                <span className={`text-sm font-black ${tx.status === 'credit' ? 'text-green-500' : 'text-deep-purple'}`}>{tx.amount}</span>
+              </div>
+            ))
+          )}
         </div>
       </div>
     </div>

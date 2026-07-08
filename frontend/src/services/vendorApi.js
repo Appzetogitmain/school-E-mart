@@ -155,6 +155,16 @@ export const listVendorPendingSettlements = async (params = {}) => {
   return extractPaginated(response, 'settlements');
 };
 
+export const listVendorPayoutRequests = async (params = {}) => {
+  const response = await apiClient.get('/vendor/settlements/payouts', { params });
+  return extractPaginated(response, 'payouts');
+};
+
+export const requestVendorPayout = async (amountPaise) => {
+  const response = await apiClient.post('/vendor/settlements/payouts', { amountPaise });
+  return unwrapData(response)?.payout;
+};
+
 export const getVendorDashboard = async () => {
   const response = await apiClient.get('/vendor/analytics/dashboard');
   return unwrapData(response)?.dashboard;

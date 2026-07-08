@@ -7,7 +7,7 @@ import {
   Users, GraduationCap, Grid, Upload, FileText, 
   X, Info, Send, Save, Check, Loader2
 } from 'lucide-react';
-import { createNotice } from '../../../services/schoolApi';
+import { createNotice, listClasses } from '../../../services/schoolApi';
 import { mapAudienceToNoticePayload } from '../../../utils/mappers/parentMapper';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 import { useSchoolId } from '../../../utils/schoolContext';
@@ -23,6 +23,20 @@ const SchoolSendNotice = () => {
   const [isSuccess, setIsSuccess] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [classesList, setClassesList] = useState([]);
+  const [selectedClass, setSelectedClass] = useState('');
+
+  useEffect(() => {
+    if (!schoolId) return;
+    (async () => {
+      try {
+        const list = await listClasses(schoolId);
+        setClassesList(list || []);
+      } catch (err) {
+        console.error('Failed to load classes:', err);
+      }
+    })();
+  }, [schoolId]);
 
   const handleBack = () => {
     navigate('/school/admin');
@@ -51,6 +65,10 @@ const SchoolSendNotice = () => {
       setError('Please enter a title and notice content.');
       return;
     }
+    if (audience === 'specific' && !selectedClass) {
+      setError('Please select a targeted class.');
+      return;
+    }
     if (!schoolId) {
       setError('School context is missing. Please sign in again.');
       return;
@@ -65,6 +83,10 @@ const SchoolSendNotice = () => {
         targetAudience: mapAudienceToNoticePayload(audience),
         status: schedule === 'now' ? 'published' : 'draft',
         publishDate: schedule === 'now' ? new Date().toISOString() : undefined,
+        targetClasses:
+          audience === 'specific' && selectedClass
+            ? [{ classGrade: selectedClass, sections: [] }]
+            : undefined,
       });
       setIsSuccess(true);
       setTimeout(() => {
@@ -231,7 +253,6 @@ const SchoolSendNotice = () => {
               <span className="text-[8.5px] text-gray-400 font-bold block mt-0.5">Send to all teacher accounts</span>
             </div>
 
-            {/* Specific Section */}
             <div 
               onClick={() => setAudience('specific')}
               className={`p-4 rounded-3xl border-2 cursor-pointer transition-all flex flex-col items-center justify-center text-center relative ${audience === 'specific' ? 'border-blue-500 bg-blue-50/5' : 'border-gray-150 hover:border-gray-250 bg-white'}`}
@@ -248,6 +269,25 @@ const SchoolSendNotice = () => {
               <span className="text-[8.5px] text-gray-400 font-bold block mt-0.5">Select classes or sections</span>
             </div>
           </div>
+
+          {/* Select Classes dropdown */}
+          {audience === 'specific' && (
+            <div className="space-y-1.5 pt-4 animate-in fade-in slide-in-from-top-2 duration-300">
+              <label className="text-[11px] font-black text-gray-500">
+                Select Targeted Class <span className="text-red-500">*</span>
+              </label>
+              <select 
+                value={selectedClass}
+                onChange={(e) => setSelectedClass(e.target.value)}
+                className="w-full px-4 py-3.5 bg-white border border-gray-200 rounded-2xl text-xs font-bold text-deep-purple focus:outline-none focus:border-primary/50 transition-colors appearance-none cursor-pointer"
+              >
+                <option value="">Select a class</option>
+                {classesList.map(c => (
+                  <option key={c.classGrade} value={c.classGrade}>{c.classGrade}</option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
 
         {/* Step 3: Schedule */}

@@ -6,6 +6,9 @@ const { vendorModule } = require('../modules/vendor');
 const { ordersModule } = require('../modules/orders');
 const { adminModule } = require('../modules/admin');
 const { notificationsModule } = require('../modules/notifications');
+const { supportModule } = require('../modules/support');
+const { academicsModule } = require('../modules/academics');
+const { walletModule } = require('../modules/wallet');
 
 const v1Modules = [
   authModule,
@@ -16,6 +19,9 @@ const v1Modules = [
   ordersModule,
   adminModule,
   notificationsModule,
+  supportModule,
+  academicsModule,
+  walletModule,
 ];
 
 const registerV1Routes = (router) => {

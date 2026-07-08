@@ -262,6 +262,9 @@ const orderService = {
       for (const vendorId of updated.vendorIds || []) {
         await settlementService.recordOrderSettlement(vendorId, updated._id);
       }
+      // One-time referral bonus on the invitee's first delivered order.
+      const referralRewardService = require('../../wallet/services/referralReward.service');
+      await referralRewardService.processOrderDelivered(updated);
     }
 
     triggerService.notifyOrderStatusChange(updated, status, note);

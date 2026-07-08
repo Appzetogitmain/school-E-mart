@@ -1,24 +1,28 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import ReactDOM from 'react-dom';
-import { 
-  User, Mail, Phone, Shield, Calendar, Edit3, X, CheckCircle, Save, ChevronRight, Key, Eye, EyeOff 
+import {
+  User, Mail, Phone, Shield, Calendar, Edit3, X, CheckCircle, Save, ChevronRight, Key, Eye, EyeOff
 } from 'lucide-react';
+import { getAdminProfile, updateAdminProfile } from '../../../services/adminApi';
+import { changePassword } from '../../../services/authApi';
+import { getErrorMessage } from '../../../utils/apiHelpers';
 
 const AdminProfileManagement = () => {
-  // Local profile states matching exact user requirements
+  // Profile state (hydrated from the API)
   const [profile, setProfile] = useState({
-    firstName: 'Harsh',
-    lastName: 'Admin',
-    email: 'admin9111966732@kosil.com',
-    mobile: '9111966732',
+    firstName: '',
+    lastName: '',
+    email: '',
+    mobile: '',
     role: 'Super Admin',
-    createdAt: '10/03/2026, 17:26:13'
+    createdAt: ''
   });
 
   // Modal active states
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editForm, setEditForm] = useState({ ...profile });
-  
+  const [saving, setSaving] = useState(false);
+
   // Toast notifications states
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('Profile updated successfully!');
@@ -27,11 +31,33 @@ const AdminProfileManagement = () => {
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [updatingPassword, setUpdatingPassword] = useState(false);
 
   // Password visibility triggers
   const [showPass1, setShowPass1] = useState(false);
   const [showPass2, setShowPass2] = useState(false);
   const [showPass3, setShowPass3] = useState(false);
+
+  const notify = (message) => {
+    setToastMessage(message);
+    setShowToast(true);
+    setTimeout(() => setShowToast(false), 3000);
+  };
+
+  const loadProfile = useCallback(async () => {
+    try {
+      const data = await getAdminProfile();
+      if (data) {
+        setProfile((prev) => ({ ...prev, ...data }));
+      }
+    } catch (err) {
+      notify(getErrorMessage(err, 'Unable to load profile'));
+    }
+  }, []);
+
+  useEffect(() => {
+    loadProfile();
+  }, [loadProfile]);
 
   // Trigger edit modal
   const handleOpenEdit = () => {
@@ -40,25 +66,29 @@ const AdminProfileManagement = () => {
   };
 
   // Submit profile changes
-  const handleSaveProfile = (e) => {
+  const handleSaveProfile = async (e) => {
     e.preventDefault();
-    setProfile({
-      ...profile,
-      firstName: editForm.firstName.trim(),
-      lastName: editForm.lastName.trim(),
-      email: editForm.email.trim(),
-      mobile: editForm.mobile.trim()
-    });
-    setIsModalOpen(false);
-    setToastMessage('Profile updated successfully!');
-    setShowToast(true);
-    setTimeout(() => setShowToast(false), 3000);
+    setSaving(true);
+    try {
+      const updated = await updateAdminProfile({
+        firstName: editForm.firstName.trim(),
+        lastName: editForm.lastName.trim(),
+        mobile: editForm.mobile.trim(),
+      });
+      setProfile((prev) => ({ ...prev, ...updated }));
+      setIsModalOpen(false);
+      notify('Profile updated successfully!');
+    } catch (err) {
+      alert(getErrorMessage(err, 'Unable to update profile'));
+    } finally {
+      setSaving(false);
+    }
   };
 
   // Submit password updates
-  const handleUpdatePassword = (e) => {
+  const handleUpdatePassword = async (e) => {
     e.preventDefault();
-    
+
     if (!currentPassword.trim() || !newPassword.trim() || !confirmNewPassword.trim()) {
       alert('Please fill out all password fields.');
       return;
@@ -74,14 +104,22 @@ const AdminProfileManagement = () => {
       return;
     }
 
-    // Reset fields on successful simulation
-    setCurrentPassword('');
-    setNewPassword('');
-    setConfirmNewPassword('');
-
-    setToastMessage('Password updated successfully!');
-    setShowToast(true);
-    setTimeout(() => setShowToast(false), 3000);
+    setUpdatingPassword(true);
+    try {
+      await changePassword({
+        currentPassword,
+        newPassword,
+        confirmPassword: confirmNewPassword,
+      });
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmNewPassword('');
+      notify('Password updated successfully!');
+    } catch (err) {
+      alert(getErrorMessage(err, 'Unable to update password'));
+    } finally {
+      setUpdatingPassword(false);
+    }
   };
 
   return (
@@ -285,10 +323,11 @@ const AdminProfileManagement = () => {
           <div className="flex justify-end pt-2">
             <button
               type="submit"
-              className="flex items-center gap-1.5 bg-[#0B1528] hover:bg-[#15253F] text-white text-[10px] font-black uppercase tracking-wider py-2.5 px-6 rounded-xl transition-all shadow-xs cursor-pointer"
+              disabled={updatingPassword}
+              className="flex items-center gap-1.5 bg-[#0B1528] hover:bg-[#15253F] disabled:opacity-60 text-white text-[10px] font-black uppercase tracking-wider py-2.5 px-6 rounded-xl transition-all shadow-xs cursor-pointer"
             >
               <Save size={12} className="stroke-[2.5]" />
-              Update Password
+              {updatingPassword ? 'Updating…' : 'Update Password'}
             </button>
           </div>
 
@@ -345,16 +384,14 @@ const AdminProfileManagement = () => {
                 />
               </div>
 
-              {/* Email Address */}
+              {/* Email Address (read-only) */}
               <div className="space-y-1.5">
-                <label className="block text-gray-400 uppercase tracking-wide text-[9px] font-black">Email Address *</label>
+                <label className="block text-gray-400 uppercase tracking-wide text-[9px] font-black">Email Address</label>
                 <input
                   type="email"
-                  required
-                  placeholder="email@example.com"
+                  disabled
                   value={editForm.email}
-                  onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
-                  className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-500/25 font-bold"
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none font-bold text-gray-400 cursor-not-allowed"
                 />
               </div>
 
@@ -375,9 +412,10 @@ const AdminProfileManagement = () => {
               <div className="pt-3 flex gap-3">
                 <button
                   type="submit"
-                  className="flex-1 bg-[#0B1528] hover:bg-[#15253F] text-white text-xs font-black uppercase tracking-wider py-3 rounded-xl transition-all shadow-xs cursor-pointer"
+                  disabled={saving}
+                  className="flex-1 bg-[#0B1528] hover:bg-[#15253F] disabled:opacity-60 text-white text-xs font-black uppercase tracking-wider py-3 rounded-xl transition-all shadow-xs cursor-pointer"
                 >
-                  Save Changes
+                  {saving ? 'Saving…' : 'Save Changes'}
                 </button>
                 
                 <button

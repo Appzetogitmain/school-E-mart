@@ -217,3 +217,63 @@ export const setPlatformCourseStatus = async (courseId, status) => {
   const response = await apiClient.patch(`/admin/lms/courses/${courseId}/status`, { status });
   return unwrapData(response)?.course;
 };
+
+// Wallet & payouts
+export const getWalletOverview = async () => {
+  const response = await apiClient.get('/admin/wallet/overview');
+  return unwrapData(response)?.overview;
+};
+
+export const listVendorTransactions = async (params = {}) => {
+  const response = await apiClient.get('/admin/wallet/transactions', { params });
+  return extractPaginated(response, 'transactions');
+};
+
+export const createVendorAdjustment = async (payload) => {
+  const response = await apiClient.post('/admin/wallet/transactions', payload);
+  return unwrapData(response)?.transaction;
+};
+
+export const adjustUserWallet = async (userId, payload) => {
+  const response = await apiClient.post(`/admin/users/${userId}/wallet`, payload);
+  return unwrapData(response)?.transaction;
+};
+
+export const listPayoutRequests = async (params = {}) => {
+  const response = await apiClient.get('/admin/wallet/payouts', { params });
+  return extractPaginated(response, 'payouts');
+};
+
+export const approvePayoutRequest = async (payoutId, transactionReference) => {
+  const response = await apiClient.post(`/admin/wallet/payouts/${payoutId}/approve`, {
+    transactionReference,
+  });
+  return unwrapData(response)?.payout;
+};
+
+export const rejectPayoutRequest = async (payoutId, reason) => {
+  const response = await apiClient.post(`/admin/wallet/payouts/${payoutId}/reject`, { reason });
+  return unwrapData(response)?.payout;
+};
+
+// Notification campaigns
+export const listNotificationCampaigns = async (params = {}) => {
+  const response = await apiClient.get('/admin/notifications/campaigns', { params });
+  return extractPaginated(response, 'campaigns');
+};
+
+export const createNotificationCampaign = async (payload) => {
+  const response = await apiClient.post('/admin/notifications/campaigns', payload);
+  return unwrapData(response)?.campaign;
+};
+
+// Admin profile
+export const getAdminProfile = async () => {
+  const response = await apiClient.get('/admin/profile');
+  return unwrapData(response)?.profile;
+};
+
+export const updateAdminProfile = async (payload) => {
+  const response = await apiClient.put('/admin/profile', payload);
+  return unwrapData(response)?.profile;
+};

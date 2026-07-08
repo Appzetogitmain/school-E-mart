@@ -252,6 +252,18 @@ router.get(
   validateQuery(validators.paginationQuery),
   vendorController.getSettlementHistory
 );
+router.get(
+  '/settlements/payouts',
+  ...vendorOrders,
+  validateQuery(validators.paginationQuery),
+  vendorController.listPayoutRequests
+);
+router.post(
+  '/settlements/payouts',
+  ...vendorOrdersWrite,
+  validateBody(validators.payoutRequestSchema),
+  vendorController.requestPayout
+);
 
 // Analytics
 router.get('/analytics/dashboard', ...vendorApproved, vendorController.getDashboard);

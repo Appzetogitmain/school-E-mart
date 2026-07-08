@@ -2,6 +2,8 @@ const { NotFoundError, ConflictError, BadRequestError } = require('../../../comm
 const { withTransaction } = require('../../../database');
 const { hashPassword } = require('../../../utils');
 const User = require('../../../database/models/User');
+const TeacherProfile = require('../../../database/models/TeacherProfile');
+const SchoolMembership = require('../../../database/models/SchoolMembership');
 const teacherRepository = require('../repositories/teacher.repository');
 const membershipRepository = require('../repositories/membership.repository');
 const schoolRepository = require('../repositories/school.repository');
@@ -13,7 +15,16 @@ const teacherService = {
     const school = await schoolRepository.findById(schoolId);
     if (!school) throw new NotFoundError('School not found', 'SCHOOL_NOT_FOUND');
 
-    return withTransaction(async (session) => {
+    const existingPhone = await User.findOne({ phone: payload.phone, 'softDelete.isDeleted': { $ne: true } });
+    if (existingPhone) {
+      throw new ConflictError('A user with this phone number already exists', 'PHONE_EXISTS');
+    }
+    const existingEmail = await User.findOne({ email: payload.email.toLowerCase(), 'softDelete.isDeleted': { $ne: true } });
+    if (existingEmail) {
+      throw new ConflictError('A user with this email address already exists', 'EMAIL_EXISTS');
+    }
+
+    const result = await withTransaction(async (session) => {
       const { hash, algo } = await hashPassword(payload.password);
       const refId = generateUserRefId('TCH');
 
@@ -68,6 +79,23 @@ const teacherService = {
 
       return { user, profile };
     });
+
+    if (result.user && result.user.email) {
+      const emailService = require('../../../common/email');
+      const logger = require('../../../common/logger');
+      emailService.sendWelcomeEmail({
+        to: result.user.email,
+        name: result.user.name,
+        role: 'teacher',
+        mobile: result.user.phone,
+        password: payload.password,
+        schoolName: school.name,
+      }).catch((err) => {
+        logger.error('Failed to send teacher welcome email:', err);
+      });
+    }
+
+    return result;
   },
 
   async listTeachers(schoolId, query, { approvalStatus } = {}) {
@@ -140,6 +168,22 @@ const teacherService = {
     if (!profile) throw new NotFoundError('Teacher not found', 'TEACHER_NOT_FOUND');
     await User.findByIdAndUpdate(profile.userId, { $set: { tenantSchoolId: schoolId } });
     return profile;
+  },
+
+  async deleteTeacher(schoolId, teacherProfileId) {
+    const profile = await TeacherProfile.findOne({ _id: teacherProfileId, schoolId });
+    if (!profile) throw new NotFoundError('Teacher profile not found', 'TEACHER_NOT_FOUND');
+
+    const user = await User.findOne({ _id: profile.userId, tenantSchoolId: schoolId });
+    if (!user) throw new NotFoundError('Teacher user not found under this school', 'TEACHER_NOT_FOUND');
+
+    await withTransaction(async (session) => {
+      await TeacherProfile.deleteOne({ _id: teacherProfileId }).session(session);
+      await User.deleteOne({ _id: profile.userId }).session(session);
+      await SchoolMembership.deleteMany({ userId: profile.userId, schoolId, role: 'teacher' }).session(session);
+    });
+
+    return { success: true };
   },
 };
 

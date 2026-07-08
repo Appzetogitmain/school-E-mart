@@ -306,6 +306,18 @@ const vendorController = {
     return paginated(res, { settlements: data }, pagination, 'Settlement history fetched', req);
   }),
 
+  requestPayout: asyncHandler(async (req, res) => {
+    const vendorId = await vendorAccessPolicy.resolveApprovedVendorId(req.auth);
+    const payout = await settlementService.createPayoutRequest(vendorId, req.body.amountPaise);
+    return created(res, { payout }, 'Payout request submitted', req);
+  }),
+
+  listPayoutRequests: asyncHandler(async (req, res) => {
+    const vendorId = await vendorAccessPolicy.resolveApprovedVendorId(req.auth);
+    const { data, pagination } = await settlementService.listPayoutRequests(vendorId, req.query);
+    return paginated(res, { payouts: data }, pagination, 'Payout requests fetched', req);
+  }),
+
   getDashboard: asyncHandler(async (req, res) => {
     const vendorId = await vendorAccessPolicy.resolveApprovedVendorId(req.auth);
     const dashboard = await analyticsService.getDashboard(vendorId);

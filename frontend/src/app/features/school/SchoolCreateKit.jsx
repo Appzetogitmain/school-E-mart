@@ -1,14 +1,19 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  ArrowLeft, HelpCircle, Package, Layers, 
+import {
+  ArrowLeft, HelpCircle, Package, Layers,
   Trash2, Plus, Info, Check, ChevronRight, ChevronUp,
   Upload, Sparkles, TrendingUp
 } from 'lucide-react';
+import { createKit, listClasses, uploadSchoolFile } from '../../../services/schoolApi';
+import { listProducts } from '../../../services/catalogApi';
+import { useSchoolId } from '../../../utils/schoolContext';
+import { getErrorMessage } from '../../../utils/apiHelpers';
 
 const SchoolCreateKit = () => {
   const navigate = useNavigate();
-  
+  const schoolId = useSchoolId();
+
   // Basic Info States
   const [kitName, setKitName] = useState('');
   const [classGrade, setClassGrade] = useState('');
@@ -17,6 +22,13 @@ const SchoolCreateKit = () => {
   const [includes, setIncludes] = useState('');
   const [imageFile, setImageFile] = useState(null);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  // Catalog products available to add to the kit
+  const [catalogProducts, setCatalogProducts] = useState([]);
+  const [classesList, setClassesList] = useState([]);
+  const [selectedProductToAdd, setSelectedProductToAdd] = useState('');
 
   // Default added items list in Step 2
   const [items, setItems] = useState([]);
@@ -34,7 +46,37 @@ const SchoolCreateKit = () => {
   // Expandable Accordions States
   const [step3Open, setStep3Open] = useState(true);
 
-  const costPrice = items.reduce((sum, item) => sum + (item.qty * 125), 0);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await listProducts({ limit: 100 });
+        if (!cancelled) setCatalogProducts(data || []);
+      } catch {
+        if (!cancelled) setCatalogProducts([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!schoolId) return;
+    (async () => {
+      try {
+        const list = await listClasses(schoolId);
+        setClassesList(list || []);
+      } catch (err) {
+        console.error('Failed to load classes:', err);
+      }
+    })();
+  }, [schoolId]);
+
+  const costPrice = items.reduce(
+    (sum, item) => sum + item.qty * ((item.pricePaise || 0) / 100),
+    0
+  );
   const parsedSelling = parseInt(sellingPrice) || 0;
   const profit = parsedSelling > 0 ? parsedSelling - costPrice : 0;
 
@@ -47,14 +89,35 @@ const SchoolCreateKit = () => {
   };
 
   const handleAddItem = () => {
-    const newItem = {
-      id: Date.now(),
-      name: 'New Stationery Item',
-      detail: 'Standard Pack',
-      qty: 1,
-      unit: 'Pcs'
-    };
-    setItems([...items, newItem]);
+    if (!selectedProductToAdd) {
+      setError('Please select a product from the list.');
+      return;
+    }
+    const available = catalogProducts.find(
+      (p) => String(p._id || p.id) === String(selectedProductToAdd)
+    );
+    if (!available) {
+      setError('Selected product is invalid or not found.');
+      return;
+    }
+    if (items.some((item) => String(item.productId) === String(available._id || available.id))) {
+      setError('This product is already added to this kit.');
+      return;
+    }
+    setError('');
+    setItems([
+      ...items,
+      {
+        id: available._id || available.id,
+        productId: available._id || available.id,
+        name: available.name || available.title || 'Product',
+        detail: available.brand || 'Catalog product',
+        pricePaise: available.pricePaise || 0,
+        qty: 1,
+        unit: 'Pcs',
+      },
+    ]);
+    setSelectedProductToAdd('');
   };
 
   const handleImageUpload = (e) => {
@@ -64,12 +127,53 @@ const SchoolCreateKit = () => {
     }
   };
 
-  const handleCreateKit = () => {
-    setIsSuccess(true);
-    setTimeout(() => {
-      setIsSuccess(false);
-      navigate('/school/admin');
-    }, 2000);
+  const handleCreateKit = async (overrideStatus) => {
+    setError('');
+    if (!kitName.trim()) {
+      setError('Kit name is required.');
+      return;
+    }
+    if (!items.length) {
+      setError('Add at least one product to the kit.');
+      return;
+    }
+    if (!schoolId) {
+      setError('School context is missing. Please log in again.');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      let imageId = undefined;
+      if (imageFile) {
+        const attachment = await uploadSchoolFile(schoolId, imageFile, 'kit_image');
+        imageId = attachment?._id || attachment?.id;
+      }
+
+      const finalStatus = overrideStatus === 'active' || overrideStatus === 'draft' ? overrideStatus : kitStatus;
+
+      await createKit(schoolId, {
+        name: kitName.trim(),
+        classGrade: classGrade || undefined,
+        category: category || undefined,
+        description: [description.trim(), includes.trim()].filter(Boolean).join('\n\n') || undefined,
+        imageId,
+        items: items.map((item) => ({ productId: item.productId, qty: item.qty })),
+        pricePaise: parsedSelling > 0 ? Math.round(parsedSelling * 100) : undefined,
+        mrpPaise: parseInt(mrp) > 0 ? Math.round(parseInt(mrp) * 100) : undefined,
+        status: finalStatus,
+        showOnApp,
+        availableOnline,
+        allowPreorders,
+      });
+      setIsSuccess(true);
+      setTimeout(() => {
+        setIsSuccess(false);
+        navigate('/school/kits');
+      }, 2000);
+    } catch (err) {
+      setError(getErrorMessage(err, 'Unable to create kit'));
+    }
   };
 
   return (
@@ -185,10 +289,9 @@ const SchoolCreateKit = () => {
               className="w-full px-4.5 py-3.5 bg-white border border-gray-200 rounded-2xl text-sm font-bold text-deep-purple focus:outline-none focus:border-primary/50 transition-colors appearance-none cursor-pointer leading-relaxed"
             >
               <option value="">Select class or grade</option>
-              <option value="grade-1">Class 1</option>
-              <option value="grade-2">Class 2</option>
-              <option value="grade-3">Class 3</option>
-              <option value="grade-5">Class 5</option>
+              {classesList.map(c => (
+                <option key={c.classGrade} value={c.classGrade}>{c.classGrade}</option>
+              ))}
             </select>
           </div>
 
@@ -235,17 +338,32 @@ const SchoolCreateKit = () => {
               <label className="text-[12px] font-black text-gray-500 uppercase tracking-wider">
                 Kit Image <span className="text-red-500">*</span>
               </label>
-              <div className="border border-dashed border-gray-250 rounded-2xl p-4 flex flex-col items-center justify-center text-center relative bg-gray-50/20 h-32">
+              <div className="border border-dashed border-gray-250 rounded-2xl p-4 flex flex-col items-center justify-center text-center relative bg-gray-50/20 h-32 overflow-hidden">
                 <input 
                   type="file" 
                   onChange={handleImageUpload}
-                  className="absolute inset-0 opacity-0 cursor-pointer" 
+                  className="absolute inset-0 opacity-0 cursor-pointer z-10" 
                 />
-                <Upload size={18} className="text-primary mb-2" />
-                <span className="text-[11px] font-black text-deep-purple block leading-tight truncate w-full px-2">
-                  {imageFile ? imageFile.name : 'Upload image'}
-                </span>
-                <span className="text-[9px] text-gray-400 font-bold block mt-1">JPG, PNG (Max 2MB)</span>
+                {imageFile ? (
+                  <>
+                    <img 
+                      src={URL.createObjectURL(imageFile)} 
+                      alt="Kit Preview" 
+                      className="absolute inset-0 w-full h-full object-cover" 
+                    />
+                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity z-20">
+                      <span className="text-white text-[10px] font-black uppercase tracking-wider">Change Image</span>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <Upload size={18} className="text-primary mb-2" />
+                    <span className="text-[11px] font-black text-deep-purple block leading-tight truncate w-full px-2">
+                      Upload image
+                    </span>
+                    <span className="text-[9px] text-gray-400 font-bold block mt-1">JPG, PNG (Max 2MB)</span>
+                  </>
+                )}
               </div>
             </div>
 
@@ -274,13 +392,27 @@ const SchoolCreateKit = () => {
               </h3>
             </div>
             
-            <button 
-              type="button"
-              onClick={handleAddItem}
-              className="px-3.5 py-2 border border-primary text-primary hover:bg-purple-50/40 rounded-xl text-xs font-black flex items-center gap-1 active:scale-95 transition-all shadow-sm bg-white"
-            >
-              <Plus size={14} /> Add Item
-            </button>
+            <div className="flex items-center gap-2">
+              <select
+                value={selectedProductToAdd}
+                onChange={(e) => setSelectedProductToAdd(e.target.value)}
+                className="px-3 py-2 border border-gray-250 rounded-xl text-xs font-bold text-deep-purple focus:outline-none focus:border-primary/50 max-w-[160px] bg-white cursor-pointer"
+              >
+                <option value="">Select a product</option>
+                {catalogProducts.map(p => (
+                  <option key={p._id || p.id} value={p._id || p.id}>
+                    {p.name || p.title || 'Product'}
+                  </option>
+                ))}
+              </select>
+              <button 
+                type="button"
+                onClick={handleAddItem}
+                className="px-3.5 py-2.5 bg-[#3b2d7d] text-white hover:bg-[#2b2061] rounded-xl text-xs font-black flex items-center gap-1 active:scale-95 transition-all shadow-sm shrink-0"
+              >
+                <Plus size={14} /> Add Item
+              </button>
+            </div>
           </div>
 
           {/* List of active added items */}
@@ -296,18 +428,41 @@ const SchoolCreateKit = () => {
                       {item.name}
                     </span>
                     <span className="text-[10px] text-gray-400 font-bold block mt-1">
-                      {item.detail}
+                      {item.detail} • ₹{((item.pricePaise || 0) / 100).toFixed(2)} / unit
                     </span>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-4">
-                  <div className="text-right shrink-0">
-                    <span className="text-[11px] font-black text-deep-purple block leading-none">
-                      Qty: {item.qty}
+                <div className="flex items-center gap-4 shrink-0">
+                  {/* Quantity Control Buttons */}
+                  <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl p-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setItems(items.map(it => it.id === item.id ? { ...it, qty: Math.max(1, it.qty - 1) } : it));
+                      }}
+                      className="w-6 h-6 rounded-lg bg-gray-50 flex items-center justify-center text-xs font-black text-gray-500 hover:bg-gray-100 active:scale-90 transition-transform"
+                    >
+                      -
+                    </button>
+                    <span className="text-xs font-black text-deep-purple w-6 text-center">{item.qty}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setItems(items.map(it => it.id === item.id ? { ...it, qty: it.qty + 1 } : it));
+                      }}
+                      className="w-6 h-6 rounded-lg bg-gray-50 flex items-center justify-center text-xs font-black text-gray-500 hover:bg-gray-100 active:scale-90 transition-transform"
+                    >
+                      +
+                    </button>
+                  </div>
+
+                  <div className="text-right shrink-0 min-w-[50px]">
+                    <span className="text-xs font-black text-deep-purple block leading-none">
+                      ₹{(((item.pricePaise || 0) * item.qty) / 100).toFixed(0)}
                     </span>
-                    <span className="text-[9px] text-gray-400 font-bold block mt-1.5">
-                      {item.unit}
+                    <span className="text-[9px] text-gray-400 font-bold block mt-1">
+                      Subtotal
                     </span>
                   </div>
                   
@@ -569,14 +724,28 @@ const SchoolCreateKit = () => {
 
       {/* Sticky Bottom Actions Footer Bar */}
       <div className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-md p-5 flex flex-col gap-3.5 z-50 max-w-md mx-auto shadow-[0_-10px_30px_-5px_rgba(0,0,0,0.06)]">
-        <div className="flex">
-          <button 
+        {error && (
+          <div className="bg-red-50 border border-red-100 text-red-600 text-[11px] font-bold px-4 py-2.5 rounded-2xl">
+            {error}
+          </div>
+        )}
+        <div className="flex gap-3">
+          <button
             type="button"
-            onClick={handleCreateKit}
-            className="w-full py-4 bg-[#3b2d7d] text-white rounded-2xl text-sm font-black shadow-lg shadow-purple-100 flex items-center justify-center gap-2 active:scale-95 transition-all hover:bg-[#2b2061] tracking-wider uppercase"
+            onClick={() => handleCreateKit('draft')}
+            disabled={saving}
+            className="flex-1 py-4 border-2 border-gray-300 text-gray-750 rounded-2xl text-xs font-black flex items-center justify-center gap-2 active:scale-95 transition-all hover:bg-gray-50 disabled:opacity-60 uppercase tracking-wider"
           >
-            <Sparkles size={16} />
-            Create Kit
+            Save Draft
+          </button>
+          <button
+            type="button"
+            onClick={() => handleCreateKit('active')}
+            disabled={saving}
+            className="flex-1 py-4 bg-[#3b2d7d] text-white rounded-2xl text-xs font-black shadow-lg shadow-purple-100 flex items-center justify-center gap-2 active:scale-95 transition-all hover:bg-[#2b2061] disabled:opacity-60 uppercase tracking-wider"
+          >
+            <Sparkles size={14} />
+            {saving ? 'Saving…' : 'Create Kit'}
           </button>
         </div>
       </div>

@@ -249,6 +249,57 @@ const settingsBodyBySection = {
   billing: billingSettingsSchema,
 };
 
+const payoutIdParam = Joi.object({ payoutId: objectId.required() });
+
+const approvePayoutSchema = Joi.object({
+  transactionReference: Joi.string().trim().max(120).optional(),
+});
+
+const rejectPayoutSchema = Joi.object({
+  reason: Joi.string().trim().max(500).required(),
+});
+
+const walletQuery = paginationQuery.keys({
+  vendorId: objectId.optional(),
+  transactionType: Joi.string()
+    .valid('order_credit', 'commission_deduction', 'payout_debit', 'adjustment', 'refund_debit')
+    .optional(),
+});
+
+const walletAdjustmentSchema = Joi.object({
+  vendorId: objectId.required(),
+  amountPaise: Joi.number().integer().min(1).required(),
+  direction: Joi.string().valid('credit', 'debit').required(),
+  remarks: Joi.string().trim().max(500).optional().allow('', null),
+});
+
+const userWalletAdjustmentSchema = Joi.object({
+  amountPaise: Joi.number().integer().min(1).required(),
+  direction: Joi.string().valid('credit', 'debit').required(),
+  remarks: Joi.string().trim().max(500).optional().allow('', null),
+});
+
+const notificationCampaignSchema = Joi.object({
+  title: Joi.string().trim().min(2).max(120).required(),
+  messageBody: Joi.string().trim().min(2).max(1000).required(),
+  imageUrl: Joi.string().uri().optional().allow('', null),
+  actionUrl: Joi.string().trim().max(300).optional().allow('', null),
+  targetAudience: Joi.string()
+    .valid('all_parents', 'all_vendors', 'all_schools', 'specific_users', 'custom_segment')
+    .required(),
+  segmentRules: Joi.object({
+    userIds: Joi.array().items(objectId).optional(),
+    roles: Joi.array().items(Joi.string().valid('parent', 'school', 'teacher', 'vendor')).optional(),
+  }).optional(),
+  scheduledAt: Joi.date().iso().optional().allow(null),
+});
+
+const adminProfileSchema = Joi.object({
+  firstName: Joi.string().trim().min(1).max(60).required(),
+  lastName: Joi.string().trim().min(1).max(60).required(),
+  mobile: Joi.string().trim().pattern(/^[6-9]\d{9}$/).required(),
+});
+
 module.exports = {
   paginationQuery,
   analyticsQuery,
@@ -280,4 +331,12 @@ module.exports = {
   updateSectionSchema,
   landingContentSchema,
   settingsBodyBySection,
+  payoutIdParam,
+  approvePayoutSchema,
+  rejectPayoutSchema,
+  walletQuery,
+  walletAdjustmentSchema,
+  userWalletAdjustmentSchema,
+  notificationCampaignSchema,
+  adminProfileSchema,
 };

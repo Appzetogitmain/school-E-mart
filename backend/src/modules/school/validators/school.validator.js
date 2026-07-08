@@ -3,7 +3,7 @@ const { Joi, schemas } = require('../../../common/validation');
 const objectId = schemas.objectId;
 const paginationQuery = {
   page: Joi.number().integer().min(1).default(1),
-  limit: Joi.number().integer().min(1).max(100).default(20),
+  limit: Joi.number().integer().min(1).max(500).default(20),
   sort: Joi.string().trim().optional(),
   fields: Joi.string().trim().optional(),
   search: Joi.string().trim().max(120).optional(),
@@ -50,12 +50,12 @@ const createTeacherSchema = Joi.object({
   email: schemas.email.required(),
   phone: schemas.indianMobile.required(),
   password: schemas.password.required(),
-  employeeId: Joi.string().trim().optional(),
-  designation: Joi.string().trim().optional(),
-  department: Joi.string().trim().optional(),
-  qualification: Joi.string().trim().optional(),
-  experienceYears: Joi.number().min(0).optional(),
-  joiningDate: Joi.date().optional(),
+  employeeId: Joi.string().trim().optional().allow('', null),
+  designation: Joi.string().trim().optional().allow('', null),
+  department: Joi.string().trim().optional().allow('', null),
+  qualification: Joi.string().trim().optional().allow('', null),
+  experienceYears: Joi.number().min(0).optional().allow(null),
+  joiningDate: Joi.date().optional().allow(null),
   subjectsTaught: Joi.array().items(Joi.string().trim()).optional(),
   classAssignments: Joi.array()
     .items(
@@ -320,4 +320,15 @@ module.exports = {
   updateDiarySchema,
   diaryQuerySchema,
   studentIdQuerySchema,
+  createParentSchema: Joi.object({
+    name: Joi.string().trim().min(2).max(80).required(),
+    email: schemas.email.optional().allow('', null),
+    phone: schemas.indianMobile.required(),
+  }),
+  updateParentSchema: Joi.object({
+    name: Joi.string().trim().min(2).max(80).optional(),
+    email: schemas.email.optional().allow('', null),
+    phone: schemas.indianMobile.optional(),
+  }),
+  parentIdParam: schoolIdParam.keys({ parentId: objectId.required() }),
 };

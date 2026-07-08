@@ -177,6 +177,10 @@ const verificationActionSchema = Joi.object({
   reason: Joi.string().trim().max(500).optional(),
 });
 
+const payoutRequestSchema = Joi.object({
+  amountPaise: Joi.number().integer().min(100).required(),
+});
+
 module.exports = {
   paginationQuery,
   idParam,
@@ -202,4 +206,5 @@ module.exports = {
   returnStatusSchema,
   returnActionSchema,
   verificationActionSchema,
+  payoutRequestSchema,
 };

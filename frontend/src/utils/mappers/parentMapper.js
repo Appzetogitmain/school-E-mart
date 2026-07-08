@@ -140,17 +140,46 @@ export const mapNoticeForParent = (notice) => {
   const publishedAt = notice?.publishDate || notice?.audit?.createdAt;
   const date = toLocalDateString(publishedAt);
 
+  const titleLower = (notice?.title || '').toLowerCase();
+  const contentLower = (notice?.content || '').toLowerCase();
+  
+  let type = 'general';
+  let category = 'General';
+  let bgColor = 'bg-[#EBFBF0]';
+  let iconColor = 'text-[#34A853]';
+  let iconKey = 'megaphone';
+
+  if (titleLower.includes('urgent') || titleLower.includes('emergency') || contentLower.includes('urgent') || contentLower.includes('immediate')) {
+    type = 'urgent';
+    category = 'Urgent';
+    bgColor = 'bg-[#FEF3F2]';
+    iconColor = 'text-[#D93025]';
+    iconKey = 'urgent';
+  } else if (titleLower.includes('exam') || titleLower.includes('test') || titleLower.includes('syllabus') || titleLower.includes('homework') || titleLower.includes('class')) {
+    type = 'academic';
+    category = 'Academic';
+    bgColor = 'bg-[#F4F3FF]';
+    iconColor = 'text-[#5925DC]';
+    iconKey = 'academic';
+  } else if (titleLower.includes('event') || titleLower.includes('holiday') || titleLower.includes('annual') || titleLower.includes('celebration') || titleLower.includes('sports')) {
+    type = 'event';
+    category = 'Events';
+    bgColor = 'bg-[#EFF8FF]';
+    iconColor = 'text-[#175CD3]';
+    iconKey = 'event';
+  }
+
   return {
     id,
     title: notice?.title || 'Notice',
     content: notice?.content || '',
     date,
     dateText: formatShortDateText(publishedAt),
-    type: 'general',
-    category: 'General',
-    iconKey: 'megaphone',
-    bgColor: 'bg-[#EBFBF0]',
-    iconColor: 'text-[#34A853]',
+    type,
+    category,
+    iconKey,
+    bgColor,
+    iconColor,
     attachments: notice?.attachments?.length || 0,
     pinned: false,
     isImportantSpotlight: false,

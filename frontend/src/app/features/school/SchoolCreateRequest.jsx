@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { 
   ArrowLeft, HelpCircle, Calendar, Users, 
   Clipboard, Info, Check, ChevronDown, Save, 
@@ -8,7 +8,7 @@ import {
   ShieldCheck, Loader2
 } from 'lucide-react';
 import { listVendors } from '../../../services/schoolApi';
-import { createRfq } from '../../../services/rfqApi';
+import { createRfq, getSchoolRfq, updateRfq } from '../../../services/rfqApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 import { mapSchoolVendorForInvite } from '../../../utils/mappers/schoolVendorMapper';
 import { buildCreateRfqPayload } from '../../../utils/mappers/rfqMapper';
@@ -16,6 +16,8 @@ import { useSchoolId } from '../../../utils/schoolContext';
 
 const SchoolCreateRequest = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const draftId = searchParams.get('draftId');
   const schoolId = useSchoolId();
   
   // Navigation State
@@ -24,6 +26,8 @@ const SchoolCreateRequest = () => {
   const [showDraftModal, setShowDraftModal] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
   const [publishError, setPublishError] = useState('');
+  const [draftLoading, setDraftLoading] = useState(false);
+  const [newComponentNames, setNewComponentNames] = useState({}); // { [setId]: '' }
 
   // STEP 1 STATES
   const [requestTitle, setRequestTitle] = useState('');
@@ -64,6 +68,50 @@ const SchoolCreateRequest = () => {
 
   const [uniformSets, setUniformSets] = useState([]);
 
+  useEffect(() => {
+    if (!schoolId || !draftId) return;
+    (async () => {
+      setDraftLoading(true);
+      try {
+        const rfq = await getSchoolRfq(schoolId, draftId);
+        if (rfq) {
+          setRequestTitle(rfq.title || '');
+          setAcademicYear(rfq.academicYear || '');
+          if (rfq.targetDeliveryDate) {
+            setRequiredDate(rfq.targetDeliveryDate.slice(0, 10));
+          }
+          setSelectedClasses(rfq.classes || []);
+          setTotalStudents(rfq.totalStudents ? String(rfq.totalStudents) : '');
+          
+          setAdditionalNotes(rfq.meta?.additionalNotes || rfq.additionalNotes || '');
+          
+          const desc = rfq.description || '';
+          const lines = desc.split('\n');
+          const instrLine = lines.find(l => !l.startsWith('Academic Year:') && !l.startsWith('Classes:'));
+          setSpecialInstructions(instrLine || '');
+
+          if (rfq.quotationDeadline) {
+            setDeadlineDate(rfq.quotationDeadline.slice(0, 10));
+          }
+          if (rfq.meta?.uniformSets) {
+            setUniformSets(rfq.meta.uniformSets);
+          }
+          if (rfq.invitedVendorIds) {
+            setVendors((rfq.invitedVendorIds || []).map(vendor => ({
+              id: typeof vendor === 'object' ? vendor._id || vendor.id : vendor,
+              name: typeof vendor === 'object' ? vendor.name || vendor.brand : 'Vendor',
+              selected: true,
+            })));
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load RFQ draft:', err);
+      } finally {
+        setDraftLoading(false);
+      }
+    })();
+  }, [schoolId, draftId]);
+
   const handleBack = () => {
     if (currentStep > 1) {
       setCurrentStep(currentStep - 1);
@@ -91,7 +139,7 @@ const SchoolCreateRequest = () => {
     setIsPublishing(true);
 
     try {
-      await createRfq(schoolId, buildCreateRfqPayload({
+      const payload = buildCreateRfqPayload({
         requestTitle,
         academicYear,
         requiredDate,
@@ -103,7 +151,13 @@ const SchoolCreateRequest = () => {
         uniformSets,
         vendors,
         status: 'open',
-      }));
+      });
+
+      if (draftId) {
+        await updateRfq(schoolId, draftId, payload);
+      } else {
+        await createRfq(schoolId, payload);
+      }
 
       setIsSuccess(true);
       setTimeout(() => {
@@ -225,7 +279,7 @@ const SchoolCreateRequest = () => {
     setIsPublishing(true);
 
     try {
-      await createRfq(schoolId, buildCreateRfqPayload({
+      const payload = buildCreateRfqPayload({
         requestTitle,
         academicYear,
         requiredDate,
@@ -237,7 +291,13 @@ const SchoolCreateRequest = () => {
         uniformSets,
         vendors,
         status: 'draft',
-      }));
+      });
+
+      if (draftId) {
+        await updateRfq(schoolId, draftId, payload);
+      } else {
+        await createRfq(schoolId, payload);
+      }
       setShowDraftModal(true);
     } catch (err) {
       setPublishError(getErrorMessage(err, 'Unable to save draft'));
@@ -879,6 +939,46 @@ const SchoolCreateRequest = () => {
                       </span>
                     </div>
                   ))}
+
+                  {/* Add Custom Component Input */}
+                  <div className="flex items-center gap-1.5 border border-dashed border-gray-300 rounded-xl px-2.5 py-1 bg-gray-50/50">
+                    <input
+                      type="text"
+                      placeholder="e.g. Tie, Blazer"
+                      value={newComponentNames[set.id] || ''}
+                      onChange={(e) => setNewComponentNames({
+                        ...newComponentNames,
+                        [set.id]: e.target.value
+                      })}
+                      className="bg-transparent text-xs font-bold text-deep-purple focus:outline-none w-20 py-1"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const name = newComponentNames[set.id]?.trim();
+                        if (!name) return;
+                        setUniformSets(uniformSets.map(s => {
+                          if (s.id === set.id) {
+                            return {
+                              ...s,
+                              components: [
+                                ...s.components,
+                                { label: name, icon: '🏷️', checked: true }
+                              ]
+                            };
+                          }
+                          return s;
+                        }));
+                        setNewComponentNames({
+                          ...newComponentNames,
+                          [set.id]: ''
+                        });
+                      }}
+                      className="text-[10px] font-black text-[#3b2d7d] px-2 py-1 bg-white border border-gray-250 rounded-lg hover:bg-gray-50 active:scale-90 transition-transform"
+                    >
+                      Add
+                    </button>
+                  </div>
                 </div>
               </div>
 

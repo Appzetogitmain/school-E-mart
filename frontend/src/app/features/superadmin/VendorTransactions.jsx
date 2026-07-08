@@ -1,18 +1,38 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { 
-  Plus, Calendar, Search, Download, ChevronRight, X, Info 
+import {
+  Plus, Calendar, Search, Download, ChevronRight, X, Info
 } from 'lucide-react';
+import {
+  listVendorTransactions,
+  createVendorAdjustment,
+  listVendors,
+} from '../../../services/adminApi';
+import { getErrorMessage } from '../../../utils/apiHelpers';
+
+const mapTransaction = (t) => ({
+  id: t._id?.toString?.().slice(-8).toUpperCase() || '—',
+  vendorName: t.vendor?.storeName || 'Vendor',
+  type: (t.amountPaise || 0) >= 0 ? 'Credit' : 'Debit',
+  amount: Math.abs(t.amountPaise || 0) / 100,
+  remarks: t.description || t.transactionType || '—',
+  date: t.audit?.createdAt
+    ? new Date(t.audit.createdAt).toLocaleDateString('en-GB')
+    : '—',
+});
 
 const VendorTransactions = () => {
   const [transactions, setTransactions] = useState([]);
+  const [vendors, setVendors] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   // Modal open states
   const [showAddModal, setShowAddModal] = useState(false);
 
   // New transaction form state
   const [newTx, setNewTx] = useState({
-    vendorName: '',
+    vendorId: '',
     type: 'Credit',
     amount: '',
     remarks: ''
@@ -26,39 +46,52 @@ const VendorTransactions = () => {
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
 
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const [tx, vendorList] = await Promise.all([
+        listVendorTransactions({ limit: Number(perPage) || 25 }),
+        listVendors({ limit: 100 }),
+      ]);
+      setTransactions((tx.data || []).map(mapTransaction));
+      setVendors(vendorList.data || []);
+    } catch (err) {
+      setError(getErrorMessage(err, 'Unable to load transactions'));
+    } finally {
+      setLoading(false);
+    }
+  }, [perPage]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
   // Handle new transaction submit
-  const handleAddSubmit = (e) => {
+  const handleAddSubmit = async (e) => {
     e.preventDefault();
+    if (!newTx.vendorId) {
+      alert('Please select a vendor.');
+      return;
+    }
     if (!newTx.amount || parseFloat(newTx.amount) <= 0) {
       alert('Please enter a valid transfer amount.');
       return;
     }
 
-    const randomId = Math.random().toString(36).substring(2, 10).toUpperCase();
-    const todayStr = new Date().toLocaleDateString('en-GB', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric'
-    }).replace(/\//g, '/');
-
-    const added = {
-      id: randomId,
-      vendorName: newTx.vendorName,
-      type: newTx.type,
-      amount: parseFloat(newTx.amount),
-      remarks: newTx.remarks || 'Manual administrative fund adjustment',
-      date: todayStr
-    };
-
-    setTransactions(prev => [added, ...prev]);
-    setShowAddModal(false);
-    setNewTx({
-      vendorName: "harsh's hub",
-      type: 'Credit',
-      amount: '',
-      remarks: ''
-    });
-    alert(`Transaction recorded successfully!\nReference: ${randomId}`);
+    try {
+      await createVendorAdjustment({
+        vendorId: newTx.vendorId,
+        amountPaise: Math.round(parseFloat(newTx.amount) * 100),
+        direction: newTx.type === 'Debit' ? 'debit' : 'credit',
+        remarks: newTx.remarks || 'Manual administrative fund adjustment',
+      });
+      setShowAddModal(false);
+      setNewTx({ vendorId: '', type: 'Credit', amount: '', remarks: '' });
+      await loadData();
+    } catch (err) {
+      alert(getErrorMessage(err, 'Unable to record transaction'));
+    }
   };
 
   // Clear date filters
@@ -230,10 +263,9 @@ const VendorTransactions = () => {
               className="bg-white border border-gray-200 rounded-xl px-3 py-2 focus:outline-none cursor-pointer font-bold"
             >
               <option value="All">All Vendors</option>
-              <option value="harsh's hub">harsh's hub</option>
-              <option value="patidar store">patidar store</option>
-              <option value="nexus">nexus</option>
-              <option value="Test Factory">Test Factory</option>
+              {vendors.map((v) => (
+                <option key={v._id} value={v.storeName}>{v.storeName}</option>
+              ))}
             </select>
           </div>
 
@@ -267,7 +299,19 @@ const VendorTransactions = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 text-xs font-bold text-gray-700">
-              {filteredTransactions.length === 0 ? (
+              {loading ? (
+                <tr>
+                  <td colSpan="6" className="px-6 py-8 text-center text-gray-400 font-extrabold">
+                    Loading transactions…
+                  </td>
+                </tr>
+              ) : error ? (
+                <tr>
+                  <td colSpan="6" className="px-6 py-8 text-center text-rose-500 font-extrabold">
+                    {error}
+                  </td>
+                </tr>
+              ) : filteredTransactions.length === 0 ? (
                 <tr>
                   <td colSpan="6" className="px-6 py-8 text-center text-gray-400 font-extrabold">
                     No transactions found matching your selection.
@@ -339,14 +383,14 @@ const VendorTransactions = () => {
               <div className="space-y-1.5">
                 <label className="block text-gray-400 uppercase tracking-wide text-[9px] font-black">Vendor Hub</label>
                 <select
-                  value={newTx.vendorName}
-                  onChange={(e) => setNewTx(prev => ({ ...prev, vendorName: e.target.value }))}
+                  value={newTx.vendorId}
+                  onChange={(e) => setNewTx(prev => ({ ...prev, vendorId: e.target.value }))}
                   className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-500/25 font-bold cursor-pointer"
                 >
-                  <option value="harsh's hub">harsh's hub</option>
-                  <option value="patidar store">patidar store</option>
-                  <option value="nexus">nexus</option>
-                  <option value="Test Factory">Test Factory</option>
+                  <option value="">Select a vendor…</option>
+                  {vendors.map((v) => (
+                    <option key={v._id} value={v._id}>{v.storeName}</option>
+                  ))}
                 </select>
               </div>
 
@@ -423,7 +467,7 @@ const VendorTransactions = () => {
       {/* FOOTER COPYRIGHT BAR */}
       <div className="pt-8 pb-4 text-center border-t border-gray-200 select-none">
         <p className="text-[10px] font-bold text-gray-400">
-          Copyright © 2026. Developed By <span className="text-[#0B1528] font-black">Healthy Delight</span>
+          Copyright © 2026. Developed By <span className="text-[#0B1528] font-black">School E-Mart</span>
         </p>
       </div>
 

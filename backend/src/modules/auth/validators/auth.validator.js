@@ -92,6 +92,7 @@ const parentRegisterSchema = Joi.object({
   grade: Joi.string().trim().required(),
   classGrade: Joi.string().trim().optional(),
   schoolRefNo: Joi.string().trim().allow('', null).optional(),
+  referralCode: Joi.string().trim().max(20).allow('', null).optional(),
 });
 
 const schoolLookupQuerySchema = Joi.object({

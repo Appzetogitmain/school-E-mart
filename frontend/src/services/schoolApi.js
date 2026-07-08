@@ -151,3 +151,101 @@ export const listVendors = async (schoolId, params = {}) => {
   const response = await apiClient.get(schoolPath(schoolId, '/vendors'), { params });
   return extractPaginated(response, 'vendors');
 };
+
+// Events
+export const createEvent = async (schoolId, payload) => {
+  const response = await apiClient.post(schoolPath(schoolId, '/events'), payload);
+  return unwrapData(response)?.event;
+};
+
+export const listEvents = async (schoolId, params = {}) => {
+  const response = await apiClient.get(schoolPath(schoolId, '/events'), { params });
+  return extractPaginated(response, 'events');
+};
+
+export const updateEvent = async (schoolId, eventId, payload) => {
+  const response = await apiClient.patch(schoolPath(schoolId, `/events/${eventId}`), payload);
+  return unwrapData(response)?.event;
+};
+
+export const deleteEvent = async (schoolId, eventId) => {
+  await apiClient.delete(schoolPath(schoolId, `/events/${eventId}`));
+};
+
+// Phonebook
+export const listPhonebook = async (schoolId, params = {}) => {
+  const response = await apiClient.get(schoolPath(schoolId, '/phonebook'), { params });
+  return unwrapData(response)?.entries || [];
+};
+
+export const createPhonebookEntry = async (schoolId, payload) => {
+  const response = await apiClient.post(schoolPath(schoolId, '/phonebook'), payload);
+  return unwrapData(response)?.entry;
+};
+
+// Kits
+export const createKit = async (schoolId, payload) => {
+  const response = await apiClient.post(schoolPath(schoolId, '/kits'), payload);
+  return unwrapData(response)?.kit;
+};
+
+export const listKits = async (schoolId, params = {}) => {
+  const response = await apiClient.get(schoolPath(schoolId, '/kits'), { params });
+  return extractPaginated(response, 'kits');
+};
+
+export const getKit = async (schoolId, kitId) => {
+  const response = await apiClient.get(schoolPath(schoolId, `/kits/${kitId}`));
+  return unwrapData(response)?.kit;
+};
+
+export const updateKit = async (schoolId, kitId, payload) => {
+  const response = await apiClient.patch(schoolPath(schoolId, `/kits/${kitId}`), payload);
+  return unwrapData(response)?.kit;
+};
+
+export const deleteKit = async (schoolId, kitId) => {
+  await apiClient.delete(schoolPath(schoolId, `/kits/${kitId}`));
+};
+
+// Parent Management APIs
+export const listParents = async (schoolId, params = {}) => {
+  const response = await apiClient.get(schoolPath(schoolId, '/parents'), { params });
+  return extractPaginated(response, 'parents');
+};
+
+export const createParent = async (schoolId, payload) => {
+  const response = await apiClient.post(schoolPath(schoolId, '/parents'), payload);
+  return unwrapData(response);
+};
+
+export const updateParent = async (schoolId, parentId, payload) => {
+  const response = await apiClient.patch(schoolPath(schoolId, `/parents/${parentId}`), payload);
+  return unwrapData(response)?.parent;
+};
+
+export const deleteParent = async (schoolId, parentId) => {
+  const response = await apiClient.delete(schoolPath(schoolId, `/parents/${parentId}`));
+  return unwrapData(response);
+};
+
+// Teacher Direct Creation API
+export const createTeacher = async (schoolId, payload) => {
+  const response = await apiClient.post(schoolPath(schoolId, '/teachers'), payload);
+  return unwrapData(response);
+};
+
+export const deleteTeacher = async (schoolId, teacherId) => {
+  const response = await apiClient.delete(schoolPath(schoolId, `/teachers/${teacherId}`));
+  return unwrapData(response);
+};
+
+export const uploadSchoolFile = async (schoolId, file, purpose = 'kit_image') => {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('purpose', purpose);
+  const response = await apiClient.post(schoolPath(schoolId, '/uploads'), formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return unwrapData(response)?.attachment;
+};

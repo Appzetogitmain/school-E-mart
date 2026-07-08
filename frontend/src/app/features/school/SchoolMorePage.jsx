@@ -36,6 +36,14 @@ const SchoolMorePage = () => {
           bg: 'bg-orange-50',
           path: '/school/teacher-approvals',
           protected: true
+        },
+        {
+          title: 'Parents',
+          desc: 'Manage school parent accounts',
+          icon: <User className="text-indigo-500 stroke-[2.5]" size={18} />,
+          bg: 'bg-indigo-50',
+          path: '/school/parents',
+          protected: true
         }
       ]
     },

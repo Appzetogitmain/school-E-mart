@@ -1,29 +1,77 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  ArrowLeft, HelpCircle, Search, SlidersHorizontal, 
-  Trash2, Play, Plus, BookOpen, GraduationCap, 
+import {
+  ArrowLeft, HelpCircle, Search, SlidersHorizontal,
+  Trash2, Play, Plus, BookOpen, GraduationCap,
   FolderOpen, ChevronRight, Sparkles, Users
 } from 'lucide-react';
+import { listSchoolRfqs } from '../../../services/rfqApi';
+import { useSchoolId } from '../../../utils/schoolContext';
+import { getErrorMessage } from '../../../utils/apiHelpers';
+
+const mapDraft = (rfq) => {
+  const items = rfq.items || [];
+  return {
+    id: rfq._id,
+    title: rfq.title || 'Untitled request',
+    category: rfq.category === 'uniform' ? 'Uniform Requests' : (rfq.category || 'Others'),
+    classes: (rfq.classes || rfq.targetClasses || []).join(', ') || '—',
+    setsCount: items.length,
+    vendorsCount: (rfq.invitedVendorIds || []).length,
+    createdBy: rfq.createdByName || 'You',
+    lastUpdated: rfq.audit?.updatedAt
+      ? new Date(rfq.audit.updatedAt).toLocaleDateString('en-GB')
+      : '—',
+    // Wizard progress is not persisted server-side; show a simple draft indicator.
+    completedSteps: 2,
+    totalSteps: 4,
+    percent: 50,
+  };
+};
 
 const SchoolDraftRequests = () => {
   const navigate = useNavigate();
+  const schoolId = useSchoolId();
 
   // Selected Category Pill State
   const [activeCategory, setActiveCategory] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
 
-  const drafts = [];
+  const [drafts, setDrafts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const loadDrafts = useCallback(async () => {
+    if (!schoolId) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    setError('');
+    try {
+      const { data } = await listSchoolRfqs(schoolId, { status: 'draft', limit: 50 });
+      setDrafts((data || []).map(mapDraft));
+    } catch (err) {
+      setDrafts([]);
+      setError(getErrorMessage(err, 'Unable to load draft requests'));
+    } finally {
+      setLoading(false);
+    }
+  }, [schoolId]);
+
+  useEffect(() => {
+    loadDrafts();
+  }, [loadDrafts]);
 
   const categories = ['All', 'Uniform Requests', 'Purchase Requests', 'Kits', 'Others'];
 
   const handleDeleteDraft = () => {
-    alert('RFQ draft API is not available yet.');
+    // No RFQ delete endpoint yet; drafts are managed from the create-request flow.
+    alert('Deleting drafts is not supported yet. Open the draft to edit it instead.');
   };
 
   const handleResumeDraft = (d) => {
-    // Navigate to create-request screen
-    navigate('/school/create-request');
+    navigate(`/school/create-request?draftId=${d.id}`);
   };
 
   const filteredDrafts = drafts.filter(d => {
@@ -210,8 +258,12 @@ const SchoolDraftRequests = () => {
           {filteredDrafts.length === 0 && (
             <div className="text-center py-10 bg-white border border-gray-150 rounded-[2.2rem] p-6 shadow-sm">
               <FolderOpen size={36} className="text-gray-300 mx-auto block stroke-[1.5]" />
-              <span className="text-xs font-black text-gray-500 block mt-3">No draft requests yet</span>
-              <span className="text-[10px] text-gray-400 font-bold block mt-1">RFQ draft API is not available yet.</span>
+              <span className="text-xs font-black text-gray-500 block mt-3">
+                {loading ? 'Loading drafts…' : error ? 'Unable to load drafts' : 'No draft requests yet'}
+              </span>
+              <span className="text-[10px] text-gray-400 font-bold block mt-1">
+                {error && !loading ? error : 'Saved but unsent procurement requests will appear here.'}
+              </span>
             </div>
           )}
         </div>

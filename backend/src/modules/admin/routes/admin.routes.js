@@ -488,4 +488,69 @@ router.delete(
   adminController.deleteReel
 );
 
+// Wallet & Payouts
+router.get('/wallet/overview', ...adminOnly, adminController.getWalletOverview);
+router.get(
+  '/wallet/transactions',
+  ...adminOnly,
+  validateQuery(validators.walletQuery),
+  adminController.listVendorTransactions
+);
+router.post(
+  '/wallet/transactions',
+  ...adminOnly,
+  validateBody(validators.walletAdjustmentSchema),
+  adminController.createVendorAdjustment
+);
+router.post(
+  '/users/:userId/wallet',
+  ...adminOnly,
+  validateParams(validators.userIdParam),
+  validateBody(validators.userWalletAdjustmentSchema),
+  adminController.adjustUserWallet
+);
+router.get(
+  '/wallet/payouts',
+  ...adminOnly,
+  validateQuery(validators.walletQuery),
+  adminController.listPayoutRequests
+);
+router.post(
+  '/wallet/payouts/:payoutId/approve',
+  ...adminOnly,
+  validateParams(validators.payoutIdParam),
+  validateBody(validators.approvePayoutSchema),
+  adminController.approvePayout
+);
+router.post(
+  '/wallet/payouts/:payoutId/reject',
+  ...adminOnly,
+  validateParams(validators.payoutIdParam),
+  validateBody(validators.rejectPayoutSchema),
+  adminController.rejectPayout
+);
+
+// Notification campaigns
+router.get(
+  '/notifications/campaigns',
+  ...adminOnly,
+  validateQuery(validators.paginationQuery),
+  adminController.listNotificationCampaigns
+);
+router.post(
+  '/notifications/campaigns',
+  ...adminOnly,
+  validateBody(validators.notificationCampaignSchema),
+  adminController.createNotificationCampaign
+);
+
+// Admin profile
+router.get('/profile', ...adminOnly, adminController.getAdminProfile);
+router.put(
+  '/profile',
+  ...adminOnly,
+  validateBody(validators.adminProfileSchema),
+  adminController.updateAdminProfile
+);
+
 module.exports = router;

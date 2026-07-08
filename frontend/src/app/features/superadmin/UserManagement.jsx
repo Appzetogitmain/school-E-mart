@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { 
   Users, UserCheck, Wallet, ShoppingBag, Search, ChevronRight, X, Edit3, ShieldAlert, Loader2
 } from 'lucide-react';
-import { listUsers, suspendUser, activateUser } from '../../../services/adminApi';
+import { listUsers, suspendUser, activateUser, adjustUserWallet } from '../../../services/adminApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 import { mapAdminUserForList } from '../../../utils/mappers/adminUserMapper';
 
@@ -67,16 +67,25 @@ const UserManagement = () => {
   };
 
   // Submit wallet adjustment
-  const handleWalletSubmit = (e) => {
+  const handleWalletSubmit = async (e) => {
     e.preventDefault();
     if (!adjustAmount || parseFloat(adjustAmount) <= 0) {
       alert('Please enter a valid monetary amount.');
       return;
     }
 
-    alert('Wallet adjustments API is not available yet. Amount not saved.');
-    setSelectedUser(null);
-    setAdjustAmount('');
+    try {
+      await adjustUserWallet(selectedUser.id, {
+        amountPaise: Math.round(parseFloat(adjustAmount) * 100),
+        direction: adjustType === 'Debit' ? 'debit' : 'credit',
+        remarks: `Manual ${adjustType.toLowerCase()} by super admin`,
+      });
+      setSelectedUser(null);
+      setAdjustAmount('');
+      await loadUsers();
+    } catch (err) {
+      alert(getErrorMessage(err, 'Unable to adjust wallet'));
+    }
   };
 
   // Filter users by search
@@ -416,7 +425,7 @@ const UserManagement = () => {
       {/* FOOTER COPYRIGHT BAR */}
       <div className="pt-8 pb-4 text-center border-t border-gray-200 select-none">
         <p className="text-[10px] font-bold text-gray-400">
-          Copyright © 2026. Developed By <span className="text-[#0B1528] font-black">Healthy Delight</span>
+          Copyright © 2026. Developed By <span className="text-[#0B1528] font-black">School E-Mart</span>
         </p>
       </div>
 

@@ -47,7 +47,7 @@ const publicReelQuery = paginationQuery.keys({
 
 const headerCategorySchema = Joi.object({
   name: Joi.string().trim().min(2).max(80).required(),
-  imageUrl: Joi.string().trim().uri().optional(),
+  imageUrl: Joi.string().trim().uri({ allowRelative: true }).optional(),
   commissionPercent: Joi.number().min(0).max(100).default(0),
   feesFlatPaise: Joi.number().integer().min(0).default(0),
   status: Joi.string().valid('active', 'inactive').default('active'),
@@ -59,7 +59,7 @@ const updateHeaderCategorySchema = headerCategorySchema.fork(['name'], (s) => s.
 const categorySchema = Joi.object({
   headerId: objectId.required(),
   name: Joi.string().trim().min(2).max(80).required(),
-  imageUrl: Joi.string().trim().uri().optional(),
+  imageUrl: Joi.string().trim().uri({ allowRelative: true }).optional(),
   status: Joi.string().valid('active', 'inactive').default('active'),
   displayOrder: Joi.number().integer().min(0).optional(),
 });
@@ -69,7 +69,7 @@ const updateCategorySchema = categorySchema.fork(['headerId', 'name'], (s) => s.
 const subcategorySchema = Joi.object({
   categoryId: objectId.required(),
   name: Joi.string().trim().min(2).max(80).required(),
-  imageUrl: Joi.string().trim().uri().optional(),
+  imageUrl: Joi.string().trim().uri({ allowRelative: true }).optional(),
   status: Joi.string().valid('active', 'inactive').default('active'),
   displayOrder: Joi.number().integer().min(0).optional(),
 });

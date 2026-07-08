@@ -4,9 +4,19 @@ import {
   Plus, Search, Download, ChevronDown, ChevronRight, Edit, Trash2, 
   X, Check, LayoutGrid, List, Upload, Loader2
 } from 'lucide-react';
-import { getCategoryTree } from '../../../services/catalogApi';
+import { 
+  getCategoryTree, 
+  listHeaderCategories, 
+  createCategory, 
+  updateCategory, 
+  deleteCategory,
+  createSubcategory,
+  updateSubcategory,
+  deleteSubcategory
+} from '../../../services/catalogApi';
+import { uploadAdminFile } from '../../../services/adminApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
-import { mapCategoryTreeForAdmin } from '../../../utils/mappers/categoryAdminMapper';
+import { mapCategoryTreeForAdmin, mapHeaderCategoryForAdmin } from '../../../utils/mappers/categoryAdminMapper';
 
 const CategoryManagement = () => {
   // Views toggle: 'tree' | 'list'
@@ -45,7 +55,18 @@ const CategoryManagement = () => {
   const [editCatStatus, setEditCatStatus] = useState(true);
   const [editCatImage, setEditCatImage] = useState('');
 
+  // Subcategory image upload states
+  const [newSubcatImage, setNewSubcatImage] = useState(null);
+  const [newSubcatImagePreview, setNewSubcatImagePreview] = useState('');
+  const newSubcatFileInputRef = React.useRef(null);
+
+  // Edit category image upload states
+  const [editCatImageFile, setEditCatImageFile] = useState(null);
+  const [editCatImagePreview, setEditCatImagePreview] = useState('');
+  const editCatFileInputRef = React.useRef(null);
+
   const [categories, setCategories] = useState([]);
+  const [headerCategories, setHeaderCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -63,9 +84,23 @@ const CategoryManagement = () => {
     }
   }, []);
 
+  const loadHeaderCategories = useCallback(async () => {
+    try {
+      const { data } = await listHeaderCategories({ limit: 100 });
+      const mapped = (data || []).map(mapHeaderCategoryForAdmin);
+      setHeaderCategories(mapped);
+      if (mapped.length > 0) {
+        setNewCatHeader(mapped[0].id);
+      }
+    } catch (err) {
+      console.error('Unable to load header categories', err);
+    }
+  }, []);
+
   useEffect(() => {
     loadCategories();
-  }, [loadCategories]);
+    loadHeaderCategories();
+  }, [loadCategories, loadHeaderCategories]);
 
   const toggleNode = (id) => {
     setExpandedNodes(prev => ({ ...prev, [id]: !prev[id] }));
@@ -80,66 +115,83 @@ const CategoryManagement = () => {
   };
 
   // Add Category Handler
-  const handleAddCategory = (e) => {
+  const handleAddCategory = async (e) => {
     e.preventDefault();
     if (!newCatName.trim()) return;
 
-    const newId = String(categories.length + 1);
-    const newCategory = {
-      id: newId,
-      name: newCatName,
-      image: 'https://images.unsplash.com/photo-1544816155-12df9643f363?w=120&auto=format&fit=crop&q=60',
-      status: 'Active',
-      header: newCatHeader,
-      order: parseInt(newCatOrder) || 0,
-      subcategories: []
-    };
-
-    setCategories(prev => [...prev, newCategory]);
-    setNewCatName('');
-    setIsAddModalOpen(false);
+    try {
+      setLoading(true);
+      let headerId = newCatHeader;
+      const matchedHeader = headerCategories.find(hc => hc.id === newCatHeader || hc.name === newCatHeader);
+      if (matchedHeader) {
+        headerId = matchedHeader.id;
+      }
+      await createCategory({
+        name: newCatName,
+        headerId,
+        displayOrder: parseInt(newCatOrder) || 0,
+        status: 'active'
+      });
+      setNewCatName('');
+      setIsAddModalOpen(false);
+      await loadCategories();
+    } catch (err) {
+      alert(getErrorMessage(err, 'Unable to create category'));
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Add Subcategory Handler
-  const handleAddSubcategory = (e) => {
+  const handleAddSubcategory = async (e) => {
     e.preventDefault();
     if (!newCatName.trim() || !selectedParentId) return;
 
-    setCategories(prev => prev.map(cat => {
-      if (cat.id === selectedParentId) {
-        const subId = `${cat.id}-${cat.subcategories.length + 1}`;
-        return {
-          ...cat,
-          subcategories: [
-            ...cat.subcategories,
-            { 
-              id: subId, 
-              name: newCatName, 
-              status: activeStatus ? 'Active' : 'Deactivated', 
-              order: parseInt(newCatOrder) || 0 
-            }
-          ]
-        };
-      }
-      return cat;
-    }));
+    try {
+      setLoading(true);
 
-    setNewCatName('');
-    setNewCatOrder('0');
-    setActiveStatus(true);
-    setIsAddSubModalOpen(false);
+      let imageUrl = undefined;
+      if (newSubcatImage) {
+        const formData = new FormData();
+        formData.append('file', newSubcatImage);
+        formData.append('purpose', 'category_image');
+        const attachment = await uploadAdminFile(formData);
+        imageUrl = attachment?.url;
+      }
+
+      await createSubcategory({
+        name: newCatName,
+        categoryId: selectedParentId,
+        displayOrder: parseInt(newCatOrder) || 0,
+        status: activeStatus ? 'active' : 'inactive',
+        imageUrl
+      });
+      setNewCatName('');
+      setNewCatOrder('0');
+      setActiveStatus(true);
+      setNewSubcatImage(null);
+      setNewSubcatImagePreview('');
+      setIsAddSubModalOpen(false);
+      await loadCategories();
+    } catch (err) {
+      alert(getErrorMessage(err, 'Unable to create subcategory'));
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Open Edit Dialog pre-populating current attributes
   const openEditModal = (catOrSubId, isSub = false) => {
     setEditingCategoryId(catOrSubId);
     setIsAdvancedOpen(false);
+    setEditCatImageFile(null);
+    setEditCatImagePreview('');
     
     if (!isSub) {
       const cat = categories.find(c => c.id === catOrSubId);
       if (cat) {
         setEditCatName(cat.name);
-        setEditCatHeader(cat.header || 'Ice Creams');
+        setEditCatHeader(cat.headerId || cat.header || '');
         setEditCatParent('none');
         setEditCatOrder(String(cat.order));
         setEditCatStatus(cat.status === 'Active');
@@ -158,7 +210,7 @@ const CategoryManagement = () => {
       }
       if (foundSub && parentCat) {
         setEditCatName(foundSub.name);
-        setEditCatHeader(parentCat.header || 'Ice Creams');
+        setEditCatHeader(parentCat.headerId || parentCat.header || '');
         setEditCatParent(parentCat.id);
         setEditCatOrder(String(foundSub.order));
         setEditCatStatus(foundSub.status === 'Active');
@@ -169,90 +221,98 @@ const CategoryManagement = () => {
   };
 
   // Edit / Update Category Handler
-  const handleUpdateCategory = (e) => {
+  const handleUpdateCategory = async (e) => {
     e.preventDefault();
     if (!editCatName.trim() || !editingCategoryId) return;
 
     const isSub = editingCategoryId.includes('-');
 
-    if (!isSub) {
-      setCategories(prev => prev.map(cat => {
-        if (cat.id === editingCategoryId) {
-          return {
-            ...cat,
-            name: editCatName,
-            header: editCatHeader,
-            order: parseInt(editCatOrder) || 0,
-            status: editCatStatus ? 'Active' : 'Deactivated',
-            image: editCatImage
-          };
-        }
-        return cat;
-      }));
-    } else {
-      setCategories(prev => prev.map(cat => {
-        const hasSub = cat.subcategories.some(s => s.id === editingCategoryId);
-        if (hasSub) {
-          if (editCatParent === cat.id || editCatParent === 'none') {
-            return {
-              ...cat,
-              subcategories: cat.subcategories.map(s => {
-                if (s.id === editingCategoryId) {
-                  return {
-                    ...s,
-                    name: editCatName,
-                    order: parseInt(editCatOrder) || 0,
-                    status: editCatStatus ? 'Active' : 'Deactivated'
-                  };
-                }
-                return s;
-              })
-            };
-          } else {
-            // Remove from current parent
-            return {
-              ...cat,
-              subcategories: cat.subcategories.filter(s => s.id !== editingCategoryId)
-            };
-          }
-        }
-        
-        // Append to new parent category list
-        if (cat.id === editCatParent) {
-          return {
-            ...cat,
-            subcategories: [
-              ...cat.subcategories,
-              {
-                id: editingCategoryId,
-                name: editCatName,
-                order: parseInt(editCatOrder) || 0,
-                status: editCatStatus ? 'Active' : 'Deactivated'
-              }
-            ]
-          };
-        }
-        return cat;
-      }));
-    }
+    try {
+      setLoading(true);
 
-    setIsEditModalOpen(false);
+      let imageUrl = editCatImage;
+      if (editCatImageFile) {
+        const formData = new FormData();
+        formData.append('file', editCatImageFile);
+        formData.append('purpose', 'category_image');
+        const attachment = await uploadAdminFile(formData);
+        imageUrl = attachment?.url;
+      }
+
+      if (!isSub) {
+        let headerId = editCatHeader;
+        const matchedHeader = headerCategories.find(hc => hc.id === editCatHeader || hc.name === editCatHeader);
+        if (matchedHeader) {
+          headerId = matchedHeader.id;
+        }
+        await updateCategory(editingCategoryId, {
+          name: editCatName,
+          headerId,
+          displayOrder: parseInt(editCatOrder) || 0,
+          status: editCatStatus ? 'active' : 'inactive',
+          imageUrl
+        });
+      } else {
+        await updateSubcategory(editingCategoryId, {
+          name: editCatName,
+          categoryId: editCatParent,
+          displayOrder: parseInt(editCatOrder) || 0,
+          status: editCatStatus ? 'active' : 'inactive',
+          imageUrl
+        });
+      }
+      setEditCatImageFile(null);
+      setEditCatImagePreview('');
+      setIsEditModalOpen(false);
+      await loadCategories();
+    } catch (err) {
+      alert(getErrorMessage(err, 'Unable to update category'));
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Deactivate Handler
-  const handleDeactivate = (id) => {
-    setCategories(prev => prev.map(cat => {
-      if (cat.id === id) {
-        return { ...cat, status: cat.status === 'Active' ? 'Deactivated' : 'Active' };
+  const handleDeactivate = async (id) => {
+    const isSub = id.includes('-');
+    const item = !isSub 
+      ? categories.find(c => c.id === id) 
+      : categories.flatMap(c => c.subcategories).find(s => s.id === id);
+    if (!item) return;
+
+    const nextStatus = item.status === 'Active' ? 'inactive' : 'active';
+    try {
+      setLoading(true);
+      if (!isSub) {
+        await updateCategory(id, { status: nextStatus });
+      } else {
+        await updateSubcategory(id, { categoryId: item.categoryId || selectedParentId || item.raw?.categoryId, status: nextStatus });
       }
-      return cat;
-    }));
+      await loadCategories();
+    } catch (err) {
+      alert(getErrorMessage(err, 'Unable to change status'));
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Delete Handler
-  const handleDelete = (id) => {
-    if (confirm('Are you sure you want to delete this category?')) {
-      setCategories(prev => prev.filter(cat => cat.id !== id));
+  const handleDelete = async (id) => {
+    const isSub = id.includes('-');
+    if (confirm(`Are you sure you want to delete this ${isSub ? 'subcategory' : 'category'}?`)) {
+      try {
+        setLoading(true);
+        if (!isSub) {
+          await deleteCategory(id);
+        } else {
+          await deleteSubcategory(id);
+        }
+        await loadCategories();
+      } catch (err) {
+        alert(getErrorMessage(err, 'Unable to delete category'));
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
@@ -649,10 +709,20 @@ const CategoryManagement = () => {
                     onChange={(e) => setNewCatHeader(e.target.value)}
                     className="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
                   >
-                    <option>Ice Cream</option>
-                    <option>School Uniforms</option>
-                    <option>Textbooks & Guides</option>
-                    <option>Stationery & Gifts</option>
+                    {headerCategories.length > 0 ? (
+                      headerCategories.map(hc => (
+                        <option key={hc.id} value={hc.id}>
+                          {hc.name}
+                        </option>
+                      ))
+                    ) : (
+                      <>
+                        <option value="Ice Creams">Ice Creams</option>
+                        <option value="School Uniforms">School Uniforms</option>
+                        <option value="Textbooks & Guides">Textbooks & Guides</option>
+                        <option value="Stationery & Gifts">Stationery & Gifts</option>
+                      </>
+                    )}
                   </select>
                 </div>
                 <div className="space-y-1">
@@ -746,10 +816,49 @@ const CategoryManagement = () => {
               {/* Category Image Upload Dropzone */}
               <div className="space-y-1">
                 <label className="text-xs font-black text-gray-700 mb-1.5 block">Category Image</label>
-                <div className="border-2 border-dashed border-gray-200 rounded-xl p-6 flex flex-col items-center justify-center bg-gray-50/50 hover:bg-gray-50 transition-colors cursor-pointer select-none">
-                  <Upload size={24} className="text-gray-400 mb-2 stroke-[2.5]" />
-                  <span className="text-xs font-black text-gray-700">Choose File or Drag & Drop</span>
-                  <span className="text-[10px] text-gray-400 mt-1 font-bold">Max 5MB</span>
+                <input 
+                  type="file"
+                  ref={newSubcatFileInputRef}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      setNewSubcatImage(file);
+                      setNewSubcatImagePreview(URL.createObjectURL(file));
+                    }
+                  }}
+                  accept="image/*"
+                  className="hidden"
+                />
+                <div 
+                  onClick={() => newSubcatFileInputRef.current?.click()}
+                  className="border-2 border-dashed border-gray-200 rounded-xl p-6 flex flex-col items-center justify-center bg-gray-50/50 hover:bg-gray-50 transition-colors cursor-pointer select-none relative overflow-hidden min-h-[120px]"
+                >
+                  {newSubcatImagePreview ? (
+                    <div className="flex flex-col items-center justify-center text-center">
+                      <img 
+                        src={newSubcatImagePreview} 
+                        alt="Preview" 
+                        className="w-24 h-24 object-cover rounded-xl border border-gray-200 shadow-sm mb-1" 
+                      />
+                      <button 
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setNewSubcatImage(null);
+                          setNewSubcatImagePreview('');
+                        }}
+                        className="text-[10px] text-red-500 font-bold hover:underline"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <Upload size={24} className="text-gray-400 mb-2 stroke-[2.5]" />
+                      <span className="text-xs font-black text-gray-700">Choose File or Drag & Drop</span>
+                      <span className="text-[10px] text-gray-400 mt-1 font-bold">Max 5MB</span>
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -867,18 +976,63 @@ const CategoryManagement = () => {
                   className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-xs font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
                 >
                   <option value="">-- Select Header Category --</option>
-                  <option value="Ice Creams">Ice Creams</option>
-                  <option value="School Uniforms">School Uniforms</option>
-                  <option value="Textbooks & Guides">Textbooks & Guides</option>
-                  <option value="Stationery & Gifts">Stationery & Gifts</option>
+                  {headerCategories.length > 0 ? (
+                    headerCategories.map(hc => (
+                      <option key={hc.id} value={hc.id}>
+                        {hc.name}
+                      </option>
+                    ))
+                  ) : (
+                    <>
+                      <option value="Ice Creams">Ice Creams</option>
+                      <option value="School Uniforms">School Uniforms</option>
+                      <option value="Textbooks & Guides">Textbooks & Guides</option>
+                      <option value="Stationery & Gifts">Stationery & Gifts</option>
+                    </>
+                  )}
                 </select>
               </div>
 
               {/* Category Image upload/preview dropzone */}
               <div className="space-y-1">
                 <label className="text-xs font-black text-gray-700 mb-1.5 block">Category Image</label>
-                <div className="border-2 border-dashed border-gray-200 rounded-xl p-6 flex flex-col items-center justify-center bg-gray-50/50 relative">
-                  {editCatImage ? (
+                <input 
+                  type="file"
+                  ref={editCatFileInputRef}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      setEditCatImageFile(file);
+                      setEditCatImagePreview(URL.createObjectURL(file));
+                    }
+                  }}
+                  accept="image/*"
+                  className="hidden"
+                />
+                <div 
+                  onClick={() => editCatFileInputRef.current?.click()}
+                  className="border-2 border-dashed border-gray-200 rounded-xl p-6 flex flex-col items-center justify-center bg-gray-50/50 hover:bg-gray-50 transition-colors cursor-pointer select-none relative overflow-hidden min-h-[140px]"
+                >
+                  {editCatImagePreview ? (
+                    <div className="flex flex-col items-center justify-center text-center">
+                      <img 
+                        src={editCatImagePreview} 
+                        alt="Preview" 
+                        className="w-28 h-28 object-cover rounded-xl border border-gray-200 shadow-sm mb-1" 
+                      />
+                      <button 
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditCatImageFile(null);
+                          setEditCatImagePreview('');
+                        }}
+                        className="text-[10px] text-red-500 font-bold hover:underline"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ) : editCatImage ? (
                     <div className="flex flex-col items-center justify-center text-center">
                       <img 
                         src={editCatImage} 
@@ -888,7 +1042,10 @@ const CategoryManagement = () => {
                       <span className="text-[10px] text-gray-400 font-bold">Current image</span>
                       <button 
                         type="button" 
-                        onClick={() => setEditCatImage('')}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditCatImage('');
+                        }}
                         className="text-[10px] text-red-500 font-black hover:underline mt-1 block"
                       >
                         Remove

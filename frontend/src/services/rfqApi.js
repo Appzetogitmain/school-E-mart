@@ -26,6 +26,11 @@ export const getSchoolRfq = async (schoolId, rfqId) => {
   return unwrapData(response)?.rfq;
 };
 
+export const updateRfq = async (schoolId, rfqId, payload) => {
+  const response = await apiClient.patch(schoolRfqPath(schoolId, `/${rfqId}`), payload);
+  return unwrapData(response)?.rfq;
+};
+
 export const awardRfqQuote = async (schoolId, rfqId, quoteId) => {
   const response = await apiClient.post(
     schoolRfqPath(schoolId, `/${rfqId}/quotes/${quoteId}/award`)

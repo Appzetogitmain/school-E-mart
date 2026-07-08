@@ -8,6 +8,7 @@ const { protectedRoute } = require('../../../middlewares/auth/guards');
 const { PERMISSIONS } = require('../../../constants/permissions');
 const { ROLES } = require('../../../constants/roles');
 const { resolveSchool } = require('../middlewares/resolveSchool');
+const { uploadImage } = require('../../admin/middlewares/upload.middleware');
 
 const router = express.Router();
 
@@ -103,6 +104,14 @@ router.patch(
   validateParams(validators.teacherIdParam),
   validateBody(validators.teacherStatusSchema),
   schoolController.setTeacherStatus
+);
+
+router.delete(
+  '/:schoolId/teachers/:teacherId',
+  ...protectedRoute({ roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN], permissions: [PERMISSIONS.TEACHERS_WRITE] }),
+  resolveSchool(),
+  validateParams(validators.teacherIdParam),
+  schoolController.deleteTeacher
 );
 
 router.get(
@@ -442,6 +451,14 @@ router.delete(
 );
 
 router.post(
+  '/:schoolId/uploads',
+  ...schoolAdmin,
+  resolveSchool(),
+  uploadImage,
+  schoolController.uploadAttachment
+);
+
+router.post(
   '/:schoolId/diary',
   ...diaryWrite,
   resolveSchool(),
@@ -519,12 +536,63 @@ router.get(
   schoolController.getRfq
 );
 
+router.patch(
+  '/:schoolId/rfqs/:rfqId',
+  ...schoolAdmin,
+  resolveSchool(),
+  validateParams(rfqValidators.rfqIdParam),
+  validateBody(rfqValidators.updateRfqSchema),
+  schoolController.updateRfq
+);
+
 router.post(
   '/:schoolId/rfqs/:rfqId/quotes/:quoteId/award',
   ...schoolAdmin,
   resolveSchool(),
   validateParams(rfqValidators.quoteIdParam),
   schoolController.awardRfqQuote
+);
+
+// Parents Management
+router.post(
+  '/:schoolId/parents',
+  ...schoolAdmin,
+  resolveSchool(),
+  validateBody(validators.createParentSchema),
+  schoolController.createParent
+);
+
+router.get(
+  '/:schoolId/parents',
+  ...schoolAdmin,
+  resolveSchool(),
+  validateQuery(validators.paginationQuery),
+  schoolController.listParents
+);
+
+router.get(
+  '/:schoolId/parents/:parentId',
+  ...schoolAdmin,
+  resolveSchool(),
+  validateParams(validators.parentIdParam),
+  schoolController.getParent
+);
+
+router.patch(
+  '/:schoolId/parents/:parentId',
+  ...schoolAdmin,
+  resolveSchool(),
+  validateParams(validators.parentIdParam),
+  validateBody(validators.updateParentSchema),
+  schoolController.updateParent
+);
+
+router.delete(
+  '/:schoolId/parents/:parentId',
+  ...schoolAdmin,
+  resolveSchool(),
+  validateParams(validators.parentIdParam),
+  schoolController.deleteParent
 );
 
 module.exports = router;

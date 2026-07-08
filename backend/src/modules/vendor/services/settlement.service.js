@@ -3,6 +3,8 @@ const Order = require('../../../database/models/Order');
 const ledgerRepository = require('../repositories/ledger.repository');
 const payoutRepository = require('../repositories/payout.repository');
 const VendorLedger = require('../../../database/models/VendorLedger');
+const PayoutRequest = require('../../../database/models/PayoutRequest');
+const { BadRequestError, NotFoundError } = require('../../../common/errors');
 
 const settlementService = {
   calculateCommission(lineTotalPaise, commissionPercent) {
@@ -98,6 +100,50 @@ const settlementService = {
 
   async getSettlementHistory(vendorId, query) {
     return ledgerRepository.paginateLedger(vendorId, query);
+  },
+
+  /**
+   * Vendor-initiated withdrawal. The requested amount is validated against the
+   * balance still available after any in-flight (pending/processing) payouts.
+   */
+  async createPayoutRequest(vendorId, amountPaise) {
+    const amount = Math.round(Number(amountPaise) || 0);
+    if (amount < 100) {
+      throw new BadRequestError('Minimum payout amount is ₹1');
+    }
+
+    const summary = await this.getEarningsSummary(vendorId);
+    const withdrawable = summary.availableBalancePaise - summary.pendingSettlementPaise;
+    if (amount > withdrawable) {
+      throw new BadRequestError('Requested amount exceeds available balance');
+    }
+
+    const vendor = await VendorProfile.findById(vendorId).lean();
+    if (!vendor) {
+      throw new NotFoundError('Vendor profile not found');
+    }
+    const bank = vendor.bank || {};
+    if (!bank.accountNumberEnc || !bank.ifsc) {
+      throw new BadRequestError('Add your bank details before requesting a payout');
+    }
+
+    const payout = await PayoutRequest.create({
+      vendorId,
+      amountPaise: amount,
+      bankDetailsSnapshot: {
+        accountName: bank.accountName,
+        bankName: bank.bankName,
+        accountNumberEnc: bank.accountNumberEnc,
+        ifsc: bank.ifsc,
+      },
+      status: 'pending',
+    });
+
+    return payout.toObject();
+  },
+
+  async listPayoutRequests(vendorId, query) {
+    return payoutRepository.paginatePayouts(vendorId, query);
   },
 };
 

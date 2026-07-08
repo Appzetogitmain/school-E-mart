@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import AppHeader from '../../components/AppHeader';
 import LoginRequired from '../../components/LoginRequired';
-import { listTeachers } from '../../../services/schoolApi';
+import { listPhonebook } from '../../../services/schoolApi';
 import { getChildInfoFromStorage } from '../../../utils/parentContext';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 
@@ -85,9 +85,9 @@ const ParentPhonebook = () => {
     setContactsLoading(true);
     setContactsError('');
 
-    listTeachers(schoolId, { limit: 100 })
-      .then(({ data }) => {
-        if (!cancelled) setTeachers(data || []);
+    listPhonebook(schoolId)
+      .then((entries) => {
+        if (!cancelled) setTeachers(entries || []);
       })
       .catch((err) => {
         if (!cancelled) {

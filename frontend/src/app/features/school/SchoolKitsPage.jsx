@@ -1,24 +1,72 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  ArrowLeft, Search, Filter, ChevronDown, Check, X, 
+import {
+  ArrowLeft, Search, Filter, ChevronDown, Check, X,
   MoreVertical, Package, CheckCircle, AlertCircle, Plus,
-  Users, Layers, Award, Tag, Sparkles, ShoppingBag, Eye
+  Users, Layers, Award, Tag, Sparkles, ShoppingBag, Eye, Loader2
 } from 'lucide-react';
+import { listKits } from '../../../services/schoolApi';
+import { useSchoolId } from '../../../utils/schoolContext';
+import { getErrorMessage } from '../../../utils/apiHelpers';
+
+const mapKit = (k) => {
+  const imageUrl = k.imageId?.storageKey || k.imageUrl || k.image?.url;
+  const avatar = imageUrl ? imageUrl : `https://ui-avatars.com/api/?background=3b2d7d&color=fff&bold=true&name=${encodeURIComponent(k.name || 'Kit')}`;
+  return {
+    id: k._id,
+    name: k.name,
+    desc: k.description || '',
+    category: k.category || 'Others',
+    tag: k.category || 'Kit',
+    classes: k.classGrade || 'All classes',
+    itemsCount: (k.items || []).length,
+    price: ((k.pricePaise || 0) / 100).toFixed(0),
+    status: k.status === 'active' ? 'Active' : 'Draft',
+    updatedDate: k.audit?.updatedAt
+      ? new Date(k.audit.updatedAt).toLocaleDateString('en-GB')
+      : '—',
+    avatar,
+  };
+};
 
 const SchoolKitsPage = () => {
   const navigate = useNavigate();
+  const schoolId = useSchoolId();
 
   // Tab category selection state
   const [activeCategory, setActiveCategory] = useState('All');
-  
+
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useState('');
-  
+
   // Modals state
   const [selectedKit, setSelectedKit] = useState(null);
 
-  const kits = [];
+  const [kits, setKits] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const loadKits = useCallback(async () => {
+    if (!schoolId) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    setError('');
+    try {
+      const { data } = await listKits(schoolId, { limit: 100 });
+      setKits((data || []).map(mapKit));
+    } catch (err) {
+      setKits([]);
+      setError(getErrorMessage(err, 'Unable to load kits'));
+    } finally {
+      setLoading(false);
+    }
+  }, [schoolId]);
+
+  useEffect(() => {
+    loadKits();
+  }, [loadKits]);
 
   const totalCount = kits.length;
   const activeCount = kits.filter((k) => k.status === 'Active').length;
@@ -175,11 +223,22 @@ const SchoolKitsPage = () => {
       {/* Kits Cards list exactly matching the mockup */}
       <div className="px-6 py-4 space-y-4">
 
-        {kits.length === 0 && (
+        {loading && (
+          <div className="text-center py-16 bg-white border border-gray-150 rounded-[2.2rem] p-6 shadow-sm">
+            <Loader2 size={32} className="text-[#3b2d7d] mx-auto block animate-spin" />
+            <span className="text-xs font-black text-gray-500 block mt-3">Loading kits…</span>
+          </div>
+        )}
+
+        {!loading && kits.length === 0 && (
           <div className="text-center py-16 bg-white border border-gray-150 rounded-[2.2rem] p-6 shadow-sm">
             <Package size={44} className="text-gray-300 mx-auto block stroke-[1.5]" />
-            <span className="text-xs font-black text-gray-500 block mt-3">No procurement kits yet</span>
-            <span className="text-[10px] text-gray-400 font-bold block mt-1">School kit management API is not available yet.</span>
+            <span className="text-xs font-black text-gray-500 block mt-3">
+              {error ? 'Unable to load kits' : 'No procurement kits yet'}
+            </span>
+            <span className="text-[10px] text-gray-400 font-bold block mt-1">
+              {error || 'Create your first kit from the Create Kit page.'}
+            </span>
           </div>
         )}
         

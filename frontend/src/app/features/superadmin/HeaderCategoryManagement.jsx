@@ -4,7 +4,7 @@ import {
   Plus, Search, Edit, Trash2, X, ChevronRight, Upload, 
   ShoppingBag, HelpCircle, Utensils, Home as HomeIcon, Baby, Heart, ShieldAlert, Loader2
 } from 'lucide-react';
-import { listHeaderCategories } from '../../../services/catalogApi';
+import { listHeaderCategories, createHeaderCategory, updateHeaderCategory, deleteHeaderCategory } from '../../../services/catalogApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 import { mapHeaderCategoryForAdmin } from '../../../utils/mappers/categoryAdminMapper';
 
@@ -55,24 +55,27 @@ const HeaderCategoryManagement = () => {
   };
 
   // Add Action Handler
-  const handleAddHeader = (e) => {
+  const handleAddHeader = async (e) => {
     e.preventDefault();
     if (!formName.trim()) return;
 
-    const newId = String(headers.length + 1);
-    const newHeader = {
-      id: newId,
-      name: formName,
-      slug: formSlug || formName.toLowerCase().replace(/\s+/g, '-'),
-      commission: formCommission.endsWith('%') ? formCommission : `${formCommission}%`,
-      fees: formFees.startsWith('₹') ? formFees : `₹${formFees}`,
-      status: formStatus,
-      image: formImage || 'https://images.unsplash.com/photo-1544816155-12df9643f363?w=80&auto=format&fit=crop&q=60'
-    };
-
-    setHeaders(prev => [...prev, newHeader]);
-    resetForm();
-    setIsAddModalOpen(false);
+    try {
+      setLoading(true);
+      await createHeaderCategory({
+        name: formName,
+        commissionPercent: parseFloat(formCommission) || 0,
+        feesFlatPaise: Math.round(parseFloat(formFees) * 100) || 0,
+        status: formStatus,
+        imageUrl: formImage || undefined,
+      });
+      resetForm();
+      setIsAddModalOpen(false);
+      await loadHeaders();
+    } catch (err) {
+      alert(getErrorMessage(err, 'Unable to create header category'));
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Open Edit pre-populating attributes
@@ -82,39 +85,47 @@ const HeaderCategoryManagement = () => {
     setFormSlug(headerItem.slug);
     setFormCommission(headerItem.commission.replace('%', ''));
     setFormFees(headerItem.fees.replace('₹', ''));
-    setFormStatus(headerItem.status);
+    setFormStatus(headerItem.status === 'Active' ? 'active' : 'inactive');
     setFormImage(headerItem.image || '');
     setIsEditModalOpen(true);
   };
 
   // Edit Update Action Handler
-  const handleUpdateHeader = (e) => {
+  const handleUpdateHeader = async (e) => {
     e.preventDefault();
     if (!formName.trim() || !editingHeaderId) return;
 
-    setHeaders(prev => prev.map(item => {
-      if (item.id === editingHeaderId) {
-        return {
-          ...item,
-          name: formName,
-          slug: formSlug,
-          commission: formCommission.endsWith('%') ? formCommission : `${formCommission}%`,
-          fees: formFees.startsWith('₹') ? formFees : `₹${formFees}`,
-          status: formStatus,
-          image: formImage
-        };
-      }
-      return item;
-    }));
-
-    resetForm();
-    setIsEditModalOpen(false);
+    try {
+      setLoading(true);
+      await updateHeaderCategory(editingHeaderId, {
+        name: formName,
+        commissionPercent: parseFloat(formCommission) || 0,
+        feesFlatPaise: Math.round(parseFloat(formFees) * 100) || 0,
+        status: formStatus,
+        imageUrl: formImage || undefined,
+      });
+      resetForm();
+      setIsEditModalOpen(false);
+      await loadHeaders();
+    } catch (err) {
+      alert(getErrorMessage(err, 'Unable to update header category'));
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Delete Action Handler
-  const handleDeleteHeader = (id) => {
+  const handleDeleteHeader = async (id) => {
     if (confirm('Are you sure you want to delete this header category?')) {
-      setHeaders(prev => prev.filter(item => item.id !== id));
+      try {
+        setLoading(true);
+        await deleteHeaderCategory(id);
+        await loadHeaders();
+      } catch (err) {
+        alert(getErrorMessage(err, 'Unable to delete header category'));
+      } finally {
+        setLoading(false);
+      }
     }
   };
 

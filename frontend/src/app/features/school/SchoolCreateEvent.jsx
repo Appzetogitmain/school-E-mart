@@ -1,13 +1,32 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  ArrowLeft, Calendar, Clock, MapPin, 
-  Bell, Users, GraduationCap, Grid, Info, 
+import {
+  ArrowLeft, Calendar, Clock, MapPin,
+  Bell, Users, GraduationCap, Grid, Info,
   Check, ArrowRight, ToggleLeft, ToggleRight
 } from 'lucide-react';
+import { createEvent, listClasses } from '../../../services/schoolApi';
+import { useSchoolId } from '../../../utils/schoolContext';
+import { getErrorMessage } from '../../../utils/apiHelpers';
+import { useEffect } from 'react';
+
+const combineDateTime = (date, time, allDay) => {
+  if (!date) return null;
+  if (allDay || !time) return new Date(`${date}T00:00:00`).toISOString();
+  return new Date(`${date}T${time}:00`).toISOString();
+};
+
+const AUDIENCE_MAP = {
+  all: 'all',
+  parents: 'parents',
+  teachers: 'teachers',
+  students: 'students',
+  specific: 'specific_classes',
+};
 
 const SchoolCreateEvent = () => {
   const navigate = useNavigate();
+  const schoolId = useSchoolId();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [eventType, setEventType] = useState('');
@@ -24,17 +43,63 @@ const SchoolCreateEvent = () => {
   const [visibleOnCalendar, setVisibleOnCalendar] = useState(true);
   const [publishToNoticeBoard, setPublishToNoticeBoard] = useState(true);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [classesList, setClassesList] = useState([]);
+
+  useEffect(() => {
+    if (!schoolId) return;
+    (async () => {
+      try {
+        const list = await listClasses(schoolId);
+        setClassesList(list || []);
+      } catch (err) {
+        console.error('Failed to load classes:', err);
+      }
+    })();
+  }, [schoolId]);
 
   const handleBack = () => {
     navigate('/school/admin');
   };
 
-  const handleCreateEvent = () => {
-    setIsSuccess(true);
-    setTimeout(() => {
-      setIsSuccess(false);
-      navigate('/school/admin');
-    }, 2000);
+  const handleCreateEvent = async () => {
+    setError('');
+    if (!title.trim() || !startDate) {
+      setError('Event title and start date are required.');
+      return;
+    }
+    if (!schoolId) {
+      setError('School context is missing. Please log in again.');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const targetAudience = AUDIENCE_MAP[audience] || 'all';
+      await createEvent(schoolId, {
+        title: title.trim(),
+        description: description.trim() || undefined,
+        eventType: eventType || eventCategory || 'General',
+        startDate: combineDateTime(startDate, startTime, isAllDay),
+        endDate: combineDateTime(endDate || startDate, endTime || startTime, isAllDay) || undefined,
+        location: venue.trim() || undefined,
+        targetAudience,
+        targetClasses:
+          targetAudience === 'specific_classes' && selectedClass
+            ? [{ classGrade: selectedClass, sections: [] }]
+            : undefined,
+      });
+      setIsSuccess(true);
+      setTimeout(() => {
+        setIsSuccess(false);
+        navigate('/school/admin');
+      }, 2000);
+    } catch (err) {
+      setError(getErrorMessage(err, 'Unable to create event'));
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -342,9 +407,9 @@ const SchoolCreateEvent = () => {
                 className="w-full px-4 py-3.5 bg-white border border-gray-200 rounded-2xl text-xs font-bold text-deep-purple focus:outline-none focus:border-primary/50 transition-colors appearance-none cursor-pointer"
               >
                 <option value="">Select classes or sections</option>
-                <option value="grade-1">Class 1 - Section A</option>
-                <option value="grade-2">Class 2 - Section B</option>
-                <option value="grade-3">Class 3 - Section A</option>
+                {classesList.map(c => (
+                  <option key={c.classGrade} value={c.classGrade}>{c.classGrade}</option>
+                ))}
               </select>
             </div>
           )}
@@ -395,14 +460,20 @@ const SchoolCreateEvent = () => {
 
       {/* Sticky Bottom Actions Footer Bar */}
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-150 p-4 flex flex-col gap-3 z-50 max-w-md mx-auto">
+        {error && (
+          <div className="bg-red-50 border border-red-100 text-red-600 text-[11px] font-bold px-4 py-2.5 rounded-2xl">
+            {error}
+          </div>
+        )}
         <div className="flex">
-          <button 
+          <button
             type="button"
             onClick={handleCreateEvent}
-            className="w-full py-3.5 bg-primary text-white rounded-2xl text-xs font-black shadow-lg shadow-purple-100 flex items-center justify-center gap-1.5 active:scale-95 transition-all"
+            disabled={saving}
+            className="w-full py-3.5 bg-primary text-white rounded-2xl text-xs font-black shadow-lg shadow-purple-100 flex items-center justify-center gap-1.5 active:scale-95 transition-all disabled:opacity-60"
           >
             <Calendar size={14} />
-            Create Event
+            {saving ? 'Creating…' : 'Create Event'}
           </button>
         </div>
 

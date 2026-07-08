@@ -30,6 +30,20 @@ const createRfqSchema = Joi.object({
   status: Joi.string().valid('draft', 'open').default('open'),
 });
 
+const updateRfqSchema = Joi.object({
+  title: Joi.string().trim().min(3).max(100).optional(),
+  academicYear: Joi.string().trim().max(20).optional(),
+  requiredDate: Joi.date().optional().allow(null, ''),
+  quotationDeadline: Joi.date().optional().allow(null, ''),
+  classes: Joi.array().items(Joi.string().trim()).min(1).optional(),
+  totalStudents: Joi.alternatives().try(Joi.number().min(0), Joi.string().trim()).optional().allow(null, ''),
+  specialInstructions: Joi.string().trim().max(500).optional().allow(null, ''),
+  additionalNotes: Joi.string().trim().max(300).optional().allow(null, ''),
+  uniformSets: Joi.array().items(uniformSetSchema).min(1).optional(),
+  invitedVendorIds: Joi.array().items(schemas.objectId).min(1).optional(),
+  status: Joi.string().valid('draft', 'open').optional(),
+});
+
 const submitQuoteSchema = Joi.object({
   unitPrice: Joi.number().min(0).required(),
   taxRatePercent: Joi.number().min(0).max(100).default(0),
@@ -57,6 +71,7 @@ const paginationQuery = Joi.object({
 
 module.exports = {
   createRfqSchema,
+  updateRfqSchema,
   submitQuoteSchema,
   rfqIdParam,
   quoteIdParam,

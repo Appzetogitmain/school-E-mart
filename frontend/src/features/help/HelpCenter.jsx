@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Phone, Mail, MessageSquare, ChevronDown, ChevronUp, Clock, MapPin, ShieldCheck, HelpCircle, Loader2 } from 'lucide-react';
 import AccountManagerModal from '../../components/shared/AccountManagerModal';
+import SupportTickets from './SupportTickets';
 import { listFaqs, getContactInfo } from '../../services/adminApi';
 import { getErrorMessage } from '../../utils/apiHelpers';
 
@@ -137,6 +138,8 @@ const HelpCenter = () => {
             </div>
           )}
         </div>
+
+        <SupportTickets />
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           <div className="bg-primary p-10 rounded-[2.5rem] text-white relative overflow-hidden">

@@ -110,6 +110,12 @@ const buildEnv = () => {
   OUTBOX_POLL_INTERVAL_MS: Number(process.env.OUTBOX_POLL_INTERVAL_MS) || 5000,
   OUTBOX_BATCH_SIZE: Number(process.env.OUTBOX_BATCH_SIZE) || 20,
 
+  SMTP_HOST: process.env.SMTP_HOST || 'smtp.gmail.com',
+  SMTP_PORT: Number(process.env.SMTP_PORT) || 587,
+  SMTP_USER: process.env.SMTP_USER || '',
+  SMTP_PASS: process.env.SMTP_PASS || '',
+  SMTP_FROM: process.env.SMTP_FROM || 'School E-Mart <noreply@schoolemart.com>',
+
   FIREBASE_PROJECT_ID: process.env.FIREBASE_PROJECT_ID || null,
   FIREBASE_CLIENT_EMAIL: process.env.FIREBASE_CLIENT_EMAIL || null,
   FIREBASE_PRIVATE_KEY: process.env.FIREBASE_PRIVATE_KEY

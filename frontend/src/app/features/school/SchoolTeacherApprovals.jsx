@@ -3,9 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Filter, Search, UserPlus, Check, X, 
   MoreVertical, Clock, Users, ArrowUpRight, 
-  ThumbsUp, ThumbsDown, CheckCircle2, XCircle, Loader2
+  ThumbsUp, ThumbsDown, CheckCircle2, XCircle, Loader2,
+  AlertCircle, Trash2
 } from 'lucide-react';
-import { listTeachers, setTeacherStatus } from '../../../services/schoolApi';
+import { listTeachers, setTeacherStatus, createTeacher, deleteTeacher } from '../../../services/schoolApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 import { mapTeacherForApproval } from '../../../utils/mappers/schoolTeacherMapper';
 import { useSchoolId } from '../../../utils/schoolContext';
@@ -14,13 +15,98 @@ const SchoolTeacherApprovals = () => {
   const navigate = useNavigate();
   const schoolId = useSchoolId();
 
-  const [activeTab, setActiveTab] = useState('Pending');
+  const [activeTab, setActiveTab] = useState('Approved');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTeacher, setSelectedTeacher] = useState(null);
   const [teachers, setTeachers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [actionId, setActionId] = useState(null);
+
+  // Deletion States
+  const [teacherToDelete, setTeacherToDelete] = useState(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
+  // Add Teacher Modal States
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [addFormData, setAddFormData] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    password: '',
+    designation: '',
+    department: '',
+  });
+  const [addLoading, setAddLoading] = useState(false);
+  const [addError, setAddError] = useState('');
+
+  const handleAddInputChange = (field, value) => {
+    setAddError('');
+    let val = value;
+    if (field === 'phone') {
+      val = value.replace(/\D/g, '').slice(-10);
+    }
+    setAddFormData(prev => ({ ...prev, [field]: val }));
+  };
+
+  const handleAddSubmit = async (e) => {
+    e.preventDefault();
+    if (!addFormData.name.trim()) return setAddError('Name is required');
+    if (!addFormData.email.trim()) return setAddError('Email is required');
+    if (!addFormData.phone || addFormData.phone.length !== 10) return setAddError('Valid 10-digit mobile number is required');
+    if (!addFormData.password) return setAddError('Password is required');
+    if (addFormData.password.length < 8) return setAddError('Password must be at least 8 characters');
+    if (!/\d/.test(addFormData.password)) return setAddError('Password must contain at least one number');
+    if (!/[!@#$%^&*(),.?":{}|<>]/.test(addFormData.password)) return setAddError('Password must contain at least one special character');
+
+    setAddLoading(true);
+    setAddError('');
+    try {
+      const payload = {
+        name: addFormData.name.trim(),
+        email: addFormData.email.trim(),
+        phone: addFormData.phone.trim(),
+        password: addFormData.password,
+        autoApprove: true,
+      };
+      if (addFormData.designation?.trim()) {
+        payload.designation = addFormData.designation.trim();
+      }
+      if (addFormData.department?.trim()) {
+        payload.department = addFormData.department.trim();
+      }
+
+      await createTeacher(schoolId, payload);
+      setIsAddModalOpen(false);
+      setAddFormData({
+        name: '',
+        email: '',
+        phone: '',
+        password: '',
+        designation: '',
+        department: '',
+      });
+      loadTeachers();
+    } catch (err) {
+      setAddError(getErrorMessage(err, 'Failed to create teacher account'));
+    } finally {
+      setAddLoading(false);
+    }
+  };
+
+  const handleDeleteTeacher = async () => {
+    if (!teacherToDelete || !schoolId) return;
+    setDeleteLoading(true);
+    try {
+      await deleteTeacher(schoolId, teacherToDelete.mongoId);
+      setTeachers(prev => prev.filter(t => t.mongoId !== teacherToDelete.mongoId));
+      setTeacherToDelete(null);
+    } catch (err) {
+      alert(getErrorMessage(err, 'Failed to delete teacher'));
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
 
   const loadTeachers = useCallback(async () => {
     if (!schoolId) {
@@ -121,6 +207,13 @@ const SchoolTeacherApprovals = () => {
               </span>
             </div>
           </div>
+          <button
+            onClick={() => setIsAddModalOpen(true)}
+            className="flex items-center gap-2 bg-white text-[#3b2d7d] px-4 py-2.5 rounded-full text-xs font-black hover:bg-purple-50 active:scale-95 transition-all shadow-md shrink-0"
+          >
+            <UserPlus size={16} />
+            Add Teacher
+          </button>
         </div>
       </div>
 
@@ -309,12 +402,13 @@ const SchoolTeacherApprovals = () => {
 
               </div>
 
-              {/* Three dots vertical menu badge */}
+              {/* Delete button */}
               <button 
-                className="absolute top-4 right-4 w-7 h-7 rounded-full flex items-center justify-center hover:bg-gray-50 text-gray-400 active:scale-90 transition-transform"
-                onClick={() => alert(`Context settings for ${t.name}`)}
+                className="absolute top-4 right-4 w-7 h-7 rounded-full flex items-center justify-center hover:bg-gray-50 text-gray-400 hover:text-rose-600 active:scale-90 transition-transform"
+                onClick={() => setTeacherToDelete(t)}
+                title="Delete Teacher"
               >
-                <MoreVertical size={16} />
+                <Trash2 size={15} />
               </button>
 
             </div>
@@ -481,6 +575,164 @@ const SchoolTeacherApprovals = () => {
           </div>
         </div>
       )}
+
+      {/* Add Teacher Modal */}
+      {isAddModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-md rounded-[2.2rem] overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
+            
+            {/* Modal Header */}
+            <div className="bg-[#3b2d7d] text-white px-6 py-5 flex items-center justify-between shrink-0">
+              <h3 className="text-lg font-black">Add Teacher Account</h3>
+              <button 
+                onClick={() => setIsAddModalOpen(false)}
+                className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 active:scale-95 transition-all text-white"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Modal Form */}
+            <form onSubmit={handleAddSubmit} className="p-6 space-y-4 overflow-y-auto flex-1">
+              {addError && (
+                <div className="p-3.5 bg-red-50 border border-red-100 rounded-2xl text-xs font-bold text-red-600 flex items-center gap-2">
+                  <AlertCircle size={15} />
+                  <span>{addError}</span>
+                </div>
+              )}
+
+              {/* Name */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Teacher Full Name</label>
+                <input 
+                  type="text"
+                  required
+                  value={addFormData.name}
+                  onChange={(e) => handleAddInputChange('name', e.target.value)}
+                  placeholder="e.g. Mrs. Priya Sen"
+                  className="w-full px-4 py-3 bg-gray-50 border-none rounded-2xl text-sm font-bold text-deep-purple focus:ring-2 focus:ring-primary/10 outline-none placeholder:text-gray-300"
+                />
+              </div>
+
+              {/* Email */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Email ID</label>
+                <input 
+                  type="email"
+                  required
+                  value={addFormData.email}
+                  onChange={(e) => handleAddInputChange('email', e.target.value)}
+                  placeholder="teacher@school.com"
+                  className="w-full px-4 py-3 bg-gray-50 border-none rounded-2xl text-sm font-bold text-deep-purple focus:ring-2 focus:ring-primary/10 outline-none placeholder:text-gray-300"
+                />
+              </div>
+
+              {/* Phone */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Mobile Number</label>
+                <input 
+                  type="tel"
+                  required
+                  value={addFormData.phone}
+                  onChange={(e) => handleAddInputChange('phone', e.target.value)}
+                  placeholder="10-digit mobile number"
+                  className="w-full px-4 py-3 bg-gray-50 border-none rounded-2xl text-sm font-bold text-deep-purple focus:ring-2 focus:ring-primary/10 outline-none placeholder:text-gray-300"
+                />
+              </div>
+
+              {/* Password */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Temporary Password</label>
+                <input 
+                  type="text"
+                  required
+                  value={addFormData.password}
+                  onChange={(e) => handleAddInputChange('password', e.target.value)}
+                  placeholder="At least 8 chars, 1 number, 1 special char"
+                  className="w-full px-4 py-3 bg-gray-50 border-none rounded-2xl text-sm font-bold text-deep-purple focus:ring-2 focus:ring-primary/10 outline-none placeholder:text-gray-300"
+                />
+              </div>
+
+              {/* Designation */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Designation (Optional)</label>
+                <input 
+                  type="text"
+                  value={addFormData.designation}
+                  onChange={(e) => handleAddInputChange('designation', e.target.value)}
+                  placeholder="e.g. PGT Physics"
+                  className="w-full px-4 py-3 bg-gray-50 border-none rounded-2xl text-sm font-bold text-deep-purple focus:ring-2 focus:ring-primary/10 outline-none placeholder:text-gray-300"
+                />
+              </div>
+
+              {/* Department */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Department (Optional)</label>
+                <input 
+                  type="text"
+                  value={addFormData.department}
+                  onChange={(e) => handleAddInputChange('department', e.target.value)}
+                  placeholder="e.g. Science Department"
+                  className="w-full px-4 py-3 bg-gray-50 border-none rounded-2xl text-sm font-bold text-deep-purple focus:ring-2 focus:ring-primary/10 outline-none placeholder:text-gray-300"
+                />
+              </div>
+
+              {/* Actions */}
+              <div className="flex gap-3 pt-4 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setIsAddModalOpen(false)}
+                  className="flex-1 py-3.5 border border-gray-200 rounded-2xl text-xs font-black text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={addLoading}
+                  className="flex-1 py-3.5 bg-[#3b2d7d] text-white rounded-2xl text-xs font-black hover:bg-purple-800 transition-all flex items-center justify-center gap-2 shadow-lg shadow-purple-900/10"
+                >
+                  {addLoading ? <Loader2 size={16} className="animate-spin" /> : 'Create Account'}
+                </button>
+              </div>
+            </form>
+
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {teacherToDelete && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-sm rounded-[2rem] p-6 text-center space-y-4 shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="w-14 h-14 bg-rose-50 text-rose-500 rounded-full flex items-center justify-center mx-auto">
+              <AlertCircle size={28} />
+            </div>
+            <div>
+              <h3 className="text-lg font-black text-deep-purple">Delete Teacher Account?</h3>
+              <p className="text-gray-400 text-xs mt-1.5 leading-relaxed">
+                Are you sure you want to delete the account for <strong>{teacherToDelete.name}</strong>? This action will disable their access.
+              </p>
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button
+                disabled={deleteLoading}
+                onClick={() => setTeacherToDelete(null)}
+                className="flex-1 py-3 border border-gray-150 rounded-2xl text-xs font-black text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                disabled={deleteLoading}
+                onClick={handleDeleteTeacher}
+                className="flex-1 py-3 bg-rose-600 text-white rounded-2xl text-xs font-black hover:bg-rose-700 active:scale-95 transition-all flex items-center justify-center gap-2"
+              >
+                {deleteLoading ? <Loader2 size={16} className="animate-spin" /> : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };

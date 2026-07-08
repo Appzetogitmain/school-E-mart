@@ -1,11 +1,35 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { 
-  Bell, Trash2, Send, Play, X, ChevronRight, CheckCircle, Info 
+import {
+  Bell, Trash2, Send, Play, X, ChevronRight, CheckCircle, Info
 } from 'lucide-react';
+import {
+  listNotificationCampaigns,
+  createNotificationCampaign,
+} from '../../../services/adminApi';
+import { getErrorMessage } from '../../../utils/apiHelpers';
+
+// UI audience value -> API payload
+const AUDIENCE_PAYLOAD = {
+  'All Users': { targetAudience: 'custom_segment', segmentRules: { roles: ['parent', 'vendor', 'school', 'teacher'] } },
+  Customer: { targetAudience: 'all_parents' },
+  Seller: { targetAudience: 'all_vendors' },
+  School: { targetAudience: 'all_schools' },
+};
+
+const AUDIENCE_LABEL = {
+  all_parents: 'Customer',
+  all_vendors: 'Vendor',
+  all_schools: 'School',
+  specific_users: 'Specific',
+  custom_segment: 'All Users',
+};
 
 const NotificationManagement = () => {
   const [notifications, setNotifications] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState('');
 
   // Form states
   const [selectedUserType, setSelectedUserType] = useState('All Users');
@@ -20,45 +44,57 @@ const NotificationManagement = () => {
   // Floating Toast alert simulator state
   const [activeToast, setActiveToast] = useState(null);
 
+  const loadCampaigns = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const { data } = await listNotificationCampaigns({ limit: 50 });
+      setNotifications(
+        (data || []).map((c) => ({
+          id: c._id,
+          users: AUDIENCE_LABEL[c.targetAudience] || c.targetAudience,
+          title: c.title,
+          message: c.messageBody,
+          metrics: c.metrics,
+          date: c.audit?.createdAt ? new Date(c.audit.createdAt).toLocaleString() : '—',
+        }))
+      );
+    } catch (err) {
+      setError(getErrorMessage(err, 'Unable to load campaigns'));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadCampaigns();
+  }, [loadCampaigns]);
+
   // Send new notification
-  const handleSendNotification = (e) => {
+  const handleSendNotification = async (e) => {
     e.preventDefault();
     if (!titleInput.trim() || !messageInput.trim()) {
       alert('Please fill out both notification title and message.');
       return;
     }
 
-    const todayStr = new Date().toLocaleDateString('en-GB', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric'
-    }).replace(/ /g, '-') + ' ' + new Date().toLocaleTimeString('en-US', { 
-      hour12: false, 
-      hour: '2-digit', 
-      minute: '2-digit', 
-      second: '2-digit' 
-    });
-
-    const newNotif = {
-      id: Date.now(),
-      users: selectedUserType,
-      title: titleInput,
-      message: messageInput,
-      date: todayStr
-    };
-
-    setNotifications(prev => [newNotif, ...prev]);
-    
-    // Trigger floating preview
-    triggerToast(titleInput, messageInput, selectedUserType);
-
-    setTitleInput('');
-    setMessageInput('');
-  };
-
-  // Delete notification
-  const handleDeleteNotification = (id) => {
-    setNotifications(prev => prev.filter(n => n.id !== id));
+    const audience = AUDIENCE_PAYLOAD[selectedUserType] || AUDIENCE_PAYLOAD['All Users'];
+    setSending(true);
+    try {
+      await createNotificationCampaign({
+        title: titleInput.trim(),
+        messageBody: messageInput.trim(),
+        ...audience,
+      });
+      triggerToast(titleInput, messageInput, selectedUserType);
+      setTitleInput('');
+      setMessageInput('');
+      await loadCampaigns();
+    } catch (err) {
+      alert(getErrorMessage(err, 'Unable to send notification'));
+    } finally {
+      setSending(false);
+    }
   };
 
   // Trigger floating Toast
@@ -73,19 +109,19 @@ const NotificationManagement = () => {
   const handleTriggerTest = () => {
     triggerToast(
       '⚡ Quick Test Alert',
-      'System broadcast link checked. Notifications are functioning correctly!',
+      'This is a local preview only — click Send Notification to broadcast for real.',
       'All Users'
     );
   };
 
   // Filter notification ledger
   const filteredNotifications = notifications.filter(n => {
-    const matchesSearch = 
+    const matchesSearch =
       n.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       n.message.toLowerCase().includes(searchQuery.toLowerCase());
 
-    const matchesType = 
-      filterType === 'All' || 
+    const matchesType =
+      filterType === 'All' ||
       n.users.toLowerCase() === filterType.toLowerCase() ||
       (filterType === 'Vendor' && n.users === 'Seller');
 
@@ -129,10 +165,9 @@ const NotificationManagement = () => {
                 className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-500/25 font-bold cursor-pointer"
               >
                 <option value="All Users">All Users</option>
-                <option value="Admin">Admin</option>
-                <option value="Seller">Vendor (Seller)</option>
-                <option value="Customer">Customer</option>
-                <option value="Delivery">Delivery Partner</option>
+                <option value="Customer">Customers (Parents)</option>
+                <option value="Seller">Vendors (Sellers)</option>
+                <option value="School">Schools</option>
               </select>
             </div>
 
@@ -175,10 +210,11 @@ const NotificationManagement = () => {
 
               <button
                 type="submit"
-                className="w-full flex items-center justify-center gap-2 bg-[#0B1528] hover:bg-[#15253F] text-white text-xs font-black uppercase tracking-wider py-3 rounded-xl transition-all shadow-xs"
+                disabled={sending}
+                className="w-full flex items-center justify-center gap-2 bg-[#0B1528] hover:bg-[#15253F] disabled:opacity-60 text-white text-xs font-black uppercase tracking-wider py-3 rounded-xl transition-all shadow-xs"
               >
                 <Send size={13} className="stroke-[2.5]" />
-                <span>Send Notification</span>
+                <span>{sending ? 'Sending…' : 'Send Notification'}</span>
               </button>
             </div>
 
@@ -248,12 +284,24 @@ const NotificationManagement = () => {
                   <th className="px-4 py-3">Users</th>
                   <th className="px-4 py-3">Title</th>
                   <th className="px-4 py-3">Message</th>
+                  <th className="px-4 py-3">Sent / Failed</th>
                   <th className="px-4 py-3">Date</th>
-                  <th className="px-4 py-3 text-center w-16">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 text-xs font-bold text-gray-700">
-                {filteredNotifications.length === 0 ? (
+                {loading ? (
+                  <tr>
+                    <td colSpan="6" className="px-4 py-8 text-center text-gray-400 font-extrabold select-none">
+                      Loading campaigns…
+                    </td>
+                  </tr>
+                ) : error ? (
+                  <tr>
+                    <td colSpan="6" className="px-4 py-8 text-center text-rose-500 font-extrabold select-none">
+                      {error}
+                    </td>
+                  </tr>
+                ) : filteredNotifications.length === 0 ? (
                   <tr>
                     <td colSpan="6" className="px-4 py-8 text-center text-gray-400 font-extrabold select-none">
                       No broadcast notifications recorded.
@@ -285,20 +333,16 @@ const NotificationManagement = () => {
                         {n.message}
                       </td>
 
+                      {/* Delivery metrics */}
+                      <td className="px-4 py-4 text-gray-500 font-extrabold tabular-nums select-none whitespace-nowrap">
+                        <span className="text-emerald-600">{n.metrics?.successful ?? 0}</span>
+                        {' / '}
+                        <span className="text-rose-500">{n.metrics?.failed ?? 0}</span>
+                      </td>
+
                       {/* Date */}
                       <td className="px-4 py-4 text-gray-400 font-extrabold tabular-nums select-none whitespace-nowrap">
                         {n.date}
-                      </td>
-
-                      {/* Action Delete */}
-                      <td className="px-4 py-4 text-center select-none">
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteNotification(n.id)}
-                          className="bg-red-500 hover:bg-red-600 text-white p-2 rounded-xl shadow-xs transition-all inline-flex items-center justify-center border border-red-600/10"
-                        >
-                          <Trash2 size={13} className="stroke-[2.5]" />
-                        </button>
                       </td>
 
                     </tr>
@@ -345,7 +389,7 @@ const NotificationManagement = () => {
       {/* FOOTER COPYRIGHT BAR */}
       <div className="pt-8 pb-4 text-center border-t border-gray-200 select-none">
         <p className="text-[10px] font-bold text-gray-400">
-          Copyright © 2026. Developed By <span className="text-[#0B1528] font-black">Healthy Delight</span>
+          Copyright © 2026. Developed By <span className="text-[#0B1528] font-black">School E-Mart</span>
         </p>
       </div>
 

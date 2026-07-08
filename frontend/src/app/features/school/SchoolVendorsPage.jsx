@@ -1,26 +1,79 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  ArrowLeft, Search, Filter, ChevronDown, Check, X, 
-  MoreVertical, Store, Shirt, FileText, CheckCircle, 
-  Star, ChevronRight, UserPlus, Send, Mail, Phone, MapPin, 
-  Tag, Landmark, HelpCircle, ShieldCheck
+import {
+  ArrowLeft, Search, Filter, ChevronDown, Check, X,
+  MoreVertical, Store, Shirt, FileText, CheckCircle,
+  Star, ChevronRight, UserPlus, Send, Mail, Phone, MapPin,
+  Tag, Landmark, HelpCircle, ShieldCheck, Loader2
 } from 'lucide-react';
+import { listVendors } from '../../../services/schoolApi';
+import { getErrorMessage } from '../../../utils/apiHelpers';
+import { useSchoolId } from '../../../utils/schoolContext';
+
+const mapVendor = (v) => {
+  const name = v.name || v.storeName || 'Vendor';
+  const category = v.primaryCategory?.name || v.primaryCategory || '';
+  return {
+    id: v._id,
+    name,
+    storeName: v.storeName,
+    avatar: `https://ui-avatars.com/api/?background=3b2d7d&color=fff&bold=true&name=${encodeURIComponent(name)}`,
+    rating: v.rating ? Number(v.rating).toFixed(1) : '0.0',
+    reviews: v.ordersCount || 0,
+    location: v.location || '—',
+    category,
+    tag: category || 'Supplier',
+    completedOrders: v.ordersCount || 0,
+    pendingQuotes: 0,
+    gstin: v.gstin || '—',
+    specialities: category || 'General school supplies',
+    contactPerson: v.name || '—',
+    phone: v.phone || '—',
+    email: v.email || '—',
+    address: v.location || '—',
+    verified: Boolean(v.verifiedBadge),
+  };
+};
 
 const SchoolVendorsPage = () => {
   const navigate = useNavigate();
+  const schoolId = useSchoolId();
 
   // Tab category selection state
   const [activeCategory, setActiveCategory] = useState('All');
-  
+
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useState('');
-  
+
   // Modals state
   const [selectedVendor, setSelectedVendor] = useState(null);
   const [quoteSuccessVendor, setQuoteSuccessVendor] = useState(null);
 
-  const vendors = [];
+  const [vendors, setVendors] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const loadVendors = useCallback(async () => {
+    if (!schoolId) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    setError('');
+    try {
+      const { data } = await listVendors(schoolId, { limit: 100 });
+      setVendors((data || []).map(mapVendor));
+    } catch (err) {
+      setVendors([]);
+      setError(getErrorMessage(err, 'Unable to load vendors'));
+    } finally {
+      setLoading(false);
+    }
+  }, [schoolId]);
+
+  useEffect(() => {
+    loadVendors();
+  }, [loadVendors]);
 
   const totalCount = vendors.length;
   const uniformCount = vendors.filter((v) => v.category === 'Uniform').length;
@@ -175,11 +228,25 @@ const SchoolVendorsPage = () => {
       {/* Vendor Cards list exactly matching the mockup */}
       <div className="px-6 py-4 space-y-4">
 
-        {vendors.length === 0 && (
+        {loading && (
+          <div className="text-center py-16 bg-white border border-gray-150 rounded-[2.2rem] p-6 shadow-sm">
+            <Loader2 size={32} className="text-[#3b2d7d] mx-auto block animate-spin" />
+            <span className="text-xs font-black text-gray-500 block mt-3">Loading vendors…</span>
+          </div>
+        )}
+
+        {!loading && error && (
           <div className="text-center py-16 bg-white border border-gray-150 rounded-[2.2rem] p-6 shadow-sm">
             <Store size={44} className="text-gray-300 mx-auto block stroke-[1.5]" />
-            <span className="text-xs font-black text-gray-500 block mt-3">No vendor directory yet</span>
-            <span className="text-[10px] text-gray-400 font-bold block mt-1">School vendor procurement API is not available yet.</span>
+            <span className="text-xs font-black text-rose-500 block mt-3">{error}</span>
+          </div>
+        )}
+
+        {!loading && !error && vendors.length === 0 && (
+          <div className="text-center py-16 bg-white border border-gray-150 rounded-[2.2rem] p-6 shadow-sm">
+            <Store size={44} className="text-gray-300 mx-auto block stroke-[1.5]" />
+            <span className="text-xs font-black text-gray-500 block mt-3">No vendors found</span>
+            <span className="text-[10px] text-gray-400 font-bold block mt-1">No approved vendors are available for your school yet.</span>
           </div>
         )}
         

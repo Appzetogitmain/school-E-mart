@@ -5,7 +5,8 @@ import {
 } from 'lucide-react';
 import {
   getVendorEarningsSummary,
-  listVendorPendingSettlements,
+  listVendorPayoutRequests,
+  requestVendorPayout,
 } from '../../services/vendorApi';
 import { getErrorMessage } from '../../utils/apiHelpers';
 import { mapVendorEarningsToWallet } from '../../utils/mappers/vendorSettlementMapper';
@@ -35,23 +36,23 @@ const VendorMoneyRequests = () => {
     setLoading(true);
     setError('');
     try {
-      const [summary, pending] = await Promise.all([
+      const [summary, payouts] = await Promise.all([
         getVendorEarningsSummary(),
-        listVendorPendingSettlements({ limit: 50 }),
+        listVendorPayoutRequests({ limit: 50 }),
       ]);
       const wallet = mapVendorEarningsToWallet(summary);
       setAvailableBal(wallet.availableBal);
       setOnHoldBal(wallet.onHoldBal);
       setPendingBal(wallet.pendingBal);
-      setRequests((pending.data || []).map((item) => ({
+      setRequests((payouts.data || []).map((item) => ({
         id: item._id?.toString?.()?.slice(-8)?.toUpperCase() || 'PAYOUT',
         date: item.audit?.createdAt
           ? new Date(item.audit.createdAt).toISOString().split('T')[0]
           : '—',
         amount: paiseToRupees(item.amountPaise || 0),
-        status: item.status || 'Pending Approval',
+        status: item.status || 'pending',
         method: 'Bank Transfer',
-        details: item.bankSnapshot?.bankName || 'Registered bank account',
+        details: item.bankDetailsSnapshot?.bankName || 'Registered bank account',
       })));
     } catch (err) {
       setError(getErrorMessage(err, 'Unable to load wallet data'));
@@ -64,9 +65,37 @@ const VendorMoneyRequests = () => {
     loadWallet();
   }, [loadWallet]);
 
-  const handleSubmitRequest = (e) => {
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleSubmitRequest = async (e) => {
     e.preventDefault();
-    setErrorMsg('Payout requests are not available in the app yet. Pending settlements are managed by the platform.');
+    setErrorMsg('');
+
+    const rupees = Number(reqAmount);
+    if (!rupees || rupees <= 0) {
+      setErrorMsg('Enter a valid amount');
+      return;
+    }
+    if (rupees > availableBal) {
+      setErrorMsg('Requested amount exceeds available balance');
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      await requestVendorPayout(Math.round(rupees * 100));
+      setSuccessMsg(true);
+      setReqAmount('');
+      await loadWallet();
+      setTimeout(() => {
+        setSuccessMsg(false);
+        setShowDrawer(false);
+      }, 1200);
+    } catch (err) {
+      setErrorMsg(getErrorMessage(err, 'Unable to submit payout request'));
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   // Filter requests matching search query

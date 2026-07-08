@@ -1,8 +1,18 @@
-import React, { useState } from 'react';
-import { 
-  TrendingUp, DollarSign, Wallet as WalletIcon, Clock, CreditCard, 
-  ArrowLeftRight, Filter, ChevronDown, CheckCircle2, AlertCircle, Info 
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  TrendingUp, DollarSign, Wallet as WalletIcon, Clock, CreditCard,
+  ArrowLeftRight, Filter, ChevronDown, CheckCircle2, AlertCircle, Info
 } from 'lucide-react';
+import { getWalletOverview, listVendorTransactions } from '../../../services/adminApi';
+import { getErrorMessage } from '../../../utils/apiHelpers';
+
+const TYPE_DESC = {
+  order_credit: 'Order earnings',
+  commission_deduction: 'Platform commission',
+  payout_debit: 'Vendor payout',
+  adjustment: 'Manual adjustment',
+  refund_debit: 'Refund',
+};
 
 const WalletManagement = () => {
   // Active Tab state
@@ -12,47 +22,42 @@ const WalletManagement = () => {
   const [userFilter, setUserFilter] = useState('All');
   const [typeFilter, setTypeFilter] = useState('All');
 
-  // Withdrawal Requests status pills filter
-  const [withdrawalStatusFilter, setWithdrawalStatusFilter] = useState('All');
+  const [overview, setOverview] = useState(null);
+  const [transactions, setTransactions] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  // Transaction reference input dictionary for pending items
-  const [txnRefs, setTxnRefs] = useState({});
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const [ov, tx] = await Promise.all([
+        getWalletOverview(),
+        listVendorTransactions({ limit: 100 }),
+      ]);
+      setOverview(ov);
+      setTransactions(
+        (tx.data || []).map((t) => ({
+          id: t._id,
+          dateTime: t.audit?.createdAt ? new Date(t.audit.createdAt).toLocaleString() : '—',
+          user: t.vendor?.storeName || 'Vendor',
+          role: 'Vendor',
+          transactionType: t.transactionType,
+          type: (t.amountPaise || 0) >= 0 ? 'Credit' : 'Debit',
+          description: t.description || TYPE_DESC[t.transactionType] || '—',
+          amount: (t.amountPaise || 0) / 100,
+        }))
+      );
+    } catch (err) {
+      setError(getErrorMessage(err, 'Unable to load wallet data'));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-  const [transactions] = useState([]);
-
-  const [adminEarnings] = useState([]);
-
-  const [withdrawals, setWithdrawals] = useState([]);
-
-  // Handle Approve Withdrawal with custom transaction reference code
-  const handleApproveWithdrawal = (id) => {
-    const enteredRef = txnRefs[id]?.trim() || `txn_auto_${Math.random().toString(36).substr(2, 9)}`;
-    setWithdrawals(prev => prev.map(w => 
-      w.id === id 
-        ? { ...w, status: 'Completed', transactionReference: enteredRef } 
-        : w
-    ));
-    alert(`Withdrawal Approved and Completed! Transaction Code: ${enteredRef}`);
-  };
-
-  // Handle Reject Withdrawal
-  const handleRejectWithdrawal = (id) => {
-    const enteredReason = txnRefs[id]?.trim() || 'Rejected by super administrator';
-    setWithdrawals(prev => prev.map(w => 
-      w.id === id 
-        ? { ...w, status: 'Rejected', transactionReference: enteredReason } 
-        : w
-    ));
-    alert('Withdrawal Request marked as Rejected.');
-  };
-
-  // Handle Input text changes
-  const handleRefTextChange = (id, val) => {
-    setTxnRefs(prev => ({
-      ...prev,
-      [id]: val
-    }));
-  };
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   // Filter transactions
   const filteredTransactions = transactions.filter(t => {
@@ -61,34 +66,24 @@ const WalletManagement = () => {
     return matchesUser && matchesType;
   });
 
-  // Filter withdrawals
-  const filteredWithdrawals = withdrawals.filter(w => {
-    if (withdrawalStatusFilter === 'All') return true;
-    // Map completed status matching
-    if (withdrawalStatusFilter === 'Completed' && w.status === 'Completed') return true;
-    if (withdrawalStatusFilter === 'Pending' && w.status === 'Pending') return true;
-    if (withdrawalStatusFilter === 'Approved' && (w.status === 'Approved' || w.status === 'Completed')) return true;
-    if (withdrawalStatusFilter === 'Rejected' && w.status === 'Rejected') return true;
-    return w.status === withdrawalStatusFilter;
-  });
+  const adminEarnings = transactions
+    .filter((t) => t.transactionType === 'commission_deduction')
+    .map((t) => ({
+      id: t.id,
+      dateTime: t.dateTime,
+      orderId: t.description,
+      orderTotal: 0,
+      commissionRate: '—',
+      adminCut: Math.abs(t.amount),
+    }));
 
-  const totalPlatformEarning = transactions
-    .filter((t) => t.amount > 0)
-    .reduce((sum, t) => sum + t.amount, 0);
-  const totalAdminEarning = adminEarnings.reduce((sum, e) => sum + (e.adminCut || 0), 0);
-  const completedWithdrawals = withdrawals
-    .filter((w) => w.status === 'Completed')
-    .reduce((sum, w) => sum + (w.amount || 0), 0);
-  const currentBalance = totalPlatformEarning - completedWithdrawals;
-  const pendingVendorPayouts = withdrawals
-    .filter((w) => w.status === 'Pending' && w.role === 'Vendor')
-    .reduce((sum, w) => sum + (w.amount || 0), 0);
-  const pendingDeliveryPayouts = withdrawals
-    .filter((w) => w.status === 'Pending' && w.role === 'Delivery Boy')
-    .reduce((sum, w) => sum + (w.amount || 0), 0);
-  const pendingFromDelivery = transactions
-    .filter((t) => t.role === 'Delivery Boy' && t.type === 'Debit')
-    .reduce((sum, t) => sum + Math.abs(t.amount || 0), 0);
+  const toRupees = (paise) => (paise || 0) / 100;
+  const totalPlatformEarning = toRupees(overview?.totalEarningsPaise);
+  const totalAdminEarning = toRupees(overview?.platformRevenuePaise);
+  const currentBalance = toRupees(overview?.outstandingBalancePaise);
+  const pendingVendorPayouts = toRupees(overview?.pendingPayoutPaise);
+  const pendingDeliveryPayouts = 0;
+  const pendingFromDelivery = 0;
 
   return (
     <div className="space-y-6 font-sans antialiased text-gray-800">
@@ -290,7 +285,19 @@ const WalletManagement = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 text-xs font-bold text-gray-700">
-                    {filteredTransactions.length === 0 ? (
+                    {loading ? (
+                      <tr>
+                        <td colSpan="5" className="px-5 py-8 text-center text-gray-400 font-extrabold">
+                          Loading transactions…
+                        </td>
+                      </tr>
+                    ) : error ? (
+                      <tr>
+                        <td colSpan="5" className="px-5 py-8 text-center text-rose-500 font-extrabold">
+                          {error}
+                        </td>
+                      </tr>
+                    ) : filteredTransactions.length === 0 ? (
                       <tr>
                         <td colSpan="5" className="px-5 py-8 text-center text-gray-400 font-extrabold">
                           No transactions found for the active filter.
@@ -392,7 +399,7 @@ const WalletManagement = () => {
       {/* FOOTER COPYRIGHT BAR */}
       <div className="pt-8 pb-4 text-center border-t border-gray-200 select-none">
         <p className="text-[10px] font-bold text-gray-400">
-          Copyright © 2026. Developed By <span className="text-[#0B1528] font-black">Healthy Delight</span>
+          Copyright © 2026. Developed By <span className="text-[#0B1528] font-black">School E-Mart</span>
         </p>
       </div>
 

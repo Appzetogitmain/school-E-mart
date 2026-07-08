@@ -19,6 +19,25 @@ import {
 import { useNavigate } from 'react-router-dom';
 import AppHeader from '../../components/AppHeader';
 import LoginRequired from '../../components/LoginRequired';
+import { listEvents } from '../../../services/schoolApi';
+
+// eventType (free text) -> calendar category buckets
+const categorizeEvent = (eventType = '') => {
+  const t = eventType.toLowerCase();
+  if (t.includes('exam') || t.includes('test')) return 'Exam';
+  if (t.includes('holiday') || t.includes('vacation')) return 'Holiday';
+  if (t.includes('ptm') || t.includes('meeting')) return 'PTM / Meeting';
+  if (t.includes('academic') || t.includes('class')) return 'Academic';
+  return 'Event';
+};
+
+const CATEGORY_VISUALS = {
+  Academic: { bgColor: 'bg-[#F9F5FF]', iconColor: 'text-[#7F56D9]', dotColor: 'bg-[#7F56D9]' },
+  Event: { bgColor: 'bg-[#EBFBF0]', iconColor: 'text-[#34A853]', dotColor: 'bg-[#34A853]' },
+  Holiday: { bgColor: 'bg-[#FFF6ED]', iconColor: 'text-[#F2994A]', dotColor: 'bg-[#F2994A]' },
+  'PTM / Meeting': { bgColor: 'bg-[#E8F0FE]', iconColor: 'text-[#1A73E8]', dotColor: 'bg-[#1A73E8]' },
+  Exam: { bgColor: 'bg-[#FFF0F2]', iconColor: 'text-[#E04F5F]', dotColor: 'bg-[#E04F5F]' },
+};
 
 const ParentCalendar = () => {
   const navigate = useNavigate();
@@ -56,8 +75,50 @@ const ParentCalendar = () => {
     setScrolled(scrollPos > 50);
   };
 
-  // No calendar API — events loaded as empty until backend support exists
-  const eventsDatabase = useMemo(() => [], []);
+  // School events fetched from the academics API
+  const [rawEvents, setRawEvents] = useState([]);
+
+  useEffect(() => {
+    const schoolId = childInfo?.schoolId;
+    if (!schoolId || schoolId === 'explore-schools') return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await listEvents(schoolId, { limit: 100 });
+        if (!cancelled) setRawEvents(data || []);
+      } catch {
+        if (!cancelled) setRawEvents([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [childInfo?.schoolId]);
+
+  const eventsDatabase = useMemo(
+    () =>
+      rawEvents.map((evt) => {
+        const start = evt.startDate ? new Date(evt.startDate) : new Date();
+        const category = categorizeEvent(evt.eventType);
+        const visuals = CATEGORY_VISUALS[category] || CATEGORY_VISUALS.Event;
+        return {
+          id: evt._id,
+          day: start.getDate(),
+          month: start.getMonth(),
+          year: start.getFullYear(),
+          title: evt.title,
+          content: evt.description || '',
+          time: start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          category,
+          location: evt.location || 'School campus',
+          icon: <Calendar size={20} />,
+          isHighlight: category === 'Event' || category === 'Exam',
+          ...visuals,
+        };
+      }),
+    [rawEvents]
+  );
 
   const categoryStyles = {
     'Academic': { dot: 'bg-[#7F56D9]', label: 'Academic', text: 'text-[#7F56D9]', labelBg: 'bg-[#F9F5FF]' },

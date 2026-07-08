@@ -1,17 +1,36 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  ArrowLeft, Share2, Copy, Users, 
+import {
+  ArrowLeft, Share2, Copy, Users,
   Trophy, Gift, ChevronRight, Building2,
   Sparkles
 } from 'lucide-react';
+import { getMyReferral } from '../../../services/walletApi';
 
 const SchoolReferEarnPage = () => {
   const navigate = useNavigate();
-  const [referralCode] = useState("SE-SCH-9981");
+  const [referralCode, setReferralCode] = useState('');
   const [copied, setCopied] = useState(false);
 
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await getMyReferral();
+        if (!cancelled && data?.referral?.referralCode) {
+          setReferralCode(data.referral.referralCode);
+        }
+      } catch {
+        // Referral fetch failed — leave the code blank.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const handleCopy = () => {
+    if (!referralCode) return;
     navigator.clipboard.writeText(referralCode);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);

@@ -77,6 +77,17 @@ const vendorOrderService = {
       { new: true }
     ).lean();
 
+    if (status === 'delivered') {
+      // Record vendor earnings + referral bonus — mirrors the orders-module path
+      // so vendor-driven deliveries settle too.
+      const settlementService = require('./settlement.service');
+      for (const vId of updated.vendorIds || []) {
+        await settlementService.recordOrderSettlement(vId, updated._id);
+      }
+      const referralRewardService = require('../../wallet/services/referralReward.service');
+      await referralRewardService.processOrderDelivered(updated);
+    }
+
     triggerService.notifyVendorOrderAction(updated, vendorId, status);
     return this.getOrder(vendorId, updated._id);
   },

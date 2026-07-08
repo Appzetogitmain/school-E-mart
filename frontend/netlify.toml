@@ -1,6 +1,16 @@
+# IMPORTANT: set the VITE_API_URL build env var in the Netlify UI
+# (e.g. https://api.yourdomain.com/api/v1) or uncomment the /api proxy
+# below — otherwise API calls return the SPA's index.html in production.
 [build]
   publish = "dist"
   command = "npm run build"
+
+# Uncomment and set the backend host to proxy API calls through Netlify:
+# [[redirects]]
+#   from = "/api/*"
+#   to = "https://YOUR-BACKEND-HOST/api/:splat"
+#   status = 200
+#   force = true
 
 [[redirects]]
   from = "/*"
