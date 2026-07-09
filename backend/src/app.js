@@ -23,7 +23,6 @@ const createApp = () => {
   app.use(helmet(config.security.helmet));
   app.use(cors(config.cors));
   app.use(compression(config.security.compression));
-  app.use(middlewares.globalLimiter);
 
   // Razorpay webhooks require the raw body for signature verification
   const razorpayWebhookRoutes = require('./webhooks/razorpay/razorpayWebhook.routes');

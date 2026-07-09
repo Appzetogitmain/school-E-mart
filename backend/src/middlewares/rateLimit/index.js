@@ -8,6 +8,7 @@ const createRateLimiter = ({
   max = config.rateLimit.max,
   message = messages.COMMON.INTERNAL_ERROR,
   keyGenerator,
+  skipSuccessfulRequests = false,
 } = {}) =>
   rateLimit({
     windowMs,
@@ -15,15 +16,17 @@ const createRateLimiter = ({
     standardHeaders: true,
     legacyHeaders: false,
     keyGenerator,
+    skipSuccessfulRequests,
     handler: (req, res) =>
       fail(res, message, httpStatus.TOO_MANY_REQUESTS, responseCodes.RATE_LIMIT_EXCEEDED, null, req),
   });
 
-const globalLimiter = createRateLimiter();
-
+// Only failed attempts count toward the limit, so legitimate logins and
+// token refreshes from a shared IP (school NAT) are never blocked.
 const authLimiter = createRateLimiter({
   max: config.rateLimit.authMax,
   message: 'Too many authentication attempts. Please try again later.',
+  skipSuccessfulRequests: true,
 });
 
 const otpLimiter = createRateLimiter({
@@ -34,7 +37,6 @@ const otpLimiter = createRateLimiter({
 
 module.exports = {
   createRateLimiter,
-  globalLimiter,
   authLimiter,
   otpLimiter,
 };
