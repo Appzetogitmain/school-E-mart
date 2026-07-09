@@ -4,9 +4,9 @@ import {
   ArrowLeft, Search, Filter, ChevronDown, Check, X,
   MoreVertical, RefreshCw, GraduationCap, Users, User,
   Calendar, CheckCircle, AlertCircle, Sparkles, Upload,
-  Download, Award, Shield, MapPin, Phone, Mail, Loader2
+  Download, Award, Shield, MapPin, Phone, Mail, Loader2, UserPlus
 } from 'lucide-react';
-import { listStudents } from '../../../services/schoolApi';
+import { listStudents, registerStudent, listClasses, listParents } from '../../../services/schoolApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 import { mapStudentForList } from '../../../utils/mappers/schoolStudentMapper';
 import { useSchoolId } from '../../../utils/schoolContext';
@@ -25,6 +25,27 @@ const SchoolStudentsPage = () => {
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [classesList, setClassesList] = useState([]);
+
+  const [parentsList, setParentsList] = useState([]);
+
+  const emptyForm = {
+    name: '',
+    classGrade: '',
+    section: '',
+    rollNo: '',
+    gender: '',
+    dob: '',
+    bloodGroup: '',
+    parentId: '',
+    admissionNo: '',
+  };
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [addForm, setAddForm] = useState(emptyForm);
+  const [addErrors, setAddErrors] = useState({});
+  const [addSubmitting, setAddSubmitting] = useState(false);
+  const [addError, setAddError] = useState('');
+  const [addSuccess, setAddSuccess] = useState(false);
 
   const loadStudents = useCallback(async () => {
     if (!schoolId) {
@@ -50,6 +71,99 @@ const SchoolStudentsPage = () => {
     loadStudents();
   }, [loadStudents]);
 
+  useEffect(() => {
+    if (!schoolId) return;
+    (async () => {
+      try {
+        const list = await listClasses(schoolId);
+        setClassesList(list || []);
+      } catch (err) {
+        console.error('Failed to load classes:', err);
+      }
+      try {
+        const { data } = await listParents(schoolId, { limit: 100 });
+        setParentsList((data || []).filter((p) => p?.user));
+      } catch (err) {
+        console.error('Failed to load parents:', err);
+      }
+    })();
+  }, [schoolId]);
+
+  const selectedFormClass = classesList.find((c) => c.classGrade === addForm.classGrade);
+  const formSections = selectedFormClass?.sections || [];
+  const allSections = [...new Set(classesList.flatMap((c) => c.sections || []))].sort();
+
+  const handleAddFormChange = (field, value) => {
+    setAddForm((prev) => ({
+      ...prev,
+      [field]: value,
+      // Reset section when class changes since sections belong to a class
+      ...(field === 'classGrade' ? { section: '' } : {}),
+    }));
+    setAddErrors((prev) => ({ ...prev, [field]: undefined }));
+  };
+
+  const openAddModal = () => {
+    setAddForm(emptyForm);
+    setAddErrors({});
+    setAddError('');
+    setAddSuccess(false);
+    setShowAddModal(true);
+  };
+
+  const handleAddStudent = async (e) => {
+    e.preventDefault();
+
+    const errs = {};
+    if (!addForm.name.trim() || addForm.name.trim().length < 2) errs.name = 'Student name is required (min 2 characters)';
+    if (!addForm.classGrade) errs.classGrade = 'Class is required';
+    if (!addForm.section) errs.section = 'Section is required';
+    setAddErrors(errs);
+    if (Object.keys(errs).length > 0) return;
+
+    if (!schoolId) {
+      setAddError('School context is missing. Please log in again.');
+      return;
+    }
+
+    setAddSubmitting(true);
+    setAddError('');
+    try {
+      const payload = {
+        name: addForm.name.trim(),
+        classGrade: addForm.classGrade,
+        section: addForm.section,
+      };
+      if (addForm.rollNo.trim()) payload.rollNo = addForm.rollNo.trim();
+      if (addForm.gender) payload.gender = addForm.gender;
+      if (addForm.dob) payload.dob = addForm.dob;
+      if (addForm.bloodGroup) payload.bloodGroup = addForm.bloodGroup;
+      if (addForm.admissionNo.trim()) payload.admissionNo = addForm.admissionNo.trim();
+
+      // Linking an existing parent: sending their registered phone makes the
+      // backend attach the parent profile and create the child profile link
+      if (addForm.parentId) {
+        const selectedParent = parentsList.find((p) => p._id === addForm.parentId);
+        if (selectedParent?.user?.phone) {
+          payload.parentPhone = selectedParent.user.phone;
+          payload.parentName = selectedParent.user.name;
+        }
+      }
+
+      await registerStudent(schoolId, payload);
+      setAddSuccess(true);
+      await loadStudents();
+      setTimeout(() => {
+        setShowAddModal(false);
+        setAddSuccess(false);
+      }, 1500);
+    } catch (err) {
+      setAddError(getErrorMessage(err, 'Unable to add student'));
+    } finally {
+      setAddSubmitting(false);
+    }
+  };
+
   const boysCount = students.filter((s) => s.gender === 'Boy' && s.status === 'Active').length;
   const girlsCount = students.filter((s) => s.gender === 'Girl' && s.status === 'Active').length;
   const pendingCount = students.filter((s) => s.statusRaw === 'inactive').length;
@@ -65,10 +179,10 @@ const SchoolStudentsPage = () => {
                           (s.parentPhone || '').includes(searchQuery);
     
     // 2. Class Filter
-    const matchesClass = selectedClass === 'All Classes' || s.class.startsWith(selectedClass);
-    
+    const matchesClass = selectedClass === 'All Classes' || s.classGrade === selectedClass;
+
     // 3. Section Filter
-    const matchesSection = selectedSection === 'All Sections' || s.class.endsWith(selectedSection);
+    const matchesSection = selectedSection === 'All Sections' || s.section === selectedSection;
     
     // 4. Status Filter
     const matchesStatus = selectedStatus === 'All Statuses' || s.status === selectedStatus;
@@ -129,6 +243,14 @@ const SchoolStudentsPage = () => {
             </span>
           </div>
         </div>
+        <button
+          type="button"
+          onClick={openAddModal}
+          className="flex items-center gap-1.5 px-4 py-2.5 bg-white text-[#3b2d7d] rounded-full text-xs font-black hover:bg-purple-50 active:scale-95 transition-all shadow-md shrink-0"
+        >
+          <UserPlus size={15} className="stroke-[2.5]" />
+          Add Student
+        </button>
       </div>
 
       {error && (
@@ -219,8 +341,9 @@ const SchoolStudentsPage = () => {
               className="w-full px-4.5 py-3.5 bg-white border border-gray-200 rounded-2xl font-bold text-deep-purple focus:outline-none appearance-none cursor-pointer shadow-sm"
             >
               <option value="All Classes">All Classes</option>
-              <option value="Class 5">Class 5</option>
-              <option value="Class 6">Class 6</option>
+              {classesList.map((cls) => (
+                <option key={cls.classGrade} value={cls.classGrade}>Class {cls.classGrade}</option>
+              ))}
             </select>
             <ChevronDown size={14} className="absolute right-4.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
           </div>
@@ -233,9 +356,9 @@ const SchoolStudentsPage = () => {
               className="w-full px-4.5 py-3.5 bg-white border border-gray-200 rounded-2xl font-bold text-deep-purple focus:outline-none appearance-none cursor-pointer shadow-sm"
             >
               <option value="All Sections">All Sections</option>
-              <option value="A">Section A</option>
-              <option value="B">Section B</option>
-              <option value="C">Section C</option>
+              {allSections.map((sec) => (
+                <option key={sec} value={sec}>Section {sec}</option>
+              ))}
             </select>
             <ChevronDown size={14} className="absolute right-4.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
           </div>
@@ -329,7 +452,19 @@ const SchoolStudentsPage = () => {
         {!loading && sortedStudents.length === 0 && (
           <div className="text-center py-16 bg-white border border-gray-150 rounded-[2.2rem] p-6 shadow-sm">
             <GraduationCap size={44} className="text-gray-300 mx-auto block stroke-[1.5]" />
-            <span className="text-xs font-black text-gray-400 block mt-3">No matching students found in this search filter</span>
+            <span className="text-xs font-black text-gray-400 block mt-3">
+              {students.length === 0 ? 'No students enrolled yet' : 'No matching students found in this search filter'}
+            </span>
+            {students.length === 0 && (
+              <button
+                type="button"
+                onClick={openAddModal}
+                className="mt-4 inline-flex items-center gap-1.5 px-5 py-3 bg-[#3b2d7d] text-white rounded-2xl text-xs font-black hover:bg-[#5942bc] active:scale-95 transition-all shadow-md"
+              >
+                <UserPlus size={14} className="stroke-[2.5]" />
+                Add Your First Student
+              </button>
+            )}
           </div>
         )}
 
@@ -438,6 +573,253 @@ const SchoolStudentsPage = () => {
                 Close Profile
               </button>
             </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* Add Student Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm transition-all duration-300 animate-in fade-in">
+          <div className="w-full max-w-lg bg-white rounded-[2.2rem] shadow-2xl border border-gray-150 overflow-hidden animate-in zoom-in duration-300 relative flex flex-col max-h-[90vh]">
+
+            {/* Modal Header */}
+            <div className="bg-gradient-to-r from-[#3b2d7d] to-[#5942bc] text-white px-6 py-5 relative flex items-center justify-between shrink-0">
+              <div>
+                <h3 className="text-sm font-black tracking-wider uppercase">Add New Student</h3>
+                <span className="text-[10px] text-purple-200 font-bold block mt-0.5">Enroll a student into your school</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => !addSubmitting && setShowAddModal(false)}
+                className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 active:scale-90 transition-all text-white border border-white/10"
+              >
+                <X size={16} className="stroke-[3]" />
+              </button>
+            </div>
+
+            {addSuccess ? (
+              <div className="p-10 flex flex-col items-center justify-center text-center">
+                <div className="w-16 h-16 rounded-full bg-emerald-50 border border-emerald-100 flex items-center justify-center">
+                  <CheckCircle size={32} className="text-emerald-500" />
+                </div>
+                <h4 className="text-sm font-black text-deep-purple mt-4">Student Added Successfully!</h4>
+                <span className="text-[11px] text-gray-400 font-bold block mt-1">The students list has been updated.</span>
+              </div>
+            ) : (
+              <form onSubmit={handleAddStudent} className="flex flex-col min-h-0">
+                <div className="p-6 overflow-y-auto space-y-4 scrollbar-none text-xs">
+
+                  {addError && (
+                    <div className="px-4 py-3 bg-red-50 border border-red-100 rounded-2xl text-xs font-bold text-red-600 flex items-center gap-2">
+                      <AlertCircle size={14} className="shrink-0" />
+                      <span>{addError}</span>
+                    </div>
+                  )}
+
+                  {/* Student Name */}
+                  <div>
+                    <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider block mb-1.5">Student Name *</label>
+                    <input
+                      type="text"
+                      value={addForm.name}
+                      onChange={(e) => handleAddFormChange('name', e.target.value)}
+                      placeholder="Full name of the student"
+                      className={`w-full px-4 py-3.5 bg-white border rounded-2xl text-sm font-bold text-deep-purple focus:outline-none focus:border-[#3b2d7d]/50 transition-colors ${addErrors.name ? 'border-red-300' : 'border-gray-200'}`}
+                    />
+                    {addErrors.name && <span className="text-[10px] text-red-500 font-bold block mt-1">{addErrors.name}</span>}
+                  </div>
+
+                  {/* Class & Section */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider block mb-1.5">Class *</label>
+                      <div className="relative">
+                        <select
+                          value={addForm.classGrade}
+                          onChange={(e) => handleAddFormChange('classGrade', e.target.value)}
+                          className={`w-full px-4 py-3.5 bg-white border rounded-2xl font-bold text-deep-purple focus:outline-none appearance-none cursor-pointer ${addErrors.classGrade ? 'border-red-300' : 'border-gray-200'}`}
+                        >
+                          <option value="">Select Class</option>
+                          {classesList.map((cls) => (
+                            <option key={cls.classGrade} value={cls.classGrade}>Class {cls.classGrade}</option>
+                          ))}
+                        </select>
+                        <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                      </div>
+                      {addErrors.classGrade && <span className="text-[10px] text-red-500 font-bold block mt-1">{addErrors.classGrade}</span>}
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider block mb-1.5">Section *</label>
+                      <div className="relative">
+                        <select
+                          value={addForm.section}
+                          onChange={(e) => handleAddFormChange('section', e.target.value)}
+                          disabled={!addForm.classGrade}
+                          className={`w-full px-4 py-3.5 bg-white border rounded-2xl font-bold text-deep-purple focus:outline-none appearance-none cursor-pointer disabled:bg-gray-50 disabled:cursor-not-allowed ${addErrors.section ? 'border-red-300' : 'border-gray-200'}`}
+                        >
+                          <option value="">{addForm.classGrade ? 'Select Section' : 'Pick class first'}</option>
+                          {formSections.map((sec) => (
+                            <option key={sec} value={sec}>Section {sec}</option>
+                          ))}
+                        </select>
+                        <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                      </div>
+                      {addErrors.section && <span className="text-[10px] text-red-500 font-bold block mt-1">{addErrors.section}</span>}
+                    </div>
+                  </div>
+
+                  {classesList.length === 0 && (
+                    <div className="px-4 py-3 bg-amber-50 border border-amber-100 rounded-2xl text-[11px] font-bold text-amber-700">
+                      No classes found. Please{' '}
+                      <button
+                        type="button"
+                        onClick={() => navigate('/school/add-class')}
+                        className="underline font-black"
+                      >
+                        create a class & section
+                      </button>{' '}
+                      first, then enroll students into it.
+                    </div>
+                  )}
+
+                  {/* Roll No & Admission No */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider block mb-1.5">Roll No.</label>
+                      <input
+                        type="text"
+                        value={addForm.rollNo}
+                        onChange={(e) => handleAddFormChange('rollNo', e.target.value)}
+                        placeholder="e.g. 24"
+                        className="w-full px-4 py-3.5 bg-white border border-gray-200 rounded-2xl text-sm font-bold text-deep-purple focus:outline-none focus:border-[#3b2d7d]/50 transition-colors"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider block mb-1.5">Admission No.</label>
+                      <input
+                        type="text"
+                        value={addForm.admissionNo}
+                        onChange={(e) => handleAddFormChange('admissionNo', e.target.value)}
+                        placeholder="e.g. ADM-2026-104"
+                        className="w-full px-4 py-3.5 bg-white border border-gray-200 rounded-2xl text-sm font-bold text-deep-purple focus:outline-none focus:border-[#3b2d7d]/50 transition-colors"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Gender, DOB, Blood Group */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider block mb-1.5">Gender</label>
+                      <div className="relative">
+                        <select
+                          value={addForm.gender}
+                          onChange={(e) => handleAddFormChange('gender', e.target.value)}
+                          className="w-full px-4 py-3.5 bg-white border border-gray-200 rounded-2xl font-bold text-deep-purple focus:outline-none appearance-none cursor-pointer"
+                        >
+                          <option value="">Select</option>
+                          <option value="male">Boy</option>
+                          <option value="female">Girl</option>
+                          <option value="other">Other</option>
+                        </select>
+                        <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider block mb-1.5">Date of Birth</label>
+                      <input
+                        type="date"
+                        value={addForm.dob}
+                        onChange={(e) => handleAddFormChange('dob', e.target.value)}
+                        max={new Date().toISOString().split('T')[0]}
+                        className="w-full px-4 py-3.5 bg-white border border-gray-200 rounded-2xl text-sm font-bold text-deep-purple focus:outline-none focus:border-[#3b2d7d]/50 transition-colors"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider block mb-1.5">Blood Group</label>
+                    <div className="relative">
+                      <select
+                        value={addForm.bloodGroup}
+                        onChange={(e) => handleAddFormChange('bloodGroup', e.target.value)}
+                        className="w-full px-4 py-3.5 bg-white border border-gray-200 rounded-2xl font-bold text-deep-purple focus:outline-none appearance-none cursor-pointer"
+                      >
+                        <option value="">Select</option>
+                        {['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map((bg) => (
+                          <option key={bg} value={bg}>{bg}</option>
+                        ))}
+                      </select>
+                      <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                    </div>
+                  </div>
+
+                  {/* Parent / Guardian Link */}
+                  <div className="bg-gray-50/50 p-4 rounded-2xl border border-gray-150 space-y-3">
+                    <h4 className="text-[9px] text-gray-400 font-black uppercase tracking-wider">Parent / Guardian (Optional)</h4>
+                    <div>
+                      <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider block mb-1.5">Select Parent</label>
+                      <div className="relative">
+                        <select
+                          value={addForm.parentId}
+                          onChange={(e) => handleAddFormChange('parentId', e.target.value)}
+                          className="w-full px-4 py-3.5 bg-white border border-gray-200 rounded-2xl font-bold text-deep-purple focus:outline-none appearance-none cursor-pointer"
+                        >
+                          <option value="">No parent linked</option>
+                          {parentsList.map((p) => (
+                            <option key={p._id} value={p._id}>
+                              {p.user?.name} — {p.user?.phone}
+                            </option>
+                          ))}
+                        </select>
+                        <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-gray-400 font-bold">
+                      Parent not in the list?{' '}
+                      <button
+                        type="button"
+                        onClick={() => navigate('/school/parents')}
+                        className="text-[#3b2d7d] underline font-black"
+                      >
+                        Add them on the Parents page
+                      </button>{' '}
+                      first, then come back to enroll the student.
+                    </p>
+                  </div>
+
+                </div>
+
+                {/* Footer */}
+                <div className="bg-gray-50 border-t border-gray-200 p-5 flex items-center gap-3 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setShowAddModal(false)}
+                    disabled={addSubmitting}
+                    className="flex-1 px-6 py-3.5 bg-white border border-gray-200 text-gray-500 font-black rounded-2xl text-xs uppercase tracking-wider transition-all active:scale-95 hover:bg-gray-100 disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={addSubmitting}
+                    className="flex-1 px-6 py-3.5 bg-[#3b2d7d] hover:bg-[#5942bc] text-white font-black rounded-2xl text-xs uppercase tracking-wider transition-all active:scale-95 shadow-md flex items-center justify-center gap-1.5 disabled:opacity-60"
+                  >
+                    {addSubmitting ? (
+                      <>
+                        <Loader2 size={14} className="animate-spin" />
+                        Adding…
+                      </>
+                    ) : (
+                      <>
+                        <UserPlus size={14} className="stroke-[2.5]" />
+                        Add Student
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            )}
 
           </div>
         </div>

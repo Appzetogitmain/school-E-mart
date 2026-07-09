@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { Search, ShoppingBag, Star, Filter, Sparkles } from 'lucide-react';
 import SchoolHeader from '../../components/SchoolHeader';
 import { useCategoryTree } from '../../../hooks/useCategoryTree';
@@ -11,6 +11,7 @@ import {
 } from '../../../utils/mappers/categoryMapper';
 
 const SchoolSubcategoryPage = () => {
+  const navigate = useNavigate();
   const { categoryName } = useParams();
   const [activeSub, setActiveSub] = useState('All');
   const schoolInfo = { name: 'Adarsh Public School', code: 'APS-1024' };
@@ -90,7 +91,20 @@ const SchoolSubcategoryPage = () => {
                 <span className="text-[10px] font-black uppercase tracking-widest text-deep-purple/60">Launch Offer</span>
               </div>
               <h2 className="text-deep-purple text-xl font-black leading-tight mb-4">Special Rates for {taxonomy.title}</h2>
-              <button className="bg-deep-purple text-white text-[10px] font-black px-6 py-3 rounded-2xl shadow-lg active:scale-95 transition-all">
+              <button
+                onClick={() => {
+                  const params = new URLSearchParams({
+                    title: `Bulk Quote Request - ${taxonomy.title}`,
+                  });
+                  if (activeSub && activeSub !== 'All') {
+                    params.set('notes', `Requesting bulk quotation for ${activeSub} (${taxonomy.title}).`);
+                  } else {
+                    params.set('notes', `Requesting bulk quotation for ${taxonomy.title}.`);
+                  }
+                  navigate(`/school/create-request?${params.toString()}`);
+                }}
+                className="bg-deep-purple text-white text-[10px] font-black px-6 py-3 rounded-2xl shadow-lg active:scale-95 transition-all"
+              >
                 REQUEST QUOTE
               </button>
             </div>

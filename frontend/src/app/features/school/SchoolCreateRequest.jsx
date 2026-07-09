@@ -29,13 +29,14 @@ const SchoolCreateRequest = () => {
   const [draftLoading, setDraftLoading] = useState(false);
   const [newComponentNames, setNewComponentNames] = useState({}); // { [setId]: '' }
 
-  // STEP 1 STATES
-  const [requestTitle, setRequestTitle] = useState('');
+  // STEP 1 STATES (title/notes may be prefilled via query params,
+  // e.g. the "Request Quote" banner on the Supplies category pages)
+  const [requestTitle, setRequestTitle] = useState(() => (draftId ? '' : searchParams.get('title') || ''));
   const [academicYear, setAcademicYear] = useState('');
   const [requiredDate, setRequiredDate] = useState('');
   const [selectedClasses, setSelectedClasses] = useState([]);
   const [totalStudents, setTotalStudents] = useState('');
-  const [specialInstructions, setSpecialInstructions] = useState('');
+  const [specialInstructions, setSpecialInstructions] = useState(() => (draftId ? '' : searchParams.get('notes') || ''));
   const [isClassDropdownOpen, setIsClassDropdownOpen] = useState(false);
 
   // STEP 3 STATES

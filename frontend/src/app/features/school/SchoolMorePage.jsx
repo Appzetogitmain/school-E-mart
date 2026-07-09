@@ -1,10 +1,10 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  ArrowLeft, GraduationCap, Users, FileText, Calendar, 
-  ChevronRight, IndianRupee, Megaphone, Package, ShoppingCart, 
-  Store, Clipboard, Sliders, User, Building, HelpCircle, Key, 
-  Heart, Search, Wallet, UserPlus, Phone, Info, LogOut
+  ArrowLeft, GraduationCap, Users, FileText, Calendar,
+  ChevronRight, IndianRupee, Megaphone, Package, ShoppingCart,
+  Store, Clipboard, Sliders, User, Building, HelpCircle, Key,
+  Heart, Search, Wallet, UserPlus, Phone, Info, LogOut, Layers
 } from 'lucide-react';
 import AuthPrompt from '../../components/AuthPrompt';
 import useAuthStore from '../../../store/useAuthStore';
@@ -21,6 +21,14 @@ const SchoolMorePage = () => {
     {
       title: 'School Management',
       items: [
+        {
+          title: 'Classes & Sections',
+          desc: 'Create classes, sections and assign class teachers',
+          icon: <Layers className="text-emerald-500 stroke-[2.5]" size={18} />,
+          bg: 'bg-emerald-50',
+          path: '/school/add-class',
+          protected: true
+        },
         {
           title: 'Students',
           desc: 'View and manage student information',
