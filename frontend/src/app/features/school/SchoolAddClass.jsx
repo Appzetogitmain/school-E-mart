@@ -11,6 +11,7 @@ import {
   createSection,
   assignClassTeacher,
   getSchool,
+  updateSchool,
 } from '../../../services/schoolApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 import { flattenClassesForList } from '../../../utils/mappers/schoolClassMapper';
@@ -23,6 +24,7 @@ const SchoolAddClass = () => {
 
   const [className, setClassName] = useState('');
   const [academicYear, setAcademicYear] = useState('2025 - 2026');
+  const [savedYear, setSavedYear] = useState('');
   const [section, setSection] = useState('');
   const [classTeacher, setClassTeacher] = useState('');
 
@@ -52,6 +54,7 @@ const SchoolAddClass = () => {
 
       const year = school?.academicYearCurrent || '2025 - 2026';
       setAcademicYear(year);
+      setSavedYear(year);
       setClassesList(flattenClassesForList(classes, year));
       setTeachers(
         (teacherResult.data || [])
@@ -72,7 +75,7 @@ const SchoolAddClass = () => {
   const validate = () => {
     const tempErrors = {};
     if (!className.trim()) tempErrors.className = 'Class Name is required';
-    if (!academicYear) tempErrors.academicYear = 'Academic Year is required';
+    if (!academicYear.trim()) tempErrors.academicYear = 'Academic Year is required';
 
     setErrors(tempErrors);
     return Object.keys(tempErrors).length === 0;
@@ -91,6 +94,14 @@ const SchoolAddClass = () => {
     setSaving(true);
     setError('');
     try {
+      // Persist a newly typed academic year on the school so it becomes
+      // the default here and everywhere else the current year is shown
+      const yearValue = academicYear.trim();
+      if (yearValue !== savedYear) {
+        await updateSchool(schoolId, { academicYearCurrent: yearValue });
+        setSavedYear(yearValue);
+      }
+
       const existingClass = classesList.some((c) => c.className === classGrade);
 
       if (!existingClass) {
@@ -205,16 +216,21 @@ const SchoolAddClass = () => {
                 </label>
                 <div className="relative">
                   <Calendar size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                  <select
+                  <input
+                    type="text"
                     value={academicYear}
-                    onChange={(e) => setAcademicYear(e.target.value)}
-                    className="w-full pl-10 pr-8 py-3.5 bg-gray-50 border-2 border-transparent rounded-2xl text-xs font-bold text-deep-purple outline-none focus:border-primary/10 focus:bg-white focus:shadow-xl focus:shadow-primary/5 transition-all appearance-none cursor-pointer"
-                  >
-                    <option value="2025 - 2026">2025 - 2026</option>
-                    <option value="2026 - 2027">2026 - 2027</option>
-                  </select>
-                  <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                    onChange={(e) => setAcademicYear(e.target.value.slice(0, 20))}
+                    placeholder="e.g. 2026 - 2027"
+                    className={`w-full pl-10 pr-4 py-3.5 bg-gray-50 border-2 rounded-2xl text-xs font-bold text-deep-purple outline-none transition-all ${
+                      errors.academicYear ? 'border-red-300 focus:border-red-400 bg-red-50/20' : 'border-transparent focus:border-primary/10 focus:bg-white focus:shadow-xl focus:shadow-primary/5'
+                    }`}
+                  />
                 </div>
+                {errors.academicYear && (
+                  <p className="text-[9px] font-bold text-red-500 flex items-center gap-1 ml-1 mt-0.5">
+                    <AlertCircle size={10} /> {errors.academicYear}
+                  </p>
+                )}
               </div>
 
               {/* Section */}

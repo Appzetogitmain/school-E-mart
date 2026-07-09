@@ -46,6 +46,8 @@ const SchoolStudentsPage = () => {
   const [addSubmitting, setAddSubmitting] = useState(false);
   const [addError, setAddError] = useState('');
   const [addSuccess, setAddSuccess] = useState(false);
+  const [parentSearch, setParentSearch] = useState('');
+  const [parentDropdownOpen, setParentDropdownOpen] = useState(false);
 
   const loadStudents = useCallback(async () => {
     if (!schoolId) {
@@ -108,7 +110,30 @@ const SchoolStudentsPage = () => {
     setAddErrors({});
     setAddError('');
     setAddSuccess(false);
+    setParentSearch('');
+    setParentDropdownOpen(false);
     setShowAddModal(true);
+  };
+
+  // Once a parent is picked the input shows their label, so filter only while typing
+  const parentQuery = addForm.parentId ? '' : parentSearch.trim().toLowerCase();
+  const filteredParents = parentsList.filter((p) => {
+    if (!parentQuery) return true;
+    return (
+      (p.user?.name || '').toLowerCase().includes(parentQuery) ||
+      (p.user?.phone || '').includes(parentQuery)
+    );
+  });
+
+  const selectParent = (p) => {
+    setAddForm((prev) => ({ ...prev, parentId: p._id }));
+    setParentSearch(`${p.user?.name || ''} — ${p.user?.phone || ''}`);
+    setParentDropdownOpen(false);
+  };
+
+  const clearParentSelection = () => {
+    setAddForm((prev) => ({ ...prev, parentId: '' }));
+    setParentSearch('');
   };
 
   const handleAddStudent = async (e) => {
@@ -758,22 +783,77 @@ const SchoolStudentsPage = () => {
                   <div className="bg-gray-50/50 p-4 rounded-2xl border border-gray-150 space-y-3">
                     <h4 className="text-[9px] text-gray-400 font-black uppercase tracking-wider">Parent / Guardian (Optional)</h4>
                     <div>
-                      <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider block mb-1.5">Select Parent</label>
+                      <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider block mb-1.5">Search & Select Parent</label>
                       <div className="relative">
-                        <select
-                          value={addForm.parentId}
-                          onChange={(e) => handleAddFormChange('parentId', e.target.value)}
-                          className="w-full px-4 py-3.5 bg-white border border-gray-200 rounded-2xl font-bold text-deep-purple focus:outline-none appearance-none cursor-pointer"
-                        >
-                          <option value="">No parent linked</option>
-                          {parentsList.map((p) => (
-                            <option key={p._id} value={p._id}>
-                              {p.user?.name} — {p.user?.phone}
-                            </option>
-                          ))}
-                        </select>
-                        <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                        <Search size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                        <input
+                          type="text"
+                          value={parentSearch}
+                          onChange={(e) => {
+                            setParentSearch(e.target.value);
+                            setAddForm((prev) => ({ ...prev, parentId: '' }));
+                            setParentDropdownOpen(true);
+                          }}
+                          onFocus={() => setParentDropdownOpen(true)}
+                          onBlur={() => setTimeout(() => setParentDropdownOpen(false), 150)}
+                          placeholder="Search parent by name or mobile..."
+                          className={`w-full pl-10 pr-10 py-3.5 bg-white border rounded-2xl text-sm font-bold text-deep-purple focus:outline-none focus:border-[#3b2d7d]/50 transition-colors ${addForm.parentId ? 'border-emerald-300 bg-emerald-50/30' : 'border-gray-200'}`}
+                        />
+                        {(parentSearch || addForm.parentId) && (
+                          <button
+                            type="button"
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              clearParentSelection();
+                            }}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500 active:scale-90 transition-all"
+                          >
+                            <X size={12} className="stroke-[3]" />
+                          </button>
+                        )}
+
+                        {parentDropdownOpen && (
+                          <div className="absolute z-20 mt-2 w-full bg-white border border-gray-200 rounded-2xl shadow-xl max-h-48 overflow-y-auto">
+                            {parentsList.length === 0 ? (
+                              <div className="px-4 py-4 text-[11px] font-bold text-gray-400 text-center">
+                                No parents registered yet
+                              </div>
+                            ) : filteredParents.length === 0 ? (
+                              <div className="px-4 py-4 text-[11px] font-bold text-gray-400 text-center">
+                                No parents match "{parentSearch}"
+                              </div>
+                            ) : (
+                              filteredParents.map((p) => (
+                                <button
+                                  type="button"
+                                  key={p._id}
+                                  onMouseDown={(e) => {
+                                    e.preventDefault();
+                                    selectParent(p);
+                                  }}
+                                  className={`w-full text-left px-4 py-3 hover:bg-purple-50/60 transition-colors border-b border-gray-50 last:border-b-0 flex items-center justify-between gap-3 ${addForm.parentId === p._id ? 'bg-purple-50/60' : ''}`}
+                                >
+                                  <div className="min-w-0">
+                                    <span className="text-xs font-black text-deep-purple block truncate">{p.user?.name}</span>
+                                    <span className="text-[10px] font-bold text-gray-400 block mt-0.5">
+                                      {p.user?.phone}{p.user?.email ? ` • ${p.user.email}` : ''}
+                                    </span>
+                                  </div>
+                                  {addForm.parentId === p._id && (
+                                    <Check size={14} className="text-[#3b2d7d] shrink-0 stroke-[3]" />
+                                  )}
+                                </button>
+                              ))
+                            )}
+                          </div>
+                        )}
                       </div>
+                      {addForm.parentId && (
+                        <span className="text-[10px] text-emerald-600 font-black flex items-center gap-1 mt-1.5">
+                          <CheckCircle size={12} />
+                          Parent will be linked to this student
+                        </span>
+                      )}
                     </div>
                     <p className="text-[10px] text-gray-400 font-bold">
                       Parent not in the list?{' '}
