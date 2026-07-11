@@ -4,17 +4,103 @@ import {
   ArrowLeft, GraduationCap, Users, FileText, Calendar,
   ChevronRight, IndianRupee, Megaphone, Package, ShoppingCart,
   Store, Clipboard, Sliders, User, Building, HelpCircle, Key,
-  Heart, Search, Wallet, UserPlus, Phone, Info, LogOut, Layers
+  Heart, Search, Wallet, UserPlus, Phone, Info, LogOut, Layers,
+  Loader2, BookOpen
 } from 'lucide-react';
 import AuthPrompt from '../../components/AuthPrompt';
 import useAuthStore from '../../../store/useAuthStore';
+import { useSchoolId } from '../../../utils/schoolContext';
+import { listStudents, listTeachers, listEvents, getSchool } from '../../../services/schoolApi';
+import { listSchoolRfqs } from '../../../services/rfqApi';
+import { mapSchoolRfqForList } from '../../../utils/mappers/rfqMapper';
 
 const SchoolMorePage = () => {
   const navigate = useNavigate();
-  const isGuest = !localStorage.getItem('childInfo');
-  const user = isGuest ? null : JSON.parse(localStorage.getItem('childInfo'));
+  // childInfo is shared with the parent portal — only a school login counts here
+  const storedInfo = (() => {
+    try {
+      const raw = localStorage.getItem('childInfo');
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  })();
+  const isGuest = !storedInfo || (storedInfo.role && storedInfo.role !== 'school');
+  const user = isGuest ? null : storedInfo;
   const logout = useAuthStore((state) => state.logout);
   const [isAuthPromptOpen, setIsAuthPromptOpen] = React.useState(false);
+
+  const schoolId = useSchoolId();
+  const [stats, setStats] = React.useState({
+    students: 0,
+    teachers: 0,
+    pendingQuotes: 0,
+    events: 0
+  });
+  const [statsLoading, setStatsLoading] = React.useState(true);
+  const [statsError, setStatsError] = React.useState('');
+  const [academicYear, setAcademicYear] = React.useState('');
+
+  React.useEffect(() => {
+    let cancelled = false;
+
+    const fetchStats = async () => {
+      if (isGuest || !schoolId) {
+        setStatsLoading(false);
+        return;
+      }
+
+      setStatsLoading(true);
+      setStatsError('');
+
+      try {
+        const [studentsRes, teachersRes, rfqsRes, eventsRes, school] = await Promise.all([
+          listStudents(schoolId, { limit: 1 }),
+          listTeachers(schoolId, { limit: 1 }),
+          listSchoolRfqs(schoolId, { limit: 100 }),
+          listEvents(schoolId, { limit: 100 }),
+          getSchool(schoolId).catch(() => null)
+        ]);
+
+        if (cancelled) return;
+
+        if (school?.academicYearCurrent) {
+          setAcademicYear(school.academicYearCurrent);
+        }
+
+        const studentsCount = studentsRes.pagination?.total ?? studentsRes.data?.length ?? 0;
+        const teachersCount = teachersRes.pagination?.total ?? teachersRes.data?.length ?? 0;
+        
+        const rfqs = rfqsRes.data || [];
+        const requirements = rfqs.map(mapSchoolRfqForList);
+        const pendingQuotesCount = requirements.filter((r) => r.status === 'Pending').length;
+
+        const eventsCount = eventsRes.pagination?.total ?? eventsRes.data?.length ?? 0;
+
+        setStats({
+          students: studentsCount,
+          teachers: teachersCount,
+          pendingQuotes: pendingQuotesCount,
+          events: eventsCount
+        });
+      } catch (err) {
+        if (!cancelled) {
+          console.error('Failed to load school stats:', err);
+          setStatsError('Unable to load statistics');
+        }
+      } finally {
+        if (!cancelled) {
+          setStatsLoading(false);
+        }
+      }
+    };
+
+    fetchStats();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [schoolId, isGuest]);
 
   // Navigation configuration sections matching mockup exactly
   const sections = [
@@ -46,8 +132,16 @@ const SchoolMorePage = () => {
           protected: true
         },
         {
+          title: 'Class & Teacher Assignments',
+          desc: 'Who teaches which class, subject & class teachers',
+          icon: <BookOpen className="text-emerald-600 stroke-[2.5]" size={18} />,
+          bg: 'bg-emerald-50',
+          path: '/school/teacher-assignments',
+          protected: true
+        },
+        {
           title: 'Parents',
-          desc: 'Manage school parent accounts',
+          desc: 'View parent accounts linked via student enrollment',
           icon: <User className="text-indigo-500 stroke-[2.5]" size={18} />,
           bg: 'bg-indigo-50',
           path: '/school/parents',
@@ -233,9 +327,11 @@ const SchoolMorePage = () => {
             <h1 className="text-xl font-black leading-tight">
               {isGuest ? 'School Portal' : (user?.school || 'School E-Mart')}
             </h1>
-            <div className="flex items-center gap-2 mt-1 text-[11px] text-purple-200 font-bold leading-none">
-              <span>Academic Year <span className="px-1.5 py-0.5 bg-white/20 rounded font-black text-white ml-0.5">2026 – 27</span></span>
-            </div>
+            {academicYear && (
+              <div className="flex items-center gap-2 mt-1 text-[11px] text-purple-200 font-bold leading-none">
+                <span>Academic Year <span className="px-1.5 py-0.5 bg-white/20 rounded font-black text-white ml-0.5">{academicYear}</span></span>
+              </div>
+            )}
           </div>
         </div>
         
@@ -282,7 +378,15 @@ const SchoolMorePage = () => {
           <div className="w-8 h-8 rounded-full bg-purple-50 text-[#3b2d7d] flex items-center justify-center mx-auto shrink-0">
             <GraduationCap size={16} />
           </div>
-          <span className="text-sm font-black text-deep-purple block mt-2 leading-none">1,250</span>
+          <span className="text-sm font-black text-deep-purple block mt-2 leading-none">
+            {statsLoading ? (
+              <span className="flex justify-center items-center py-0.5">
+                <Loader2 size={12} className="animate-spin text-[#3b2d7d]" />
+              </span>
+            ) : (
+              (stats.students || 0).toLocaleString()
+            )}
+          </span>
           <span className="text-[8px] text-gray-400 font-black uppercase block mt-1 tracking-wider">Students</span>
         </div>
 
@@ -300,7 +404,15 @@ const SchoolMorePage = () => {
           <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center mx-auto shrink-0">
             <Users size={16} />
           </div>
-          <span className="text-sm font-black text-deep-purple block mt-2 leading-none">42</span>
+          <span className="text-sm font-black text-deep-purple block mt-2 leading-none">
+            {statsLoading ? (
+              <span className="flex justify-center items-center py-0.5">
+                <Loader2 size={12} className="animate-spin text-blue-600" />
+              </span>
+            ) : (
+              (stats.teachers || 0).toLocaleString()
+            )}
+          </span>
           <span className="text-[8px] text-gray-400 font-black uppercase block mt-1 tracking-wider">Teachers</span>
         </div>
 
@@ -318,7 +430,15 @@ const SchoolMorePage = () => {
           <div className="w-8 h-8 rounded-full bg-orange-50 text-orange-500 flex items-center justify-center mx-auto shrink-0">
             <FileText size={16} />
           </div>
-          <span className="text-sm font-black text-deep-purple block mt-2 leading-none">8</span>
+          <span className="text-sm font-black text-deep-purple block mt-2 leading-none">
+            {statsLoading ? (
+              <span className="flex justify-center items-center py-0.5">
+                <Loader2 size={12} className="animate-spin text-orange-500" />
+              </span>
+            ) : (
+              (stats.pendingQuotes || 0).toLocaleString()
+            )}
+          </span>
           <span className="text-[8px] text-gray-400 font-black uppercase block mt-1 tracking-wider">Pending Quotes</span>
         </div>
 
@@ -336,11 +456,24 @@ const SchoolMorePage = () => {
           <div className="w-8 h-8 rounded-full bg-emerald-50 text-emerald-500 flex items-center justify-center mx-auto shrink-0">
             <Calendar size={16} />
           </div>
-          <span className="text-sm font-black text-deep-purple block mt-2 leading-none">3</span>
+          <span className="text-sm font-black text-deep-purple block mt-2 leading-none">
+            {statsLoading ? (
+              <span className="flex justify-center items-center py-0.5">
+                <Loader2 size={12} className="animate-spin text-emerald-500" />
+              </span>
+            ) : (
+              (stats.events || 0).toLocaleString()
+            )}
+          </span>
           <span className="text-[8px] text-gray-400 font-black uppercase block mt-1 tracking-wider">Events</span>
         </div>
 
       </div>
+      {statsError && (
+        <div className="px-6 pt-2 text-center">
+          <span className="text-[10px] text-rose-500 font-bold">{statsError}</span>
+        </div>
+      )}
 
       {/* Settings Sections Grid Navigation */}
       <div className="px-6 py-6 space-y-6">

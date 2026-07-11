@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft, Search, Filter, ChevronDown, Check, X,
+  ArrowLeft, Search, Filter, ChevronDown, X,
   MoreVertical, RefreshCw, GraduationCap, Users, User,
   Calendar, CheckCircle, AlertCircle, Sparkles, Upload,
   Download, Award, Shield, MapPin, Phone, Mail, Loader2, UserPlus
 } from 'lucide-react';
-import { listStudents, registerStudent, listClasses, listParents } from '../../../services/schoolApi';
+import { listStudents, registerStudent, listClasses } from '../../../services/schoolApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
-import { mapStudentForList } from '../../../utils/mappers/schoolStudentMapper';
+import { mapStudentForList, formatClassLabel, calculateAge } from '../../../utils/mappers/schoolStudentMapper';
 import { useSchoolId } from '../../../utils/schoolContext';
 
 const SchoolStudentsPage = () => {
@@ -19,15 +19,12 @@ const SchoolStudentsPage = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedClass, setSelectedClass] = useState('All Classes');
   const [selectedSection, setSelectedSection] = useState('All Sections');
-  const [selectedStatus, setSelectedStatus] = useState('All Statuses');
   const [sortBy, setSortBy] = useState('Name (A - Z)');
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [classesList, setClassesList] = useState([]);
-
-  const [parentsList, setParentsList] = useState([]);
 
   const emptyForm = {
     name: '',
@@ -37,7 +34,13 @@ const SchoolStudentsPage = () => {
     gender: '',
     dob: '',
     bloodGroup: '',
-    parentId: '',
+    motherName: '',
+    address: '',
+    admissionDate: '',
+    previousSchool: '',
+    parentName: '',
+    parentPhone: '',
+    parentEmail: '',
     admissionNo: '',
   };
   const [showAddModal, setShowAddModal] = useState(false);
@@ -46,8 +49,6 @@ const SchoolStudentsPage = () => {
   const [addSubmitting, setAddSubmitting] = useState(false);
   const [addError, setAddError] = useState('');
   const [addSuccess, setAddSuccess] = useState(false);
-  const [parentSearch, setParentSearch] = useState('');
-  const [parentDropdownOpen, setParentDropdownOpen] = useState(false);
 
   const loadStudents = useCallback(async () => {
     if (!schoolId) {
@@ -82,12 +83,6 @@ const SchoolStudentsPage = () => {
       } catch (err) {
         console.error('Failed to load classes:', err);
       }
-      try {
-        const { data } = await listParents(schoolId, { limit: 100 });
-        setParentsList((data || []).filter((p) => p?.user));
-      } catch (err) {
-        console.error('Failed to load parents:', err);
-      }
     })();
   }, [schoolId]);
 
@@ -96,9 +91,11 @@ const SchoolStudentsPage = () => {
   const allSections = [...new Set(classesList.flatMap((c) => c.sections || []))].sort();
 
   const handleAddFormChange = (field, value) => {
+    // Parent mobile is the login number — keep it to 10 digits
+    const val = field === 'parentPhone' ? value.replace(/\D/g, '').slice(0, 10) : value;
     setAddForm((prev) => ({
       ...prev,
-      [field]: value,
+      [field]: val,
       // Reset section when class changes since sections belong to a class
       ...(field === 'classGrade' ? { section: '' } : {}),
     }));
@@ -106,34 +103,12 @@ const SchoolStudentsPage = () => {
   };
 
   const openAddModal = () => {
-    setAddForm(emptyForm);
+    // Admission date defaults to today — the usual case for a new enrollment
+    setAddForm({ ...emptyForm, admissionDate: new Date().toISOString().split('T')[0] });
     setAddErrors({});
     setAddError('');
     setAddSuccess(false);
-    setParentSearch('');
-    setParentDropdownOpen(false);
     setShowAddModal(true);
-  };
-
-  // Once a parent is picked the input shows their label, so filter only while typing
-  const parentQuery = addForm.parentId ? '' : parentSearch.trim().toLowerCase();
-  const filteredParents = parentsList.filter((p) => {
-    if (!parentQuery) return true;
-    return (
-      (p.user?.name || '').toLowerCase().includes(parentQuery) ||
-      (p.user?.phone || '').includes(parentQuery)
-    );
-  });
-
-  const selectParent = (p) => {
-    setAddForm((prev) => ({ ...prev, parentId: p._id }));
-    setParentSearch(`${p.user?.name || ''} — ${p.user?.phone || ''}`);
-    setParentDropdownOpen(false);
-  };
-
-  const clearParentSelection = () => {
-    setAddForm((prev) => ({ ...prev, parentId: '' }));
-    setParentSearch('');
   };
 
   const handleAddStudent = async (e) => {
@@ -141,8 +116,14 @@ const SchoolStudentsPage = () => {
 
     const errs = {};
     if (!addForm.name.trim() || addForm.name.trim().length < 2) errs.name = 'Student name is required (min 2 characters)';
+    if (!addForm.dob) errs.dob = 'Date of birth is required';
+    else if (new Date(addForm.dob) > new Date()) errs.dob = 'Date of birth cannot be in the future';
+    if (!addForm.gender) errs.gender = 'Gender is required';
     if (!addForm.classGrade) errs.classGrade = 'Class is required';
     if (!addForm.section) errs.section = 'Section is required';
+    if (!addForm.parentName.trim() || addForm.parentName.trim().length < 2) errs.parentName = 'Parent/Guardian name is required (min 2 characters)';
+    if (!/^[6-9]\d{9}$/.test(addForm.parentPhone)) errs.parentPhone = 'Valid 10-digit mobile number is required';
+    if (addForm.parentEmail.trim() && !/\S+@\S+\.\S+/.test(addForm.parentEmail.trim())) errs.parentEmail = 'Invalid email address';
     setAddErrors(errs);
     if (Object.keys(errs).length > 0) return;
 
@@ -154,26 +135,25 @@ const SchoolStudentsPage = () => {
     setAddSubmitting(true);
     setAddError('');
     try {
+      // The parent's mobile becomes (or matches) the login account — the
+      // backend auto-creates/links the parent user, profile and child link
       const payload = {
         name: addForm.name.trim(),
         classGrade: addForm.classGrade,
         section: addForm.section,
+        dob: addForm.dob,
+        gender: addForm.gender,
+        parentName: addForm.parentName.trim(),
+        parentPhone: addForm.parentPhone,
       };
+      if (addForm.parentEmail.trim()) payload.parentEmail = addForm.parentEmail.trim();
       if (addForm.rollNo.trim()) payload.rollNo = addForm.rollNo.trim();
-      if (addForm.gender) payload.gender = addForm.gender;
-      if (addForm.dob) payload.dob = addForm.dob;
       if (addForm.bloodGroup) payload.bloodGroup = addForm.bloodGroup;
+      if (addForm.motherName.trim()) payload.motherName = addForm.motherName.trim();
+      if (addForm.address.trim()) payload.address = addForm.address.trim();
+      if (addForm.admissionDate) payload.admissionDate = addForm.admissionDate;
+      if (addForm.previousSchool.trim()) payload.previousSchool = addForm.previousSchool.trim();
       if (addForm.admissionNo.trim()) payload.admissionNo = addForm.admissionNo.trim();
-
-      // Linking an existing parent: sending their registered phone makes the
-      // backend attach the parent profile and create the child profile link
-      if (addForm.parentId) {
-        const selectedParent = parentsList.find((p) => p._id === addForm.parentId);
-        if (selectedParent?.user?.phone) {
-          payload.parentPhone = selectedParent.user.phone;
-          payload.parentName = selectedParent.user.name;
-        }
-      }
 
       await registerStudent(schoolId, payload);
       setAddSuccess(true);
@@ -191,8 +171,6 @@ const SchoolStudentsPage = () => {
 
   const boysCount = students.filter((s) => s.gender === 'Boy' && s.status === 'Active').length;
   const girlsCount = students.filter((s) => s.gender === 'Girl' && s.status === 'Active').length;
-  const pendingCount = students.filter((s) => s.statusRaw === 'inactive').length;
-  const inactiveCount = students.filter((s) => s.status === 'Inactive' || s.status === 'Alumni').length;
   const totalCount = students.length;
 
   // Filter students based on all states combined
@@ -209,22 +187,15 @@ const SchoolStudentsPage = () => {
     // 3. Section Filter
     const matchesSection = selectedSection === 'All Sections' || s.section === selectedSection;
     
-    // 4. Status Filter
-    const matchesStatus = selectedStatus === 'All Statuses' || s.status === selectedStatus;
-
-    // 5. Stat Tab Filter (if selectable)
+    // 4. Stat Tab Filter (All / Boys / Girls cards)
     let matchesStatTab = true;
     if (activeStatTab === 'Boys') {
       matchesStatTab = s.gender === 'Boy' && s.status === 'Active';
     } else if (activeStatTab === 'Girls') {
       matchesStatTab = s.gender === 'Girl' && s.status === 'Active';
-    } else if (activeStatTab === 'Pending Admissions') {
-      matchesStatTab = s.status === 'Pending Admissions';
-    } else if (activeStatTab === 'Inactive') {
-      matchesStatTab = s.status === 'Inactive';
     }
 
-    return matchesSearch && matchesClass && matchesSection && matchesStatus && matchesStatTab;
+    return matchesSearch && matchesClass && matchesSection && matchesStatTab;
   });
 
   // Sort logic
@@ -238,15 +209,6 @@ const SchoolStudentsPage = () => {
     }
     return 0;
   });
-
-  // Clear filters
-  const handleClearFilters = () => {
-    setSearchQuery('');
-    setSelectedClass('All Classes');
-    setSelectedSection('All Sections');
-    setSelectedStatus('Active');
-    setActiveStatTab('All');
-  };
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-50 pb-24 font-outfit">
@@ -367,7 +329,7 @@ const SchoolStudentsPage = () => {
             >
               <option value="All Classes">All Classes</option>
               {classesList.map((cls) => (
-                <option key={cls.classGrade} value={cls.classGrade}>Class {cls.classGrade}</option>
+                <option key={cls.classGrade} value={cls.classGrade}>{formatClassLabel(cls.classGrade)}</option>
               ))}
             </select>
             <ChevronDown size={14} className="absolute right-4.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
@@ -460,12 +422,12 @@ const SchoolStudentsPage = () => {
 
 
 
-            {/* Three dot context settings */}
-            <button 
+            {/* Open full profile */}
+            <button
               className="absolute top-4 right-4 w-7 h-7 rounded-full flex items-center justify-center hover:bg-gray-50 text-gray-400 active:scale-90 transition-transform"
               onClick={(e) => {
                 e.stopPropagation();
-                alert(`Settings menu for student ${student.name}`);
+                setSelectedStudent(student);
               }}
             >
               <MoreVertical size={16} />
@@ -505,7 +467,7 @@ const SchoolStudentsPage = () => {
             <div className="bg-gradient-to-r from-[#3b2d7d] to-[#5942bc] text-white px-6 py-5 relative flex items-center justify-between shrink-0">
               <div>
                 <h3 className="text-sm font-black tracking-wider uppercase">Student Profile Card</h3>
-                <span className="text-[10px] text-purple-200 font-bold block mt-0.5">Academic Year 2026 - 2027</span>
+                <span className="text-[10px] text-purple-200 font-bold block mt-0.5">{selectedStudent.class}</span>
               </div>
               <button 
                 onClick={() => setSelectedStudent(null)}
@@ -520,8 +482,8 @@ const SchoolStudentsPage = () => {
               
               {/* Profile Card Header */}
               <div className="flex items-center gap-5 bg-purple-50/40 p-4 rounded-3xl border border-purple-150/40">
-                <img 
-                  src={selectedStudent.avatar} 
+                <img
+                  src={selectedStudent.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedStudent.name)}&background=3b2d7d&color=fff`}
                   alt={selectedStudent.name}
                   className="w-20 h-20 rounded-full object-cover border-4 border-white shadow-md shrink-0"
                 />
@@ -556,31 +518,45 @@ const SchoolStudentsPage = () => {
                   <h4 className="text-[9px] text-gray-400 font-black uppercase tracking-wider block font-bold mb-2">Personal Information</h4>
                   <div className="grid grid-cols-2 gap-2 text-deep-purple font-bold">
                     <div>📅 DOB: <span className="text-gray-600 font-bold">{selectedStudent.dob}</span></div>
-                    <div>🩸 Blood Group: <span className="text-gray-600 font-bold">{selectedStudent.bloodGroup}</span></div>
+                    <div>🎂 Age: <span className="text-gray-600 font-bold">{selectedStudent.age !== null && selectedStudent.age !== undefined ? `${selectedStudent.age} years` : '—'}</span></div>
                     <div>⚧️ Gender: <span className="text-gray-600 font-bold">{selectedStudent.gender}</span></div>
+                    <div>🩸 Blood Group: <span className="text-gray-600 font-bold">{selectedStudent.bloodGroup}</span></div>
                     <div>🛡️ Status: <span className="text-gray-600 font-bold">{selectedStudent.status}</span></div>
+                  </div>
+                  <div className="mt-2 text-deep-purple font-bold flex items-start gap-1.5">
+                    <MapPin size={12} className="text-gray-400 shrink-0 mt-0.5" />
+                    <span>Address: <span className="text-gray-600 font-bold">{selectedStudent.address}</span></span>
+                  </div>
+                </div>
+
+                {/* Admission particulars */}
+                <div className="bg-gray-50/50 p-4.5 rounded-2xl border border-gray-150 shadow-inner">
+                  <h4 className="text-[9px] text-gray-400 font-black uppercase tracking-wider block font-bold mb-2">Admission Details</h4>
+                  <div className="grid grid-cols-2 gap-2 text-deep-purple font-bold">
+                    <div>🗓️ Admitted: <span className="text-gray-600 font-bold">{selectedStudent.admissionDate}</span></div>
+                    <div>🏫 Prev. School: <span className="text-gray-600 font-bold">{selectedStudent.previousSchool}</span></div>
                   </div>
                 </div>
 
                 {/* Parent / Guardian Particulars */}
                 <div className="bg-gray-50/50 p-4.5 rounded-2xl border border-gray-150 shadow-inner space-y-2">
-                  <h4 className="text-[9px] text-gray-400 font-black uppercase tracking-wider block font-bold mb-1">Parent/Guardian Information</h4>
+                  <h4 className="text-[9px] text-gray-400 font-black uppercase tracking-wider block font-bold mb-1">Parent/Guardian & Login Account</h4>
                   <div className="space-y-1 font-bold text-deep-purple">
                     <div className="flex items-center gap-2">
                       <User size={12} className="text-gray-400 shrink-0" />
-                      <span>Primary Contact: <span className="text-gray-600 font-bold">{selectedStudent.parent}</span></span>
+                      <span>Father / Guardian: <span className="text-gray-600 font-bold">{selectedStudent.parent}</span></span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <User size={12} className="text-gray-400 shrink-0" />
+                      <span>Mother: <span className="text-gray-600 font-bold">{selectedStudent.motherName}</span></span>
                     </div>
                     <div className="flex items-center gap-2">
                       <Phone size={12} className="text-gray-400 shrink-0" />
-                      <span>Phone: <span className="text-gray-600 font-bold">{selectedStudent.parentPhone}</span></span>
+                      <span>Login Mobile: <span className="text-gray-600 font-bold">{selectedStudent.parentPhone}</span></span>
                     </div>
                     <div className="flex items-center gap-2">
                       <Mail size={12} className="text-gray-400 shrink-0" />
                       <span>Email: <span className="text-gray-600 font-bold truncate">{selectedStudent.parentEmail}</span></span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <MapPin size={12} className="text-gray-400 shrink-0" />
-                      <span>Address: <span className="text-gray-600 font-bold">Green Avenue Sector-4, Block B-42</span></span>
                     </div>
                   </div>
                 </div>
@@ -611,8 +587,8 @@ const SchoolStudentsPage = () => {
             {/* Modal Header */}
             <div className="bg-gradient-to-r from-[#3b2d7d] to-[#5942bc] text-white px-6 py-5 relative flex items-center justify-between shrink-0">
               <div>
-                <h3 className="text-sm font-black tracking-wider uppercase">Add New Student</h3>
-                <span className="text-[10px] text-purple-200 font-bold block mt-0.5">Enroll a student into your school</span>
+                <h3 className="text-sm font-black tracking-wider uppercase">Student Enrollment Form</h3>
+                <span className="text-[10px] text-purple-200 font-bold block mt-0.5">Admission record + parent login account in one step</span>
               </div>
               <button
                 type="button"
@@ -642,20 +618,85 @@ const SchoolStudentsPage = () => {
                     </div>
                   )}
 
-                  {/* Student Name */}
+                  {/* ── Section 1: Student Details ── */}
+                  <div className="flex items-center gap-2 pt-1">
+                    <span className="w-5 h-5 rounded-lg bg-[#3b2d7d] text-white flex items-center justify-center text-[9px] font-black shrink-0">1</span>
+                    <h4 className="text-[10px] text-[#3b2d7d] font-black uppercase tracking-widest">Student Details</h4>
+                    <div className="flex-1 h-px bg-purple-100" />
+                  </div>
+
                   <div>
-                    <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider block mb-1.5">Student Name *</label>
+                    <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider block mb-1.5">Student Full Name *</label>
                     <input
                       type="text"
                       value={addForm.name}
                       onChange={(e) => handleAddFormChange('name', e.target.value)}
-                      placeholder="Full name of the student"
+                      placeholder="Full name as per records"
                       className={`w-full px-4 py-3.5 bg-white border rounded-2xl text-sm font-bold text-deep-purple focus:outline-none focus:border-[#3b2d7d]/50 transition-colors ${addErrors.name ? 'border-red-300' : 'border-gray-200'}`}
                     />
                     {addErrors.name && <span className="text-[10px] text-red-500 font-bold block mt-1">{addErrors.name}</span>}
                   </div>
 
-                  {/* Class & Section */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider block mb-1.5">Date of Birth *</label>
+                      <input
+                        type="date"
+                        value={addForm.dob}
+                        onChange={(e) => handleAddFormChange('dob', e.target.value)}
+                        max={new Date().toISOString().split('T')[0]}
+                        className={`w-full px-4 py-3.5 bg-white border rounded-2xl text-sm font-bold text-deep-purple focus:outline-none focus:border-[#3b2d7d]/50 transition-colors ${addErrors.dob ? 'border-red-300' : 'border-gray-200'}`}
+                      />
+                      {addErrors.dob && <span className="text-[10px] text-red-500 font-bold block mt-1">{addErrors.dob}</span>}
+                      {addForm.dob && calculateAge(addForm.dob) !== null && (
+                        <span className="text-[10px] text-emerald-600 font-black block mt-1">
+                          Age: {calculateAge(addForm.dob)} years
+                        </span>
+                      )}
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider block mb-1.5">Gender *</label>
+                      <div className="relative">
+                        <select
+                          value={addForm.gender}
+                          onChange={(e) => handleAddFormChange('gender', e.target.value)}
+                          className={`w-full px-4 py-3.5 bg-white border rounded-2xl font-bold text-deep-purple focus:outline-none appearance-none cursor-pointer ${addErrors.gender ? 'border-red-300' : 'border-gray-200'}`}
+                        >
+                          <option value="">Select</option>
+                          <option value="male">Boy</option>
+                          <option value="female">Girl</option>
+                          <option value="other">Other</option>
+                        </select>
+                        <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                      </div>
+                      {addErrors.gender && <span className="text-[10px] text-red-500 font-bold block mt-1">{addErrors.gender}</span>}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider block mb-1.5">Blood Group</label>
+                    <div className="relative">
+                      <select
+                        value={addForm.bloodGroup}
+                        onChange={(e) => handleAddFormChange('bloodGroup', e.target.value)}
+                        className="w-full px-4 py-3.5 bg-white border border-gray-200 rounded-2xl font-bold text-deep-purple focus:outline-none appearance-none cursor-pointer"
+                      >
+                        <option value="">Select</option>
+                        {['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map((bg) => (
+                          <option key={bg} value={bg}>{bg}</option>
+                        ))}
+                      </select>
+                      <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                    </div>
+                  </div>
+
+                  {/* ── Section 2: Academic Details ── */}
+                  <div className="flex items-center gap-2 pt-2">
+                    <span className="w-5 h-5 rounded-lg bg-[#3b2d7d] text-white flex items-center justify-center text-[9px] font-black shrink-0">2</span>
+                    <h4 className="text-[10px] text-[#3b2d7d] font-black uppercase tracking-widest">Academic Details</h4>
+                    <div className="flex-1 h-px bg-purple-100" />
+                  </div>
+
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider block mb-1.5">Class *</label>
@@ -667,7 +708,7 @@ const SchoolStudentsPage = () => {
                         >
                           <option value="">Select Class</option>
                           {classesList.map((cls) => (
-                            <option key={cls.classGrade} value={cls.classGrade}>Class {cls.classGrade}</option>
+                            <option key={cls.classGrade} value={cls.classGrade}>{formatClassLabel(cls.classGrade)}</option>
                           ))}
                         </select>
                         <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
@@ -694,6 +735,20 @@ const SchoolStudentsPage = () => {
                     </div>
                   </div>
 
+                  {addForm.classGrade && formSections.length === 0 && (
+                    <div className="px-4 py-3 bg-amber-50 border border-amber-100 rounded-2xl text-[11px] font-bold text-amber-700">
+                      This class has no sections yet.{' '}
+                      <button
+                        type="button"
+                        onClick={() => navigate('/school/add-class')}
+                        className="underline font-black"
+                      >
+                        Add a section
+                      </button>{' '}
+                      to it first — a section is required for enrollment.
+                    </div>
+                  )}
+
                   {classesList.length === 0 && (
                     <div className="px-4 py-3 bg-amber-50 border border-amber-100 rounded-2xl text-[11px] font-bold text-amber-700">
                       No classes found. Please{' '}
@@ -708,7 +763,6 @@ const SchoolStudentsPage = () => {
                     </div>
                   )}
 
-                  {/* Roll No & Admission No */}
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider block mb-1.5">Roll No.</label>
@@ -732,140 +786,118 @@ const SchoolStudentsPage = () => {
                     </div>
                   </div>
 
-                  {/* Gender, DOB, Blood Group */}
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider block mb-1.5">Gender</label>
-                      <div className="relative">
-                        <select
-                          value={addForm.gender}
-                          onChange={(e) => handleAddFormChange('gender', e.target.value)}
-                          className="w-full px-4 py-3.5 bg-white border border-gray-200 rounded-2xl font-bold text-deep-purple focus:outline-none appearance-none cursor-pointer"
-                        >
-                          <option value="">Select</option>
-                          <option value="male">Boy</option>
-                          <option value="female">Girl</option>
-                          <option value="other">Other</option>
-                        </select>
-                        <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider block mb-1.5">Date of Birth</label>
+                      <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider block mb-1.5">Admission Date</label>
                       <input
                         type="date"
-                        value={addForm.dob}
-                        onChange={(e) => handleAddFormChange('dob', e.target.value)}
+                        value={addForm.admissionDate}
+                        onChange={(e) => handleAddFormChange('admissionDate', e.target.value)}
                         max={new Date().toISOString().split('T')[0]}
+                        className="w-full px-4 py-3.5 bg-white border border-gray-200 rounded-2xl text-sm font-bold text-deep-purple focus:outline-none focus:border-[#3b2d7d]/50 transition-colors"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider block mb-1.5">Previous School</label>
+                      <input
+                        type="text"
+                        value={addForm.previousSchool}
+                        onChange={(e) => handleAddFormChange('previousSchool', e.target.value)}
+                        placeholder="If transferring (optional)"
                         className="w-full px-4 py-3.5 bg-white border border-gray-200 rounded-2xl text-sm font-bold text-deep-purple focus:outline-none focus:border-[#3b2d7d]/50 transition-colors"
                       />
                     </div>
                   </div>
 
-                  <div>
-                    <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider block mb-1.5">Blood Group</label>
-                    <div className="relative">
-                      <select
-                        value={addForm.bloodGroup}
-                        onChange={(e) => handleAddFormChange('bloodGroup', e.target.value)}
-                        className="w-full px-4 py-3.5 bg-white border border-gray-200 rounded-2xl font-bold text-deep-purple focus:outline-none appearance-none cursor-pointer"
-                      >
-                        <option value="">Select</option>
-                        {['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map((bg) => (
-                          <option key={bg} value={bg}>{bg}</option>
-                        ))}
-                      </select>
-                      <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                    </div>
+                  {/* ── Section 3: Contact Address ── */}
+                  <div className="flex items-center gap-2 pt-2">
+                    <span className="w-5 h-5 rounded-lg bg-[#3b2d7d] text-white flex items-center justify-center text-[9px] font-black shrink-0">3</span>
+                    <h4 className="text-[10px] text-[#3b2d7d] font-black uppercase tracking-widest">Contact Address</h4>
+                    <div className="flex-1 h-px bg-purple-100" />
                   </div>
 
-                  {/* Parent / Guardian Link */}
-                  <div className="bg-gray-50/50 p-4 rounded-2xl border border-gray-150 space-y-3">
-                    <h4 className="text-[9px] text-gray-400 font-black uppercase tracking-wider">Parent / Guardian (Optional)</h4>
-                    <div>
-                      <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider block mb-1.5">Search & Select Parent</label>
-                      <div className="relative">
-                        <Search size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                  <div>
+                    <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider block mb-1.5">Residential Address</label>
+                    <textarea
+                      value={addForm.address}
+                      onChange={(e) => handleAddFormChange('address', e.target.value)}
+                      placeholder="House no., street, area, city, PIN code"
+                      rows={2}
+                      maxLength={500}
+                      className="w-full px-4 py-3.5 bg-white border border-gray-200 rounded-2xl text-sm font-bold text-deep-purple focus:outline-none focus:border-[#3b2d7d]/50 transition-colors resize-none"
+                    />
+                  </div>
+
+                  {/* ── Section 4: Parent / Guardian & Login Account ── */}
+                  <div className="flex items-center gap-2 pt-2">
+                    <span className="w-5 h-5 rounded-lg bg-[#3b2d7d] text-white flex items-center justify-center text-[9px] font-black shrink-0">4</span>
+                    <h4 className="text-[10px] text-[#3b2d7d] font-black uppercase tracking-widest">Parent / Guardian & Login Account</h4>
+                    <div className="flex-1 h-px bg-purple-100" />
+                  </div>
+
+                  {/* The parent account (login user) is created automatically
+                      from these fields */}
+                  <div className="bg-purple-50/40 p-4 rounded-2xl border border-purple-100 space-y-3">
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider block mb-1.5">Father / Guardian Name *</label>
                         <input
                           type="text"
-                          value={parentSearch}
-                          onChange={(e) => {
-                            setParentSearch(e.target.value);
-                            setAddForm((prev) => ({ ...prev, parentId: '' }));
-                            setParentDropdownOpen(true);
-                          }}
-                          onFocus={() => setParentDropdownOpen(true)}
-                          onBlur={() => setTimeout(() => setParentDropdownOpen(false), 150)}
-                          placeholder="Search parent by name or mobile..."
-                          className={`w-full pl-10 pr-10 py-3.5 bg-white border rounded-2xl text-sm font-bold text-deep-purple focus:outline-none focus:border-[#3b2d7d]/50 transition-colors ${addForm.parentId ? 'border-emerald-300 bg-emerald-50/30' : 'border-gray-200'}`}
+                          value={addForm.parentName}
+                          onChange={(e) => handleAddFormChange('parentName', e.target.value)}
+                          placeholder="e.g. Rahul Sharma"
+                          className={`w-full px-4 py-3.5 bg-white border rounded-2xl text-sm font-bold text-deep-purple focus:outline-none focus:border-[#3b2d7d]/50 transition-colors ${addErrors.parentName ? 'border-red-300' : 'border-gray-200'}`}
                         />
-                        {(parentSearch || addForm.parentId) && (
-                          <button
-                            type="button"
-                            onMouseDown={(e) => {
-                              e.preventDefault();
-                              clearParentSelection();
-                            }}
-                            className="absolute right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500 active:scale-90 transition-all"
-                          >
-                            <X size={12} className="stroke-[3]" />
-                          </button>
-                        )}
-
-                        {parentDropdownOpen && (
-                          <div className="absolute z-20 mt-2 w-full bg-white border border-gray-200 rounded-2xl shadow-xl max-h-48 overflow-y-auto">
-                            {parentsList.length === 0 ? (
-                              <div className="px-4 py-4 text-[11px] font-bold text-gray-400 text-center">
-                                No parents registered yet
-                              </div>
-                            ) : filteredParents.length === 0 ? (
-                              <div className="px-4 py-4 text-[11px] font-bold text-gray-400 text-center">
-                                No parents match "{parentSearch}"
-                              </div>
-                            ) : (
-                              filteredParents.map((p) => (
-                                <button
-                                  type="button"
-                                  key={p._id}
-                                  onMouseDown={(e) => {
-                                    e.preventDefault();
-                                    selectParent(p);
-                                  }}
-                                  className={`w-full text-left px-4 py-3 hover:bg-purple-50/60 transition-colors border-b border-gray-50 last:border-b-0 flex items-center justify-between gap-3 ${addForm.parentId === p._id ? 'bg-purple-50/60' : ''}`}
-                                >
-                                  <div className="min-w-0">
-                                    <span className="text-xs font-black text-deep-purple block truncate">{p.user?.name}</span>
-                                    <span className="text-[10px] font-bold text-gray-400 block mt-0.5">
-                                      {p.user?.phone}{p.user?.email ? ` • ${p.user.email}` : ''}
-                                    </span>
-                                  </div>
-                                  {addForm.parentId === p._id && (
-                                    <Check size={14} className="text-[#3b2d7d] shrink-0 stroke-[3]" />
-                                  )}
-                                </button>
-                              ))
-                            )}
-                          </div>
-                        )}
+                        {addErrors.parentName && <span className="text-[10px] text-red-500 font-bold block mt-1">{addErrors.parentName}</span>}
                       </div>
-                      {addForm.parentId && (
-                        <span className="text-[10px] text-emerald-600 font-black flex items-center gap-1 mt-1.5">
-                          <CheckCircle size={12} />
-                          Parent will be linked to this student
-                        </span>
-                      )}
+                      <div>
+                        <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider block mb-1.5">Mother Name</label>
+                        <input
+                          type="text"
+                          value={addForm.motherName}
+                          onChange={(e) => handleAddFormChange('motherName', e.target.value)}
+                          placeholder="e.g. Priya Sharma"
+                          className="w-full px-4 py-3.5 bg-white border border-gray-200 rounded-2xl text-sm font-bold text-deep-purple focus:outline-none focus:border-[#3b2d7d]/50 transition-colors"
+                        />
+                      </div>
                     </div>
-                    <p className="text-[10px] text-gray-400 font-bold">
-                      Parent not in the list?{' '}
-                      <button
-                        type="button"
-                        onClick={() => navigate('/school/parents')}
-                        className="text-[#3b2d7d] underline font-black"
-                      >
-                        Add them on the Parents page
-                      </button>{' '}
-                      first, then come back to enroll the student.
-                    </p>
+
+                    <div>
+                      <label className="text-[10px] text-[#3b2d7d] font-black uppercase tracking-wider block mb-1.5">Parent Mobile Number * — Login Number</label>
+                      <div className="relative">
+                        <Phone size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#3b2d7d] pointer-events-none" />
+                        <input
+                          type="tel"
+                          value={addForm.parentPhone}
+                          onChange={(e) => handleAddFormChange('parentPhone', e.target.value)}
+                          placeholder="10-digit mobile number"
+                          className={`w-full pl-10 pr-4 py-3.5 bg-white border-2 rounded-2xl text-sm font-black text-deep-purple focus:outline-none focus:border-[#3b2d7d] transition-colors ${addErrors.parentPhone ? 'border-red-300' : 'border-purple-200'}`}
+                        />
+                      </div>
+                      {addErrors.parentPhone && <span className="text-[10px] text-red-500 font-bold block mt-1">{addErrors.parentPhone}</span>}
+                      <span className="text-[10px] text-[#3b2d7d] font-bold block mt-1.5 bg-white/70 border border-purple-100 rounded-xl px-3 py-2">
+                        🔑 This number is the family's login for the app (OTP login) — the student and parent use this one account. If the number is already registered (e.g. a sibling studies here), this student is linked to that same account.
+                      </span>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider block mb-1.5">Parent Email (Optional)</label>
+                      <div className="relative">
+                        <Mail size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                        <input
+                          type="email"
+                          value={addForm.parentEmail}
+                          onChange={(e) => handleAddFormChange('parentEmail', e.target.value)}
+                          placeholder="email@example.com"
+                          className={`w-full pl-10 pr-4 py-3.5 bg-white border rounded-2xl text-sm font-bold text-deep-purple focus:outline-none focus:border-[#3b2d7d]/50 transition-colors ${addErrors.parentEmail ? 'border-red-300' : 'border-gray-200'}`}
+                        />
+                      </div>
+                      {addErrors.parentEmail && <span className="text-[10px] text-red-500 font-bold block mt-1">{addErrors.parentEmail}</span>}
+                      <span className="text-[10px] text-gray-400 font-bold block mt-1">
+                        If provided, a welcome email with login details is sent to the parent.
+                      </span>
+                    </div>
                   </div>
 
                 </div>

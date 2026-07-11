@@ -89,11 +89,35 @@ export const createSection = async (schoolId, classGrade, section) => {
   return unwrapData(response)?.school;
 };
 
-export const assignClassTeacher = async (schoolId, classGrade, payload) => {
-  const response = await apiClient.post(
-    schoolPath(schoolId, `/classes/${encodeURIComponent(classGrade)}/class-teacher`),
+// Teacher ↔ class/section/subject assignments (Class & Teacher Assignments page)
+export const listTeacherAssignments = async (schoolId) => {
+  const response = await apiClient.get(schoolPath(schoolId, '/teacher-assignments'));
+  return unwrapData(response)?.assignments || [];
+};
+
+export const upsertTeacherAssignment = async (schoolId, teacherProfileId, payload) => {
+  const response = await apiClient.put(
+    schoolPath(schoolId, `/teachers/${teacherProfileId}/assignments`),
     payload
   );
+  return unwrapData(response)?.assignments || [];
+};
+
+export const removeTeacherAssignment = async (schoolId, teacherProfileId, { classGrade, section }) => {
+  const response = await apiClient.delete(
+    schoolPath(schoolId, `/teachers/${teacherProfileId}/assignments`),
+    { params: { classGrade, section } }
+  );
+  return unwrapData(response)?.assignments || [];
+};
+
+export const listSubjects = async (schoolId, params = {}) => {
+  const response = await apiClient.get(schoolPath(schoolId, '/subjects'), { params });
+  return extractPaginated(response, 'subjects');
+};
+
+export const createSubject = async (schoolId, payload) => {
+  const response = await apiClient.post(schoolPath(schoolId, '/subjects'), payload);
   return unwrapData(response);
 };
 
@@ -208,15 +232,11 @@ export const deleteKit = async (schoolId, kitId) => {
   await apiClient.delete(schoolPath(schoolId, `/kits/${kitId}`));
 };
 
-// Parent Management APIs
+// Parent Management APIs (parents are created automatically via student
+// enrollment — see registerStudent's parentName/parentPhone fields)
 export const listParents = async (schoolId, params = {}) => {
   const response = await apiClient.get(schoolPath(schoolId, '/parents'), { params });
   return extractPaginated(response, 'parents');
-};
-
-export const createParent = async (schoolId, payload) => {
-  const response = await apiClient.post(schoolPath(schoolId, '/parents'), payload);
-  return unwrapData(response);
 };
 
 export const updateParent = async (schoolId, parentId, payload) => {

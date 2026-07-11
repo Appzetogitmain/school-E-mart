@@ -9,7 +9,7 @@ export const flattenClassesForList = (classes = [], academicYear = '') =>
         className: cls.classGrade,
         academicYear: academicYear || '—',
         section: section === '-' ? '-' : section,
-        classTeacher: teacherInfo?.designation || 'Not Assigned',
+        classTeacher: teacherInfo?.name || teacherInfo?.designation || 'Not Assigned',
         teacherProfileId: teacherInfo?.teacherProfileId,
       };
     });

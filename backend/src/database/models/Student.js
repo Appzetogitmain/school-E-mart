@@ -22,6 +22,10 @@ const studentSchema = new mongoose.Schema({
     enum: ['male', 'female', 'other', 'unspecified']
   },
   bloodGroup: { type: String },
+  motherName: { type: String },
+  address: { type: String },
+  admissionDate: { type: Date },
+  previousSchool: { type: String },
   parentProfileIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'ParentProfile' }]
 }, { collection: 'students' });
 

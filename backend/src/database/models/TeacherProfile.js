@@ -21,9 +21,14 @@ const teacherProfileSchema = new mongoose.Schema({
     enum: ['single', 'married', 'other']
   },
   subjectsTaught: [{ type: String }],
+  // One entry per class+section a teacher is permitted to teach. subjects
+  // lists what they teach there; isClassTeacher marks the section's class
+  // teacher (kept unique per section by the assignment service)
   classAssignments: [{
     class: { type: String },
-    section: { type: String }
+    section: { type: String },
+    subjects: [{ type: String }],
+    isClassTeacher: { type: Boolean, default: false }
   }],
   avatarUrl: { type: String },
   approvalStatus: {

@@ -1,19 +1,19 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  ArrowLeft, Users, User, Phone, Search, X, 
-  Plus, Edit, Download, Save, Calendar, BookOpen,
+  ArrowLeft, Users, User, Phone, Search, X,
+  Edit, Save, Calendar, BookOpen,
   Check, MoreVertical, Trash2, Loader2
 } from 'lucide-react';
 import {
   listStudents,
-  registerStudent,
   updateStudent,
   deleteStudent,
 } from '../../../services/schoolApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 import { mapStudentForTeacherManage, parseClassGrade, parseSection } from '../../../utils/mappers/teacherMapper';
 import { useTeacherSchoolId } from '../../../utils/teacherContext';
+import { useTeacherClassOptions } from '../../../hooks/useTeacherClassOptions';
 
 const TeacherManageStudents = () => {
   const navigate = useNavigate();
@@ -24,8 +24,11 @@ const TeacherManageStudents = () => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   
-  const [selectedClass, setSelectedClass] = useState('Class 5');
-  const [selectedSection, setSelectedSection] = useState('A');
+  // Class options come from the teacher's own assignments — the API only
+  // returns classes this teacher is permitted to teach
+  const { classLabels, getSections, loading: classesLoading, hasClasses } = useTeacherClassOptions(schoolId);
+  const [selectedClass, setSelectedClass] = useState('');
+  const [selectedSection, setSelectedSection] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState('rollNo'); // 'rollNo' or 'name'
 
@@ -36,7 +39,6 @@ const TeacherManageStudents = () => {
 
   // Drawer / Modal Form State
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
   const [currentStudentId, setCurrentStudentId] = useState(null);
 
   // Form Fields
@@ -68,10 +70,25 @@ const TeacherManageStudents = () => {
     setTimeout(() => setShowToast(false), 2500);
   };
 
+  // Default to the first permitted class/section once assignments load
+  useEffect(() => {
+    if (!selectedClass && classLabels.length > 0) {
+      const firstClass = classLabels[0];
+      setSelectedClass(firstClass);
+      const sections = getSections(firstClass);
+      setSelectedSection(sections[0] || '');
+    }
+  }, [classLabels, getSections, selectedClass]);
+
   const loadStudents = useCallback(async () => {
     if (!schoolId) {
       setLoading(false);
       setError('School context is missing. Please log in again.');
+      setStudents([]);
+      return;
+    }
+    if (!selectedClass) {
+      setLoading(false);
       setStudents([]);
       return;
     }
@@ -103,27 +120,13 @@ const TeacherManageStudents = () => {
     gender: formGender === 'Female' ? 'female' : 'male',
     dob: formDob || undefined,
     schoolRefNo: formAdmissionNo.trim() || undefined,
+    // Sending parent contact keeps the parent login account linked/updated
+    parentName: formFatherName.trim() || undefined,
+    parentPhone: formPhone.trim() || undefined,
   });
 
-  const handleOpenAddDrawer = () => {
-    setIsEditing(false);
-    setCurrentStudentId(null);
-    setFormName('');
-    setFormRollNo(String(students.length + 1).padStart(2, '0'));
-    setFormGender('Male');
-    setFormDob('');
-    setFormFatherName('');
-    setFormMotherName('');
-    setFormPhone('');
-    setFormAltPhone('');
-    setFormAdmissionNo('');
-    setFormClass(selectedClass);
-    setFormSection(selectedSection);
-    setIsDrawerOpen(true);
-  };
-
+  // Enrollment happens on the school admin side only; teachers can just edit
   const handleOpenEditDrawer = (student) => {
-    setIsEditing(true);
     setCurrentStudentId(student.id);
     setFormName(student.name);
     setFormRollNo(student.rollNo);
@@ -168,14 +171,9 @@ const TeacherManageStudents = () => {
     setSaving(true);
     try {
       const payload = buildStudentPayload();
-      if (isEditing) {
-        const student = students.find((s) => s.id === currentStudentId);
-        await updateStudent(schoolId, student.mongoId, payload);
-        triggerToast('Student Details Updated!');
-      } else {
-        await registerStudent(schoolId, payload);
-        triggerToast('New Student Registered!');
-      }
+      const student = students.find((s) => s.id === currentStudentId);
+      await updateStudent(schoolId, student.mongoId, payload);
+      triggerToast('Student Details Updated!');
       setIsDrawerOpen(false);
       await loadStudents();
     } catch (err) {
@@ -288,23 +286,32 @@ const TeacherManageStudents = () => {
               onClick={() => { setIsClassOpen(!isClassOpen); setIsSectionOpen(false); }}
               className="w-full px-4 py-3.5 bg-white border border-gray-200 hover:border-primary/20 active:bg-gray-50 rounded-2xl text-left flex items-center justify-between shadow-sm transition-all"
             >
-              <span className="text-xs font-black text-deep-purple">{selectedClass}</span>
+              <span className="text-xs font-black text-deep-purple">{selectedClass || (classesLoading ? 'Loading…' : 'No class')}</span>
               <span className="text-gray-400 text-xs">▼</span>
             </button>
             {isClassOpen && (
               <>
                 <div className="fixed inset-0 z-40 bg-transparent" onClick={() => setIsClassOpen(false)} />
                 <div className="absolute left-0 right-0 mt-2 bg-white border border-gray-200 rounded-2xl shadow-2xl z-50 py-1.5 animate-in fade-in slide-in-from-top-2 duration-200">
-                  {['Class 5', 'Class 6', 'Class 7'].map(cls => (
-                    <button 
-                      key={cls}
-                      type="button"
-                      onClick={() => { setSelectedClass(cls); setIsClassOpen(false); }}
-                      className={`w-full px-4 py-2.5 text-left text-xs font-bold transition-all ${selectedClass === cls ? 'text-primary bg-primary/5 font-black' : 'text-deep-purple hover:bg-gray-50'}`}
-                    >
-                      {cls}
-                    </button>
-                  ))}
+                  {classLabels.length === 0 ? (
+                    <div className="px-4 py-3 text-[11px] font-bold text-gray-400 text-center">No classes assigned to you</div>
+                  ) : (
+                    classLabels.map(cls => (
+                      <button
+                        key={cls}
+                        type="button"
+                        onClick={() => {
+                          setSelectedClass(cls);
+                          const secs = getSections(cls);
+                          setSelectedSection(secs[0] || '');
+                          setIsClassOpen(false);
+                        }}
+                        className={`w-full px-4 py-2.5 text-left text-xs font-bold transition-all ${selectedClass === cls ? 'text-primary bg-primary/5 font-black' : 'text-deep-purple hover:bg-gray-50'}`}
+                      >
+                        {cls}
+                      </button>
+                    ))
+                  )}
                 </div>
               </>
             )}
@@ -317,23 +324,27 @@ const TeacherManageStudents = () => {
               onClick={() => { setIsSectionOpen(!isSectionOpen); setIsClassOpen(false); }}
               className="w-full px-4 py-3.5 bg-white border border-gray-200 hover:border-primary/20 active:bg-gray-50 rounded-2xl text-left flex items-center justify-between shadow-sm transition-all"
             >
-              <span className="text-xs font-black text-deep-purple">Section {selectedSection}</span>
+              <span className="text-xs font-black text-deep-purple">{selectedSection ? `Section ${selectedSection}` : '—'}</span>
               <span className="text-gray-400 text-xs">▼</span>
             </button>
             {isSectionOpen && (
               <>
                 <div className="fixed inset-0 z-40 bg-transparent" onClick={() => setIsSectionOpen(false)} />
                 <div className="absolute left-0 right-0 mt-2 bg-white border border-gray-200 rounded-2xl shadow-2xl z-50 py-1.5 animate-in fade-in slide-in-from-top-2 duration-200">
-                  {['A', 'B', 'C'].map(sec => (
-                    <button 
-                      key={sec}
-                      type="button"
-                      onClick={() => { setSelectedSection(sec); setIsSectionOpen(false); }}
-                      className={`w-full px-4 py-2.5 text-left text-xs font-bold transition-all ${selectedSection === sec ? 'text-primary bg-primary/5 font-black' : 'text-deep-purple hover:bg-gray-50'}`}
-                    >
-                      Section {sec}
-                    </button>
-                  ))}
+                  {getSections(selectedClass).length === 0 ? (
+                    <div className="px-4 py-3 text-[11px] font-bold text-gray-400 text-center">No sections assigned</div>
+                  ) : (
+                    getSections(selectedClass).map(sec => (
+                      <button
+                        key={sec}
+                        type="button"
+                        onClick={() => { setSelectedSection(sec); setIsSectionOpen(false); }}
+                        className={`w-full px-4 py-2.5 text-left text-xs font-bold transition-all ${selectedSection === sec ? 'text-primary bg-primary/5 font-black' : 'text-deep-purple hover:bg-gray-50'}`}
+                      >
+                        Section {sec}
+                      </button>
+                    ))
+                  )}
                 </div>
               </>
             )}
@@ -398,38 +409,20 @@ const TeacherManageStudents = () => {
             )}
           </div>
 
-          {/* Actions grid */}
-          <div className="grid grid-cols-3 gap-2">
-            {/* Import Excel */}
-            <button 
-              type="button"
-              onClick={() => triggerToast('Excel Template Exported!')}
-              className="py-3 bg-white border border-primary/20 hover:border-primary hover:bg-primary/5 text-primary active:scale-95 transition-all rounded-2xl flex items-center justify-center gap-1 text-[10px] font-black shadow-sm"
-            >
-              <Download size={13} strokeWidth={2.5} />
-              <span>Import Excel</span>
-            </button>
-
-            {/* Bulk Add Student */}
-            <button 
-              type="button"
-              onClick={() => navigate('/school/teacher/students/bulk')}
-              className="py-3 bg-[#FAF9FF] border border-[#ECE9FC] text-primary hover:bg-purple-100/50 active:scale-95 transition-all rounded-2xl flex items-center justify-center gap-1 text-[10px] font-black shadow-sm"
-            >
-              <Plus size={13} strokeWidth={2.5} />
-              <span>Bulk Add</span>
-            </button>
-
-            {/* Add Student button */}
-            <button 
-              type="button"
-              onClick={handleOpenAddDrawer}
-              className="py-3 bg-primary text-white hover:bg-deep-purple active:scale-95 transition-all rounded-2xl flex items-center justify-center gap-1 text-[10px] font-black shadow-sm"
-            >
-              <Plus size={14} strokeWidth={2.5} />
-              <span>Add Student</span>
-            </button>
+          {/* Student enrollment is handled by the school admin — teachers
+              only view and edit the roster here */}
+          <div className="px-4 py-2.5 bg-purple-50/60 border border-purple-100 rounded-2xl text-[10px] font-bold text-primary">
+            New admissions are added by the school office. You can view and update the students of your class here.
           </div>
+
+          {!classesLoading && !hasClasses && (
+            <div className="px-4 py-3.5 bg-amber-50 border border-amber-100 rounded-2xl text-center">
+              <p className="text-[11px] font-black text-amber-700">No classes assigned to you yet</p>
+              <p className="text-[10px] font-bold text-amber-600/80 mt-0.5">
+                Your school office assigns classes to teachers. Please contact them to get access.
+              </p>
+            </div>
+          )}
         </div>
 
         {/* 5. Student List Header Row */}
@@ -549,14 +542,6 @@ const TeacherManageStudents = () => {
 
       </div>
 
-      {/* Floating Add Button */}
-      <button 
-        onClick={handleOpenAddDrawer}
-        className="fixed bottom-24 right-6 w-12 h-12 bg-primary text-white hover:bg-deep-purple active:scale-95 transition-all rounded-full flex items-center justify-center shadow-xl shadow-purple-100 z-30"
-      >
-        <Plus size={22} strokeWidth={2.5} />
-      </button>
-
       {/* Drawer Overlay Backdrop */}
       {isDrawerOpen && (
         <>
@@ -571,8 +556,8 @@ const TeacherManageStudents = () => {
             {/* Drawer Drag bar / Header */}
             <div className="flex justify-between items-center px-6 pt-5 pb-3 border-b border-gray-100 shrink-0">
               <div>
-                <h3 className="text-sm font-black text-deep-purple leading-none">{isEditing ? 'Edit Student Details' : 'Add New Student'}</h3>
-                <p className="text-[9px] text-gray-400 font-bold mt-1">Register student details to the class list</p>
+                <h3 className="text-sm font-black text-deep-purple leading-none">Edit Student Details</h3>
+                <p className="text-[9px] text-gray-400 font-bold mt-1">Update this student's class record</p>
               </div>
               <button 
                 onClick={() => setIsDrawerOpen(false)}
@@ -654,7 +639,7 @@ const TeacherManageStudents = () => {
 
                 <div className="grid grid-cols-2 gap-3.5">
                   <div className="bg-gray-50 border border-gray-150 rounded-2xl px-3 py-2">
-                    <label className="text-[8px] font-bold text-gray-400 block mb-0.5 leading-none">Father Name</label>
+                    <label className="text-[8px] font-bold text-gray-400 block mb-0.5 leading-none">Father Name *</label>
                     <input 
                       type="text"
                       value={formFatherName}

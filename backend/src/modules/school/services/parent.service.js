@@ -1,80 +1,12 @@
-const { NotFoundError, ConflictError } = require('../../../common/errors');
+const { NotFoundError } = require('../../../common/errors');
 const { withTransaction } = require('../../../database');
 const User = require('../../../database/models/User');
 const ParentProfile = require('../../../database/models/ParentProfile');
-const schoolRepository = require('../repositories/school.repository');
-const { generateUserRefId } = require('../utils/refId');
 const { normalizePhone } = require('../../../utils');
 
+// Parent accounts are no longer created here — they are created automatically
+// by student.service's linkParentByPhone when a student is enrolled.
 const parentService = {
-  async createParent(schoolId, payload) {
-    const school = await schoolRepository.findById(schoolId);
-    if (!school) throw new NotFoundError('School not found', 'SCHOOL_NOT_FOUND');
-
-    const normalizedPhone = normalizePhone(payload.phone);
-    
-    const existingPhone = await User.findOne({ phone: normalizedPhone, 'softDelete.isDeleted': { $ne: true } });
-    if (existingPhone) {
-      throw new ConflictError('A user with this phone number already exists', 'PHONE_EXISTS');
-    }
-
-    if (payload.email) {
-      const existingEmail = await User.findOne({ email: payload.email.toLowerCase(), 'softDelete.isDeleted': { $ne: true } });
-      if (existingEmail) {
-        throw new ConflictError('A user with this email address already exists', 'EMAIL_EXISTS');
-      }
-    }
-
-    const result = await withTransaction(async (session) => {
-      const refId = generateUserRefId('P');
-      
-      const [user] = await User.create([{
-        refId,
-        role: 'parent',
-        status: 'active',
-        name: payload.name,
-        email: payload.email || undefined,
-        phone: normalizedPhone,
-        phoneVerifiedAt: new Date(),
-        tenantSchoolId: schoolId,
-      }], { session });
-
-      // Generate a unique referralCode (format EMARTxxxx)
-      let referralCode;
-      let isUnique = false;
-      while (!isUnique) {
-        const rand = Math.floor(1000 + Math.random() * 9000); // 4 digits
-        referralCode = `EMART${rand}`;
-        const match = await ParentProfile.findOne({ referralCode }).session(session);
-        if (!match) isUnique = true;
-      }
-
-      const [profile] = await ParentProfile.create([{
-        userId: user._id,
-        referralCode,
-      }], { session });
-
-      return { user, profile };
-    });
-
-    // Send Welcome Email
-    if (payload.email) {
-      const emailService = require('../../../common/email');
-      const logger = require('../../../common/logger');
-      emailService.sendWelcomeEmail({
-        to: payload.email,
-        name: payload.name,
-        role: 'parent',
-        mobile: normalizedPhone,
-        schoolName: school.name,
-      }).catch((err) => {
-        logger.error('Failed to send parent welcome email:', err);
-      });
-    }
-
-    return result;
-  },
-
   async listParents(schoolId, query) {
     const page = parseInt(query.page) || 1;
     const limit = parseInt(query.limit) || 20;
@@ -102,12 +34,19 @@ const parentService = {
       .limit(limit)
       .lean();
 
-    // Populate ParentProfile details
+    // Populate ParentProfile details and linked children so the (view-only)
+    // parents directory can show who each account belongs to
+    const ChildProfile = require('../../../database/models/ChildProfile');
     const populated = await Promise.all(users.map(async (user) => {
       const profile = await ParentProfile.findOne({ userId: user._id, 'softDelete.isDeleted': { $ne: true } }).lean();
+      const children = await ChildProfile.find({
+        parentUserId: user._id,
+        'softDelete.isDeleted': { $ne: true },
+      }).select('name grade rollNo studentId').lean();
       return {
         ...profile,
         user,
+        children,
       };
     }));
 
@@ -150,7 +89,17 @@ const parentService = {
     const user = await User.findOne({ _id: profile.userId, tenantSchoolId: schoolId });
     if (!user) throw new NotFoundError('Parent not found under this school', 'PARENT_NOT_FOUND');
 
+    const Student = require('../../../database/models/Student');
+    const ChildProfile = require('../../../database/models/ChildProfile');
+
     await withTransaction(async (session) => {
+      // Remove references first so students and child profiles don't keep
+      // dangling links to the deleted parent
+      await Student.updateMany(
+        { parentProfileIds: parentId },
+        { $pull: { parentProfileIds: parentId } }
+      ).session(session);
+      await ChildProfile.deleteMany({ parentUserId: profile.userId }).session(session);
       await ParentProfile.deleteOne({ _id: parentId }).session(session);
       await User.deleteOne({ _id: profile.userId }).session(session);
     });

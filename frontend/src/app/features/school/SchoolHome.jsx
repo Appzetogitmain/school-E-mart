@@ -47,7 +47,17 @@ const SchoolHome = () => {
     };
   });
 
-  const isGuest = !localStorage.getItem('childInfo');
+  // childInfo is shared with the parent portal — only a school login counts here
+  const isGuest = (() => {
+    try {
+      const raw = localStorage.getItem('childInfo');
+      if (!raw) return true;
+      const parsed = JSON.parse(raw);
+      return Boolean(parsed.role && parsed.role !== 'school');
+    } catch {
+      return true;
+    }
+  })();
 
   useEffect(() => {
     const handleUpdate = () => {

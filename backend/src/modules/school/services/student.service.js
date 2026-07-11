@@ -2,136 +2,273 @@ const { NotFoundError, ConflictError } = require('../../../common/errors');
 const { withTransaction } = require('../../../database');
 const studentRepository = require('../repositories/student.repository');
 const schoolUserRepository = require('../repositories/user.repository');
-const { generateStudentRefNo } = require('../utils/refId');
+const { generateStudentRefNo, generateUserRefId } = require('../utils/refId');
+
+// referralCode is globally unique on ParentProfile; the 4-digit space is small,
+// so retry until an unused code is found instead of trusting a single draw
+const generateUniqueReferralCode = async (ParentProfile, session) => {
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    const code = 'EMART' + Math.floor(1000 + Math.random() * 9000);
+    const exists = await ParentProfile.findOne({ referralCode: code }).session(session);
+    if (!exists) return code;
+  }
+  // 4-digit space saturated — fall back to a timestamp-based suffix
+  return 'EMART' + Date.now().toString().slice(-8);
+};
+
+// Shared by registerStudent and updateStudent: find or create the parent
+// account for payload.parentPhone and fully link it to the student
+// (student.parentProfileIds, ChildProfile, activeChildId).
+// Returns details of the linked parent so callers can act after the
+// transaction commits (e.g. send the welcome email).
+const linkParentByPhone = async (schoolId, student, payload, session) => {
+  const { normalizePhone } = require('../../../utils');
+  const User = require('../../../database/models/User');
+  const ParentProfile = require('../../../database/models/ParentProfile');
+  const ChildProfile = require('../../../database/models/ChildProfile');
+  const School = require('../../../database/models/School');
+
+  const normalizedPhone = normalizePhone(payload.parentPhone);
+  const normalizedEmail = payload.parentEmail
+    ? payload.parentEmail.trim().toLowerCase()
+    : undefined;
+
+  // User.phone is globally unique across roles; creating a second user with a
+  // teacher's/vendor's phone would hit the unique index, so fail cleanly here
+  const existingUser = await User.findOne({
+    phone: normalizedPhone,
+    'softDelete.isDeleted': { $ne: true },
+  }).session(session);
+  if (existingUser && existingUser.role !== 'parent') {
+    throw new ConflictError(
+      'This phone number belongs to an existing non-parent account',
+      'PHONE_NOT_PARENT'
+    );
+  }
+
+  if (normalizedEmail) {
+    const emailOwner = await User.findOne({
+      email: normalizedEmail,
+      'softDelete.isDeleted': { $ne: true },
+    }).session(session);
+    if (emailOwner && (!existingUser || !emailOwner._id.equals(existingUser._id))) {
+      throw new ConflictError(
+        'A user with this email address already exists',
+        'EMAIL_EXISTS'
+      );
+    }
+  }
+
+  let parentUser = existingUser;
+  let parentProfile;
+  let parentCreated = false;
+
+  if (parentUser) {
+    // Backfill the email if the account doesn't have one yet
+    if (normalizedEmail && !parentUser.email) {
+      await User.updateOne(
+        { _id: parentUser._id },
+        { $set: { email: normalizedEmail } }
+      ).session(session);
+    }
+    parentProfile = await ParentProfile.findOne({
+      userId: parentUser._id,
+      'softDelete.isDeleted': { $ne: true },
+    }).session(session);
+    if (!parentProfile) {
+      const referralCode = await generateUniqueReferralCode(ParentProfile, session);
+      const createdProfile = await ParentProfile.create(
+        [{ userId: parentUser._id, referralCode }],
+        { session }
+      );
+      parentProfile = createdProfile[0];
+    }
+  } else {
+    const refId = generateUserRefId('P');
+    const pName = payload.parentName || `${payload.name || student.name} Parent`;
+    const createdUser = await User.create(
+      [
+        {
+          refId,
+          role: 'parent',
+          status: 'active',
+          name: pName,
+          email: normalizedEmail,
+          phone: normalizedPhone,
+          phoneVerifiedAt: new Date(),
+          // Without this the parent never appears in the school's parent list
+          tenantSchoolId: schoolId,
+        },
+      ],
+      { session }
+    );
+    parentUser = createdUser[0];
+    parentCreated = true;
+
+    const referralCode = await generateUniqueReferralCode(ParentProfile, session);
+    const createdProfile = await ParentProfile.create(
+      [{ userId: parentUser._id, referralCode }],
+      { session }
+    );
+    parentProfile = createdProfile[0];
+  }
+
+  if (parentProfile) {
+    await studentRepository.updateById(
+      student._id,
+      { $addToSet: { parentProfileIds: parentProfile._id } },
+      {},
+      { session }
+    );
+  }
+
+  const schoolObj = await School.findById(schoolId).session(session);
+  const schoolRefNoVal = schoolObj ? schoolObj.schoolRefNo : '';
+
+  let childProfile = await ChildProfile.findOne({
+    parentUserId: parentUser._id,
+    studentId: student._id,
+    'softDelete.isDeleted': { $ne: true },
+  }).session(session);
+  if (!childProfile) {
+    const createdChild = await ChildProfile.create(
+      [
+        {
+          parentUserId: parentUser._id,
+          name: payload.name || student.name,
+          schoolId,
+          schoolRefNo: schoolRefNoVal,
+          grade: payload.classGrade || student.classGrade,
+          rollNo: payload.rollNo || student.rollNo,
+          studentId: student._id,
+        },
+      ],
+      { session }
+    );
+    childProfile = createdChild[0];
+  } else {
+    await ChildProfile.updateOne(
+      { _id: childProfile._id },
+      {
+        $set: {
+          name: payload.name || student.name,
+          grade: payload.classGrade || student.classGrade,
+          rollNo: payload.rollNo || student.rollNo,
+          schoolId,
+          schoolRefNo: schoolRefNoVal,
+        },
+      }
+    ).session(session);
+  }
+
+  if (parentProfile && !parentProfile.activeChildId) {
+    await ParentProfile.updateOne(
+      { _id: parentProfile._id },
+      { $set: { activeChildId: childProfile._id } }
+    ).session(session);
+  }
+
+  return {
+    parentCreated,
+    parentName: parentUser.name,
+    parentEmail: parentUser.email || normalizedEmail,
+    parentPhone: normalizedPhone,
+    schoolName: schoolObj ? schoolObj.name : '',
+  };
+};
+
+// Fire-and-forget after the transaction commits — a failed email must never
+// roll back an enrollment
+const sendParentWelcomeEmail = (linkResult) => {
+  if (!linkResult || !linkResult.parentCreated || !linkResult.parentEmail) return;
+  const emailService = require('../../../common/email');
+  const logger = require('../../../common/logger');
+  emailService.sendWelcomeEmail({
+    to: linkResult.parentEmail,
+    name: linkResult.parentName,
+    role: 'parent',
+    mobile: linkResult.parentPhone,
+    schoolName: linkResult.schoolName,
+  }).catch((err) => {
+    logger.error('Failed to send parent welcome email:', err);
+  });
+};
 
 const studentService = {
   async registerStudent(schoolId, payload) {
-    const count = await studentRepository.countBySchool(schoolId);
-    const schoolRefNo = payload.schoolRefNo || generateStudentRefNo(schoolId, count + 1);
+    const Student = require('../../../database/models/Student');
 
-    const existing = await studentRepository.findBySchoolRefNo(schoolId, schoolRefNo);
-    if (existing) throw new ConflictError('Student reference already exists', 'STUDENT_REF_EXISTS');
+    // The (schoolId, schoolRefNo) unique index also covers soft-deleted
+    // students, so both the duplicate check and the sequence generation must
+    // query the raw model rather than the soft-delete-filtered repository
+    let schoolRefNo = payload.schoolRefNo;
+    if (schoolRefNo) {
+      const existing = await Student.findOne({ schoolId, schoolRefNo }).lean();
+      if (existing) throw new ConflictError('Student reference already exists', 'STUDENT_REF_EXISTS');
+    } else {
+      const total = await Student.countDocuments({ schoolId });
+      let sequence = total + 1;
+      schoolRefNo = generateStudentRefNo(schoolId, sequence);
+      // eslint-disable-next-line no-await-in-loop
+      while (await Student.findOne({ schoolId, schoolRefNo }).lean()) {
+        sequence += 1;
+        schoolRefNo = generateStudentRefNo(schoolId, sequence);
+      }
+    }
 
-    return withTransaction(async (session) => {
-      const student = await studentRepository.create(
-        {
-          schoolId,
-          name: payload.name,
-          schoolRefNo,
-          rollNo: payload.rollNo,
-          classGrade: payload.classGrade,
-          section: payload.section,
-          admissionNo: payload.admissionNo,
-          status: payload.status || 'active',
-          dob: payload.dob,
-          gender: payload.gender,
-          bloodGroup: payload.bloodGroup,
-          parentProfileIds: payload.parentProfileIds || [],
-        },
-        { session }
-      );
-
-      if (payload.parentPhone) {
-        const { normalizePhone } = require('../../../utils');
-        const User = require('../../../database/models/User');
-        const ParentProfile = require('../../../database/models/ParentProfile');
-        const ChildProfile = require('../../../database/models/ChildProfile');
-        const School = require('../../../database/models/School');
-        const { generateUserRefId } = require('../utils/refId');
-
-        const normalizedPhone = normalizePhone(payload.parentPhone);
-        
-        let parentUser = await User.findOne({ phone: normalizedPhone, role: 'parent', 'softDelete.isDeleted': { $ne: true } }).session(session);
-        let parentProfile;
-        
-        if (parentUser) {
-          parentProfile = await ParentProfile.findOne({ userId: parentUser._id, 'softDelete.isDeleted': { $ne: true } }).session(session);
-          if (!parentProfile) {
-            const referralCode = 'EMART' + Math.floor(1000 + Math.random() * 9000);
-            const createdProfile = await ParentProfile.create([{
-              userId: parentUser._id,
-              referralCode
-            }], { session });
-            parentProfile = createdProfile[0];
-          }
-        } else {
-          // Create user
-          const refId = generateUserRefId('P');
-          const pName = payload.parentName || `${payload.name} Parent`;
-          const createdUser = await User.create([{
-            refId,
-            role: 'parent',
-            status: 'active',
-            name: pName,
-            phone: normalizedPhone,
-            phoneVerifiedAt: new Date()
-          }], { session });
-          parentUser = createdUser[0];
-
-          const referralCode = 'EMART' + Math.floor(1000 + Math.random() * 9000);
-          const createdProfile = await ParentProfile.create([{
-            userId: parentUser._id,
-            referralCode
-          }], { session });
-          parentProfile = createdProfile[0];
-        }
-
-        // Link parent to student
-        if (parentProfile) {
-          await studentRepository.updateById(
-            student._id,
-            { $addToSet: { parentProfileIds: parentProfile._id } },
-            {},
-            { session }
-          );
-        }
-
-        // Link student to parent child profile
-        const schoolObj = await School.findById(schoolId).session(session);
-        const schoolRefNoVal = schoolObj ? schoolObj.schoolRefNo : '';
-        
-        let childProfile = await ChildProfile.findOne({ parentUserId: parentUser._id, studentId: student._id, 'softDelete.isDeleted': { $ne: true } }).session(session);
-        if (!childProfile) {
-          const createdChild = await ChildProfile.create([{
-            parentUserId: parentUser._id,
-            name: student.name,
+    try {
+      let linkResult;
+      const student = await withTransaction(async (session) => {
+        const created = await studentRepository.create(
+          {
             schoolId,
-            schoolRefNo: schoolRefNoVal,
-            grade: student.classGrade,
-            rollNo: student.rollNo,
-            studentId: student._id
-          }], { session });
-          childProfile = createdChild[0];
-        } else {
-          await ChildProfile.updateOne(
-            { _id: childProfile._id },
-            { $set: { name: student.name, grade: student.classGrade, rollNo: student.rollNo, schoolId, schoolRefNo: schoolRefNoVal } }
-          ).session(session);
+            name: payload.name,
+            schoolRefNo,
+            rollNo: payload.rollNo,
+            classGrade: payload.classGrade,
+            section: payload.section,
+            admissionNo: payload.admissionNo,
+            status: payload.status || 'active',
+            dob: payload.dob,
+            gender: payload.gender,
+            bloodGroup: payload.bloodGroup,
+            motherName: payload.motherName,
+            address: payload.address,
+            admissionDate: payload.admissionDate,
+            previousSchool: payload.previousSchool,
+            parentProfileIds: payload.parentProfileIds || [],
+          },
+          { session }
+        );
+
+        if (payload.parentPhone) {
+          linkResult = await linkParentByPhone(schoolId, created, payload, session);
         }
 
-        // Set activeChildId if not set
-        if (parentProfile && !parentProfile.activeChildId) {
-          await ParentProfile.updateOne(
-            { _id: parentProfile._id },
-            { $set: { activeChildId: childProfile._id } }
-          ).session(session);
+        if (payload.parentUserId) {
+          const parentProfile = await schoolUserRepository.findParentProfileByUserId(payload.parentUserId);
+          if (parentProfile) {
+            await studentRepository.updateById(
+              created._id,
+              { $addToSet: { parentProfileIds: parentProfile._id } },
+              {},
+              { session }
+            );
+          }
         }
-      }
 
-      if (payload.parentUserId) {
-        const parentProfile = await schoolUserRepository.findParentProfileByUserId(payload.parentUserId);
-        if (parentProfile) {
-          await studentRepository.updateById(
-            student._id,
-            { $addToSet: { parentProfileIds: parentProfile._id } },
-            {},
-            { session }
-          );
-        }
-      }
+        return created;
+      });
 
+      sendParentWelcomeEmail(linkResult);
       return student;
-    });
+    } catch (err) {
+      // Concurrent registrations can still race on the unique index
+      if (err?.code === 11000) {
+        throw new ConflictError('Student reference already exists', 'STUDENT_REF_EXISTS');
+      }
+      throw err;
+    }
   },
 
   async listStudents(schoolId, query) {
@@ -143,7 +280,7 @@ const studentService = {
 
     const Student = require('../../../database/models/Student');
     const populatedData = await Student.populate(data, [
-      { path: 'parentProfileIds', populate: { path: 'userId', select: 'name phone' } }
+      { path: 'parentProfileIds', populate: { path: 'userId', select: 'name phone email' } }
     ]);
 
     return { data: populatedData, pagination };
@@ -154,122 +291,40 @@ const studentService = {
     if (!student) throw new NotFoundError('Student not found', 'STUDENT_NOT_FOUND');
     const Student = require('../../../database/models/Student');
     return Student.populate(student, [
-      { path: 'parentProfileIds', populate: { path: 'userId', select: 'name phone' } }
+      { path: 'parentProfileIds', populate: { path: 'userId', select: 'name phone email' } }
     ]);
   },
 
   async updateStudent(schoolId, studentId, payload) {
-    return withTransaction(async (session) => {
+    let linkResult;
+    const result = await withTransaction(async (session) => {
       const student = await studentRepository.findOne({ _id: studentId, schoolId }).session(session);
       if (!student) throw new NotFoundError('Student not found', 'STUDENT_NOT_FOUND');
 
       const updateFields = { ...payload };
       delete updateFields.parentPhone;
       delete updateFields.parentName;
+      delete updateFields.parentEmail;
+      // Parent links are managed via linkParentByPhone/associateParent; a raw
+      // $set here could silently wipe existing links
+      delete updateFields.parentProfileIds;
+      delete updateFields.parentUserId;
 
       await studentRepository.updateById(studentId, { $set: updateFields }, {}, { session });
 
       if (payload.parentPhone) {
-        const { normalizePhone } = require('../../../utils');
-        const User = require('../../../database/models/User');
-        const ParentProfile = require('../../../database/models/ParentProfile');
-        const ChildProfile = require('../../../database/models/ChildProfile');
-        const School = require('../../../database/models/School');
-        const { generateUserRefId } = require('../utils/refId');
-
-        const normalizedPhone = normalizePhone(payload.parentPhone);
-        
-        let parentUser = await User.findOne({ phone: normalizedPhone, role: 'parent', 'softDelete.isDeleted': { $ne: true } }).session(session);
-        let parentProfile;
-        
-        if (parentUser) {
-          parentProfile = await ParentProfile.findOne({ userId: parentUser._id, 'softDelete.isDeleted': { $ne: true } }).session(session);
-          if (!parentProfile) {
-            const referralCode = 'EMART' + Math.floor(1000 + Math.random() * 9000);
-            const createdProfile = await ParentProfile.create([{
-              userId: parentUser._id,
-              referralCode
-            }], { session });
-            parentProfile = createdProfile[0];
-          }
-        } else {
-          // Create user
-          const refId = generateUserRefId('P');
-          const pName = payload.parentName || `${payload.name || student.name} Parent`;
-          const createdUser = await User.create([{
-            refId,
-            role: 'parent',
-            status: 'active',
-            name: pName,
-            phone: normalizedPhone,
-            phoneVerifiedAt: new Date()
-          }], { session });
-          parentUser = createdUser[0];
-
-          const referralCode = 'EMART' + Math.floor(1000 + Math.random() * 9000);
-          const createdProfile = await ParentProfile.create([{
-            userId: parentUser._id,
-            referralCode
-          }], { session });
-          parentProfile = createdProfile[0];
-        }
-
-        // Link parent to student
-        if (parentProfile) {
-          await studentRepository.updateById(
-            studentId,
-            { $addToSet: { parentProfileIds: parentProfile._id } },
-            {},
-            { session }
-          );
-        }
-
-        // Link student to parent child profile
-        const schoolObj = await School.findById(schoolId).session(session);
-        const schoolRefNo = schoolObj ? schoolObj.schoolRefNo : '';
-        
-        let childProfile = await ChildProfile.findOne({ parentUserId: parentUser._id, studentId, 'softDelete.isDeleted': { $ne: true } }).session(session);
-        if (!childProfile) {
-          const createdChild = await ChildProfile.create([{
-            parentUserId: parentUser._id,
-            name: payload.name || student.name,
-            schoolId,
-            schoolRefNo,
-            grade: payload.classGrade || student.classGrade,
-            rollNo: payload.rollNo || student.rollNo,
-            studentId
-          }], { session });
-          childProfile = createdChild[0];
-        } else {
-          await ChildProfile.updateOne(
-            { _id: childProfile._id },
-            { 
-              $set: { 
-                name: payload.name || student.name, 
-                grade: payload.classGrade || student.classGrade, 
-                rollNo: payload.rollNo || student.rollNo, 
-                schoolId, 
-                schoolRefNo 
-              } 
-            }
-          ).session(session);
-        }
-
-        // Set activeChildId if not set
-        if (parentProfile && !parentProfile.activeChildId) {
-          await ParentProfile.updateOne(
-            { _id: parentProfile._id },
-            { $set: { activeChildId: childProfile._id } }
-          ).session(session);
-        }
+        linkResult = await linkParentByPhone(schoolId, student, payload, session);
       }
 
       const updated = await studentRepository.findOne({ _id: studentId, schoolId }).session(session);
       const Student = require('../../../database/models/Student');
       return Student.populate(updated, [
-        { path: 'parentProfileIds', populate: { path: 'userId', select: 'name phone' } }
+        { path: 'parentProfileIds', populate: { path: 'userId', select: 'name phone email' } }
       ]);
     });
+
+    sendParentWelcomeEmail(linkResult);
+    return result;
   },
 
   async transferStudent(schoolId, studentId, { classGrade, section }) {

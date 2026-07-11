@@ -41,9 +41,17 @@ const subjectService = {
     if (!teacher) throw new NotFoundError('Teacher not found', 'TEACHER_NOT_FOUND');
 
     const subjectsTaught = Array.from(new Set([...(teacher.subjectsTaught || []), subjectCode]));
-    const classAssignments = [...(teacher.classAssignments || [])];
-    if (!classAssignments.some((a) => a.class === classGrade && a.section === section)) {
-      classAssignments.push({ class: classGrade, section });
+    const classAssignments = (teacher.classAssignments || []).map((a) => ({
+      class: a.class,
+      section: a.section,
+      subjects: a.subjects || [],
+      isClassTeacher: Boolean(a.isClassTeacher),
+    }));
+    const existing = classAssignments.find((a) => a.class === classGrade && a.section === section);
+    if (existing) {
+      existing.subjects = Array.from(new Set([...existing.subjects, subjectCode]));
+    } else {
+      classAssignments.push({ class: classGrade, section, subjects: [subjectCode], isClassTeacher: false });
     }
 
     await teacherRepository.updateById(teacherProfileId, {

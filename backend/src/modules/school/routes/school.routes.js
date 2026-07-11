@@ -142,13 +142,28 @@ router.delete(
   validateParams(validators.classGradeParam),
   schoolController.deleteClass
 );
-router.post(
-  '/:schoolId/classes/:classGrade/class-teacher',
+// Teacher ↔ class/section/subject assignments (Class & Teacher Assignments page)
+router.get(
+  '/:schoolId/teacher-assignments',
+  ...protectedRoute({ roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN], permissions: [PERMISSIONS.CLASSES_READ] }),
+  resolveSchool(),
+  schoolController.listTeacherAssignments
+);
+router.put(
+  '/:schoolId/teachers/:teacherId/assignments',
   ...protectedRoute({ roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN], permissions: [PERMISSIONS.CLASSES_WRITE] }),
   resolveSchool(),
-  validateParams(validators.classGradeParam),
-  validateBody(validators.assignClassTeacherSchema),
-  schoolController.assignClassTeacher
+  validateParams(validators.teacherIdParam),
+  validateBody(validators.upsertAssignmentSchema),
+  schoolController.upsertTeacherAssignment
+);
+router.delete(
+  '/:schoolId/teachers/:teacherId/assignments',
+  ...protectedRoute({ roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN], permissions: [PERMISSIONS.CLASSES_WRITE] }),
+  resolveSchool(),
+  validateParams(validators.teacherIdParam),
+  validateQuery(validators.removeAssignmentQuerySchema),
+  schoolController.removeTeacherAssignment
 );
 
 router.get(
@@ -190,9 +205,11 @@ router.post(
   schoolController.assignStudentsToSection
 );
 
+// Enrollment is a school-admin action; teachers can view and edit students
+// but must not create them
 router.post(
   '/:schoolId/students',
-  ...protectedRoute({ roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN, ROLES.TEACHER], permissions: [PERMISSIONS.STUDENTS_WRITE] }),
+  ...protectedRoute({ roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN], permissions: [PERMISSIONS.STUDENTS_WRITE] }),
   resolveSchool(),
   validateBody(validators.createStudentSchema),
   schoolController.registerStudent
@@ -553,15 +570,8 @@ router.post(
   schoolController.awardRfqQuote
 );
 
-// Parents Management
-router.post(
-  '/:schoolId/parents',
-  ...schoolAdmin,
-  resolveSchool(),
-  validateBody(validators.createParentSchema),
-  schoolController.createParent
-);
-
+// Parents Management (view-only: parent accounts are created automatically
+// when a student is enrolled with parent details)
 router.get(
   '/:schoolId/parents',
   ...schoolAdmin,

@@ -92,6 +92,7 @@ const SchoolQuotationsPage = React.lazy(() => import('../app/features/school/Sch
 const SchoolKitsPage = React.lazy(() => import('../app/features/school/SchoolKitsPage'));
 const SchoolChangePasswordPage = React.lazy(() => import('../app/features/school/SchoolChangePasswordPage'));
 const SchoolAddClass = React.lazy(() => import('../app/features/school/SchoolAddClass'));
+const SchoolTeacherAssignments = React.lazy(() => import('../app/features/school/SchoolTeacherAssignments'));
 
 
 // Teacher App Components
@@ -101,7 +102,6 @@ const TeacherAttendance = React.lazy(() => import('../app/features/teacher/Teach
 const TeacherHomework = React.lazy(() => import('../app/features/teacher/TeacherHomework'));
 const TeacherDiary = React.lazy(() => import('../app/features/teacher/TeacherDiary'));
 const TeacherManageStudents = React.lazy(() => import('../app/features/teacher/TeacherManageStudents'));
-const TeacherBulkAddStudents = React.lazy(() => import('../app/features/teacher/TeacherBulkAddStudents'));
 const TeacherProfile = React.lazy(() => import('../app/features/teacher/TeacherProfile'));
 const TeacherNotifications = React.lazy(() => import('../app/features/teacher/TeacherNotifications'));
 const TeacherCheckHomework = React.lazy(() => import('../app/features/teacher/TeacherCheckHomework'));
@@ -306,6 +306,7 @@ const AppRoutes = () => {
             <Route index element={<Navigate to="admin" replace />} />
             <Route path="admin" element={<SchoolHome />} />
             <Route path="add-class" element={<SchoolAddClass />} />
+            <Route path="teacher-assignments" element={<SchoolTeacherAssignments />} />
             <Route path="send-notice" element={<SchoolSendNotice />} />
             <Route path="create-event" element={<SchoolCreateEvent />} />
             <Route path="create-kit" element={<SchoolCreateKit />} />
@@ -345,7 +346,6 @@ const AppRoutes = () => {
             <Route index element={<Navigate to="dashboard" replace />} />
             <Route path="dashboard" element={<TeacherDashboard />} />
             <Route path="students" element={<TeacherManageStudents />} />
-            <Route path="students/bulk" element={<TeacherBulkAddStudents />} />
             <Route path="attendance" element={<TeacherAttendance />} />
             <Route path="homework" element={<TeacherHomework />} />
             <Route path="homework/check" element={<TeacherCheckHomework />} />

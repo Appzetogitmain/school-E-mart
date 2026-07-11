@@ -1,21 +1,18 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  ArrowLeft, HelpCircle, Calendar, Search, 
-  Save, CheckCircle2, AlertCircle, ChevronDown, GraduationCap, Loader2
+import {
+  ArrowLeft, HelpCircle, Calendar,
+  Save, CheckCircle2, AlertCircle, GraduationCap, Loader2, Users
 } from 'lucide-react';
 import {
   listClasses,
-  listTeachers,
   createClass,
   createSection,
-  assignClassTeacher,
   getSchool,
   updateSchool,
 } from '../../../services/schoolApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 import { flattenClassesForList } from '../../../utils/mappers/schoolClassMapper';
-import { mapTeacherForSelect } from '../../../utils/mappers/schoolTeacherMapper';
 import { useSchoolId } from '../../../utils/schoolContext';
 
 const SchoolAddClass = () => {
@@ -26,12 +23,10 @@ const SchoolAddClass = () => {
   const [academicYear, setAcademicYear] = useState('2025 - 2026');
   const [savedYear, setSavedYear] = useState('');
   const [section, setSection] = useState('');
-  const [classTeacher, setClassTeacher] = useState('');
 
   const [showToast, setShowToast] = useState(false);
   const [errors, setErrors] = useState({});
   const [classesList, setClassesList] = useState([]);
-  const [teachers, setTeachers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -46,21 +41,15 @@ const SchoolAddClass = () => {
     setLoading(true);
     setError('');
     try {
-      const [school, classes, teacherResult] = await Promise.all([
+      const [school, classes] = await Promise.all([
         getSchool(schoolId),
         listClasses(schoolId),
-        listTeachers(schoolId, { limit: 100 }),
       ]);
 
       const year = school?.academicYearCurrent || '2025 - 2026';
       setAcademicYear(year);
       setSavedYear(year);
       setClassesList(flattenClassesForList(classes, year));
-      setTeachers(
-        (teacherResult.data || [])
-          .filter((t) => t.approvalStatus === 'approved')
-          .map(mapTeacherForSelect)
-      );
     } catch (err) {
       setError(getErrorMessage(err, 'Unable to load classes'));
     } finally {
@@ -91,6 +80,32 @@ const SchoolAddClass = () => {
     const classGrade = className.trim();
     const sectionValue = section.trim() ? section.trim().toUpperCase() : '';
 
+    // Match case-insensitively so "class 5" doesn't create a duplicate of "Class 5",
+    // and reuse the stored spelling when adding a section to an existing class
+    const existingEntry = classesList.find(
+      (c) => c.className.trim().toLowerCase() === classGrade.toLowerCase()
+    );
+
+    if (existingEntry && !sectionValue) {
+      setError(
+        `"${existingEntry.className}" already exists. Enter a section letter to add a new section to it.`
+      );
+      return;
+    }
+    if (existingEntry && sectionValue) {
+      const sectionTaken = classesList.some(
+        (c) =>
+          c.className.trim().toLowerCase() === classGrade.toLowerCase() &&
+          c.section.toUpperCase() === sectionValue
+      );
+      if (sectionTaken) {
+        setError(`Section ${sectionValue} already exists for "${existingEntry.className}".`);
+        return;
+      }
+    }
+
+    const effectiveClassGrade = existingEntry ? existingEntry.className : classGrade;
+
     setSaving(true);
     setError('');
     try {
@@ -102,28 +117,18 @@ const SchoolAddClass = () => {
         setSavedYear(yearValue);
       }
 
-      const existingClass = classesList.some((c) => c.className === classGrade);
-
-      if (!existingClass) {
+      if (!existingEntry) {
         await createClass(schoolId, {
-          classGrade,
+          classGrade: effectiveClassGrade,
           sections: sectionValue ? [sectionValue] : [],
         });
-      } else if (sectionValue) {
-        await createSection(schoolId, classGrade, sectionValue);
-      }
-
-      if (classTeacher && sectionValue) {
-        await assignClassTeacher(schoolId, classGrade, {
-          section: sectionValue,
-          teacherProfileId: classTeacher,
-        });
+      } else {
+        await createSection(schoolId, effectiveClassGrade, sectionValue);
       }
 
       await loadData();
       setClassName('');
       setSection('');
-      setClassTeacher('');
       setShowToast(true);
       setTimeout(() => setShowToast(false), 2000);
     } catch (err) {
@@ -254,26 +259,20 @@ const SchoolAddClass = () => {
               </div>
             </div>
 
-            {/* Class Teacher */}
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">
-                Class Teacher (Optional)
-              </label>
-              <div className="relative">
-                <Search size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                <select
-                  value={classTeacher}
-                  onChange={(e) => setClassTeacher(e.target.value)}
-                  className="w-full pl-10 pr-8 py-3.5 bg-gray-50 border-2 border-transparent rounded-2xl text-xs font-bold text-deep-purple outline-none focus:border-primary/10 focus:bg-white focus:shadow-xl focus:shadow-primary/5 transition-all appearance-none cursor-pointer"
+            {/* Teachers are assigned on the dedicated management page, not here */}
+            <div className="px-4 py-3 bg-purple-50/60 border border-purple-100 rounded-2xl text-[10px] font-bold text-primary flex items-start gap-2">
+              <Users size={14} className="shrink-0 mt-0.5" />
+              <span>
+                Class teachers and subject teachers are assigned on the{' '}
+                <button
+                  type="button"
+                  onClick={() => navigate('/school/teacher-assignments')}
+                  className="underline font-black"
                 >
-                  <option value="">Search teacher name</option>
-                  {teachers.map((t) => (
-                    <option key={t.id} value={t.id}>{t.label}</option>
-                  ))}
-                </select>
-                <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-              </div>
-              <span className="text-[9px] text-gray-400 font-bold ml-1 block">You can assign or change later</span>
+                  Class &amp; Teacher Assignments
+                </button>{' '}
+                page after the class is created.
+              </span>
             </div>
           </div>
 

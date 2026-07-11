@@ -252,11 +252,18 @@ const TeacherDashboard = () => {
           </div>
         </div>
 
-        <p className="text-[10px] text-gray-400 font-bold text-center mt-4">
-          {classesLoading ? 'Loading classes…' : !hasClasses
-            ? 'No classes configured yet'
-            : 'Select a class & section to view and manage details'}
-        </p>
+        {!classesLoading && !hasClasses ? (
+          <div className="mt-4 px-4 py-3.5 bg-amber-50 border border-amber-100 rounded-2xl text-center">
+            <p className="text-[11px] font-black text-amber-700">No classes assigned to you yet</p>
+            <p className="text-[10px] font-bold text-amber-600/80 mt-0.5">
+              Your school office assigns classes and subjects to teachers. Please contact them to get access.
+            </p>
+          </div>
+        ) : (
+          <p className="text-[10px] text-gray-400 font-bold text-center mt-4">
+            {classesLoading ? 'Loading classes…' : 'Select a class & section to view and manage details'}
+          </p>
+        )}
       </div>
 
       {/* 3. Quick Actions Row */}

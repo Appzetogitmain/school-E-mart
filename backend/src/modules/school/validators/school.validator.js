@@ -40,10 +40,13 @@ const createSchoolSchema = Joi.object({
     .optional(),
 });
 
-const updateSchoolSchema = createSchoolSchema.fork(
-  ['name', 'schoolRefNo'],
-  (schema) => schema.optional()
-);
+const updateSchoolSchema = createSchoolSchema
+  .fork(['name', 'schoolRefNo'], (schema) => schema.optional())
+  .keys({
+    // Redefined without the create-time default: otherwise every partial
+    // update would $set partnerStatus back to 'prospect'
+    partnerStatus: Joi.string().valid('prospect', 'active', 'suspended').optional(),
+  });
 
 const createTeacherSchema = Joi.object({
   name: Joi.string().trim().min(2).max(80).required(),
@@ -117,18 +120,26 @@ const createStudentSchema = Joi.object({
   classGrade: Joi.string().trim().required(),
   section: Joi.string().trim().required(),
   status: Joi.string().valid('active', 'inactive', 'alumni').default('active'),
-  dob: Joi.date().optional(),
-  gender: Joi.string().valid('male', 'female', 'other', 'unspecified').optional(),
-  bloodGroup: Joi.string().trim().optional(),
+  // A school enrollment record needs the child's DOB (age) and gender
+  dob: Joi.date().max('now').required(),
+  gender: Joi.string().valid('male', 'female', 'other', 'unspecified').required(),
+  bloodGroup: Joi.string().trim().optional().allow('', null),
+  motherName: Joi.string().trim().max(80).optional().allow('', null),
+  address: Joi.string().trim().max(500).optional().allow('', null),
+  admissionDate: Joi.date().optional(),
+  previousSchool: Joi.string().trim().max(120).optional().allow('', null),
   parentUserId: objectId.optional(),
   parentProfileIds: Joi.array().items(objectId).optional(),
-  parentPhone: schemas.indianMobile.optional(),
-  parentName: Joi.string().trim().optional(),
+  // Parent contact is mandatory at enrollment: the parent's mobile becomes the
+  // login account for this student (no separate parent registration flow)
+  parentPhone: schemas.indianMobile.required(),
+  parentName: Joi.string().trim().min(2).max(80).required(),
+  parentEmail: schemas.email.optional().allow('', null),
   admissionNo: Joi.string().trim().optional(),
 });
 
 const updateStudentSchema = createStudentSchema.fork(
-  ['name', 'classGrade', 'section'],
+  ['name', 'classGrade', 'section', 'dob', 'gender', 'parentPhone', 'parentName'],
   (schema) => schema.optional()
 );
 
@@ -209,9 +220,18 @@ const timetableQuerySchema = Joi.object({
   dayOfWeek: Joi.number().integer().min(0).max(6).optional(),
 });
 
-const assignClassTeacherSchema = Joi.object({
+// Teacher ↔ class/section/subject assignment (managed on the school's
+// Class & Teacher Assignments page)
+const upsertAssignmentSchema = Joi.object({
+  classGrade: Joi.string().trim().required(),
   section: Joi.string().trim().required(),
-  teacherProfileId: objectId.required(),
+  subjects: Joi.array().items(Joi.string().trim().min(1).max(60)).default([]),
+  isClassTeacher: Joi.boolean().default(false),
+});
+
+const removeAssignmentQuerySchema = Joi.object({
+  classGrade: Joi.string().trim().required(),
+  section: Joi.string().trim().required(),
 });
 
 const targetClassSchema = Joi.object({
@@ -299,7 +319,8 @@ module.exports = {
   monthlyAttendanceQuerySchema,
   timetableSlotSchema,
   timetableQuerySchema,
-  assignClassTeacherSchema,
+  upsertAssignmentSchema,
+  removeAssignmentQuerySchema,
   updateSubjectSchema: subjectSchema.fork(['code'], (schema) => schema.optional()),
   updateAttendanceSchema: Joi.object({
     status: Joi.string().valid('present', 'absent', 'half_day', 'holiday', 'leave').optional(),
@@ -320,11 +341,6 @@ module.exports = {
   updateDiarySchema,
   diaryQuerySchema,
   studentIdQuerySchema,
-  createParentSchema: Joi.object({
-    name: Joi.string().trim().min(2).max(80).required(),
-    email: schemas.email.optional().allow('', null),
-    phone: schemas.indianMobile.required(),
-  }),
   updateParentSchema: Joi.object({
     name: Joi.string().trim().min(2).max(80).optional(),
     email: schemas.email.optional().allow('', null),

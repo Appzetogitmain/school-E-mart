@@ -14,6 +14,7 @@ const vendorDirectoryService = require('../services/vendorDirectory.service');
 const rfqService = require('../../rfq/services/rfq.service');
 const parentService = require('../services/parent.service');
 const attachmentService = require('../../admin/services/attachment.service');
+const schoolAccessPolicy = require('../policies/schoolAccess.policy');
 
 const schoolController = {
   createSchool: asyncHandler(async (req, res) => {
@@ -103,14 +104,22 @@ const schoolController = {
     return success(res, { school }, 'Class deleted successfully', undefined, req);
   }),
 
-  assignClassTeacher: asyncHandler(async (req, res) => {
-    const result = await classService.assignClassTeacher(
-      req.schoolId,
-      req.params.classGrade,
-      req.body.section,
-      req.body.teacherProfileId
-    );
-    return success(res, result, 'Class teacher assigned successfully', undefined, req);
+  listTeacherAssignments: asyncHandler(async (req, res) => {
+    const assignments = await classService.listTeacherAssignments(req.schoolId);
+    return success(res, { assignments }, 'Teacher assignments fetched successfully', undefined, req);
+  }),
+
+  upsertTeacherAssignment: asyncHandler(async (req, res) => {
+    const assignments = await classService.upsertAssignment(req.schoolId, req.params.teacherId, req.body);
+    return success(res, { assignments }, 'Teacher assignment saved successfully', undefined, req);
+  }),
+
+  removeTeacherAssignment: asyncHandler(async (req, res) => {
+    const assignments = await classService.removeAssignment(req.schoolId, req.params.teacherId, {
+      classGrade: req.query.classGrade,
+      section: req.query.section,
+    });
+    return success(res, { assignments }, 'Teacher assignment removed successfully', undefined, req);
   }),
 
   listSections: asyncHandler(async (req, res) => {
@@ -157,6 +166,11 @@ const schoolController = {
   }),
 
   registerStudent: asyncHandler(async (req, res) => {
+    // Teachers may only enroll students into classes they are assigned to
+    await schoolAccessPolicy.assertTeacherClassAccess(req, {
+      classGrade: req.body.classGrade,
+      section: req.body.section,
+    });
     const student = await studentService.registerStudent(req.schoolId, req.body);
     return created(res, { student }, 'Student registered successfully', req);
   }),
@@ -177,6 +191,11 @@ const schoolController = {
   }),
 
   transferStudent: asyncHandler(async (req, res) => {
+    // Teachers may only transfer students into classes they are assigned to
+    await schoolAccessPolicy.assertTeacherClassAccess(req, {
+      classGrade: req.body.classGrade,
+      section: req.body.section,
+    });
     const student = await studentService.transferStudent(req.schoolId, req.params.studentId, req.body);
     return success(res, { student }, 'Student transferred successfully', undefined, req);
   }),
@@ -373,11 +392,6 @@ const schoolController = {
   awardRfqQuote: asyncHandler(async (req, res) => {
     const rfq = await rfqService.awardQuote(req.schoolId, req.params.rfqId, req.params.quoteId);
     return success(res, { rfq }, 'Contract awarded successfully', undefined, req);
-  }),
-
-  createParent: asyncHandler(async (req, res) => {
-    const result = await parentService.createParent(req.schoolId, req.body);
-    return created(res, result, 'Parent created successfully', req);
   }),
 
   listParents: asyncHandler(async (req, res) => {
