@@ -15,6 +15,7 @@ const childProfileSchema = new mongoose.Schema({
   schoolRefNo: { type: String },
   grade: { type: String, required: true },
   rollNo: { type: String },
+  avatarUrl: { type: String },
   studentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Student' } // linked once confirmed
 }, { collection: 'childProfiles' });
 

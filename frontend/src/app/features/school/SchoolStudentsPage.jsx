@@ -33,7 +33,6 @@ const SchoolStudentsPage = () => {
     rollNo: '',
     gender: '',
     dob: '',
-    bloodGroup: '',
     motherName: '',
     address: '',
     admissionDate: '',
@@ -148,7 +147,6 @@ const SchoolStudentsPage = () => {
       };
       if (addForm.parentEmail.trim()) payload.parentEmail = addForm.parentEmail.trim();
       if (addForm.rollNo.trim()) payload.rollNo = addForm.rollNo.trim();
-      if (addForm.bloodGroup) payload.bloodGroup = addForm.bloodGroup;
       if (addForm.motherName.trim()) payload.motherName = addForm.motherName.trim();
       if (addForm.address.trim()) payload.address = addForm.address.trim();
       if (addForm.admissionDate) payload.admissionDate = addForm.admissionDate;
@@ -520,7 +518,6 @@ const SchoolStudentsPage = () => {
                     <div>📅 DOB: <span className="text-gray-600 font-bold">{selectedStudent.dob}</span></div>
                     <div>🎂 Age: <span className="text-gray-600 font-bold">{selectedStudent.age !== null && selectedStudent.age !== undefined ? `${selectedStudent.age} years` : '—'}</span></div>
                     <div>⚧️ Gender: <span className="text-gray-600 font-bold">{selectedStudent.gender}</span></div>
-                    <div>🩸 Blood Group: <span className="text-gray-600 font-bold">{selectedStudent.bloodGroup}</span></div>
                     <div>🛡️ Status: <span className="text-gray-600 font-bold">{selectedStudent.status}</span></div>
                   </div>
                   <div className="mt-2 text-deep-purple font-bold flex items-start gap-1.5">
@@ -670,23 +667,6 @@ const SchoolStudentsPage = () => {
                         <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                       </div>
                       {addErrors.gender && <span className="text-[10px] text-red-500 font-bold block mt-1">{addErrors.gender}</span>}
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider block mb-1.5">Blood Group</label>
-                    <div className="relative">
-                      <select
-                        value={addForm.bloodGroup}
-                        onChange={(e) => handleAddFormChange('bloodGroup', e.target.value)}
-                        className="w-full px-4 py-3.5 bg-white border border-gray-200 rounded-2xl font-bold text-deep-purple focus:outline-none appearance-none cursor-pointer"
-                      >
-                        <option value="">Select</option>
-                        {['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map((bg) => (
-                          <option key={bg} value={bg}>{bg}</option>
-                        ))}
-                      </select>
-                      <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                     </div>
                   </div>
 

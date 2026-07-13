@@ -120,6 +120,11 @@ const notificationService = {
   async getUnreadCount(userId) {
     return Notification.countDocuments({ userId, isRead: false });
   },
+
+  async remove(userId, notificationId) {
+    const deleted = await Notification.findOneAndDelete({ _id: notificationId, userId }).lean();
+    return deleted;
+  },
 };
 
 module.exports = notificationService;

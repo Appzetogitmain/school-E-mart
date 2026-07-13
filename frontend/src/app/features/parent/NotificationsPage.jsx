@@ -5,12 +5,28 @@ import {
   Info, ChevronLeft, CheckCheck, Trash2,
   Clock, ArrowRight, Loader2
 } from 'lucide-react';
-import { listParentNotices } from '../../../services/parentApi';
-import { getChildInfoFromStorage } from '../../../utils/parentContext';
+import {
+  listNotifications,
+  markNotificationAsRead,
+  markAllNotificationsAsRead,
+  deleteNotification as deleteNotificationApi,
+} from '../../../services/notificationApi';
+import useAuthStore from '../../../store/useAuthStore';
 import { getErrorMessage } from '../../../utils/apiHelpers';
+
+const mapNotification = (n) => ({
+  id: n._id || n.id,
+  title: n.title || 'Notification',
+  message: n.body || '',
+  type: n.type,
+  isRead: Boolean(n.isRead),
+  createdAt: n.createdAt,
+  actionLink: n.actionUrl || null,
+});
 
 const NotificationsPage = () => {
   const navigate = useNavigate();
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -19,31 +35,19 @@ const NotificationsPage = () => {
     let cancelled = false;
 
     const load = async () => {
-      setLoading(true);
-      setError('');
-      const childInfo = getChildInfoFromStorage();
-      const schoolId = childInfo?.schoolId;
-
-      if (!schoolId || schoolId === 'explore-schools') {
+      if (!isAuthenticated) {
         setNotifications([]);
         setLoading(false);
         return;
       }
 
+      setLoading(true);
+      setError('');
+
       try {
-        const { data } = await listParentNotices(schoolId, { limit: 20 });
+        const { data } = await listNotifications({ limit: 20 });
         if (!cancelled) {
-          setNotifications(
-            (data || []).map((notice) => ({
-              id: notice._id || notice.id,
-              title: notice.title || 'School Notice',
-              message: notice.body || notice.content || notice.summary || '',
-              type: 'school',
-              isRead: notice.isRead || notice.readAt,
-              createdAt: notice.publishedAt || notice.createdAt,
-              actionLink: '/user/notices',
-            }))
-          );
+          setNotifications((data || []).map(mapNotification));
         }
       } catch (err) {
         if (!cancelled) {
@@ -59,26 +63,47 @@ const NotificationsPage = () => {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [isAuthenticated]);
 
-  const markAsRead = (id) => {
+  const markAsRead = async (id) => {
+    const target = notifications.find((n) => n.id === id);
+    if (!target || target.isRead) return;
+
     setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, isRead: true } : n)));
+    try {
+      await markNotificationAsRead(id);
+    } catch {
+      setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, isRead: false } : n)));
+    }
   };
 
-  const markAllRead = () => {
+  const markAllRead = async () => {
+    const previous = notifications;
     setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+    try {
+      await markAllNotificationsAsRead();
+    } catch {
+      setNotifications(previous);
+    }
   };
 
-  const deleteNotification = (e, id) => {
+  const deleteNotification = async (e, id) => {
     e.stopPropagation();
+    const previous = notifications;
     setNotifications((prev) => prev.filter((n) => n.id !== id));
+    try {
+      await deleteNotificationApi(id);
+    } catch {
+      setNotifications(previous);
+    }
   };
 
   const getIcon = (type) => {
     switch (type) {
-      case 'order': return <Package className="text-blue-500" size={20} />;
-      case 'school': return <School className="text-primary" size={20} />;
-      case 'seller': return <ShoppingBag className="text-golden-yellow" size={20} />;
+      case 'order_update': return <Package className="text-blue-500" size={20} />;
+      case 'school_notice': return <School className="text-primary" size={20} />;
+      case 'event': return <School className="text-primary" size={20} />;
+      case 'promo': return <ShoppingBag className="text-golden-yellow" size={20} />;
       default: return <Info className="text-gray-400" size={20} />;
     }
   };

@@ -1,5 +1,6 @@
 const asyncHandler = require('../../../utils/asyncHandler');
 const { success, created, paginated } = require('../../../common/response');
+const { NotFoundError } = require('../../../common/errors');
 const { tokenService, notificationService } = require('../../../services/notification');
 
 const notificationsController = {
@@ -36,12 +37,19 @@ const notificationsController = {
       req.auth.userId,
       req.params.notificationId
     );
+    if (!notification) throw new NotFoundError('Notification not found', 'NOTIFICATION_NOT_FOUND');
     return success(res, { notification }, 'Notification marked as read', undefined, req);
   }),
 
   markAllAsRead: asyncHandler(async (req, res) => {
     const result = await notificationService.markAllAsRead(req.auth.userId);
     return success(res, result, 'All notifications marked as read', undefined, req);
+  }),
+
+  remove: asyncHandler(async (req, res) => {
+    const deleted = await notificationService.remove(req.auth.userId, req.params.notificationId);
+    if (!deleted) throw new NotFoundError('Notification not found', 'NOTIFICATION_NOT_FOUND');
+    return success(res, null, 'Notification deleted', undefined, req);
   }),
 };
 

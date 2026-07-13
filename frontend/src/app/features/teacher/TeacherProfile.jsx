@@ -1,14 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  ArrowLeft, ShieldAlert, Camera, User, Phone, 
+import {
+  ArrowLeft, ShieldAlert, Camera, User, Phone,
   Mail, MapPin, Briefcase, Lock, CheckCircle2, ChevronRight,
-  Save, X, Loader2
+  Save, X, Loader2, LogOut
 } from 'lucide-react';
 import { updateTeacher } from '../../../services/schoolApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 import { resolveTeacherProfile } from '../../../utils/teacherApiHelpers';
 import { useAuthUser, useTeacherSchoolId } from '../../../utils/teacherContext';
+import useAuthStore from '../../../store/useAuthStore';
 
 const TeacherProfile = () => {
   const navigate = useNavigate();
@@ -50,6 +51,11 @@ const TeacherProfile = () => {
   // Feedback states
   const [toastMessage, setToastMessage] = useState('');
   const [showToast, setShowToast] = useState(false);
+
+  // Logout states
+  const logout = useAuthStore((state) => state.logout);
+  const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -136,6 +142,19 @@ const TeacherProfile = () => {
       triggerToast(getErrorMessage(err, 'Unable to save profile'));
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    setLoggingOut(true);
+    try {
+      // The store clears the local session even if the API call fails, so this
+      // always ends with the teacher signed out.
+      await logout();
+      navigate('/school/login', { replace: true });
+    } finally {
+      setLoggingOut(false);
+      setIsLogoutModalOpen(false);
     }
   };
 
@@ -511,7 +530,7 @@ const TeacherProfile = () => {
               </button>
 
               {/* Row 2 */}
-              <div className="w-full py-3.5 px-2 flex items-center justify-between text-left">
+              <div className="w-full py-3.5 px-2 flex items-center justify-between text-left border-b border-gray-50">
                 <div className="flex items-center gap-3">
                   <Phone size={16} className="text-gray-450 shrink-0" />
                   <div>
@@ -519,7 +538,7 @@ const TeacherProfile = () => {
                     <span className="text-[9px] text-gray-450 font-bold block mt-0.5">{phone}</span>
                   </div>
                 </div>
-                
+
                 <div className="flex items-center gap-2">
                   <span className="bg-[#EBFDF2] text-[#15803D] border border-[#DCFCE7] text-[8px] font-black px-2 py-0.5 rounded-full">
                     Verified ✓
@@ -527,6 +546,22 @@ const TeacherProfile = () => {
                   <ChevronRight size={16} className="text-gray-400" />
                 </div>
               </div>
+
+              {/* Row 3 — Log Out */}
+              <button
+                type="button"
+                onClick={() => setIsLogoutModalOpen(true)}
+                className="w-full py-3.5 px-2 flex items-center justify-between hover:bg-red-50/50 active:scale-[0.99] transition-all rounded-xl text-left"
+              >
+                <div className="flex items-center gap-3">
+                  <LogOut size={16} className="text-red-500 shrink-0" />
+                  <div>
+                    <span className="text-xs font-black text-red-500 block leading-tight">Log Out</span>
+                    <span className="text-[9px] text-gray-450 font-bold block mt-0.5">Sign out of your teacher account</span>
+                  </div>
+                </div>
+                <ChevronRight size={16} className="text-gray-400" />
+              </button>
             </div>
           </div>
 
@@ -627,6 +662,55 @@ const TeacherProfile = () => {
               </button>
             </form>
 
+          </div>
+        </>
+      )}
+
+      {/* 9. Log Out Confirmation Modal */}
+      {isLogoutModalOpen && (
+        <>
+          <div
+            className="fixed inset-0 bg-deep-purple/40 backdrop-blur-sm z-[90] transition-all animate-in fade-in duration-300"
+            onClick={() => !loggingOut && setIsLogoutModalOpen(false)}
+          />
+
+          <div className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white rounded-t-[2.2rem] shadow-2xl z-[100] transition-all animate-in slide-in-from-bottom-24 duration-300 flex flex-col p-6 space-y-5">
+            <div className="flex flex-col items-center text-center pt-2">
+              <div className="w-14 h-14 rounded-full bg-red-50 flex items-center justify-center mb-3">
+                <LogOut size={22} className="text-red-500" />
+              </div>
+              <h3 className="text-sm font-black text-deep-purple leading-none">Log out?</h3>
+              <p className="text-[10px] text-gray-400 font-bold mt-2 max-w-[240px] leading-relaxed">
+                You&apos;ll need to sign in again to mark attendance or set homework. Any unsaved profile changes will be lost.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <button
+                type="button"
+                onClick={handleLogout}
+                disabled={loggingOut}
+                className="w-full py-4 bg-red-500 text-white hover:bg-red-600 active:scale-98 transition-all rounded-[1.8rem] text-sm font-black shadow-lg shadow-red-100 flex items-center justify-center gap-2 disabled:opacity-70"
+              >
+                {loggingOut ? (
+                  <Loader2 size={16} className="animate-spin" />
+                ) : (
+                  <>
+                    <LogOut size={16} strokeWidth={2.5} />
+                    <span>Yes, Log Out</span>
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsLogoutModalOpen(false)}
+                disabled={loggingOut}
+                className="w-full py-4 bg-white hover:bg-gray-50 active:scale-98 transition-all rounded-[1.8rem] text-sm font-black text-gray-450 border border-gray-200 flex items-center justify-center disabled:opacity-70"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </>
       )}

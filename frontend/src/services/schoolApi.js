@@ -249,6 +249,20 @@ export const deleteParent = async (schoolId, parentId) => {
   return unwrapData(response);
 };
 
+export const resendParentWelcome = async (schoolId, parentId) => {
+  const response = await apiClient.post(
+    schoolPath(schoolId, `/parents/${parentId}/resend-welcome`)
+  );
+  return unwrapData(response);
+};
+
+export const resendParentWelcomeBulk = async (schoolId, parentIds) => {
+  const response = await apiClient.post(schoolPath(schoolId, '/parents/resend-welcome'), {
+    parentIds,
+  });
+  return unwrapData(response);
+};
+
 // Teacher Direct Creation API
 export const createTeacher = async (schoolId, payload) => {
   const response = await apiClient.post(schoolPath(schoolId, '/teachers'), payload);

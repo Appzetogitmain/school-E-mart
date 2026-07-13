@@ -38,4 +38,12 @@ router.patch(
 
 router.patch('/read-all', ...protectedRoute(), notificationsController.markAllAsRead);
 
+// Declared after DELETE /tokens so the literal path keeps priority over this param route.
+router.delete(
+  '/:notificationId',
+  ...protectedRoute(),
+  validateParams(validators.notificationIdParamsSchema),
+  notificationsController.remove
+);
+
 module.exports = router;

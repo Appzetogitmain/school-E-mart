@@ -19,11 +19,44 @@ const getTransporter = () => {
   return transporter;
 };
 
+const addressOf = (value = '') => {
+  const match = String(value).match(/<([^>]+)>/);
+  return (match ? match[1] : String(value)).trim().toLowerCase();
+};
+
+const displayNameOf = (value = '') => {
+  const match = String(value).match(/^\s*"?([^"<]*?)"?\s*</);
+  return match ? match[1].trim() : '';
+};
+
+/**
+ * Providers like Gmail only relay mail whose From is the authenticated account.
+ * A From on a domain the provider does not own fails SPF/DKIM, so the message is
+ * rejected or silently binned as spam. Realign it and keep the configured address
+ * as Reply-To so replies still reach the right inbox.
+ */
+const resolveFrom = () => {
+  const configured = env.SMTP_FROM;
+  const user = env.SMTP_USER;
+  if (!user || addressOf(configured) === addressOf(user)) {
+    return { from: configured, replyTo: undefined };
+  }
+
+  const name = displayNameOf(configured) || 'School E-Mart';
+  logger.warn(
+    'SMTP_FROM does not match SMTP_USER; sending as the authenticated account so the mail is not rejected.',
+    { configuredFrom: addressOf(configured), sendingAs: addressOf(user) }
+  );
+  return { from: `${name} <${user}>`, replyTo: configured };
+};
+
 const emailService = {
   async sendMail(options) {
     try {
+      const { from, replyTo } = resolveFrom();
       const mailOptions = {
-        from: env.SMTP_FROM,
+        from,
+        replyTo,
         to: options.to,
         subject: options.subject,
         text: options.text,

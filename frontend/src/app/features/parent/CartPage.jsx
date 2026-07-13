@@ -6,13 +6,16 @@ import {
 } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
 import QuantitySelector from '../../components/QuantitySelector';
+import useAuthStore from '../../../store/useAuthStore';
+import { useCheckoutSummary } from '../../../hooks/useCheckoutSummary';
 
 const CartPage = () => {
   const navigate = useNavigate();
   const { cartItems, updateQuantity, removeFromCart, totalQuantity, loading } = useCart();
   const [showRemoveToast, setShowRemoveToast] = useState(false);
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
 
-  const subtotal = cartItems.reduce((sum, item) => {
+  const localSubtotal = cartItems.reduce((sum, item) => {
     if (item.pricePaise) return sum + (item.pricePaise / 100) * item.quantity;
     const price = typeof item.price === 'string'
       ? parseInt(item.price.replace('₹', '').replace(/,/g, ''), 10)
@@ -20,9 +23,21 @@ const CartPage = () => {
     return sum + (price * item.quantity);
   }, 0);
 
-  const deliveryFee = subtotal > 0 ? 49 : 0;
-  const platformFee = subtotal > 0 ? 10 : 0;
-  const total = subtotal + deliveryFee + platformFee;
+  // Fetch real fees from backend when authenticated
+  const { summary, totals, loading: summaryLoading } = useCheckoutSummary({
+    deliveryType: 'home',
+    paymentMethod: 'online',
+    addressSource: {},
+    audience: 'parent',
+    enabled: isAuthenticated && cartItems.length > 0,
+  });
+
+  // `totals` is always a zero-filled object, so only trust it once `summary` has
+  // actually arrived. Without a summary we can only show the item subtotal —
+  // fees are decided by the backend billing config at checkout.
+  const hasSummary = Boolean(summary);
+  const subtotal = hasSummary ? totals.subtotal : localSubtotal;
+  const total = hasSummary ? totals.grandTotal : localSubtotal;
 
   const handleRemove = (id) => {
     removeFromCart(id);
@@ -126,16 +141,51 @@ const CartPage = () => {
             <span className="text-gray-400">Items Subtotal</span>
             <span className="text-deep-purple">₹{subtotal.toLocaleString()}</span>
           </div>
-          <div className="flex justify-between text-xs font-bold">
-            <span className="text-gray-400">Delivery Fee</span>
-            <span className="text-green-500">₹{deliveryFee}</span>
-          </div>
-          <div className="flex justify-between text-xs font-bold">
-            <span className="text-gray-400">Platform Fee</span>
-            <span className="text-deep-purple">₹{platformFee}</span>
-          </div>
+
+          {hasSummary ? (
+            <>
+              {totals.discount > 0 && (
+                <div className="flex justify-between text-xs font-bold">
+                  <span className="text-gray-400">Discount</span>
+                  <span className="text-green-500">-₹{totals.discount.toLocaleString()}</span>
+                </div>
+              )}
+              <div className="flex justify-between text-xs font-bold">
+                <span className="text-gray-400">Delivery Fee</span>
+                <span className={totals.deliveryCharge === 0 ? 'text-green-500' : 'text-deep-purple'}>
+                  {totals.deliveryCharge === 0 ? 'FREE' : `₹${totals.deliveryCharge.toLocaleString()}`}
+                </span>
+              </div>
+              <div className="flex justify-between text-xs font-bold">
+                <span className="text-gray-400">Platform Fee</span>
+                <span className="text-deep-purple">₹{totals.platformFee.toLocaleString()}</span>
+              </div>
+              {totals.handlingCharge > 0 && (
+                <div className="flex justify-between text-xs font-bold">
+                  <span className="text-gray-400">Handling Charge</span>
+                  <span className="text-deep-purple">₹{totals.handlingCharge.toLocaleString()}</span>
+                </div>
+              )}
+              {totals.tax > 0 && (
+                <div className="flex justify-between text-xs font-bold">
+                  <span className="text-gray-400">Tax</span>
+                  <span className="text-deep-purple">₹{totals.tax.toLocaleString()}</span>
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="flex justify-between text-xs font-bold">
+              <span className="text-gray-400">Delivery &amp; fees</span>
+              <span className="text-gray-400">
+                {summaryLoading ? 'Calculating…' : 'Calculated at checkout'}
+              </span>
+            </div>
+          )}
+
           <div className="pt-4 border-t border-gray-50 flex justify-between items-center">
-            <span className="text-sm font-black text-deep-purple">Total Amount</span>
+            <span className="text-sm font-black text-deep-purple">
+              {hasSummary ? 'Total Amount' : 'Items Total'}
+            </span>
             <span className="text-xl font-black text-primary">₹{total.toLocaleString()}</span>
           </div>
         </div>

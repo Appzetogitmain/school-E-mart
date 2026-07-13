@@ -1,20 +1,28 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { 
-  Phone, Mail, MapPin, Clock, 
-  ArrowLeft, Send, CheckCircle2, 
-  ChevronRight
+import { useNavigate } from 'react-router-dom';
+import {
+  Phone, Mail, MapPin, Clock,
+  ArrowLeft, Send, CheckCircle2,
+  ChevronRight, LogIn
 } from 'lucide-react';
+import { createSupportTicket } from '../../../services/supportApi';
+import { getErrorMessage } from '../../../utils/apiHelpers';
+import useAuthStore from '../../../store/useAuthStore';
 
 const ContactUsPage = () => {
   const navigate = useNavigate();
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    phone: '',
-    message: ''
+  // Prefill from the signed-in account so the user isn't retyping known details.
+  const [formData, setFormData] = useState(() => {
+    const current = useAuthStore.getState().user;
+    return {
+      name: current?.name || '',
+      email: current?.email || '',
+      phone: current?.phone || '',
+      message: '',
+    };
   });
   const [errors, setErrors] = useState({});
 
@@ -28,17 +36,29 @@ const ContactUsPage = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!validate()) return;
 
     setLoading(true);
-    // Simulate API call
-    setTimeout(() => {
-      setLoading(false);
+    setErrors({});
+    try {
+      await createSupportTicket({
+        subject: `Contact form: ${formData.name}`,
+        body: formData.message,
+        contact: {
+          name: formData.name,
+          email: formData.email,
+          ...(formData.phone ? { phone: formData.phone } : {}),
+        },
+      });
       setSubmitted(true);
       setFormData({ name: '', email: '', phone: '', message: '' });
-    }, 1500);
+    } catch (err) {
+      setErrors({ form: getErrorMessage(err, 'Failed to send message. Please try again.') });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -92,7 +112,23 @@ const ContactUsPage = () => {
         <section className="bg-white rounded-[2.5rem] p-8 shadow-xl shadow-primary/5 border border-gray-50">
           <h2 className="text-xl font-black text-deep-purple mb-6">Send a Message</h2>
 
-          {submitted ? (
+          {!isAuthenticated ? (
+            <div className="py-6 text-center">
+              <div className="w-16 h-16 bg-primary/5 rounded-full flex items-center justify-center mx-auto mb-4">
+                <LogIn size={28} className="text-primary" />
+              </div>
+              <h3 className="text-base font-bold text-deep-purple mb-2">Sign in to send a message</h3>
+              <p className="text-sm text-gray-400 font-medium mb-6 max-w-[260px] mx-auto leading-relaxed">
+                We link every message to your account so we can track it and reply to you. You can still reach us on the phone and email above.
+              </p>
+              <button
+                onClick={() => navigate('/user/login')}
+                className="w-full py-4 bg-primary text-white rounded-2xl text-sm font-black shadow-lg shadow-primary/20 active:scale-95 transition-all"
+              >
+                Sign In
+              </button>
+            </div>
+          ) : submitted ? (
             <div className="py-8 text-center animate-in zoom-in duration-500">
               <div className="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-4">
                 <CheckCircle2 size={32} className="text-green-500" />
@@ -139,6 +175,12 @@ const ContactUsPage = () => {
                 ></textarea>
                 {errors.message && <p className="text-[10px] text-red-500 font-bold ml-1">{errors.message}</p>}
               </div>
+
+              {errors.form && (
+                <p className="text-xs text-red-500 font-bold text-center bg-red-50 rounded-2xl py-3 px-4">
+                  {errors.form}
+                </p>
+              )}
 
               <button
                 type="submit"

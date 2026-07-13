@@ -9,12 +9,13 @@ import { createAssignment } from '../../../services/lmsApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 import { parseClassGrade, parseSection } from '../../../utils/mappers/teacherMapper';
 import { ensureCourse } from '../../../utils/teacherApiHelpers';
-import { useTeacherSchoolId } from '../../../utils/teacherContext';
+import { useAuthUser, useTeacherSchoolId } from '../../../utils/teacherContext';
 import { useTeacherClassOptions } from '../../../hooks/useTeacherClassOptions';
 
 const TeacherHomework = () => {
   const navigate = useNavigate();
   const schoolId = useTeacherSchoolId();
+  const authUser = useAuthUser();
   const { classLabels, getSections } = useTeacherClassOptions(schoolId);
   const fileInputRef = React.useRef(null);
 
@@ -98,13 +99,30 @@ const TeacherHomework = () => {
     try {
       const classGrade = parseClassGrade(selectedClass);
       const section = parseSection(selectedSection);
-      const course = await ensureCourse(schoolId, { classGrade, section, subject });
+      const course = await ensureCourse(schoolId, {
+        classGrade,
+        section,
+        subject,
+        instructorName: authUser?.name,
+        instructorUserId: authUser?.id,
+      });
+
+      const reference = {
+        ...(textbook.trim() ? { textbook: textbook.trim() } : {}),
+        ...(chapter.trim() ? { chapter: chapter.trim() } : {}),
+      };
 
       await createAssignment(schoolId, course._id || course.id, {
         title: title.trim(),
         description: description.trim() || undefined,
         instructions: instructions.trim() || undefined,
         dueDate: dueDate || undefined,
+        assignedDate: dateAssigned || undefined,
+        classGrade,
+        section,
+        homeworkType,
+        priority,
+        ...(Object.keys(reference).length ? { reference } : {}),
         maxScore: 100,
         status: 'published',
       });

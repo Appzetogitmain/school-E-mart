@@ -1,7 +1,10 @@
-const { NotFoundError } = require('../../../common/errors');
+const { NotFoundError, BadRequestError } = require('../../../common/errors');
 const { withTransaction } = require('../../../database');
 const User = require('../../../database/models/User');
 const ParentProfile = require('../../../database/models/ParentProfile');
+const School = require('../../../database/models/School');
+const emailService = require('../../../common/email');
+const logger = require('../../../common/logger');
 const { normalizePhone } = require('../../../utils');
 
 // Parent accounts are no longer created here — they are created automatically
@@ -81,6 +84,62 @@ const parentService = {
 
     await user.save();
     return { ...profile.toObject(), user: user.toObject() };
+  },
+
+  /**
+   * Re-send the "your account is ready" mail to a parent. The original is sent once,
+   * at enrollment; schools need to be able to send it again on demand (parent lost it,
+   * email added later, etc). Awaited rather than fire-and-forget so the school gets a
+   * real success/failure back.
+   */
+  async resendWelcomeEmail(schoolId, parentId) {
+    const parent = await this.getParent(schoolId, parentId);
+    const { user } = parent;
+
+    if (!user.email) {
+      throw new BadRequestError(
+        'This parent has no email address on record',
+        'PARENT_EMAIL_MISSING'
+      );
+    }
+
+    const school = await School.findById(schoolId).select('name').lean();
+
+    await emailService.sendWelcomeEmail({
+      to: user.email,
+      name: user.name,
+      role: 'parent',
+      mobile: user.phone,
+      schoolName: school?.name || '',
+    });
+
+    return { sent: true, email: user.email, name: user.name };
+  },
+
+  /** Send to many parents at once; one bad address must not sink the rest. */
+  async resendWelcomeEmailBulk(schoolId, parentIds) {
+    const results = await Promise.allSettled(
+      parentIds.map((parentId) => this.resendWelcomeEmail(schoolId, parentId))
+    );
+
+    const sent = [];
+    const failed = [];
+    results.forEach((result, index) => {
+      if (result.status === 'fulfilled') {
+        sent.push(result.value.email);
+      } else {
+        failed.push({
+          parentId: parentIds[index],
+          reason: result.reason?.message || 'Failed to send',
+        });
+        logger.error('Failed to resend parent welcome email', {
+          parentId: parentIds[index],
+          message: result.reason?.message,
+        });
+      }
+    });
+
+    return { sentCount: sent.length, failedCount: failed.length, sent, failed };
   },
 
   async deleteParent(schoolId, parentId) {

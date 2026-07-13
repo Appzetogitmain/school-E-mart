@@ -8,6 +8,9 @@ const lmsAssignmentSubmissionSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   content: { type: String },
   attachments: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Attachment' }],
+  // Files the parent uploaded with the submission, stored under /uploads. This is
+  // what the teacher actually opens when checking the work.
+  attachmentUrls: [{ type: String }],
   submittedAt: { type: Date },
   score: { type: Number, min: 0 },
   feedback: { type: String },

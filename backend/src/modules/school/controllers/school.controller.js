@@ -414,6 +414,19 @@ const schoolController = {
     return success(res, null, 'Parent deleted successfully', undefined, req);
   }),
 
+  resendParentWelcome: asyncHandler(async (req, res) => {
+    const result = await parentService.resendWelcomeEmail(req.schoolId, req.params.parentId);
+    return success(res, result, `Account email sent to ${result.email}`, undefined, req);
+  }),
+
+  resendParentWelcomeBulk: asyncHandler(async (req, res) => {
+    const result = await parentService.resendWelcomeEmailBulk(req.schoolId, req.body.parentIds);
+    const message = result.failedCount
+      ? `Sent to ${result.sentCount} parent(s), ${result.failedCount} failed`
+      : `Account email sent to ${result.sentCount} parent(s)`;
+    return success(res, result, message, undefined, req);
+  }),
+
   uploadAttachment: asyncHandler(async (req, res) => {
     const attachment = await attachmentService.createFromUpload({
       ownerUserId: req.auth.userId,

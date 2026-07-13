@@ -16,6 +16,7 @@ import { useNavigate } from 'react-router-dom';
 import AppHeader from '../../components/AppHeader';
 import LoginRequired from '../../components/LoginRequired';
 import { getAttendanceHistory } from '../../../services/parentApi';
+import { getChildInfoFromStorage } from '../../../utils/parentContext';
 
 const formatSelectedDate = (date) => {
   const weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -61,16 +62,7 @@ const ParentAttendance = () => {
   const [showTrendDropdown, setShowTrendDropdown] = useState(false);
   const [trendFilter, setTrendFilter] = useState('Last 6 Months');
 
-  const [childInfo] = useState(() => {
-    const saved = localStorage.getItem('childInfo');
-    return saved ? JSON.parse(saved) : {
-      name: "Priya Damodaran",
-      school: "St. Xavier's High School",
-      grade: "Class 2",
-      phone: "+91 79999 42772",
-      progress: { completed: 12, total: 18 }
-    };
-  });
+  const [childInfo] = useState(() => getChildInfoFromStorage());
 
   useEffect(() => {
     const fetchHistory = async () => {

@@ -215,8 +215,69 @@ const authController = {
   }),
 
   registerParent: asyncHandler(async (req, res) => {
+    const { normalizePhone } = require('../../../utils');
     const { BadRequestError } = require('../../../common/errors');
-    throw new BadRequestError('Self-registration is disabled. Accounts can only be created by school administrators.', null, 'REGISTRATION_DISABLED');
+    const User = require('../../../database/models/User');
+    const ParentProfile = require('../../../database/models/ParentProfile');
+    const ChildProfile = require('../../../database/models/ChildProfile');
+    const School = require('../../../database/models/School');
+    const { issueAuthenticatedSession } = require('../services/sessionIssue.service');
+    const { generateUserRefId } = require('../../school/utils/refId');
+
+    const normalizedPhone = normalizePhone(req.body.phone);
+
+    const existingUser = await User.findOne({ phone: normalizedPhone, 'softDelete.isDeleted': { $ne: true } });
+    if (existingUser) {
+      throw new BadRequestError('Phone number already registered', null, 'PHONE_EXISTS');
+    }
+
+    let school = null;
+    if (req.body.schoolRefNo) {
+      const normalizedRef = req.body.schoolRefNo.trim().toUpperCase();
+      school = await School.findOne({
+        $or: [{ schoolRefNo: normalizedRef }, { code: normalizedRef }],
+        'softDelete.isDeleted': { $ne: true },
+      });
+      if (!school) {
+        throw new BadRequestError('Invalid school reference number', null, 'INVALID_SCHOOL_REF');
+      }
+    }
+
+    const generateUniqueReferralCode = async () => {
+      while (true) {
+        const code = `EMART${Math.floor(1000 + Math.random() * 9000)}`;
+        const exists = await ParentProfile.findOne({ referralCode: code });
+        if (!exists) return code;
+      }
+    };
+
+    const refId = generateUserRefId('P');
+    const user = await User.create({
+      refId,
+      role: 'parent',
+      status: 'active',
+      name: `${req.body.studentName} Parent`,
+      phone: normalizedPhone,
+      phoneVerifiedAt: new Date(),
+      tenantSchoolId: school?._id || null,
+    });
+
+    const referralCode = await generateUniqueReferralCode();
+    await ParentProfile.create({
+      userId: user._id,
+      referralCode,
+    });
+
+    await ChildProfile.create({
+      parentUserId: user._id,
+      name: req.body.studentName,
+      schoolId: school?._id || null,
+      schoolRefNo: school?.schoolRefNo || req.body.schoolRefNo || null,
+      grade: req.body.grade,
+    });
+
+    const sessionResponse = await issueAuthenticatedSession(user, getRequestMeta(req), 'auth.register.parent.success');
+    return sendAuthResponse(res, req, sessionResponse, 'Parent registration successful');
   }),
 
   registerTeacher: asyncHandler(async (req, res) => {

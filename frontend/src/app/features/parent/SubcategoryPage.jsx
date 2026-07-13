@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Search, ShoppingBag, Star, Filter } from 'lucide-react';
+import { ArrowLeft, Search, ShoppingBag, Filter } from 'lucide-react';
+import ProductCard from '../../components/ProductCard';
 import { useCategoryTree } from '../../../hooks/useCategoryTree';
 import { useProducts } from '../../../hooks/useProducts';
 import {
@@ -25,39 +26,9 @@ const SubcategoryPage = () => {
     mapperKey: 'subcategory',
   });
 
-  const renderProductCard = (product) => {
-    const numericPrice = typeof product.price === 'string'
-      ? parseFloat(product.price.replace(/[^\d.]/g, ''))
-      : product.price;
-
-    return (
-      <div key={product.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 flex flex-col overflow-hidden group active:scale-[0.98] transition-all">
-        <div className="relative aspect-square bg-white p-2">
-          <div className="absolute top-0 left-0 bg-[#ef4444] text-white text-[9px] font-bold px-2 py-1 rounded-br-lg z-10">
-            SAVE ₹{Math.floor(Math.random() * 500 + 100)}
-          </div>
-          <button className="absolute top-2 right-2 text-gray-300 hover:text-red-500 transition-colors z-10">
-            <Star size={16} />
-          </button>
-          <img src={product.image} alt={product.name} className="w-full h-full object-contain mix-blend-multiply group-hover:scale-110 transition-transform duration-500" />
-        </div>
-        <div className="p-2.5 flex flex-col flex-1">
-          <h3 className="text-[11px] font-bold text-deep-purple leading-snug line-clamp-2 h-8 mb-1 uppercase tracking-tight">
-            {product.name}
-          </h3>
-          <p className="text-[9px] text-gray-400 font-medium mb-2 truncate">Premium Cotton Blend</p>
-          <div className="flex items-center gap-2 mb-3">
-            <span className="text-[9px] text-gray-400 line-through">₹{Math.round(numericPrice + 200)}</span>
-            <span className="text-[12px] font-bold text-black">{product.price}</span>
-          </div>
-          <button className="w-full py-2 bg-[#ffc107] text-black rounded-lg text-[10px] font-bold shadow-md shadow-yellow-100 active:scale-95 transition-all flex items-center justify-center gap-1">
-            <ShoppingBag size={12} />
-            ADD
-          </button>
-        </div>
-      </div>
-    );
-  };
+  const renderProductCard = (product) => (
+    <ProductCard key={product.id} product={product} />
+  );
 
   return (
     <div className="flex flex-col h-full bg-white font-outfit">

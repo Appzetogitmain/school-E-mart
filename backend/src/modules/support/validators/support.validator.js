@@ -17,9 +17,16 @@ const topicsQuery = Joi.object({
 const ticketIdParam = Joi.object({ ticketId: Joi.string().trim().required() });
 
 const createTicketSchema = Joi.object({
-  topicId: objectId.required(),
+  // Optional: the contact form has no topic picker, so the service falls back to
+  // the general-enquiry topic when this is omitted.
+  topicId: objectId.optional(),
   subject: Joi.string().trim().min(2).max(150).required(),
   body: Joi.string().trim().min(2).max(2000).required(),
+  contact: Joi.object({
+    name: Joi.string().trim().max(120).optional(),
+    email: schemas.email.optional(),
+    phone: Joi.string().trim().max(20).optional(),
+  }).optional(),
   reference: Joi.object({
     kind: Joi.string().valid('Order', 'Product', 'VendorProfile').optional(),
     id: objectId.optional(),

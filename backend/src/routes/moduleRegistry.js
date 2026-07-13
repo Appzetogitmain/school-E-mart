@@ -9,6 +9,7 @@ const { notificationsModule } = require('../modules/notifications');
 const { supportModule } = require('../modules/support');
 const { academicsModule } = require('../modules/academics');
 const { walletModule } = require('../modules/wallet');
+const { usersModule } = require('../modules/users');
 
 const v1Modules = [
   authModule,
@@ -22,6 +23,7 @@ const v1Modules = [
   supportModule,
   academicsModule,
   walletModule,
+  usersModule,
 ];
 
 const registerV1Routes = (router) => {

@@ -82,6 +82,15 @@ const createAssignmentSchema = Joi.object({
   description: Joi.string().trim().max(5000).optional(),
   instructions: Joi.string().trim().max(5000).optional(),
   dueDate: Joi.date().optional(),
+  assignedDate: Joi.date().optional(),
+  classGrade: Joi.string().trim().max(40).optional(),
+  section: Joi.string().trim().max(20).optional(),
+  homeworkType: Joi.string().valid('Written', 'Reading', 'Project', 'Online Quiz').optional(),
+  priority: Joi.string().valid('High', 'Medium', 'Low').optional(),
+  reference: Joi.object({
+    textbook: Joi.string().trim().max(160).allow('').optional(),
+    chapter: Joi.string().trim().max(160).allow('').optional(),
+  }).optional(),
   maxScore: Joi.number().min(0).default(100),
   status: Joi.string().valid('draft', 'published', 'archived').optional(),
 });
@@ -89,8 +98,11 @@ const createAssignmentSchema = Joi.object({
 const updateAssignmentSchema = createAssignmentSchema.fork(['title'], (s) => s.optional());
 
 const submitAssignmentSchema = Joi.object({
-  content: Joi.string().trim().max(10000).optional(),
+  content: Joi.string().trim().max(10000).allow('').optional(),
   attachments: Joi.array().items(objectId).optional(),
+  // Base64 data URIs of the completed work (photos/PDF). Kept small and few because
+  // they are inlined in the request body.
+  files: Joi.array().items(Joi.string().max(8 * 1024 * 1024)).max(5).optional(),
   studentId: objectId.optional(),
 });
 

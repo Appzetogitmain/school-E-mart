@@ -71,6 +71,10 @@ export const mapAssignmentForParentHomework = (assignment, course, submissionOrC
     }
   }
 
+  const classGrade = assignment?.classGrade || course?.gradeClass || '';
+  const section = assignment?.section || '';
+  const priority = assignment?.priority || null;
+
   return {
     id,
     courseId: course?._id?.toString?.() || course?.id,
@@ -78,13 +82,22 @@ export const mapAssignmentForParentHomework = (assignment, course, submissionOrC
     title: assignment?.title,
     description: assignment?.description || assignment?.instructions || assignment?.title,
     image: SUBJECT_IMAGES[subject] || '/assets/math_homework.png',
-    isHighPriority: status === 'Overdue' || status === 'Due Soon',
+    // Reflects what the teacher actually chose, not just how close the due date is.
+    isHighPriority: priority === 'High' || status === 'Overdue' || status === 'Due Soon',
+    priority,
     status,
     statusColor,
-    assignedDate: formatDate(assignment?.audit?.createdAt || assignment?.createdAt),
+    assignedDate: formatDate(assignment?.assignedDate || assignment?.audit?.createdAt || assignment?.createdAt),
     dueDate: formatDate(assignment?.dueDate),
     daysRemaining: daysRemainingLabel(assignment?.dueDate),
-    teacher: course?.instructorName || '—',
+    // The teacher who set this homework; the course instructor is only a fallback
+    // because a course can be shared by several teachers.
+    teacher: assignment?.assignedByName || course?.instructorName || '—',
+    classSection: [classGrade, section].filter(Boolean).join(' - ') || '—',
+    homeworkType: assignment?.homeworkType || null,
+    instructions: assignment?.instructions || '',
+    textbook: assignment?.reference?.textbook || '',
+    chapter: assignment?.reference?.chapter || '',
     attachmentsCount: assignment?.attachments?.length || 0,
     tabType,
     maxScore: assignment?.maxScore ?? 100,

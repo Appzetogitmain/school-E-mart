@@ -4,6 +4,7 @@ import { Heart, ArrowLeft, ShoppingCart, Sparkles } from 'lucide-react';
 import { useWishlist } from '../../context/WishlistContext';
 import ProductCard from '../../components/ProductCard';
 import LoginRequired from '../../components/LoginRequired';
+import AuthPrompt from '../../components/AuthPrompt';
 
 const WishlistPage = () => {
   const navigate = useNavigate();

@@ -15,6 +15,7 @@ export const normalizeUser = (user) => {
     permissions: user.permissions || [],
     scopes: user.scopes || [],
     profile: user.profile || null,
+    childProfile: user.childProfile || null,
   };
 };
 
@@ -44,10 +45,11 @@ export const mapUserForDisplay = (user) => {
 export const buildChildInfoFromUser = (user, existing = {}) => {
   const normalized = normalizeUser(user);
   const profile = normalized?.profile || {};
+  const childProfile = user?.childProfile || normalized?.childProfile || {};
 
   return {
     ...existing,
-    name: normalized?.name || existing.name || 'Guest',
+    name: childProfile.name || normalized?.name || existing.name || 'Guest',
     role:
       normalized?.role === 'school'
         ? 'school'
@@ -57,9 +59,18 @@ export const buildChildInfoFromUser = (user, existing = {}) => {
     phone: normalized?.phone || existing.phone || '',
     email: normalized?.email || existing.email || '',
     refId: normalized?.refId || existing.refId,
-    school: existing.school || profile.schoolName || profile.storeName || 'Explore Schools',
-    grade: existing.grade || profile.grade || 'Select Grade',
-    schoolId: normalized?.tenantSchoolId || profile.schoolId || existing.schoolId,
+    school: childProfile.schoolName || existing.school || profile.schoolName || profile.storeName || 'Explore Schools',
+    grade: childProfile.grade || existing.grade || profile.grade || 'Select Grade',
+    schoolId: childProfile.schoolId || normalized?.tenantSchoolId || profile.schoolId || existing.schoolId,
+    schoolRefNo: childProfile.schoolRefNo || existing.schoolRefNo || null,
+    studentId: childProfile.studentId || existing.studentId || null,
+    altPhone: profile.altPhone || existing.altPhone || '',
+    address: profile.address || existing.address || '',
+    pinCode: profile.pinCode || existing.pinCode || '',
+    city: profile.city || existing.city || '',
+    state: profile.state || existing.state || '',
+    country: profile.country || existing.country || 'India',
+    photo: childProfile.avatarUrl || childProfile.photo || profile.avatarUrl || existing.photo || '',
     progress: existing.progress,
   };
 };

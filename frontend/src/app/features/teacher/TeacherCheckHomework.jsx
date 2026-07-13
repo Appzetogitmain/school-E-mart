@@ -62,6 +62,7 @@ const TeacherCheckHomework = () => {
     setError('');
     try {
       const grade = parseClassGrade(selectedClass);
+      const section = parseSection(selectedSection);
       const { data: courses } = await listCourses(schoolId, { limit: 50 });
       const matchingCourses = (courses || []).filter(
         (course) => course.gradeClass === grade || course.title?.includes(grade)
@@ -76,8 +77,20 @@ const TeacherCheckHomework = () => {
         });
       }
 
-      setHomeworks(assignmentRows);
-      setSelectedHomework(assignmentRows[0] || null);
+      // A course covers the whole grade, so keep only the homework aimed at this
+      // section. Older homework predates section tagging, so show it in every section
+      // rather than hiding it entirely.
+      const forSection = assignmentRows.filter(
+        (row) => !row.section || row.section === section
+      );
+
+      // Newest homework first — that's what a teacher wants to check.
+      forSection.sort(
+        (a, b) => new Date(b.dateAssigned || 0) - new Date(a.dateAssigned || 0)
+      );
+
+      setHomeworks(forSection);
+      setSelectedHomework(forSection[0] || null);
     } catch (err) {
       setHomeworks([]);
       setSelectedHomework(null);
@@ -85,7 +98,7 @@ const TeacherCheckHomework = () => {
     } finally {
       setLoadingHomeworks(false);
     }
-  }, [schoolId, selectedClass]);
+  }, [schoolId, selectedClass, selectedSection]);
 
   useEffect(() => {
     loadHomeworks();
@@ -465,8 +478,8 @@ const TeacherCheckHomework = () => {
               }
 
               return (
-                <div 
-                  key={stud.roll} 
+                <div
+                  key={stud.studentId || stud.mongoId || stud.roll}
                   onClick={() => stud.status !== 'Not Submitted' && handleOpenCheckPanel(stud)}
                   className={`py-3.5 px-2 flex items-center justify-between transition-colors ${stud.status !== 'Not Submitted' ? 'cursor-pointer hover:bg-gray-100/40 active:bg-gray-100/70' : 'opacity-65'}`}
                 >
@@ -534,28 +547,64 @@ const TeacherCheckHomework = () => {
               
               {/* Submitted files preview section */}
               <div className="space-y-3">
-                <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-wider block">Submitted Files</h4>
-                <div className="grid grid-cols-2 gap-3.5">
-                  {activeStudent.files && activeStudent.files.map((file, idx) => (
-                    <div 
-                      key={idx} 
-                      onClick={() => setPreviewImageUrl(file.url)}
-                      className="border border-gray-200 rounded-2xl overflow-hidden bg-gray-50 hover:border-primary cursor-pointer transition-all shadow-sm flex flex-col group relative"
-                    >
-                      <div className="aspect-video w-full bg-gray-200 relative overflow-hidden flex-1">
-                        <img src={file.url} alt={file.name} className="w-full h-full object-cover group-hover:scale-105 transition-all duration-500" />
-                        <span className="absolute inset-0 bg-black/10 group-hover:bg-black/25 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                          <Eye size={20} className="text-white" />
-                        </span>
-                      </div>
-                      <div className="p-2 bg-white flex items-center gap-2">
-                        <FileText size={12} className="text-primary shrink-0" />
-                        <span className="text-[9px] font-bold text-deep-purple truncate flex-1 leading-none">{file.name}</span>
-                      </div>
+                <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-wider block">
+                  Submitted Work {activeStudent.submittedAt && (
+                    <span className="text-gray-300 normal-case">• {activeStudent.submittedAt}</span>
+                  )}
+                </h4>
+
+                {activeStudent.files?.length > 0 ? (
+                  <>
+                    <div className="grid grid-cols-2 gap-3.5">
+                      {activeStudent.files.map((file, idx) => (
+                        <div
+                          key={idx}
+                          onClick={() =>
+                            file.isImage
+                              ? setPreviewImageUrl(file.url)
+                              : window.open(file.url, '_blank', 'noopener,noreferrer')
+                          }
+                          className="border border-gray-200 rounded-2xl overflow-hidden bg-gray-50 hover:border-primary cursor-pointer transition-all shadow-sm flex flex-col group relative"
+                        >
+                          <div className="aspect-video w-full bg-gray-200 relative overflow-hidden flex-1">
+                            {file.isImage ? (
+                              <img src={file.url} alt={file.name} className="w-full h-full object-cover group-hover:scale-105 transition-all duration-500" />
+                            ) : (
+                              <div className="w-full h-full bg-red-50 flex flex-col items-center justify-center gap-1">
+                                <FileText size={22} className="text-red-500" />
+                                <span className="text-[8px] font-black text-red-500 uppercase tracking-wider">
+                                  {file.kind === 'pdf' ? 'PDF' : 'File'}
+                                </span>
+                              </div>
+                            )}
+                            <span className="absolute inset-0 bg-black/10 group-hover:bg-black/25 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                              <Eye size={20} className="text-white" />
+                            </span>
+                          </div>
+                          <div className="p-2 bg-white flex items-center gap-2">
+                            <FileText size={12} className="text-primary shrink-0" />
+                            <span className="text-[9px] font-bold text-deep-purple truncate flex-1 leading-none">{file.name}</span>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-                <p className="text-[9px] text-gray-400 font-bold block mt-1">Click image to expand / view full-size file.</p>
+                    <p className="text-[9px] text-gray-400 font-bold block mt-1">Tap an image to expand, or a document to open it.</p>
+                  </>
+                ) : (
+                  <div className="border border-dashed border-gray-200 rounded-2xl py-6 text-center">
+                    <FileText size={20} className="text-gray-300 mx-auto mb-1.5" />
+                    <p className="text-[10px] font-bold text-gray-400">No files attached to this submission</p>
+                  </div>
+                )}
+
+                {activeStudent.content && (
+                  <div className="bg-gray-50/70 border border-gray-150 rounded-2xl p-3.5">
+                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-wider mb-1.5">Student&apos;s note</p>
+                    <p className="text-[11px] font-bold text-deep-purple leading-relaxed whitespace-pre-line">
+                      {activeStudent.content}
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* Enter Grade/Score */}
@@ -609,12 +658,17 @@ const TeacherCheckHomework = () => {
               >
                 Cancel
               </button>
-              <button 
+              <button
                 onClick={handleSaveReview}
-                className="flex-1 py-4 bg-primary text-white hover:bg-deep-purple active:scale-98 transition-all rounded-3xl text-xs font-black shadow-lg shadow-purple-100 flex items-center justify-center gap-2"
+                disabled={savingReview}
+                className="flex-1 py-4 bg-primary text-white hover:bg-deep-purple active:scale-98 transition-all rounded-3xl text-xs font-black shadow-lg shadow-purple-100 flex items-center justify-center gap-2 disabled:opacity-60"
               >
-                <Check size={14} strokeWidth={2.5} />
-                <span>Save Review</span>
+                {savingReview ? (
+                  <Loader2 size={14} className="animate-spin" />
+                ) : (
+                  <Check size={14} strokeWidth={2.5} />
+                )}
+                <span>{savingReview ? 'Saving…' : 'Save Review'}</span>
               </button>
             </div>
 

@@ -34,8 +34,10 @@ const createApp = () => {
   const deliveryWebhookRoutes = require('./routes/deliveryWebhookRoutes');
   app.use('/api/delivery', express.raw({ type: '*/*', limit: '1mb' }), deliveryWebhookRoutes);
 
-  app.use(express.json({ limit: '1mb' }));
-  app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+  // Homework submissions and avatars are posted as base64 data URIs, which inflate
+  // the payload by ~33% and do not fit in the default 1mb budget.
+  app.use(express.json({ limit: '10mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '10mb' }));
   app.use(cookieParser());
   app.use(middlewares.requestLogger);
 

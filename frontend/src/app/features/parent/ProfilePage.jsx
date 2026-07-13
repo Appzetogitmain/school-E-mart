@@ -8,30 +8,48 @@ import {
 } from 'lucide-react';
 import AuthPrompt from '../../components/AuthPrompt';
 import useAuthStore from '../../../store/useAuthStore';
+import { getMyProfile } from '../../../services/parentApi';
 
 const ProfilePage = () => {
   const navigate = useNavigate();
   const [isAuthPromptOpen, setIsAuthPromptOpen] = useState(false);
   const [user, setUser] = useState(null);
-  const [isGuest, setIsGuest] = useState(true);
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const authUser = useAuthStore((state) => state.user);
+  const isGuest = !isAuthenticated;
 
-  // Load user data on mount and listen for storage changes
+  // Fetch profile from API for authenticated users, fall back to auth store
   useEffect(() => {
-    const loadUser = () => {
-      const childInfoStr = localStorage.getItem('childInfo');
-      if (childInfoStr) {
-        setUser(JSON.parse(childInfoStr));
-        setIsGuest(false);
-      } else {
-        setUser(null);
-        setIsGuest(true);
-      }
-    };
+    if (!isAuthenticated) {
+      setUser(null);
+      return undefined;
+    }
 
-    loadUser();
-    window.addEventListener('storage', loadUser);
-    return () => window.removeEventListener('storage', loadUser);
-  }, []);
+    let cancelled = false;
+    (async () => {
+      try {
+        const profile = await getMyProfile();
+        if (!cancelled && profile) {
+          setUser({
+            name: profile.childProfile?.name || profile.name || authUser?.name,
+            phone: profile.phone || authUser?.phone,
+            photo: profile.childProfile?.photo || profile.childProfile?.avatarUrl || profile.profile?.avatarUrl,
+          });
+        }
+      } catch {
+        // Fall back to auth store user if API fails
+        if (!cancelled) {
+          setUser({
+            name: authUser?.name,
+            phone: authUser?.phone,
+            photo: authUser?.profile?.avatarUrl,
+          });
+        }
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [isAuthenticated, authUser]);
 
   const menuItems = [
     { icon: <Edit2 size={20} />, label: "Edit Profile", to: "/user/edit-profile", protected: true, color: "text-[#6A47DE] bg-[#F4EBFF]" },

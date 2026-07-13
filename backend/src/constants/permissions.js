@@ -68,6 +68,10 @@ const ROLE_DEFAULT_PERMISSIONS = {
     PERMISSIONS.TIMETABLE_READ,
     PERMISSIONS.LMS_READ,
     PERMISSIONS.LMS_WRITE,
+    // Every LMS authoring route (assignments, submissions, grading, courses,
+    // chapters, lessons) is gated on LMS_MANAGE, not LMS_WRITE. Teachers need it
+    // to set and grade homework.
+    PERMISSIONS.LMS_MANAGE,
     PERMISSIONS.NOTICES_READ,
     PERMISSIONS.DIARY_READ,
     PERMISSIONS.DIARY_WRITE,

@@ -11,6 +11,29 @@ const lmsAssignmentSchema = new mongoose.Schema({
   description: { type: String },
   instructions: { type: String },
   dueDate: { type: Date },
+  // When the teacher told students the work starts, which is not necessarily the
+  // moment the record was created.
+  assignedDate: { type: Date },
+  // Who the homework is for. The course is per grade+subject, so the section
+  // lives here.
+  classGrade: { type: String },
+  section: { type: String },
+  homeworkType: {
+    type: String,
+    enum: ['Written', 'Reading', 'Project', 'Online Quiz'],
+  },
+  priority: {
+    type: String,
+    enum: ['High', 'Medium', 'Low'],
+  },
+  reference: {
+    textbook: { type: String },
+    chapter: { type: String },
+  },
+  // Stamped from the authenticated teacher so the parent sees who set the work,
+  // even when several teachers share one course.
+  assignedByUserId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  assignedByName: { type: String },
   maxScore: { type: Number, default: 100, min: 0 },
   status: {
     type: String,

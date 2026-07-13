@@ -82,6 +82,44 @@ const assertTeacherCourseAccess = async (req, course) => {
   req.teacherProfile = profile;
 };
 
+// classGrade is free text across the app ("5", "Class 5", "class  5"), so compare
+// on the normalized form rather than the raw strings.
+const normalizeGrade = (value) =>
+  String(value || '')
+    .toLowerCase()
+    .replace(/class/g, '')
+    .replace(/\s+/g, '')
+    .trim();
+
+/**
+ * A school course scoped to the student's own class is coursework, not an opt-in
+ * catalogue course: the student is enrolled by virtue of being in that class. Create
+ * the enrollment on first access so homework doesn't 403 for a whole class that was
+ * never explicitly enrolled.
+ */
+const autoEnrollForClassCourse = async (schoolId, courseId, student, userId) => {
+  const course = await courseRepository.findOne({ _id: courseId, schoolId });
+  if (!course?.gradeClass) return null;
+  if (normalizeGrade(course.gradeClass) !== normalizeGrade(student.classGrade)) return null;
+
+  try {
+    return await enrollmentRepository.create({
+      schoolId,
+      courseId,
+      studentId: student._id,
+      userId,
+      status: 'active',
+    });
+  } catch (error) {
+    // Concurrent first access races on the unique (school, course, student) index;
+    // the loser just reads back the winner's row.
+    if (error?.code === 11000) {
+      return enrollmentRepository.findEnrollment(schoolId, courseId, student._id);
+    }
+    throw error;
+  }
+};
+
 const assertEnrollmentAccess = async (req, courseId, studentId = null) => {
   if ([ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN, ROLES.TEACHER].includes(req.auth.role)) {
     return null;
@@ -96,12 +134,22 @@ const assertEnrollmentAccess = async (req, courseId, studentId = null) => {
     throw new ForbiddenError('Student context is required', 'STUDENT_REQUIRED');
   }
 
-  const enrollment = await enrollmentRepository.findEnrollment(
+  let enrollment = await enrollmentRepository.findEnrollment(
     req.schoolId,
     courseId,
     resolved.student._id
   );
 
+  if (!enrollment) {
+    enrollment = await autoEnrollForClassCourse(
+      req.schoolId,
+      courseId,
+      resolved.student,
+      resolved.userId
+    );
+  }
+
+  // A withdrawn enrollment is a deliberate removal, so it is never auto-restored.
   if (!enrollment || enrollment.status === 'withdrawn') {
     throw new ForbiddenError('You are not enrolled in this course', 'ENROLLMENT_REQUIRED');
   }

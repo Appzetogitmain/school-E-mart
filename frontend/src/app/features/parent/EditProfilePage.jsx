@@ -1,11 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Camera, User, Mail, Phone, 
   MapPin, Home, Globe, Navigation, 
   ShieldCheck, Check, AlertCircle, ImageIcon
 } from 'lucide-react';
-import { useRef } from 'react';
+import { updateMyProfile } from '../../../services/parentApi';
+import useAuthStore from '../../../store/useAuthStore';
 
 const EditProfilePage = () => {
   const navigate = useNavigate();
@@ -13,23 +14,49 @@ const EditProfilePage = () => {
   const [loading, setLoading] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [errors, setErrors] = useState({});
+  const refreshUser = useAuthStore((state) => state.refreshUser);
 
-  const [formData, setFormData] = useState(() => {
-    const saved = localStorage.getItem('childInfo');
-    const parsed = saved ? JSON.parse(saved) : {};
-    return {
-      fullName: parsed.name || "",
-      email: parsed.email || "",
-      phone: parsed.phone || "",
-      altPhone: parsed.altPhone || "",
-      address: parsed.address || "",
-      pinCode: parsed.pinCode || "",
-      city: parsed.city || "",
-      state: parsed.state || "",
-      country: parsed.country || "India",
-      photo: parsed.photo || ""
-    };
+  const [formData, setFormData] = useState({
+    fullName: "",
+    email: "",
+    phone: "",
+    altPhone: "",
+    address: "",
+    pinCode: "",
+    city: "",
+    state: "",
+    country: "India",
+    photo: ""
   });
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadProfile = async () => {
+      try {
+        const user = await refreshUser();
+        if (cancelled) return;
+        setFormData({
+          fullName: user.childProfile?.name || user.name || "",
+          email: user.email || "",
+          phone: user.phone || "",
+          altPhone: user.profile?.altPhone || "",
+          address: user.profile?.address || "",
+          pinCode: user.profile?.pinCode || "",
+          city: user.profile?.city || "",
+          state: user.profile?.state || "",
+          country: user.profile?.country || "India",
+          photo: user.childProfile?.photo || user.childProfile?.avatarUrl || user.profile?.avatarUrl || ""
+        });
+      } catch (err) {
+        console.error("Failed to load profile on mount", err);
+      }
+    };
+
+    loadProfile();
+    return () => {
+      cancelled = true;
+    };
+  }, [refreshUser]);
 
   const handleInputChange = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -43,14 +70,38 @@ const EditProfilePage = () => {
   };
 
   const handleAutoFill = () => {
-    setFormData(prev => ({
-      ...prev,
-      pinCode: "452010",
-      city: "Indore",
-      state: "Madhya Pradesh",
-      country: "India",
-      address: "B-204, Vijay Nagar, Scheme 54"
-    }));
+    if (!navigator.geolocation) {
+      alert('Geolocation is not supported by your browser.');
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        try {
+          const { latitude, longitude } = position.coords;
+          const response = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&addressdetails=1`,
+            { headers: { 'Accept-Language': 'en' } }
+          );
+          const data = await response.json();
+          const addr = data.address || {};
+          setFormData((prev) => ({
+            ...prev,
+            pinCode: addr.postcode || prev.pinCode,
+            city: addr.city || addr.town || addr.village || prev.city,
+            state: addr.state || prev.state,
+            country: addr.country || prev.country,
+            address: [addr.road, addr.suburb, addr.neighbourhood]
+              .filter(Boolean)
+              .join(', ') || prev.address,
+          }));
+        } catch {
+          alert('Unable to fetch address. Please enter manually.');
+        }
+      },
+      () => {
+        alert('Location access denied. Please enter your address manually.');
+      }
+    );
   };
 
   const handlePhotoClick = () => {
@@ -81,40 +132,38 @@ const EditProfilePage = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!validate()) return;
     
     setLoading(true);
-    // Persist to localStorage
-    const saved = localStorage.getItem('childInfo');
-    const existing = saved ? JSON.parse(saved) : {};
-    
-    const updatedInfo = {
-      ...existing,
-      name: formData.fullName,
-      email: formData.email,
-      phone: formData.phone,
-      altPhone: formData.altPhone,
-      address: formData.address,
-      pinCode: formData.pinCode,
-      city: formData.city,
-      state: formData.state,
-      country: formData.country,
-      photo: formData.photo
-    };
-    
-    localStorage.setItem('childInfo', JSON.stringify(updatedInfo));
+    try {
+      await updateMyProfile({
+        name: formData.fullName,
+        email: formData.email,
+        phone: formData.phone,
+        altPhone: formData.altPhone,
+        address: formData.address,
+        pinCode: formData.pinCode,
+        city: formData.city,
+        state: formData.state,
+        country: formData.country,
+        photo: formData.photo
+      });
 
-    setTimeout(() => {
+      await refreshUser();
+
       setLoading(false);
       setShowSuccess(true);
       setTimeout(() => {
         setShowSuccess(false);
         navigate(-1);
-        // Dispatch custom event to notify other components (like Header) to update
         window.dispatchEvent(new Event('storage'));
       }, 1500);
-    }, 800);
+    } catch (err) {
+      console.error("Failed to save profile", err);
+      alert(err.response?.data?.message || "Failed to update profile. Please try again.");
+      setLoading(false);
+    }
   };
 
   const InputField = ({ label, icon: Icon, field, type = "text", placeholder, readOnly = false }) => (

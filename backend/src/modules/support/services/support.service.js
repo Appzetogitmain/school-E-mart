@@ -9,6 +9,8 @@ const generateTicketId = () =>
 
 const notDeleted = { 'softDelete.isDeleted': { $ne: true } };
 
+const GENERAL_TOPIC_SLUG = 'general-enquiry';
+
 const supportService = {
   async listTopics(query = {}) {
     const filter = { status: 'active' };
@@ -16,20 +18,58 @@ const supportService = {
     return SupportTopic.find(filter).sort({ displayOrder: 1, name: 1 }).lean();
   },
 
+  /**
+   * The contact form submits without a topic, so fall back to a general-enquiry
+   * topic, creating it on first use rather than depending on seed data.
+   */
+  async getDefaultTopic() {
+    const existing = await SupportTopic.findOne({ slug: GENERAL_TOPIC_SLUG }).lean();
+    if (existing) {
+      if (existing.status !== 'active') {
+        await SupportTopic.updateOne({ _id: existing._id }, { $set: { status: 'active' } });
+      }
+      return existing;
+    }
+
+    // Concurrent first-time submissions can race here; the unique slug index makes
+    // the loser's insert fail, so fall back to re-reading the winner's document.
+    try {
+      const created = await SupportTopic.create({
+        name: 'General Enquiry',
+        slug: GENERAL_TOPIC_SLUG,
+        audience: 'general',
+        displayOrder: 0,
+        status: 'active',
+      });
+      return created.toObject();
+    } catch (error) {
+      if (error?.code === 11000) {
+        return SupportTopic.findOne({ slug: GENERAL_TOPIC_SLUG }).lean();
+      }
+      throw error;
+    }
+  },
+
   /** Open a new ticket; the initial message's sender becomes the ticket owner. */
-  async createTicket(userId, { topicId, subject, body, reference }) {
-    const topic = await SupportTopic.findById(topicId).lean();
-    if (!topic || topic.status !== 'active') {
-      throw new NotFoundError('Support topic not found');
+  async createTicket(userId, { topicId, subject, body, contact, reference }) {
+    let topic;
+    if (topicId) {
+      topic = await SupportTopic.findById(topicId).lean();
+      if (!topic || topic.status !== 'active') {
+        throw new NotFoundError('Support topic not found');
+      }
+    } else {
+      topic = await this.getDefaultTopic();
     }
 
     const ticketId = generateTicketId();
-    const message = await SupportMessage.create({
+    await SupportMessage.create({
       ticketId,
       senderUserId: userId,
-      topicId,
+      topicId: topic._id,
       subject,
       body,
+      contact,
       reference,
       status: 'open',
       isReadByCustomer: true,

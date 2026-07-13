@@ -1,50 +1,85 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { GraduationCap, Check, ArrowLeft } from 'lucide-react';
+import { GraduationCap, Check, ArrowLeft, Loader2 } from 'lucide-react';
+import { getSchool } from '../../../services/schoolApi';
+import { getChildInfoFromStorage } from '../../../utils/parentContext';
+
+// Used to order whatever the school reports, and as the catalogue-wide list when
+// the user has no school linked (guests / "explore schools").
+const STANDARD_GRADES = [
+  "Nursery", "LKG", "UKG",
+  "Class 1", "Class 2", "Class 3", "Class 4",
+  "Class 5", "Class 6", "Class 7", "Class 8",
+  "Class 9", "Class 10", "Class 11", "Class 12"
+];
+
+const GRADE_GROUPS = {
+  'Pre-Primary': ["Nursery", "LKG", "UKG"],
+  Primary: ["Class 1", "Class 2", "Class 3", "Class 4", "Class 5"],
+  Secondary: ["Class 6", "Class 7", "Class 8", "Class 9", "Class 10"],
+};
+
+const sortByStandardOrder = (list) =>
+  [...list].sort((a, b) => {
+    const ai = STANDARD_GRADES.indexOf(a);
+    const bi = STANDARD_GRADES.indexOf(b);
+    if (ai === -1 && bi === -1) return a.localeCompare(b);
+    if (ai === -1) return 1;
+    if (bi === -1) return -1;
+    return ai - bi;
+  });
 
 const SelectGradePage = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const group = searchParams.get('group');
-  
-  const [selectedGrade, setSelectedGrade] = useState('');
-  const [lastSelected, setLastSelected] = useState('');
 
-  const allGrades = [
-    "Nursery", "LKG", "UKG",
-    "Class 1", "Class 2", "Class 3", "Class 4",
-    "Class 5", "Class 6", "Class 7", "Class 8",
-    "Class 9", "Class 10", "Class 11", "Class 12"
-  ];
+  const [selectedGrade, setSelectedGrade] = useState(() => getChildInfoFromStorage()?.grade || '');
+  const [lastSelected] = useState(() => getChildInfoFromStorage()?.grade || '');
+  const [schoolGrades, setSchoolGrades] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  // Prefer the grades the school actually offers; fall back to the standard list.
+  useEffect(() => {
+    let cancelled = false;
+
+    const load = async () => {
+      const childInfo = getChildInfoFromStorage();
+      const schoolId = childInfo?.schoolId;
+
+      if (!schoolId || schoolId === 'explore-schools') {
+        if (!cancelled) setLoading(false);
+        return;
+      }
+
+      try {
+        const school = await getSchool(schoolId);
+        if (!cancelled && school?.gradesOffered?.length) {
+          setSchoolGrades(sortByStandardOrder(school.gradesOffered));
+        }
+      } catch {
+        // Leave schoolGrades null so the standard list is used.
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    load();
+    return () => { cancelled = true; };
+  }, []);
 
   const grades = useMemo(() => {
-    if (!group) return allGrades;
-    if (group === 'Pre-Primary') return ["Nursery", "LKG", "UKG"];
-    if (group === 'Primary') return ["Class 1", "Class 2", "Class 3", "Class 4", "Class 5"];
-    if (group === 'Secondary') return ["Class 6", "Class 7", "Class 8", "Class 9", "Class 10"];
-    return allGrades;
-  }, [group]);
-
-  useEffect(() => {
-    const saved = localStorage.getItem('childInfo');
-    if (saved) {
-      const info = JSON.parse(saved);
-      setSelectedGrade(info.grade);
-      setLastSelected(info.grade);
-    }
-  }, []);
+    const base = schoolGrades ?? STANDARD_GRADES;
+    const groupGrades = group ? GRADE_GROUPS[group] : null;
+    if (!groupGrades) return base;
+    // Only offer grades in this group that the school actually has.
+    return base.filter((grade) => groupGrades.includes(grade));
+  }, [group, schoolGrades]);
 
   const handleSelect = (grade) => {
     setSelectedGrade(grade);
     
-    // Update localStorage
-    const saved = localStorage.getItem('childInfo');
-    const info = saved ? JSON.parse(saved) : {
-      name: "Priya Damodaran",
-      school: "St. Xavier's High School",
-      grade: grade
-    };
-    info.grade = grade;
+    const info = { ...(getChildInfoFromStorage() || {}), grade };
     localStorage.setItem('childInfo', JSON.stringify(info));
 
     // Instant navigation with slight delay for visual feedback
@@ -98,6 +133,17 @@ const SelectGradePage = () => {
 
       {/* Grades Grid */}
       <div className="px-6">
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-20">
+            <Loader2 size={32} className="animate-spin text-primary mb-4" />
+            <p className="text-sm text-gray-400">Loading grades…</p>
+          </div>
+        ) : grades.length === 0 ? (
+          <div className="py-20 text-center">
+            <p className="text-sm font-bold text-deep-purple mb-1">No grades available</p>
+            <p className="text-xs text-gray-400">Your school hasn&apos;t published its class list yet.</p>
+          </div>
+        ) : (
         <div className="grid grid-cols-2 gap-4">
           {grades.map((grade) => {
             const isSelected = selectedGrade === grade;
@@ -127,8 +173,9 @@ const SelectGradePage = () => {
             );
           })}
         </div>
+        )}
       </div>
-      
+
       {/* Footer Branding */}
       <div className="mt-12 text-center opacity-30">
         <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400">School E-Mart Essentials</p>

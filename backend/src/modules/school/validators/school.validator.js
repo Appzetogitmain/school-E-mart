@@ -347,4 +347,7 @@ module.exports = {
     phone: schemas.indianMobile.optional(),
   }),
   parentIdParam: schoolIdParam.keys({ parentId: objectId.required() }),
+  resendParentWelcomeSchema: Joi.object({
+    parentIds: Joi.array().items(objectId).min(1).max(200).required(),
+  }),
 };

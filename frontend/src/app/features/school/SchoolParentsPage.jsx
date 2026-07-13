@@ -1,9 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft, Search, Users, Loader2, GraduationCap, UserPlus
+  ArrowLeft, Search, Users, Loader2, GraduationCap, UserPlus, Mail, Send, CheckCircle2
 } from 'lucide-react';
-import { listParents } from '../../../services/schoolApi';
+import {
+  listParents,
+  resendParentWelcome,
+  resendParentWelcomeBulk,
+} from '../../../services/schoolApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 import { useSchoolId } from '../../../utils/schoolContext';
 
@@ -42,6 +46,30 @@ const SchoolParentsPage = () => {
     loadParents();
   }, [loadParents]);
 
+  // Re-sending the account email: per-parent, or to everyone currently listed.
+  const [sendingId, setSendingId] = useState(null);
+  const [sendingAll, setSendingAll] = useState(false);
+  const [toast, setToast] = useState('');
+
+  const showToast = (message) => {
+    setToast(message);
+    setTimeout(() => setToast(''), 3500);
+  };
+
+  const handleResend = async (parent) => {
+    const parentId = parent._id;
+    setSendingId(parentId);
+    setError('');
+    try {
+      await resendParentWelcome(schoolId, parentId);
+      showToast(`Login email sent to ${parent.user?.email}`);
+    } catch (err) {
+      setError(getErrorMessage(err, 'Unable to send the account email'));
+    } finally {
+      setSendingId(null);
+    }
+  };
+
   // Filter parents based on search query
   const filteredParents = parents.filter(p => {
     const name = (p.user?.name || '').toLowerCase();
@@ -52,8 +80,40 @@ const SchoolParentsPage = () => {
     return name.includes(search) || phone.includes(search) || email.includes(search) || childNames.includes(search);
   });
 
+  // Only parents with an email on record can be mailed at all.
+  const emailableParents = filteredParents.filter((p) => p.user?.email);
+
+  const handleResendAll = async () => {
+    if (emailableParents.length === 0) return;
+    setSendingAll(true);
+    setError('');
+    try {
+      const result = await resendParentWelcomeBulk(
+        schoolId,
+        emailableParents.map((p) => p._id)
+      );
+      showToast(
+        result?.failedCount
+          ? `Sent to ${result.sentCount} parent(s) • ${result.failedCount} failed`
+          : `Login email sent to ${result?.sentCount ?? emailableParents.length} parent(s)`
+      );
+    } catch (err) {
+      setError(getErrorMessage(err, 'Unable to send the account emails'));
+    } finally {
+      setSendingAll(false);
+    }
+  };
+
   return (
     <div className="flex flex-col min-h-screen bg-gray-50/50 pb-12 font-outfit">
+
+      {/* Confirmation toast */}
+      {toast && (
+        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[100] bg-emerald-600 text-white px-5 py-3 rounded-2xl shadow-2xl flex items-center gap-2.5 animate-in slide-in-from-top-4 duration-300 max-w-[90vw]">
+          <CheckCircle2 size={16} strokeWidth={3} className="shrink-0" />
+          <span className="text-xs font-black truncate">{toast}</span>
+        </div>
+      )}
 
       {/* Header Banner */}
       <div className="bg-[#3b2d7d] text-white px-6 py-6 sticky top-0 z-50 rounded-b-[2rem] shadow-lg">
@@ -104,6 +164,31 @@ const SchoolParentsPage = () => {
             className="w-full pl-11 pr-4 py-3.5 bg-white border border-gray-200 rounded-2xl text-sm font-bold text-deep-purple focus:outline-none focus:border-[#3b2d7d]/50 transition-colors placeholder:text-gray-300 shadow-inner"
           />
         </div>
+
+        {/* Bulk resend — send the account/login email to everyone currently listed */}
+        {!loading && emailableParents.length > 0 && (
+          <div className="bg-white border border-gray-150 rounded-2xl p-4 flex items-center justify-between gap-4">
+            <div className="min-w-0">
+              <h3 className="text-[12px] font-black text-deep-purple leading-tight">
+                Send account &amp; login email
+              </h3>
+              <p className="text-[10px] font-bold text-gray-400 mt-0.5">
+                Tells parents they can log in with their mobile number and an OTP. Safe to send as often as you like.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleResendAll}
+              disabled={sendingAll}
+              className="shrink-0 bg-[#3b2d7d] text-white px-4 py-2.5 rounded-xl text-[11px] font-black shadow-lg shadow-purple-900/10 hover:bg-purple-800 active:scale-95 transition-all inline-flex items-center gap-1.5 disabled:opacity-60"
+            >
+              {sendingAll ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
+              {sendingAll
+                ? 'Sending…'
+                : `Send to all (${emailableParents.length})`}
+            </button>
+          </div>
+        )}
 
         {error && (
           <div className="px-4 py-3 bg-red-50 border border-red-100 rounded-2xl text-xs font-bold text-red-600 flex items-center justify-between gap-3">
@@ -211,6 +296,29 @@ const SchoolParentsPage = () => {
                         </div>
                       )}
                     </div>
+                  </div>
+
+                  {/* Resend account/login email */}
+                  <div className="mb-3">
+                    {parent.user?.email ? (
+                      <button
+                        type="button"
+                        onClick={() => handleResend(parent)}
+                        disabled={sendingId === parent._id || sendingAll}
+                        className="w-full py-2.5 rounded-xl border border-[#3b2d7d]/20 bg-[#3b2d7d]/5 text-[#3b2d7d] text-[11px] font-black inline-flex items-center justify-center gap-1.5 hover:bg-[#3b2d7d]/10 active:scale-[0.98] transition-all disabled:opacity-60"
+                      >
+                        {sendingId === parent._id ? (
+                          <Loader2 size={13} className="animate-spin" />
+                        ) : (
+                          <Mail size={13} />
+                        )}
+                        {sendingId === parent._id ? 'Sending…' : 'Send login email'}
+                      </button>
+                    ) : (
+                      <p className="text-[10px] font-bold text-amber-600 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2 text-center">
+                        No email on record — add one to send login details
+                      </p>
+                    )}
                   </div>
 
                   {/* Bottom Role Info */}

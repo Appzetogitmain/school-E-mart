@@ -8,6 +8,12 @@ const supportMessageSchema = new mongoose.Schema({
   topicId: { type: mongoose.Schema.Types.ObjectId, ref: 'SupportTopic', required: true },
   subject: { type: String },
   body: { type: String, required: true },
+  // Reply-to details captured from the contact form; may differ from the account's.
+  contact: {
+    name: { type: String },
+    email: { type: String },
+    phone: { type: String }
+  },
   attachments: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Attachment' }],
   reference: {
     kind: { type: String }, // 'Order', 'Product', 'VendorProfile'

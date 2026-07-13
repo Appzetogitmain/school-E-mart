@@ -167,7 +167,12 @@ const lmsController = {
   createAssignment: asyncHandler(async (req, res) => {
     const course = await withCourse(req);
     await assertManageAccess(req, course);
-    const assignment = await assignmentService.createAssignment(req.schoolId, req.params.courseId, req.body);
+    const assignment = await assignmentService.createAssignment(
+      req.schoolId,
+      req.params.courseId,
+      req.body,
+      { userId: req.auth.userId }
+    );
     return created(res, { assignment }, 'Assignment created successfully', req);
   }),
 

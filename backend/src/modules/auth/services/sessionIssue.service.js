@@ -35,9 +35,19 @@ const issueAuthenticatedSession = async (user, requestMeta = {}, auditAction = '
   const userDto = mapUserToDto(updatedUser || user, authContext);
 
   if (user.role === 'parent') {
+    const ParentProfile = require('../../../database/models/ParentProfile');
     const ChildProfile = require('../../../database/models/ChildProfile');
     const School = require('../../../database/models/School');
+    const Address = require('../../../database/models/Address');
+
+    const parentProfile = await ParentProfile.findOne({ userId: user._id, 'softDelete.isDeleted': { $ne: true } }).lean();
     const child = await ChildProfile.findOne({ parentUserId: user._id, 'softDelete.isDeleted': { $ne: true } }).lean();
+
+    let defaultAddress = null;
+    if (parentProfile?.defaultAddressId) {
+      defaultAddress = await Address.findById(parentProfile.defaultAddressId).lean();
+    }
+
     if (child) {
       const school = child.schoolId ? await School.findById(child.schoolId).lean() : null;
       userDto.childProfile = {
@@ -46,7 +56,22 @@ const issueAuthenticatedSession = async (user, requestMeta = {}, auditAction = '
         schoolId: child.schoolId ? child.schoolId.toString() : 'explore-schools',
         schoolName: school ? school.name : 'Explore Schools',
         schoolRefNo: child.schoolRefNo || (school ? school.schoolRefNo : null),
-        studentId: child.studentId ? child.studentId.toString() : null
+        studentId: child.studentId ? child.studentId.toString() : null,
+        photo: child.avatarUrl || null,
+        avatarUrl: child.avatarUrl || null,
+      };
+    }
+
+    if (parentProfile) {
+      userDto.profile = {
+        altPhone: parentProfile.altPhone || null,
+        avatarUrl: parentProfile.avatarUrl || null,
+        referralCode: parentProfile.referralCode || null,
+        address: defaultAddress?.line1 || null,
+        pinCode: defaultAddress?.pinCode || null,
+        city: defaultAddress?.city || null,
+        state: defaultAddress?.state || null,
+        country: defaultAddress?.country || null,
       };
     }
   }

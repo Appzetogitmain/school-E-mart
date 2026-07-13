@@ -67,3 +67,13 @@ export const markParentDiaryRead = async (schoolId, entryId, params = {}) => {
 
 export const submitHomework = async (schoolId, courseId, assignmentId, payload) =>
   submitAssignment(schoolId, courseId, assignmentId, payload);
+
+export const getMyProfile = async () => {
+  const response = await apiClient.get('/users/me');
+  return response.data?.data;
+};
+
+export const updateMyProfile = async (payload) => {
+  const response = await apiClient.patch('/users/me', payload);
+  return response.data?.data;
+};

@@ -22,7 +22,10 @@ const GradeProductsPage = () => {
   const [sortBy, setSortBy] = useState('Recommended');
   const [showSortDropdown, setShowSortDropdown] = useState(false);
 
-  const categories = ['All', 'Uniforms', 'Books', 'Stationery', 'Shoes', 'Bags', 'Accessories'];
+  const categories = useMemo(() => {
+    if (!tree || tree.length === 0) return ['All', 'Uniforms', 'Books', 'Stationery', 'Shoes', 'Bags', 'Accessories'];
+    return ['All', ...tree.map((cat) => cat.name)];
+  }, [tree]);
   const sortOptions = ['Recommended', 'Price: Low to High', 'Price: High to Low', 'Rating'];
 
   const selectedHeader = useMemo(

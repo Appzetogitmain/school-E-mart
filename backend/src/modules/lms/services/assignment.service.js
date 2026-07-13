@@ -1,15 +1,32 @@
 const { NotFoundError, ConflictError, BadRequestError } = require('../../../common/errors');
+const User = require('../../../database/models/User');
+const { saveBase64Files } = require('../../../utils/fileStorage');
 const { assignmentRepository, assignmentSubmissionRepository } = require('../repositories/assignment.repository');
 const courseService = require('./course.service');
 const progressService = require('./progress.service');
 
 const assignmentService = {
-  async createAssignment(schoolId, courseId, payload) {
-    await courseService.getCourse(schoolId, courseId);
+  async createAssignment(schoolId, courseId, payload, actor = {}) {
+    const course = await courseService.getCourse(schoolId, courseId);
+
+    let assignedByName = null;
+    let assignedByUserId = null;
+    if (actor.userId) {
+      assignedByUserId = actor.userId;
+      const user = await User.findById(actor.userId).select('name').lean();
+      assignedByName = user?.name || null;
+    }
+
     return assignmentRepository.create({
       ...payload,
       schoolId,
       courseId,
+      // Fall back to the course's grade/subject so the record is self-describing
+      // even if the client omits them.
+      classGrade: payload.classGrade || course.gradeClass,
+      assignedDate: payload.assignedDate || new Date(),
+      assignedByUserId,
+      assignedByName,
       status: payload.status || 'draft',
     });
   },
@@ -62,9 +79,14 @@ const assignmentService = {
       userId,
       content: payload.content,
       attachments: payload.attachments || [],
+      attachmentUrls: saveBase64Files(payload.files, 'homework'),
       status: 'submitted',
       submittedAt: new Date(),
     };
+
+    if (!data.content && !data.attachmentUrls.length && !data.attachments.length) {
+      throw new BadRequestError('Attach the completed work or add a note', 'SUBMISSION_EMPTY');
+    }
 
     if (existing) {
       if (existing.status === 'graded') {

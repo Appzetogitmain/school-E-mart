@@ -21,6 +21,11 @@ export const createCourse = async (schoolId, payload) => {
   return unwrapData(response)?.course;
 };
 
+export const updateCourse = async (schoolId, courseId, payload) => {
+  const response = await apiClient.patch(lmsPath(schoolId, `/courses/${courseId}`), payload);
+  return unwrapData(response)?.course;
+};
+
 export const listAssignments = async (schoolId, courseId, params = {}) => {
   const response = await apiClient.get(lmsPath(schoolId, `/courses/${courseId}/assignments`), { params });
   return extractPaginated(response, 'assignments');

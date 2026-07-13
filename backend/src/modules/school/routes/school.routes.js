@@ -605,4 +605,22 @@ router.delete(
   schoolController.deleteParent
 );
 
+// Re-send the account-created email. Declared before the :parentId variant so the
+// literal "resend-welcome" segment is not swallowed by the param route.
+router.post(
+  '/:schoolId/parents/resend-welcome',
+  ...schoolAdmin,
+  resolveSchool(),
+  validateBody(validators.resendParentWelcomeSchema),
+  schoolController.resendParentWelcomeBulk
+);
+
+router.post(
+  '/:schoolId/parents/:parentId/resend-welcome',
+  ...schoolAdmin,
+  resolveSchool(),
+  validateParams(validators.parentIdParam),
+  schoolController.resendParentWelcome
+);
+
 module.exports = router;

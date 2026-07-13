@@ -22,23 +22,15 @@ import {
 import { submitHomework } from '../../../services/parentApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 import { setSubmissionCache } from '../../../utils/mappers/parentMapper';
+import { filesToCompressedDataUrls } from '../../../utils/fileUpload';
 
 const ParentHomeworkDetails = ({ homework, childInfo, onClose, onSubmitted }) => {
   const [reminderSet, setReminderSet] = useState(false);
-  const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState('');
 
   const [uploadedFiles, setUploadedFiles] = useState([]);
   const [submissionStatus, setSubmissionStatus] = useState(homework?.submissionStatus || 'Not Submitted');
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const handleDownload = () => {
-    setDownloading(true);
-    setTimeout(() => {
-      setDownloading(false);
-      alert('Downloaded: Fractions_Worksheet.pdf');
-    }, 1500);
-  };
 
   const handleSetReminder = () => {
     setReminderSet(true);
@@ -79,9 +71,13 @@ const ParentHomeworkDetails = ({ homework, childInfo, onClose, onSubmitted }) =>
     setIsSubmitting(true);
     setError('');
     try {
+      // The teacher can only grade what actually reaches the server, so send the
+      // files themselves rather than a placeholder note.
+      const files = await filesToCompressedDataUrls(uploadedFiles.map((f) => f.raw));
+
       await submitHomework(schoolId, homework.courseId, homework.id, {
         studentId: childInfo?.studentId || undefined,
-        content: `Submitted ${uploadedFiles.length} file(s) via parent portal`,
+        files,
       });
 
       setSubmissionCache(childInfo?.studentId, homework.id, {
@@ -109,7 +105,9 @@ const ParentHomeworkDetails = ({ homework, childInfo, onClose, onSubmitted }) =>
         </button>
         <div>
           <h2 className="text-sm font-black text-gray-800">Homework Details</h2>
-          <p className="text-[10px] font-bold text-gray-400">Class 5 - Mathematics</p>
+          <p className="text-[10px] font-bold text-gray-400">
+            {[homework.classSection, homework.subject].filter((v) => v && v !== '—').join(' • ')}
+          </p>
         </div>
       </div>
 
@@ -130,9 +128,17 @@ const ParentHomeworkDetails = ({ homework, childInfo, onClose, onSubmitted }) =>
             />
 
             {/* Priority Pill inside Image */}
-            <span className="absolute top-3 left-3 px-2 py-0.5 bg-[#EBFBF0] rounded-lg text-[9px] font-black text-[#34A853] uppercase tracking-wider border border-[#34A853]/10">
-              High Priority
-            </span>
+            {homework.priority && (
+              <span className={`absolute top-3 left-3 px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider border ${
+                homework.priority === 'High'
+                  ? 'bg-[#FEF3F2] text-[#D93025] border-[#D93025]/10'
+                  : homework.priority === 'Medium'
+                    ? 'bg-[#FFF6ED] text-[#F2994A] border-[#F2994A]/10'
+                    : 'bg-[#EBFBF0] text-[#34A853] border-[#34A853]/10'
+              }`}>
+                {homework.priority} Priority
+              </span>
+            )}
           </div>
 
           {/* Core Info Details Column */}
@@ -165,7 +171,7 @@ const ParentHomeworkDetails = ({ homework, childInfo, onClose, onSubmitted }) =>
                   <Calendar size={13} className="text-gray-300" />
                   <span>Date Assigned</span>
                 </span>
-                <span className="text-gray-700 font-extrabold">: 12 May 2025 (Mon)</span>
+                <span className="text-gray-700 font-extrabold">: {homework.assignedDate}</span>
               </div>
 
               {/* Due Date */}
@@ -175,11 +181,13 @@ const ParentHomeworkDetails = ({ homework, childInfo, onClose, onSubmitted }) =>
                     <Clock size={13} className="text-gray-300" />
                     <span>Due Date</span>
                   </span>
-                  <span className="text-gray-700 font-extrabold">: 16 May 2025 (Fri)</span>
+                  <span className="text-gray-700 font-extrabold">: {homework.dueDate}</span>
                 </div>
-                <span className="text-[10px] font-black text-[#F2994A] ml-24 mt-0.5 uppercase tracking-wide">
-                  ( 2 Days Left )
-                </span>
+                {homework.daysRemaining && homework.daysRemaining !== '—' && (
+                  <span className="text-[10px] font-black text-[#F2994A] ml-24 mt-0.5 uppercase tracking-wide">
+                    ( {homework.daysRemaining} )
+                  </span>
+                )}
               </div>
 
               {/* Teacher */}
@@ -188,7 +196,7 @@ const ParentHomeworkDetails = ({ homework, childInfo, onClose, onSubmitted }) =>
                   <User size={13} className="text-gray-300" />
                   <span>Teacher</span>
                 </span>
-                <span className="text-gray-700 font-extrabold">: Mrs. Neha Sharma</span>
+                <span className="text-gray-700 font-extrabold">: {homework.teacher}</span>
               </div>
 
               {/* Class / Section */}
@@ -197,99 +205,85 @@ const ParentHomeworkDetails = ({ homework, childInfo, onClose, onSubmitted }) =>
                   <GraduationCap size={13} className="text-gray-300" />
                   <span>Class / Section</span>
                 </span>
-                <span className="text-gray-700 font-extrabold">: Class 5 - A</span>
+                <span className="text-gray-700 font-extrabold">: {homework.classSection}</span>
               </div>
 
               {/* Homework Type */}
-              <div className="flex items-center">
-                <span className="w-24 text-gray-400 font-bold flex items-center gap-1.5">
-                  <Tag size={13} className="text-gray-300" />
-                  <span>Homework Type</span>
-                </span>
-                <span className="text-gray-700 font-extrabold">: Written</span>
-              </div>
+              {homework.homeworkType && (
+                <div className="flex items-center">
+                  <span className="w-24 text-gray-400 font-bold flex items-center gap-1.5">
+                    <Tag size={13} className="text-gray-300" />
+                    <span>Homework Type</span>
+                  </span>
+                  <span className="text-gray-700 font-extrabold">: {homework.homeworkType}</span>
+                </div>
+              )}
 
               {/* Priority */}
-              <div className="flex items-center">
-                <span className="w-24 text-gray-400 font-bold flex items-center gap-1.5">
-                  <Flag size={13} className="text-gray-300" />
-                  <span>Priority</span>
-                </span>
-                <span className="text-red-500 font-extrabold">: High</span>
-              </div>
+              {homework.priority && (
+                <div className="flex items-center">
+                  <span className="w-24 text-gray-400 font-bold flex items-center gap-1.5">
+                    <Flag size={13} className="text-gray-300" />
+                    <span>Priority</span>
+                  </span>
+                  <span className={`font-extrabold ${
+                    homework.priority === 'High'
+                      ? 'text-red-500'
+                      : homework.priority === 'Medium'
+                        ? 'text-[#F2994A]'
+                        : 'text-[#34A853]'
+                  }`}>: {homework.priority}</span>
+                </div>
+              )}
 
             </div>
           </div>
         </div>
 
         {/* 3. Description Panel */}
-        <div className="bg-white border border-gray-100 rounded-3xl p-5 shadow-sm">
-          <h4 className="text-xs font-black text-gray-800 uppercase tracking-wider mb-2.5">
-            Description
-          </h4>
-          <p className="text-xs font-bold text-gray-500 leading-relaxed">
-            Solve the given worksheet on Fractions (Page 45-46) in the notebook. Show all the steps neatly.
-          </p>
-        </div>
-
-        {/* 4. Attachments Section */}
-        <div className="bg-white border border-gray-100 rounded-3xl p-5 shadow-sm">
-          <h4 className="text-xs font-black text-gray-800 uppercase tracking-wider mb-3">
-            Attachments
-          </h4>
-
-          <div className="border border-gray-100 rounded-2xl p-3 flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="w-10 h-10 rounded-xl bg-red-50 text-red-500 flex items-center justify-center shrink-0 border border-red-100/50">
-                <FileText size={18} />
-              </div>
-              <div className="min-w-0">
-                <h5 className="text-[11.5px] font-black text-gray-800 truncate">
-                  Fractions_Worksheet.pdf
-                </h5>
-                <p className="text-[9.5px] font-semibold text-gray-400 mt-0.5">
-                  PDF • 412 KB
-                </p>
-              </div>
-            </div>
-
-            <button
-              onClick={handleDownload}
-              disabled={downloading}
-              className="px-3.5 py-2 bg-white border border-gray-100 rounded-xl flex items-center gap-1.5 text-[10px] font-black text-[#6A47DE] hover:border-gray-200 active:scale-95 transition-all shrink-0 shadow-sm"
-            >
-              <Download size={11} className={downloading ? "animate-bounce" : ""} />
-              <span>{downloading ? 'Downloading...' : 'Download'}</span>
-            </button>
-          </div>
-        </div>
-
-        {/* 5. Instructions from Teacher */}
-        <div className="bg-white border border-gray-100 rounded-3xl p-5 shadow-sm">
-          <h4 className="text-xs font-black text-gray-800 uppercase tracking-wider mb-3">
-            Instructions from Teacher
-          </h4>
-          <ul className="flex flex-col gap-2 text-xs text-gray-500 font-bold list-disc pl-4">
-            <li>Write your answers neatly in the notebook.</li>
-            <li>Show all steps.</li>
-            <li>Learn the examples on Page 47.</li>
-          </ul>
-        </div>
-
-        {/* 6. Reference textbook */}
-        <div className="bg-white border border-gray-100 rounded-3xl p-5 shadow-sm flex items-center justify-between gap-4">
-          <div className="min-w-0">
-            <h4 className="text-xs font-black text-gray-800 uppercase tracking-wider mb-2">
-              Reference
+        {homework.description && (
+          <div className="bg-white border border-gray-100 rounded-3xl p-5 shadow-sm">
+            <h4 className="text-xs font-black text-gray-800 uppercase tracking-wider mb-2.5">
+              Description
             </h4>
-            <p className="text-[11.5px] text-gray-500 font-bold leading-normal truncate">
-              Textbook: <span className="text-gray-700 font-extrabold">Mathematics - Grade 5</span>
-            </p>
-            <p className="text-[11px] text-gray-400 font-semibold leading-normal truncate mt-0.5">
-              Chapter: <span className="text-gray-500 font-bold">Fractions and Decimals</span>
+            <p className="text-xs font-bold text-gray-500 leading-relaxed whitespace-pre-line">
+              {homework.description}
             </p>
           </div>
-        </div>
+        )}
+
+        {/* 4. Instructions from Teacher */}
+        {homework.instructions && (
+          <div className="bg-white border border-gray-100 rounded-3xl p-5 shadow-sm">
+            <h4 className="text-xs font-black text-gray-800 uppercase tracking-wider mb-3">
+              Instructions from Teacher
+            </h4>
+            <p className="text-xs font-bold text-gray-500 leading-relaxed whitespace-pre-line">
+              {homework.instructions}
+            </p>
+          </div>
+        )}
+
+        {/* 5. Reference textbook */}
+        {(homework.textbook || homework.chapter) && (
+          <div className="bg-white border border-gray-100 rounded-3xl p-5 shadow-sm flex items-center justify-between gap-4">
+            <div className="min-w-0">
+              <h4 className="text-xs font-black text-gray-800 uppercase tracking-wider mb-2">
+                Reference
+              </h4>
+              {homework.textbook && (
+                <p className="text-[11.5px] text-gray-500 font-bold leading-normal truncate">
+                  Textbook: <span className="text-gray-700 font-extrabold">{homework.textbook}</span>
+                </p>
+              )}
+              {homework.chapter && (
+                <p className="text-[11px] text-gray-400 font-semibold leading-normal truncate mt-0.5">
+                  Chapter: <span className="text-gray-500 font-bold">{homework.chapter}</span>
+                </p>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* 8. Parental Connect Info Card */}
         <div className="bg-[#FAF5FF] border border-[#F3E8FF] rounded-3xl p-4.5 flex gap-3.5 shadow-sm relative overflow-hidden">
