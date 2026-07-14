@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 require('dotenv').config();
 
-const MONGO_URI = process.env.MONGO_URI;
+const MONGO_URI = process.env.MONGODB_URI;
 
 async function run() {
   await mongoose.connect(MONGO_URI);
@@ -24,12 +24,15 @@ async function run() {
     console.log('\n--- TEACHER PROFILES ---');
     teacherProfiles.forEach(tp => console.log(`TP User: ${tp.userId}, School: ${tp.schoolId}, Assignments: ${JSON.stringify(tp.classAssignments)}, approvalStatus: ${tp.approvalStatus}`));
 
-    // 4. Get students count and query for Class 5, Section A
-    const students = await db.collection('students').find({}).toArray();
-    console.log(`\n--- STUDENTS (${students.length} total) ---`);
-    students.forEach(s => {
-      console.log(`Student: ${s.name}, Class: ${s.classGrade}, Section: ${s.section}, Roll: ${s.rollNo}, School: ${s.schoolId}, isDeleted: ${s.softDelete?.isDeleted}, status: ${s.status}`);
-    });
+    // 5. Get parents count and details
+    const parents = await db.collection('users').find({ role: 'parent' }).toArray();
+    console.log(`\n--- PARENTS (${parents.length} total) ---`);
+    parents.forEach(p => console.log(`Parent: ${p.name}, Email: ${p.email}, Phone: ${p.phone}, tenantSchoolId: ${p.tenantSchoolId}, refId: ${p.refId}`));
+
+    // 6. Get parentProfiles
+    const parentProfiles = await db.collection('parentProfiles').find({}).toArray();
+    console.log(`\n--- PARENT PROFILES (${parentProfiles.length} total) ---`);
+    parentProfiles.forEach(pp => console.log(`Profile ID: ${pp._id}, User ID: ${pp.userId}, referralCode: ${pp.referralCode}, activeChildId: ${pp.activeChildId}`));
 
   } catch (err) {
     console.error(err);

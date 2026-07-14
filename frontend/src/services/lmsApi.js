@@ -68,6 +68,45 @@ export const evaluateSubmission = async (schoolId, courseId, assignmentId, submi
   return unwrapData(response)?.submission;
 };
 
+export const returnSubmission = async (schoolId, courseId, assignmentId, submissionId, payload) => {
+  const response = await apiClient.patch(
+    lmsPath(schoolId, `/courses/${courseId}/assignments/${assignmentId}/submissions/${submissionId}/return`),
+    payload
+  );
+  return unwrapData(response)?.submission;
+};
+
+/**
+ * Every student the homework was set for, each with their submission or null.
+ * Server-side join, so names and roll numbers are always resolved and no student is
+ * lost to a page limit.
+ */
+export const getSubmissionRoster = async (schoolId, courseId, assignmentId) => {
+  const response = await apiClient.get(
+    lmsPath(schoolId, `/courses/${courseId}/assignments/${assignmentId}/roster`)
+  );
+  const data = unwrapData(response);
+  return { assignment: data?.assignment || null, roster: data?.roster || [] };
+};
+
+/** All published homework for one student, already filtered to their class AND section. */
+export const getStudentHomework = async (schoolId, params = {}) => {
+  const response = await apiClient.get(lmsPath(schoolId, '/homework'), { params });
+  return unwrapData(response)?.homework || [];
+};
+
+/**
+ * Submitted work is not public. It is fetched through an authorized endpoint, so the
+ * browser must send credentials rather than pointing an <img> at a static path.
+ */
+export const fetchSubmissionAttachment = async (schoolId, attachmentId) => {
+  const response = await apiClient.get(
+    lmsPath(schoolId, `/submission-attachments/${attachmentId}`),
+    { responseType: 'blob' }
+  );
+  return URL.createObjectURL(response.data);
+};
+
 export const getLearningHistory = async (schoolId, params = {}) => {
   const response = await apiClient.get(lmsPath(schoolId, '/learning-history'), { params });
   return extractPaginated(response, 'history');

@@ -162,7 +162,7 @@ const marketplaceController = {
     if (marketplaceAccessPolicy.isCatalogAdmin(req.auth)) {
       if (!req.body.vendorId) {
         const { BadRequestError } = require('../../../common/errors');
-        throw new BadRequestError('vendorId is required for admin product creation', 'VENDOR_ID_REQUIRED');
+        throw new BadRequestError('vendorId is required for admin product creation', null, 'VENDOR_ID_REQUIRED');
       }
       vendorId = req.body.vendorId;
     } else {

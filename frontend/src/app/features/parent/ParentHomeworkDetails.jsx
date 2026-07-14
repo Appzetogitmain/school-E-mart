@@ -17,20 +17,42 @@ import {
   UploadCloud,
   Image,
   Trash2,
+  Award,
   Loader2
 } from 'lucide-react';
 import { submitHomework } from '../../../services/parentApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
-import { setSubmissionCache } from '../../../utils/mappers/parentMapper';
-import { filesToCompressedDataUrls } from '../../../utils/fileUpload';
+import {
+  filesToCompressedDataUrls,
+  validateSubmissionFiles,
+  MAX_FILES,
+} from '../../../utils/fileUpload';
 
 const ParentHomeworkDetails = ({ homework, childInfo, onClose, onSubmitted }) => {
   const [reminderSet, setReminderSet] = useState(false);
   const [error, setError] = useState('');
 
   const [uploadedFiles, setUploadedFiles] = useState([]);
-  const [submissionStatus, setSubmissionStatus] = useState(homework?.submissionStatus || 'Not Submitted');
+  const [note, setNote] = useState('');
+  // Raw API status: 'submitted' | 'graded' | 'returned' | null. Never a display label —
+  // comparing these against capitalised text is what previously let a parent silently
+  // overwrite work they had already handed in.
+  const [submissionStatus, setSubmissionStatus] = useState(homework?.submissionStatus || null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const isGraded = submissionStatus === 'graded';
+  const isReturned = submissionStatus === 'returned';
+  const isSubmitted = submissionStatus === 'submitted';
+  // Graded work is final. Returned work is explicitly being asked for again.
+  const canSubmit = !isGraded && !isSubmitted;
+
+  const statusLabel = isGraded
+    ? 'Checked'
+    : isReturned
+      ? 'Needs Revision'
+      : isSubmitted
+        ? 'Submitted'
+        : 'Not Submitted';
 
   const handleSetReminder = () => {
     setReminderSet(true);
@@ -42,6 +64,19 @@ const ParentHomeworkDetails = ({ homework, childInfo, onClose, onSubmitted }) =>
   // Upload Handlers
   const handleFileChange = (e) => {
     const files = Array.from(e.target.files);
+
+    // Catch what the server would reject anyway, before the parent sits through an
+    // upload that ends in a failure.
+    const validationError = validateSubmissionFiles([
+      ...uploadedFiles.map((f) => f.raw),
+      ...files,
+    ]);
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
+    setError('');
     const newFiles = files.map((file, idx) => ({
       id: `file-${Date.now()}-${idx}`,
       name: file.name,
@@ -57,8 +92,8 @@ const ParentHomeworkDetails = ({ homework, childInfo, onClose, onSubmitted }) =>
   };
 
   const handleUploadHomework = async () => {
-    if (uploadedFiles.length === 0) {
-      setError('Please select or upload at least one completed homework image first.');
+    if (uploadedFiles.length === 0 && !note.trim()) {
+      setError('Attach the completed homework or add a note for the teacher.');
       return;
     }
 
@@ -75,16 +110,13 @@ const ParentHomeworkDetails = ({ homework, childInfo, onClose, onSubmitted }) =>
       // files themselves rather than a placeholder note.
       const files = await filesToCompressedDataUrls(uploadedFiles.map((f) => f.raw));
 
-      await submitHomework(schoolId, homework.courseId, homework.id, {
+      const submission = await submitHomework(schoolId, homework.courseId, homework.id, {
         studentId: childInfo?.studentId || undefined,
+        content: note.trim() || undefined,
         files,
       });
 
-      setSubmissionCache(childInfo?.studentId, homework.id, {
-        status: 'submitted',
-        submittedAt: new Date().toISOString(),
-      });
-      setSubmissionStatus('Submitted');
+      setSubmissionStatus(submission?.status || 'submitted');
       onSubmitted?.();
     } catch (err) {
       setError(getErrorMessage(err, 'Unable to submit homework. Course enrollment may be required.'));
@@ -301,7 +333,68 @@ const ParentHomeworkDetails = ({ homework, childInfo, onClose, onSubmitted }) =>
           </div>
         </div>
 
-        {/* 9. Interactive Submission Section */}
+        {/* 9. Teacher's Feedback — shown once the work has been checked or sent back */}
+        {(isGraded || (isReturned && homework.feedback)) && (
+          <div className={`border rounded-3xl p-5 shadow-sm flex flex-col gap-3 ${
+            isGraded
+              ? 'bg-[#EBFBF0] border-[#34A853]/15'
+              : 'bg-[#FEF3F2] border-[#D93025]/15'
+          }`}>
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 shadow-sm bg-white ${
+                  isGraded ? 'text-[#34A853]' : 'text-[#D93025]'
+                }`}>
+                  <Award size={16} />
+                </div>
+                <div>
+                  <h3 className="text-xs font-black text-gray-800 tracking-tight leading-snug">
+                    {isGraded ? "Teacher's Feedback" : 'Sent Back for Revision'}
+                  </h3>
+                  {homework.gradedAt && (
+                    <p className="text-[10px] font-bold text-gray-400 mt-0.5">
+                      {new Date(homework.gradedAt).toLocaleDateString('en-IN', {
+                        day: 'numeric', month: 'short', year: 'numeric',
+                      })}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {isGraded && homework.score != null && (
+                <div className="text-right shrink-0">
+                  <p className="text-base font-black text-[#34A853] leading-none">
+                    {homework.score}
+                    <span className="text-[10px] text-gray-400">/{homework.maxScore}</span>
+                  </p>
+                  {homework.letterGrade && (
+                    <p className="text-[10px] font-black text-gray-500 mt-1">
+                      Grade {homework.letterGrade}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {homework.feedback ? (
+              <p className="text-xs font-bold text-gray-600 leading-relaxed whitespace-pre-line bg-white/60 rounded-2xl p-3.5">
+                {homework.feedback}
+              </p>
+            ) : (
+              <p className="text-[11px] font-bold text-gray-400">
+                The teacher did not leave any remarks.
+              </p>
+            )}
+
+            {isReturned && (
+              <p className="text-[10px] font-black text-[#D93025] uppercase tracking-wide">
+                Please correct the work and submit it again.
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* 10. Interactive Submission Section */}
         <div className="bg-[#F8F5FF] border border-[#F1EBFF] rounded-3xl p-5 shadow-sm mt-2 flex flex-col gap-4">
 
           {/* Header Row */}
@@ -320,15 +413,23 @@ const ParentHomeworkDetails = ({ homework, childInfo, onClose, onSubmitted }) =>
               </div>
             </div>
 
-            <span className={`px-2.5 py-1.5 rounded-xl text-[9px] font-black tracking-tight border uppercase leading-none shrink-0 ${submissionStatus === 'Submitted'
+            <span className={`px-2.5 py-1.5 rounded-xl text-[9px] font-black tracking-tight border uppercase leading-none shrink-0 ${
+              isGraded || isSubmitted
                 ? 'bg-[#EBFBF0] border-[#34A853]/15 text-[#34A853]'
                 : 'bg-red-50 border-red-100 text-red-500'
-              }`}>
-              Status: {submissionStatus}
+            }`}>
+              Status: {statusLabel}
             </span>
           </div>
 
+          {homework.isLate && (isSubmitted || isGraded) && (
+            <p className="text-[10px] font-black text-[#F2994A] uppercase tracking-wide">
+              This work was submitted after the due date.
+            </p>
+          )}
+
           {/* Grid upload controls and previews */}
+          {canSubmit && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
             {/* Column 1: Choose from Gallery Clickable box */}
@@ -347,7 +448,7 @@ const ParentHomeworkDetails = ({ homework, childInfo, onClose, onSubmitted }) =>
                 Upload from Gallery
               </span>
               <span className="text-[9px] font-semibold text-gray-400 mt-1 leading-snug">
-                JPG, PNG or PDF (Max 10 MB per file)
+                JPG, PNG or PDF (Max 5 MB per file, up to {MAX_FILES} files)
               </span>
               <div className="mt-3.5 px-4 py-2 border border-[#6A47DE]/20 rounded-2xl text-[10px] font-black text-[#6A47DE] hover:bg-[#6A47DE]/5 transition-colors flex items-center gap-1.5 bg-white shadow-sm">
                 <Image size={11} />
@@ -411,26 +512,47 @@ const ParentHomeworkDetails = ({ homework, childInfo, onClose, onSubmitted }) =>
             </div>
 
           </div>
+          )}
+
+          {/* Note to the teacher — optional, and the only thing to send if there are no files */}
+          {canSubmit && (
+            <div className="bg-white border border-gray-100 rounded-2xl p-3.5 flex flex-col gap-2 shadow-sm">
+              <label className="text-[10px] font-black text-gray-700">
+                Note for the teacher <span className="text-gray-400 font-bold">(optional)</span>
+              </label>
+              <textarea
+                value={note}
+                onChange={(e) => setNote(e.target.value.slice(0, 500))}
+                placeholder="e.g. Question 4 was difficult, I have shown my working."
+                className="w-full p-3 bg-gray-50/60 border border-gray-100 focus:border-[#6A47DE]/30 focus:outline-none rounded-2xl text-[11px] font-bold text-gray-700 placeholder-gray-400 h-20 resize-none transition-all"
+              />
+              <span className="text-[9px] font-bold text-gray-400 self-end">{note.length}/500</span>
+            </div>
+          )}
 
           {/* Dynamic upload counter bar */}
-          <div className="bg-white border border-gray-100 rounded-2xl px-4 py-2.5 text-[10px] font-black text-gray-700 flex items-center justify-between shadow-sm">
-            <span>Uploaded Files</span>
-            <span className="text-[#6A47DE] font-extrabold bg-[#6A47DE]/10 px-2 py-0.5 rounded-lg text-[9.5px]">
-              {uploadedFiles.length} {uploadedFiles.length === 1 ? 'file' : 'files'}
-            </span>
-          </div>
+          {canSubmit && (
+            <div className="bg-white border border-gray-100 rounded-2xl px-4 py-2.5 text-[10px] font-black text-gray-700 flex items-center justify-between shadow-sm">
+              <span>Uploaded Files</span>
+              <span className="text-[#6A47DE] font-extrabold bg-[#6A47DE]/10 px-2 py-0.5 rounded-lg text-[9.5px]">
+                {uploadedFiles.length} {uploadedFiles.length === 1 ? 'file' : 'files'}
+              </span>
+            </div>
+          )}
 
           {/* Submission Deadline Banner */}
-          <div className="bg-[#FFF6ED] border border-[#FFE7D3] rounded-2xl p-3 flex items-center gap-2">
-            <span className="w-7 h-7 rounded-xl bg-[#FFF] text-[#F2994A] flex items-center justify-center shadow-sm shrink-0 border border-[#F2994A]/10">
-              📅
-            </span>
-            <div className="min-w-0">
-              <p className="text-[10px] font-extrabold text-[#F2994A] leading-tight">
-                Submission Deadline: 24 May 2025, 11:59 PM
-              </p>
+          {homework.dueDate && homework.dueDate !== '—' && (
+            <div className="bg-[#FFF6ED] border border-[#FFE7D3] rounded-2xl p-3 flex items-center gap-2">
+              <span className="w-7 h-7 rounded-xl bg-[#FFF] text-[#F2994A] flex items-center justify-center shadow-sm shrink-0 border border-[#F2994A]/10">
+                📅
+              </span>
+              <div className="min-w-0">
+                <p className="text-[10px] font-extrabold text-[#F2994A] leading-tight">
+                  Submission Deadline: {homework.dueDate}
+                </p>
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Parents advisory banner */}
           <div className="bg-[#FAF5FF] border border-[#F3E8FF] rounded-2xl p-3 flex items-center gap-2">
@@ -451,15 +573,16 @@ const ParentHomeworkDetails = ({ homework, childInfo, onClose, onSubmitted }) =>
           {/* Main Action Submit Button */}
           <button
             onClick={handleUploadHomework}
-            disabled={isSubmitting || submissionStatus === 'Submitted'}
-            className={`w-full font-black py-3.5 rounded-3xl flex items-center justify-center gap-2 active:scale-95 transition-all shadow-sm ${submissionStatus === 'Submitted'
+            disabled={isSubmitting || !canSubmit}
+            className={`w-full font-black py-3.5 rounded-3xl flex items-center justify-center gap-2 active:scale-95 transition-all shadow-sm disabled:cursor-not-allowed ${
+              !canSubmit
                 ? 'bg-[#34A853] text-white'
                 : 'bg-[#6A47DE] hover:bg-[#5532C8] text-white shadow-[#6A47DE]/15'
-              }`}
+            }`}
           >
             {isSubmitting ? (
               <div className="w-4.5 h-4.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-            ) : submissionStatus === 'Submitted' ? (
+            ) : !canSubmit ? (
               <Check size={16} />
             ) : (
               <UploadCloud size={16} />
@@ -467,9 +590,13 @@ const ParentHomeworkDetails = ({ homework, childInfo, onClose, onSubmitted }) =>
             <span className="text-xs">
               {isSubmitting
                 ? 'Uploading completed homework...'
-                : submissionStatus === 'Submitted'
-                  ? 'Submitted Successfully!'
-                  : 'Submit Homework'}
+                : isGraded
+                  ? 'Checked by Teacher'
+                  : isSubmitted
+                    ? 'Submitted — Awaiting Check'
+                    : isReturned
+                      ? 'Submit Revised Homework'
+                      : 'Submit Homework'}
             </span>
           </button>
 

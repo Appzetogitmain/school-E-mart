@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Calendar, Clock, Bookmark, Edit2, 
   Tag, Flag, FileText, Paperclip, Info, BookOpen, 
-  Trash2, Plus, Save, File, Check, Loader2
+  Trash2, Plus, Save, File, Check, Loader2, Award
 } from 'lucide-react';
 import { createAssignment } from '../../../services/lmsApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
@@ -29,6 +29,9 @@ const TeacherHomework = () => {
   
   const [homeworkType, setHomeworkType] = useState('Written');
   const [priority, setPriority] = useState('High');
+  // The score the teacher grades out of. Previously fixed at 100, which made it
+  // impossible to set homework marked out of anything else.
+  const [maxScore, setMaxScore] = useState('100');
   
   const [description, setDescription] = useState('');
   const [instructions, setInstructions] = useState('');
@@ -94,6 +97,12 @@ const TeacherHomework = () => {
       return;
     }
 
+    const parsedMaxScore = Number(maxScore);
+    if (!Number.isFinite(parsedMaxScore) || parsedMaxScore <= 0) {
+      setError('Enter the marks this homework is out of');
+      return;
+    }
+
     setSaving(true);
     setError('');
     try {
@@ -123,7 +132,7 @@ const TeacherHomework = () => {
         homeworkType,
         priority,
         ...(Object.keys(reference).length ? { reference } : {}),
-        maxScore: 100,
+        maxScore: parsedMaxScore,
         status: 'published',
       });
 
@@ -339,6 +348,25 @@ const TeacherHomework = () => {
                 {getDaysLeft()}
               </span>
             )}
+          </div>
+        </div>
+
+        {/* 5b. Marks this homework is graded out of */}
+        <div className="bg-white border border-gray-200 rounded-2xl p-3 flex items-center gap-2.5 shadow-sm">
+          <div className="w-9 h-9 rounded-xl bg-purple-50 flex items-center justify-center shrink-0">
+            <Award size={16} className="text-primary" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <span className="text-[9px] font-bold text-gray-400 block leading-none">Total Marks *</span>
+            <input
+              type="number"
+              min={1}
+              value={maxScore}
+              onChange={(e) => setMaxScore(e.target.value)}
+              required
+              className="w-full text-xs font-black text-deep-purple mt-1 focus:outline-none bg-transparent"
+              placeholder="e.g. 20"
+            />
           </div>
         </div>
 

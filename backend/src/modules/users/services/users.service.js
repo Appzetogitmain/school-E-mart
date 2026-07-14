@@ -107,7 +107,7 @@ const usersService = {
     if (payload.email !== undefined) {
       if (payload.email) {
         const existing = await User.findOne({ email: payload.email, _id: { $ne: userId }, 'softDelete.isDeleted': { $ne: true } });
-        if (existing) throw new BadRequestError('Email already in use', 'EMAIL_EXISTS');
+        if (existing) throw new BadRequestError('Email already in use', null, 'EMAIL_EXISTS');
       }
       user.email = payload.email || undefined;
     }
@@ -115,7 +115,7 @@ const usersService = {
     if (payload.phone) {
       const normalized = normalizePhone(payload.phone);
       const existing = await User.findOne({ phone: normalized, _id: { $ne: userId }, 'softDelete.isDeleted': { $ne: true } });
-      if (existing) throw new BadRequestError('Phone number already in use', 'PHONE_EXISTS');
+      if (existing) throw new BadRequestError('Phone number already in use', null, 'PHONE_EXISTS');
       user.phone = normalized;
     }
 

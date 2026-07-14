@@ -17,7 +17,7 @@ const certificateService = {
 
   async issueIfEligible(schoolId, courseId, studentId, userId, completionPercent) {
     if (completionPercent < 100) {
-      throw new BadRequestError('Course not fully completed', 'CERTIFICATE_NOT_ELIGIBLE');
+      throw new BadRequestError('Course not fully completed', null, 'CERTIFICATE_NOT_ELIGIBLE');
     }
 
     const existing = await certificateRepository.findByCourseAndStudent(courseId, studentId);
@@ -37,7 +37,7 @@ const certificateService = {
   async generateCertificate(schoolId, courseId, studentId, userId) {
     const eligibility = await this.checkEligibility(schoolId, courseId, studentId, userId);
     if (!eligibility.eligible) {
-      throw new BadRequestError('Completion criteria not met', 'CERTIFICATE_NOT_ELIGIBLE');
+      throw new BadRequestError('Completion criteria not met', null, 'CERTIFICATE_NOT_ELIGIBLE');
     }
     if (eligibility.issued) {
       return certificateRepository.findByCourseAndStudent(courseId, studentId);

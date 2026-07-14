@@ -2,8 +2,11 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
+const { UPLOADS_DIR } = require('../../../utils/fileStorage');
 
-const UPLOAD_DIR = path.resolve(__dirname, '../../../../uploads');
+// Single source of truth for where public uploads live, so a configured UPLOADS_DIR
+// moves multer, the base64 writer, and the static mount together.
+const UPLOAD_DIR = UPLOADS_DIR;
 
 if (!fs.existsSync(UPLOAD_DIR)) {
   fs.mkdirSync(UPLOAD_DIR, { recursive: true });

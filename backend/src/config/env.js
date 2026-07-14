@@ -121,6 +121,13 @@ const buildEnv = () => {
   FIREBASE_PRIVATE_KEY: process.env.FIREBASE_PRIVATE_KEY
     ? process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n')
     : null,
+
+  // Where uploaded bytes live on disk. Both default to a directory inside the repo, which
+  // is fine when the server is updated in place. Point them at a path OUTSIDE the repo
+  // (e.g. /var/lib/school-emart/...) if a deploy ever clones into a fresh directory,
+  // otherwise the previous checkout's uploads are left behind.
+  UPLOADS_DIR: process.env.UPLOADS_DIR || null,
+  PRIVATE_UPLOADS_DIR: process.env.PRIVATE_UPLOADS_DIR || null,
   };
 };
 

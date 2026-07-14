@@ -63,7 +63,7 @@ const quizService = {
   async startAttempt(req, schoolId, courseId, quizId) {
     const quiz = await this.getQuiz(schoolId, courseId, quizId);
     if (quiz.status !== 'published') {
-      throw new BadRequestError('Quiz is not available', 'QUIZ_NOT_AVAILABLE');
+      throw new BadRequestError('Quiz is not available', null, 'QUIZ_NOT_AVAILABLE');
     }
 
     const student = req.lmsStudent;

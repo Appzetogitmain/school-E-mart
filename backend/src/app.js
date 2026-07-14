@@ -1,5 +1,4 @@
 const http = require('http');
-const path = require('path');
 const express = require('express');
 const compression = require('compression');
 const cors = require('cors');
@@ -9,6 +8,7 @@ const config = require('./config');
 const routes = require('./routes');
 const middlewares = require('./middlewares');
 const { getHealth } = require('./controllers/health.controller');
+const { UPLOADS_DIR } = require('./utils/fileStorage');
 const logger = require('./common/logger');
 
 require('./database/modelRegistry');
@@ -34,8 +34,20 @@ const createApp = () => {
   const deliveryWebhookRoutes = require('./routes/deliveryWebhookRoutes');
   app.use('/api/delivery', express.raw({ type: '*/*', limit: '1mb' }), deliveryWebhookRoutes);
 
-  // Homework submissions and avatars are posted as base64 data URIs, which inflate
-  // the payload by ~33% and do not fit in the default 1mb budget.
+  // Homework submissions inline the completed work as base64 data URIs: up to 5 files of
+  // 5mb each, which base64 inflates to ~34mb. That budget is granted only to the
+  // submission route — parsing it first means the global parser below skips the body, so
+  // every other route keeps the smaller limit rather than opening a 40mb surface app-wide.
+  const submissionPath = /\/lms\/courses\/[^/]+\/assignments\/[^/]+\/submissions$/;
+  const submissionParser = express.json({ limit: '40mb' });
+  app.use((req, res, next) => {
+    if (req.method === 'POST' && submissionPath.test(req.path)) {
+      return submissionParser(req, res, next);
+    }
+    return next();
+  });
+
+  // Avatars are also posted as base64 and do not fit in the default 1mb budget.
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ extended: true, limit: '10mb' }));
   app.use(cookieParser());
@@ -43,7 +55,9 @@ const createApp = () => {
 
   // Infra probe endpoint (load balancers); versioned API lives under API_PREFIX
   app.get('/health', getHealth);
-  app.use('/uploads', express.static(path.resolve(__dirname, '../uploads')));
+  // Public assets only. Homework submissions deliberately live outside this directory
+  // and are readable solely through the authorized attachment stream endpoint.
+  app.use('/uploads', express.static(UPLOADS_DIR));
   app.use(config.env.API_PREFIX, routes);
 
   app.use(middlewares.notFoundHandler);

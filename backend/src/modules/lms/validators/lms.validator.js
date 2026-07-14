@@ -97,19 +97,32 @@ const createAssignmentSchema = Joi.object({
 
 const updateAssignmentSchema = createAssignmentSchema.fork(['title'], (s) => s.optional());
 
+// Base64 inflates the raw bytes by ~4/3, so a 5 MB file arrives as a ~6.8 MB string.
+// This bound must stay above the writer's 5 MB decoded cap, or a file the writer would
+// have accepted gets rejected here with a far less helpful message.
+const MAX_BASE64_FILE_CHARS = 7 * 1024 * 1024;
+
 const submitAssignmentSchema = Joi.object({
   content: Joi.string().trim().max(10000).allow('').optional(),
-  attachments: Joi.array().items(objectId).optional(),
   // Base64 data URIs of the completed work (photos/PDF). Kept small and few because
   // they are inlined in the request body.
-  files: Joi.array().items(Joi.string().max(8 * 1024 * 1024)).max(5).optional(),
+  files: Joi.array().items(Joi.string().max(MAX_BASE64_FILE_CHARS)).max(5).optional(),
   studentId: objectId.optional(),
 });
 
 const evaluateSubmissionSchema = Joi.object({
   score: Joi.number().min(0).required(),
-  feedback: Joi.string().trim().max(3000).optional(),
+  // The teacher's actual choice, kept alongside the number so the letter shown back to
+  // them is the one they picked rather than a re-derived approximation.
+  letterGrade: Joi.string().trim().max(4).optional(),
+  feedback: Joi.string().trim().max(3000).allow('').optional(),
 });
+
+const returnSubmissionSchema = Joi.object({
+  feedback: Joi.string().trim().max(3000).required(),
+});
+
+const attachmentIdParam = schoolIdParam.keys({ attachmentId: objectId.required() });
 
 const quizQuestionSchema = Joi.object({
   question: Joi.string().trim().required(),
@@ -218,8 +231,10 @@ module.exports = {
   updateLessonSchema,
   createAssignmentSchema,
   updateAssignmentSchema,
+  attachmentIdParam,
   submitAssignmentSchema,
   evaluateSubmissionSchema,
+  returnSubmissionSchema,
   createQuizSchema,
   updateQuizSchema,
   submitQuizSchema,

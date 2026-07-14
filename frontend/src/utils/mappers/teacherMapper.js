@@ -96,39 +96,63 @@ const toAbsoluteUrl = (url) => {
   return `${origin}${url}`;
 };
 
-export const mapSubmissionForCheck = (submission, studentLookup = {}) => {
-  const student = submission?.student || studentLookup[submission?.studentId] || {};
-  const graded = submission?.status === 'graded';
-  const submitted = submission?.status === 'submitted' || graded;
+/**
+ * Map one roster row — a student plus their submission, or null if they have not handed
+ * anything in. The server does the join, so the name and roll number are always present
+ * rather than depending on a client-side lookup that could miss.
+ */
+export const mapRosterRowForCheck = ({ student, submission }) => {
+  const status = submission?.status;
+  const graded = status === 'graded';
+  const returned = status === 'returned';
+  const submitted = status === 'submitted';
 
-  const files = (submission?.attachmentUrls || []).map((url, idx) => {
+  // Submitted work is private: it is fetched through an authorized endpoint by id, not
+  // linked to as a static URL.
+  const files = (submission?.attachments || []).map((attachment, idx) => ({
+    id: attachment?._id?.toString?.(),
+    name: `Attachment ${idx + 1}`,
+    mime: attachment?.mime || '',
+    isImage: String(attachment?.mime || '').startsWith('image/'),
+    kind: attachment?.mime === 'application/pdf' ? 'pdf' : 'image',
+  }));
+
+  // Submissions made before attachments became Attachment records still hold raw public
+  // paths. Keep reading them so old homework does not appear to have lost its files.
+  const legacyFiles = (submission?.attachmentUrls || []).map((url, idx) => {
     const name = url.split('/').pop() || `Attachment ${idx + 1}`;
     const isImage = /\.(png|jpe?g|webp|gif)$/i.test(name);
     return {
+      id: null,
       name,
       url: toAbsoluteUrl(url),
       isImage,
-      // PDFs cannot render in an <img>; the teacher opens them in a new tab instead.
       kind: isImage ? 'image' : /\.pdf$/i.test(name) ? 'pdf' : 'file',
+      legacy: true,
     };
   });
 
+  let displayStatus = 'Not Submitted';
+  if (graded) displayStatus = 'Checked';
+  else if (returned) displayStatus = 'Returned';
+  else if (submitted) displayStatus = 'Submitted';
+
   return {
     roll: Number(student?.rollNo) || 0,
-    mongoId: submission?._id?.toString?.(),
-    // Students who have not submitted have no submission document, so fall back to
-    // the student's own id — it is the only stable key for those rows.
-    studentId: submission?.studentId?.toString?.() || student?._id?.toString?.(),
+    mongoId: submission?._id?.toString?.() || null,
+    studentId: student?._id?.toString?.(),
     name: student?.name || 'Student',
     avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(student?.name || 'S')}&background=3b2d7d&color=fff`,
-    status: graded ? 'Checked' : submitted ? 'Submitted' : 'Not Submitted',
+    status: displayStatus,
+    isLate: Boolean(submission?.isLate),
     submittedAt: submission?.submittedAt
       ? new Date(submission.submittedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
       : null,
-    files,
+    files: [...files, ...legacyFiles],
     content: submission?.content || '',
     score: submission?.score ?? null,
-    grade: scoreToGrade(submission?.score),
+    // Prefer the letter the teacher actually chose over one re-derived from the score.
+    grade: submission?.letterGrade || scoreToGrade(submission?.score),
     remarks: submission?.feedback || '',
     raw: submission,
   };

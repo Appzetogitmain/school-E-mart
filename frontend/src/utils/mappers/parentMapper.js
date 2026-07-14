@@ -23,40 +23,30 @@ const daysRemainingLabel = (dueDate) => {
   return `${diff} Day${diff === 1 ? '' : 's'} Left`;
 };
 
-export const getSubmissionCache = (studentId) => {
-  if (!studentId) return {};
-  try {
-    const raw = localStorage.getItem(`parentHomeworkSubmissions_${studentId}`);
-    return raw ? JSON.parse(raw) : {};
-  } catch {
-    return {};
-  }
-};
-
-export const setSubmissionCache = (studentId, assignmentId, data) => {
-  if (!studentId || !assignmentId) return;
-  const cache = getSubmissionCache(studentId);
-  cache[assignmentId] = data;
-  localStorage.setItem(`parentHomeworkSubmissions_${studentId}`, JSON.stringify(cache));
-};
-
-export const mapAssignmentForParentHomework = (assignment, course, submissionOrCache = null) => {
+export const mapAssignmentForParentHomework = (assignment, course, submission = null) => {
   const id = assignment?._id?.toString?.() || assignment?.id;
-  const cached = submissionOrCache?.status
-    ? submissionOrCache
-    : submissionOrCache?.[id] || submissionOrCache;
   const dueDate = assignment?.dueDate ? new Date(assignment.dueDate) : null;
   const now = new Date();
   const subject = course?.subject || 'General';
+
+  // The server is the only source of truth for submission state. Statuses arrive
+  // lowercase ('submitted'), so never compare them against display labels.
+  const submissionStatus = submission?.status || null;
 
   let tabType = 'Pending';
   let status = 'On Track';
   let statusColor = 'bg-[#EBFBF0] text-[#34A853] border-[#34A853]/10';
 
-  if (cached?.status === 'graded') {
+  if (submissionStatus === 'graded') {
     tabType = 'Completed';
     status = 'Completed';
-  } else if (cached?.status === 'submitted') {
+  } else if (submissionStatus === 'returned') {
+    // Sent back by the teacher: this needs the student's attention again, so it belongs
+    // with the work still to do rather than with the finished work.
+    tabType = 'Pending';
+    status = 'Needs Revision';
+    statusColor = 'bg-[#FEF3F2] text-[#D93025] border-[#D93025]/10';
+  } else if (submissionStatus === 'submitted') {
     tabType = 'Submitted';
     status = 'Submitted';
     statusColor = 'bg-[#F9F5FF] text-[#7F56D9] border-[#7F56D9]/10';
@@ -74,6 +64,7 @@ export const mapAssignmentForParentHomework = (assignment, course, submissionOrC
   const classGrade = assignment?.classGrade || course?.gradeClass || '';
   const section = assignment?.section || '';
   const priority = assignment?.priority || null;
+  const maxScore = assignment?.maxScore ?? 100;
 
   return {
     id,
@@ -100,8 +91,30 @@ export const mapAssignmentForParentHomework = (assignment, course, submissionOrC
     chapter: assignment?.reference?.chapter || '',
     attachmentsCount: assignment?.attachments?.length || 0,
     tabType,
-    maxScore: assignment?.maxScore ?? 100,
-    submissionStatus: cached?.status || 'Not Submitted',
+    maxScore,
+
+    // Submission state, straight from the server. `submissionStatus` is the raw API
+    // value ('submitted' | 'graded' | 'returned' | null) — compare against these, not
+    // against the human-readable `status` above.
+    submissionStatus,
+    submissionId: submission?._id?.toString?.() || null,
+    submittedAt: submission?.submittedAt || null,
+    isLate: Boolean(submission?.isLate),
+    submittedNote: submission?.content || '',
+    submittedFiles: (submission?.attachments || []).map((attachment) => ({
+      id: attachment?._id?.toString?.() || attachment?.toString?.(),
+      mime: attachment?.mime || '',
+      isImage: String(attachment?.mime || '').startsWith('image/'),
+    })),
+    // Legacy submissions stored public URLs instead of Attachment records.
+    legacyFileUrls: submission?.attachmentUrls || [],
+
+    // What the teacher sent back. Previously stored and never shown to the parent.
+    score: submission?.score ?? null,
+    letterGrade: submission?.letterGrade || null,
+    feedback: submission?.feedback || '',
+    gradedAt: submission?.gradedAt || null,
+
     raw: assignment,
   };
 };

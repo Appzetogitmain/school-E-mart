@@ -31,34 +31,47 @@ const getVendorUserIds = async (vendorIds = []) => {
   return profiles.map((p) => p.userId).filter(Boolean);
 };
 
-const getSchoolParentUserIds = async (schoolId, notice) => {
+const parentUserIdsForStudents = async (studentIds) => {
+  if (!studentIds.length) return [];
+
+  const children = await ChildProfile.find({
+    studentId: { $in: studentIds },
+    'softDelete.isDeleted': { $ne: true },
+  })
+    .select('parentUserId')
+    .lean();
+
+  return [...new Set(children.map((c) => String(c.parentUserId)))];
+};
+
+/**
+ * Parents of every active student in the given classes. `targets` is a list of
+ * { classGrade, sections? } — omitting sections means the whole grade.
+ */
+const getParentUserIdsForClasses = async (schoolId, targets = []) => {
   const Student = require('../../database/models/Student');
+  if (!targets.length) return [];
 
-  if (notice?.targetAudience === 'specific_classes' && notice.targetClasses?.length) {
-    const classFilters = notice.targetClasses.map((entry) => {
-      const filter = {
-        schoolId,
-        classGrade: entry.classGrade,
-        status: 'active',
-        'softDelete.isDeleted': { $ne: true },
-      };
-      if (entry.sections?.length) {
-        filter.section = { $in: entry.sections };
-      }
-      return filter;
-    });
-
-    const students = await Student.find({ $or: classFilters }).select('_id').lean();
-    const studentIds = students.map((s) => s._id);
-
-    const children = await ChildProfile.find({
-      studentId: { $in: studentIds },
+  const classFilters = targets.map((entry) => {
+    const filter = {
+      schoolId,
+      classGrade: entry.classGrade,
+      status: 'active',
       'softDelete.isDeleted': { $ne: true },
-    })
-      .select('parentUserId')
-      .lean();
+    };
+    if (entry.sections?.length) {
+      filter.section = { $in: entry.sections };
+    }
+    return filter;
+  });
 
-    return [...new Set(children.map((c) => String(c.parentUserId)))];
+  const students = await Student.find({ $or: classFilters }).select('_id').lean();
+  return parentUserIdsForStudents(students.map((s) => s._id));
+};
+
+const getSchoolParentUserIds = async (schoolId, notice) => {
+  if (notice?.targetAudience === 'specific_classes' && notice.targetClasses?.length) {
+    return getParentUserIdsForClasses(schoolId, notice.targetClasses);
   }
 
   const children = await ChildProfile.find({
@@ -70,6 +83,8 @@ const getSchoolParentUserIds = async (schoolId, notice) => {
 
   return [...new Set(children.map((c) => String(c.parentUserId)))];
 };
+
+const HOMEWORK_PARENT_ROUTE = '/parent/homework';
 
 const triggerService = {
   notifyOrderPlaced(order) {
@@ -252,6 +267,101 @@ const triggerService = {
           route: '/user/notifications',
           entityId: String(notice._id),
           schoolId: String(schoolId),
+        },
+      });
+    });
+  },
+
+  notifyHomeworkPublished(schoolId, assignment, course) {
+    notifySafe(async () => {
+      const classGrade = assignment.classGrade || course?.gradeClass;
+      if (!classGrade) return;
+
+      // A homework targets one section; with no section it applies to the whole grade.
+      const parentUserIds = await getParentUserIdsForClasses(schoolId, [
+        { classGrade, sections: assignment.section ? [assignment.section] : [] },
+      ]);
+      if (!parentUserIds.length) return;
+
+      const subject = course?.subject || 'Homework';
+      await notificationService.sendToUsers(parentUserIds, {
+        type: 'homework',
+        notification: {
+          title: `New ${subject} homework`,
+          body: assignment.title || 'New homework has been assigned.',
+        },
+        data: {
+          type: 'homework_published',
+          route: HOMEWORK_PARENT_ROUTE,
+          entityId: String(assignment._id),
+          schoolId: String(schoolId),
+        },
+      });
+    });
+  },
+
+  notifyHomeworkSubmitted(assignment, submission, student) {
+    notifySafe(async () => {
+      // Course-level teachers are not tracked per assignment, so the teacher who set
+      // the work is the one who wants to know it came in.
+      const teacherUserId = assignment.assignedByUserId;
+      if (!teacherUserId) return;
+
+      const name = student?.name || 'A student';
+      await notificationService.sendToUser(teacherUserId, {
+        type: 'homework',
+        notification: {
+          title: submission.isLate ? 'Late homework submitted' : 'Homework submitted',
+          body: `${name} submitted "${assignment.title}".`,
+        },
+        data: {
+          type: 'homework_submitted',
+          route: '/school/teacher/check-homework',
+          entityId: String(submission._id),
+          assignmentId: String(assignment._id),
+        },
+      });
+    });
+  },
+
+  notifyHomeworkGraded(assignment, submission) {
+    notifySafe(async () => {
+      const parentUserIds = await parentUserIdsForStudents([submission.studentId]);
+      if (!parentUserIds.length) return;
+
+      const grade = submission.letterGrade || `${submission.score}/${assignment.maxScore ?? 100}`;
+      await notificationService.sendToUsers(parentUserIds, {
+        type: 'homework',
+        notification: {
+          title: 'Homework checked',
+          body: `"${assignment.title}" has been graded: ${grade}.`,
+        },
+        data: {
+          type: 'homework_graded',
+          route: HOMEWORK_PARENT_ROUTE,
+          entityId: String(submission._id),
+          assignmentId: String(assignment._id),
+        },
+      });
+    });
+  },
+
+  notifyHomeworkReturned(assignment, submission) {
+    notifySafe(async () => {
+      const parentUserIds = await parentUserIdsForStudents([submission.studentId]);
+      if (!parentUserIds.length) return;
+
+      await notificationService.sendToUsers(parentUserIds, {
+        type: 'homework',
+        notification: {
+          title: 'Homework needs revision',
+          body: `"${assignment.title}" was sent back by the teacher. Please review and submit again.`,
+        },
+        data: {
+          type: 'homework_returned',
+          route: HOMEWORK_PARENT_ROUTE,
+          entityId: String(submission._id),
+          assignmentId: String(assignment._id),
         },
       });
     });

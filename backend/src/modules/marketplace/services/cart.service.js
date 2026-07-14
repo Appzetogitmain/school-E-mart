@@ -43,21 +43,21 @@ const cartService = {
       const product = await productRepository.findOne(
         productRepository.findPublishedFilter({ _id: item.productId })
       );
-      if (!product) throw new BadRequestError(`Product unavailable: ${item.productId}`, 'CART_ITEM_INVALID');
+      if (!product) throw new BadRequestError(`Product unavailable: ${item.productId}`, null, 'CART_ITEM_INVALID');
 
       let stock = product.stock;
       let pricePaise = product.pricePaise;
       if (item.variantId) {
         const variant = await variantRepository.findOne({ _id: item.variantId, productId: item.productId });
-        if (!variant) throw new BadRequestError('Variant not found', 'CART_VARIANT_INVALID');
+        if (!variant) throw new BadRequestError('Variant not found', null, 'CART_VARIANT_INVALID');
         stock = variant.stock;
         pricePaise = variant.pricePaise;
       }
       if (stock < item.quantity) {
-        throw new BadRequestError(`Insufficient stock for ${product.name}`, 'INSUFFICIENT_STOCK');
+        throw new BadRequestError(`Insufficient stock for ${product.name}`, null, 'INSUFFICIENT_STOCK');
       }
       if (item.pricePaise !== pricePaise) {
-        throw new BadRequestError('Cart item price is outdated', 'CART_PRICE_STALE');
+        throw new BadRequestError('Cart item price is outdated', null, 'CART_PRICE_STALE');
       }
     }
     return true;
@@ -80,7 +80,7 @@ const cartService = {
     }
 
     if (stock < payload.quantity) {
-      throw new BadRequestError('Insufficient stock', 'INSUFFICIENT_STOCK');
+      throw new BadRequestError('Insufficient stock', null, 'INSUFFICIENT_STOCK');
     }
 
     const cart = await this.getOrCreateCart(userId, audience);
@@ -112,7 +112,7 @@ const cartService = {
   },
 
   async updateItemQuantity(userId, audience, productId, variantId, quantity) {
-    if (quantity < 1) throw new BadRequestError('Quantity must be at least 1', 'INVALID_QUANTITY');
+    if (quantity < 1) throw new BadRequestError('Quantity must be at least 1', null, 'INVALID_QUANTITY');
     const cart = await this.getOrCreateCart(userId, audience);
     const items = [...(cart.items || [])];
     const index = items.findIndex(
@@ -128,7 +128,7 @@ const cartService = {
       const variant = await variantRepository.findById(variantId);
       stock = variant?.stock ?? 0;
     }
-    if (stock < quantity) throw new BadRequestError('Insufficient stock', 'INSUFFICIENT_STOCK');
+    if (stock < quantity) throw new BadRequestError('Insufficient stock', null, 'INSUFFICIENT_STOCK');
 
     items[index].quantity = quantity;
     const totals = computeTotals(items);

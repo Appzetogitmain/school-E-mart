@@ -15,19 +15,39 @@ const parentService = {
     const limit = parseInt(query.limit) || 20;
     const skip = (page - 1) * limit;
 
+    const ChildProfile = require('../../../database/models/ChildProfile');
+    const parentUserIds = await ChildProfile.find({
+      schoolId,
+      'softDelete.isDeleted': { $ne: true }
+    }).distinct('parentUserId');
+
     const filter = {
       role: 'parent',
-      tenantSchoolId: schoolId,
       'softDelete.isDeleted': { $ne: true },
+      $or: [
+        { tenantSchoolId: schoolId },
+        { _id: { $in: parentUserIds } }
+      ]
     };
 
     if (query.search) {
       const searchRegex = new RegExp(query.search, 'i');
-      filter.$or = [
-        { name: searchRegex },
-        { phone: searchRegex },
-        { email: searchRegex },
+      filter.$and = [
+        {
+          $or: [
+            { tenantSchoolId: schoolId },
+            { _id: { $in: parentUserIds } }
+          ]
+        },
+        {
+          $or: [
+            { name: searchRegex },
+            { phone: searchRegex },
+            { email: searchRegex },
+          ]
+        }
       ];
+      delete filter.$or;
     }
 
     const total = await User.countDocuments(filter);
@@ -39,7 +59,6 @@ const parentService = {
 
     // Populate ParentProfile details and linked children so the (view-only)
     // parents directory can show who each account belongs to
-    const ChildProfile = require('../../../database/models/ChildProfile');
     const populated = await Promise.all(users.map(async (user) => {
       const profile = await ParentProfile.findOne({ userId: user._id, 'softDelete.isDeleted': { $ne: true } }).lean();
       const children = await ChildProfile.find({
@@ -67,16 +86,27 @@ const parentService = {
   async getParent(schoolId, parentId) {
     const profile = await ParentProfile.findOne({ _id: parentId, 'softDelete.isDeleted': { $ne: true } }).lean();
     if (!profile) throw new NotFoundError('Parent not found', 'PARENT_NOT_FOUND');
-    const user = await User.findOne({ _id: profile.userId, tenantSchoolId: schoolId, 'softDelete.isDeleted': { $ne: true } }).lean();
+    const user = await User.findOne({ _id: profile.userId, 'softDelete.isDeleted': { $ne: true } }).lean();
     if (!user) throw new NotFoundError('Parent not found under this school', 'PARENT_NOT_FOUND');
+
+    const ChildProfile = require('../../../database/models/ChildProfile');
+    const hasAccess = user.tenantSchoolId?.toString() === schoolId.toString() ||
+                      await ChildProfile.exists({ parentUserId: user._id, schoolId, 'softDelete.isDeleted': { $ne: true } });
+    if (!hasAccess) throw new NotFoundError('Parent not found under this school', 'PARENT_NOT_FOUND');
+
     return { ...profile, user };
   },
 
   async updateParent(schoolId, parentId, payload) {
     const profile = await ParentProfile.findOne({ _id: parentId, 'softDelete.isDeleted': { $ne: true } });
     if (!profile) throw new NotFoundError('Parent not found', 'PARENT_NOT_FOUND');
-    const user = await User.findOne({ _id: profile.userId, tenantSchoolId: schoolId, 'softDelete.isDeleted': { $ne: true } });
+    const user = await User.findOne({ _id: profile.userId, 'softDelete.isDeleted': { $ne: true } });
     if (!user) throw new NotFoundError('Parent not found under this school', 'PARENT_NOT_FOUND');
+
+    const ChildProfile = require('../../../database/models/ChildProfile');
+    const hasAccess = user.tenantSchoolId?.toString() === schoolId.toString() ||
+                      await ChildProfile.exists({ parentUserId: user._id, schoolId, 'softDelete.isDeleted': { $ne: true } });
+    if (!hasAccess) throw new NotFoundError('Parent not found under this school', 'PARENT_NOT_FOUND');
 
     if (payload.name) user.name = payload.name;
     if (payload.email !== undefined) user.email = payload.email || undefined;
@@ -99,6 +129,7 @@ const parentService = {
     if (!user.email) {
       throw new BadRequestError(
         'This parent has no email address on record',
+        null,
         'PARENT_EMAIL_MISSING'
       );
     }
@@ -145,11 +176,15 @@ const parentService = {
   async deleteParent(schoolId, parentId) {
     const profile = await ParentProfile.findOne({ _id: parentId });
     if (!profile) throw new NotFoundError('Parent not found', 'PARENT_NOT_FOUND');
-    const user = await User.findOne({ _id: profile.userId, tenantSchoolId: schoolId });
+    const user = await User.findOne({ _id: profile.userId });
     if (!user) throw new NotFoundError('Parent not found under this school', 'PARENT_NOT_FOUND');
 
-    const Student = require('../../../database/models/Student');
     const ChildProfile = require('../../../database/models/ChildProfile');
+    const hasAccess = user.tenantSchoolId?.toString() === schoolId.toString() ||
+                      await ChildProfile.exists({ parentUserId: user._id, schoolId });
+    if (!hasAccess) throw new NotFoundError('Parent not found under this school', 'PARENT_NOT_FOUND');
+
+    const Student = require('../../../database/models/Student');
 
     await withTransaction(async (session) => {
       // Remove references first so students and child profiles don't keep

@@ -1,11 +1,15 @@
+const fs = require('fs');
 const { success, created, paginated } = require('../../../common/response');
 const asyncHandler = require('../../../utils/asyncHandler');
+const { ForbiddenError, NotFoundError } = require('../../../common/errors');
 const { ROLES } = require('../../../constants/roles');
+const { resolvePrivatePath } = require('../../../utils/fileStorage');
 const {
   assertCourseInSchool,
   assertManageAccess,
   assertEnrollmentAccess,
 } = require('../policies/lmsAccess.policy');
+const studentRepository = require('../repositories/student.repository');
 const courseService = require('../services/course.service');
 const chapterService = require('../services/chapter.service');
 const lessonService = require('../services/lesson.service');
@@ -229,9 +233,24 @@ const lmsController = {
       req.params.courseId,
       req.params.assignmentId,
       req.params.submissionId,
-      req.body
+      req.body,
+      { userId: req.auth.userId }
     );
     return success(res, { submission }, 'Submission evaluated successfully', undefined, req);
+  }),
+
+  returnSubmission: asyncHandler(async (req, res) => {
+    const course = await withCourse(req);
+    await assertManageAccess(req, course);
+    const submission = await assignmentService.returnSubmission(
+      req.schoolId,
+      req.params.courseId,
+      req.params.assignmentId,
+      req.params.submissionId,
+      req.body,
+      { userId: req.auth.userId }
+    );
+    return success(res, { submission }, 'Submission returned for revision', undefined, req);
   }),
 
   listSubmissions: asyncHandler(async (req, res) => {
@@ -246,6 +265,17 @@ const lmsController = {
     return paginated(res, { submissions: data }, pagination, 'Submissions fetched successfully', req);
   }),
 
+  getSubmissionRoster: asyncHandler(async (req, res) => {
+    const course = await withCourse(req);
+    await assertManageAccess(req, course);
+    const { assignment, rows } = await assignmentService.getSubmissionRoster(
+      req.schoolId,
+      req.params.courseId,
+      req.params.assignmentId
+    );
+    return success(res, { assignment, roster: rows }, 'Roster fetched successfully', undefined, req);
+  }),
+
   getMySubmission: asyncHandler(async (req, res) => {
     await assertEnrollmentAccess(req, req.params.courseId, req.query.studentId);
     const submission = await assignmentService.getMySubmission(
@@ -255,6 +285,51 @@ const lmsController = {
       req.params.assignmentId
     );
     return success(res, { submission }, 'Submission fetched successfully', undefined, req);
+  }),
+
+  getStudentHomework: asyncHandler(async (req, res) => {
+    const resolved = await studentRepository.resolveStudentForUser(
+      req.schoolId,
+      req.auth.userId,
+      req.query.studentId
+    );
+    if (!resolved) {
+      throw new ForbiddenError('Student context is required', 'STUDENT_REQUIRED');
+    }
+
+    const homework = await assignmentService.getStudentHomeworkFeed(req.schoolId, resolved.student);
+    return success(res, { homework }, 'Homework fetched successfully', undefined, req);
+  }),
+
+  streamSubmissionAttachment: asyncHandler(async (req, res) => {
+    const { attachment, submission, assignment } = await assignmentService.getSubmissionAttachmentContext(
+      req.schoolId,
+      req.params.attachmentId
+    );
+
+    // A parent may only read their own child's work; staff go through the same course
+    // manage check that guards the rest of the grading surface.
+    if (req.auth.role === ROLES.PARENT) {
+      if (String(submission.userId) !== String(req.auth.userId)) {
+        throw new ForbiddenError('You cannot access this submission', 'SUBMISSION_ACCESS_DENIED');
+      }
+    } else {
+      const course = await assertCourseInSchool(req.schoolId, assignment.courseId);
+      await assertManageAccess(req, course);
+    }
+
+    const absolutePath = resolvePrivatePath(attachment.storageKey);
+    if (!absolutePath || !fs.existsSync(absolutePath)) {
+      throw new NotFoundError('Attachment file is missing', 'ATTACHMENT_FILE_MISSING');
+    }
+
+    res.setHeader('Content-Type', attachment.mime);
+    res.setHeader('Content-Length', attachment.sizeBytes);
+    res.setHeader('Content-Disposition', 'inline');
+    // Student work must never be held by a shared cache.
+    res.setHeader('Cache-Control', 'private, no-store');
+
+    fs.createReadStream(absolutePath).pipe(res);
   }),
 
   createQuiz: asyncHandler(async (req, res) => {

@@ -1,6 +1,34 @@
 const MAX_DIMENSION = 1600;
 const JPEG_QUALITY = 0.8;
 
+// Must match the server's per-file cap (fileStorage.DEFAULT_MAX_BYTES) and the
+// submitAssignment validator's 5-file limit. Images are downscaled below, so in practice
+// this only bites on large PDFs — which the server would otherwise reject after the
+// parent had already waited through the upload.
+export const MAX_FILE_BYTES = 5 * 1024 * 1024;
+export const MAX_FILES = 5;
+
+/** Returns an error message if the selection cannot be submitted, else null. */
+export const validateSubmissionFiles = (files = []) => {
+  if (files.length > MAX_FILES) {
+    return `You can attach at most ${MAX_FILES} files.`;
+  }
+
+  const tooBig = files.find((file) => file.size > MAX_FILE_BYTES);
+  if (tooBig && !tooBig.type.startsWith('image/')) {
+    return `"${tooBig.name}" is larger than 5 MB. Please attach a smaller file.`;
+  }
+
+  const unsupported = files.find(
+    (file) => !file.type.startsWith('image/') && file.type !== 'application/pdf'
+  );
+  if (unsupported) {
+    return `"${unsupported.name}" is not a supported file. Attach a JPG, PNG or PDF.`;
+  }
+
+  return null;
+};
+
 export const readFileAsDataUrl = (file) =>
   new Promise((resolve, reject) => {
     const reader = new FileReader();

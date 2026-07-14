@@ -12,7 +12,7 @@ const productService = {
     if (existingSku) throw new ConflictError('SKU already exists', 'SKU_EXISTS');
 
     if (payload.originalPricePaise && payload.originalPricePaise < payload.pricePaise) {
-      throw new BadRequestError('Original price cannot be less than selling price', 'INVALID_PRICE');
+      throw new BadRequestError('Original price cannot be less than selling price', null, 'INVALID_PRICE');
     }
 
     return productRepository.create({
@@ -52,7 +52,7 @@ const productService = {
 
   async updateProduct(productId, payload) {
     if (payload.originalPricePaise && payload.pricePaise && payload.originalPricePaise < payload.pricePaise) {
-      throw new BadRequestError('Original price cannot be less than selling price', 'INVALID_PRICE');
+      throw new BadRequestError('Original price cannot be less than selling price', null, 'INVALID_PRICE');
     }
     const product = await productRepository.updateById(productId, { $set: payload });
     if (!product) throw new NotFoundError('Product not found', 'PRODUCT_NOT_FOUND');

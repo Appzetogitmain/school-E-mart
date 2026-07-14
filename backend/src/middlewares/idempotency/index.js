@@ -22,6 +22,7 @@ const requireIdempotencyKey =
     if (!key || key.length < 8 || key.length > 128) {
       throw new BadRequestError(
         'Idempotency-Key header is required (8–128 characters)',
+        null,
         'IDEMPOTENCY_KEY_REQUIRED'
       );
     }

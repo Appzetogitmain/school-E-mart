@@ -4,14 +4,20 @@ import {
   ArrowLeft, Calendar, GraduationCap, Users, 
   CheckCircle, Clock, Search, FileText, Check, 
   Eye, Award, MessageSquare, X, ChevronDown, BookOpen,
-  CheckCircle2, AlertCircle, FileCheck, Loader2
+  CheckCircle2, AlertCircle, FileCheck, Loader2, RotateCcw
 } from 'lucide-react';
-import { listStudents } from '../../../services/schoolApi';
-import { listCourses, listAssignments, listSubmissions, evaluateSubmission } from '../../../services/lmsApi';
+import {
+  listCourses,
+  listAssignments,
+  getSubmissionRoster,
+  evaluateSubmission,
+  returnSubmission,
+  fetchSubmissionAttachment,
+} from '../../../services/lmsApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 import {
   mapAssignmentForHomework,
-  mapSubmissionForCheck,
+  mapRosterRowForCheck,
   parseClassGrade,
   parseSection,
 } from '../../../utils/mappers/teacherMapper';
@@ -68,14 +74,24 @@ const TeacherCheckHomework = () => {
         (course) => course.gradeClass === grade || course.title?.includes(grade)
       );
 
-      const assignmentRows = [];
-      for (const course of matchingCourses) {
-        const courseId = course._id || course.id;
-        const { data: assignments } = await listAssignments(schoolId, courseId, { limit: 50 });
-        (assignments || []).forEach((assignment) => {
-          assignmentRows.push(mapAssignmentForHomework(assignment, course));
-        });
-      }
+      // A teacher is only allowed to read courses they own, so a course belonging to a
+      // colleague answers 403. That must not blank out the whole screen — skip it and
+      // show the homework this teacher can actually see.
+      const results = await Promise.all(
+        matchingCourses.map(async (course) => {
+          const courseId = course._id || course.id;
+          try {
+            const { data: assignments } = await listAssignments(schoolId, courseId, { limit: 50 });
+            return (assignments || []).map((assignment) =>
+              mapAssignmentForHomework(assignment, course)
+            );
+          } catch {
+            return [];
+          }
+        })
+      );
+
+      const assignmentRows = results.flat();
 
       // A course covers the whole grade, so keep only the homework aimed at this
       // section. Older homework predates section tagging, so show it in every section
@@ -112,31 +128,18 @@ const TeacherCheckHomework = () => {
 
     setLoadingSubmissions(true);
     try {
-      const classGrade = parseClassGrade(selectedClass);
-      const section = parseSection(selectedSection);
-      const [{ data: apiSubmissions }, { data: students }] = await Promise.all([
-        listSubmissions(schoolId, selectedHomework.courseId, selectedHomework.id, { limit: 100 }),
-        listStudents(schoolId, { classGrade, section, limit: 100 }),
-      ]);
-
-      const studentMap = Object.fromEntries(
-        (students || []).map((student) => [student._id?.toString?.(), student])
+      // The server joins every student in the class with their submission, so no student
+      // is lost to a page limit and names always resolve.
+      const { roster } = await getSubmissionRoster(
+        schoolId,
+        selectedHomework.courseId,
+        selectedHomework.id
       );
-      const submittedIds = new Set(
-        (apiSubmissions || []).map((item) => item.studentId?.toString?.())
-      );
-
-      const mappedSubs = (apiSubmissions || []).map((item) =>
-        mapSubmissionForCheck(item, studentMap)
-      );
-      const pending = (students || [])
-        .filter((student) => !submittedIds.has(student._id?.toString?.()))
-        .map((student) =>
-          mapSubmissionForCheck({ student, status: 'pending' }, studentMap)
-        );
 
       setSubmissionsList(
-        [...mappedSubs, ...pending].sort((a, b) => (a.roll || 0) - (b.roll || 0))
+        roster
+          .map((row) => mapRosterRowForCheck(row))
+          .sort((a, b) => (a.roll || 0) - (b.roll || 0))
       );
     } catch (err) {
       setSubmissionsList([]);
@@ -144,7 +147,7 @@ const TeacherCheckHomework = () => {
     } finally {
       setLoadingSubmissions(false);
     }
-  }, [schoolId, selectedHomework, selectedClass, selectedSection]);
+  }, [schoolId, selectedHomework]);
 
   useEffect(() => {
     loadSubmissions();
@@ -153,15 +156,57 @@ const TeacherCheckHomework = () => {
   // Selected student for checking
   const [activeStudent, setActiveStudent] = useState(null);
   const [feedbackGrade, setFeedbackGrade] = useState('A');
+  const [feedbackScore, setFeedbackScore] = useState('');
   const [feedbackRemarks, setFeedbackRemarks] = useState('');
-  const [showToast, setShowToast] = useState(false);
+  const [showToast, setShowToast] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all'); // 'all', 'Submitted', 'Not Submitted', 'Checked'
-  
+
   // Full image preview state
   const [previewImageUrl, setPreviewImageUrl] = useState(null);
+  // Attachment id -> object URL. Submitted work is private, so each file is fetched
+  // through the authorized endpoint rather than linked to directly.
+  const [fileUrls, setFileUrls] = useState({});
 
+  const maxScore = selectedHomework?.maxScore ?? 100;
   const activeSubmissionsList = submissionsList;
+
+  // Resolve the open student's attachments to blob URLs, and revoke them on close so the
+  // browser does not hold a child's work in memory longer than the panel is open.
+  useEffect(() => {
+    if (!activeStudent || !schoolId) return undefined;
+
+    let cancelled = false;
+    const created = [];
+
+    (async () => {
+      const entries = await Promise.all(
+        (activeStudent.files || [])
+          .filter((file) => file.id && !file.legacy)
+          .map(async (file) => {
+            try {
+              const url = await fetchSubmissionAttachment(schoolId, file.id);
+              created.push(url);
+              return [file.id, url];
+            } catch {
+              return null;
+            }
+          })
+      );
+
+      if (cancelled) {
+        created.forEach((url) => URL.revokeObjectURL(url));
+        return;
+      }
+      setFileUrls(Object.fromEntries(entries.filter(Boolean)));
+    })();
+
+    return () => {
+      cancelled = true;
+      created.forEach((url) => URL.revokeObjectURL(url));
+      setFileUrls({});
+    };
+  }, [activeStudent, schoolId]);
 
   // Filter students based on search query & status filter
   const filteredSubmissions = activeSubmissionsList.filter(sub => {
@@ -180,14 +225,33 @@ const TeacherCheckHomework = () => {
 
   const handleOpenCheckPanel = (student) => {
     setActiveStudent(student);
-    setFeedbackGrade(student.grade || 'A');
+    const grade = student.grade || 'A';
+    setFeedbackGrade(grade);
+    // Pre-fill with the score already awarded, else the score the letter implies, scaled
+    // to this assignment's maximum.
+    setFeedbackScore(
+      String(student.score ?? Math.round((gradeToScore(grade) / 100) * (selectedHomework?.maxScore ?? 100)))
+    );
     setFeedbackRemarks(student.remarks || '');
+  };
+
+  // The letter buttons are a shortcut that fills in the score; the number is what is
+  // actually stored, so it stays editable.
+  const handlePickGrade = (grade) => {
+    setFeedbackGrade(grade);
+    setFeedbackScore(String(Math.round((gradeToScore(grade) / 100) * maxScore)));
   };
 
   const handleSaveReview = async () => {
     if (!activeStudent || !selectedHomework || !schoolId) return;
     if (!activeStudent.mongoId) {
       setError('This student has not submitted homework yet.');
+      return;
+    }
+
+    const score = Number(feedbackScore);
+    if (!Number.isFinite(score) || score < 0 || score > maxScore) {
+      setError(`Enter a score between 0 and ${maxScore}.`);
       return;
     }
 
@@ -200,17 +264,50 @@ const TeacherCheckHomework = () => {
         selectedHomework.id,
         activeStudent.mongoId,
         {
-          score: gradeToScore(feedbackGrade),
+          score,
+          letterGrade: feedbackGrade,
           feedback: feedbackRemarks.trim() || undefined,
         }
       );
 
-      setShowToast(true);
+      setShowToast('Homework checked & graded successfully!');
       setActiveStudent(null);
       await loadSubmissions();
-      setTimeout(() => setShowToast(false), 2500);
+      setTimeout(() => setShowToast(''), 2500);
     } catch (err) {
       setError(getErrorMessage(err, 'Unable to save review'));
+    } finally {
+      setSavingReview(false);
+    }
+  };
+
+  // Sending work back is the only way to reopen submission for a student, so it needs a
+  // reason the parent can act on.
+  const handleReturnForRevision = async () => {
+    if (!activeStudent?.mongoId || !selectedHomework || !schoolId) return;
+
+    if (!feedbackRemarks.trim()) {
+      setError('Add remarks telling the student what to correct before sending it back.');
+      return;
+    }
+
+    setSavingReview(true);
+    setError('');
+    try {
+      await returnSubmission(
+        schoolId,
+        selectedHomework.courseId,
+        selectedHomework.id,
+        activeStudent.mongoId,
+        { feedback: feedbackRemarks.trim() }
+      );
+
+      setShowToast('Homework sent back for revision.');
+      setActiveStudent(null);
+      await loadSubmissions();
+      setTimeout(() => setShowToast(''), 2500);
+    } catch (err) {
+      setError(getErrorMessage(err, 'Unable to return submission'));
     } finally {
       setSavingReview(false);
     }
@@ -225,7 +322,7 @@ const TeacherCheckHomework = () => {
           <div className="w-6 h-6 bg-white/20 rounded-full flex items-center justify-center">
             <Check size={14} strokeWidth={3} />
           </div>
-          <span className="text-xs font-black">Homework Checked & Graded Successfully!</span>
+          <span className="text-xs font-black">{showToast}</span>
         </div>
       )}
 
@@ -458,6 +555,12 @@ const TeacherCheckHomework = () => {
                     Pending check
                   </span>
                 );
+              } else if (stud.status === 'Returned') {
+                statusPill = (
+                  <span className="px-2.5 py-1 bg-orange-50 text-orange-600 border border-orange-100 rounded-xl text-[9px] font-black uppercase">
+                    Sent back
+                  </span>
+                );
               } else if (stud.status === 'Checked') {
                 statusPill = (
                   <div className="flex items-center gap-1.5">
@@ -493,7 +596,10 @@ const TeacherCheckHomework = () => {
                     </div>
                     <div>
                       <h4 className="text-xs font-black text-deep-purple leading-tight">{stud.name}</h4>
-                      <p className="text-[9px] text-gray-400 font-bold mt-1">Roll No: {stud.roll} {stud.submittedAt && `• ${stud.submittedAt}`}</p>
+                      <p className="text-[9px] text-gray-400 font-bold mt-1">
+                        Roll No: {stud.roll} {stud.submittedAt && `• ${stud.submittedAt}`}
+                        {stud.isLate && <span className="text-amber-600"> • Late</span>}
+                      </p>
                     </div>
                   </div>
 
@@ -556,37 +662,52 @@ const TeacherCheckHomework = () => {
                 {activeStudent.files?.length > 0 ? (
                   <>
                     <div className="grid grid-cols-2 gap-3.5">
-                      {activeStudent.files.map((file, idx) => (
-                        <div
-                          key={idx}
-                          onClick={() =>
-                            file.isImage
-                              ? setPreviewImageUrl(file.url)
-                              : window.open(file.url, '_blank', 'noopener,noreferrer')
-                          }
-                          className="border border-gray-200 rounded-2xl overflow-hidden bg-gray-50 hover:border-primary cursor-pointer transition-all shadow-sm flex flex-col group relative"
-                        >
-                          <div className="aspect-video w-full bg-gray-200 relative overflow-hidden flex-1">
-                            {file.isImage ? (
-                              <img src={file.url} alt={file.name} className="w-full h-full object-cover group-hover:scale-105 transition-all duration-500" />
-                            ) : (
-                              <div className="w-full h-full bg-red-50 flex flex-col items-center justify-center gap-1">
-                                <FileText size={22} className="text-red-500" />
-                                <span className="text-[8px] font-black text-red-500 uppercase tracking-wider">
-                                  {file.kind === 'pdf' ? 'PDF' : 'File'}
+                      {activeStudent.files.map((file, idx) => {
+                        // Legacy files still carry a direct URL; new ones are resolved to
+                        // a blob URL through the authorized endpoint.
+                        const url = file.legacy ? file.url : fileUrls[file.id];
+                        const isLoading = !url;
+
+                        return (
+                          <div
+                            key={file.id || idx}
+                            onClick={() => {
+                              if (!url) return;
+                              if (file.isImage) setPreviewImageUrl(url);
+                              else window.open(url, '_blank', 'noopener,noreferrer');
+                            }}
+                            className={`border border-gray-200 rounded-2xl overflow-hidden bg-gray-50 transition-all shadow-sm flex flex-col group relative ${
+                              isLoading ? 'opacity-60' : 'hover:border-primary cursor-pointer'
+                            }`}
+                          >
+                            <div className="aspect-video w-full bg-gray-200 relative overflow-hidden flex-1">
+                              {isLoading ? (
+                                <div className="w-full h-full flex items-center justify-center">
+                                  <Loader2 size={18} className="animate-spin text-gray-400" />
+                                </div>
+                              ) : file.isImage ? (
+                                <img src={url} alt={file.name} className="w-full h-full object-cover group-hover:scale-105 transition-all duration-500" />
+                              ) : (
+                                <div className="w-full h-full bg-red-50 flex flex-col items-center justify-center gap-1">
+                                  <FileText size={22} className="text-red-500" />
+                                  <span className="text-[8px] font-black text-red-500 uppercase tracking-wider">
+                                    {file.kind === 'pdf' ? 'PDF' : 'File'}
+                                  </span>
+                                </div>
+                              )}
+                              {!isLoading && (
+                                <span className="absolute inset-0 bg-black/10 group-hover:bg-black/25 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <Eye size={20} className="text-white" />
                                 </span>
-                              </div>
-                            )}
-                            <span className="absolute inset-0 bg-black/10 group-hover:bg-black/25 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                              <Eye size={20} className="text-white" />
-                            </span>
+                              )}
+                            </div>
+                            <div className="p-2 bg-white flex items-center gap-2">
+                              <FileText size={12} className="text-primary shrink-0" />
+                              <span className="text-[9px] font-bold text-deep-purple truncate flex-1 leading-none">{file.name}</span>
+                            </div>
                           </div>
-                          <div className="p-2 bg-white flex items-center gap-2">
-                            <FileText size={12} className="text-primary shrink-0" />
-                            <span className="text-[9px] font-bold text-deep-purple truncate flex-1 leading-none">{file.name}</span>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                     <p className="text-[9px] text-gray-400 font-bold block mt-1">Tap an image to expand, or a document to open it.</p>
                   </>
@@ -611,16 +732,32 @@ const TeacherCheckHomework = () => {
               <div className="space-y-2">
                 <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-wider flex items-center gap-1">
                   <Award size={14} className="text-primary" />
-                  <span>Grade / Evaluation *</span>
+                  <span>Score *</span>
                 </h4>
-                <div className="grid grid-cols-5 gap-2">
-                  {['A+', 'A', 'B+', 'B', 'C'].map(g => (
+
+                <div className="flex items-center gap-3">
+                  <input
+                    type="number"
+                    min={0}
+                    max={maxScore}
+                    value={feedbackScore}
+                    onChange={(e) => setFeedbackScore(e.target.value)}
+                    className="w-24 px-4 py-3 bg-white border border-gray-200 focus:border-primary/30 focus:outline-none rounded-2xl text-sm font-black text-deep-purple text-center shadow-sm transition-all"
+                  />
+                  <span className="text-xs font-black text-gray-400">/ {maxScore}</span>
+                </div>
+
+                <p className="text-[9px] font-bold text-gray-400 pt-1">
+                  Or pick a grade to fill the score in:
+                </p>
+                <div className="grid grid-cols-7 gap-1.5">
+                  {['A+', 'A', 'B+', 'B', 'C', 'D', 'F'].map(g => (
                     <button
                       key={g}
-                      onClick={() => setFeedbackGrade(g)}
-                      className={`py-3 rounded-2xl text-xs font-black border transition-all active:scale-95 ${
-                        feedbackGrade === g 
-                          ? 'bg-primary text-white border-primary shadow-lg shadow-purple-100' 
+                      onClick={() => handlePickGrade(g)}
+                      className={`py-2.5 rounded-xl text-[11px] font-black border transition-all active:scale-95 ${
+                        feedbackGrade === g
+                          ? 'bg-primary text-white border-primary shadow-lg shadow-purple-100'
                           : 'bg-white text-deep-purple border-gray-200 hover:bg-gray-50'
                       }`}
                     >
@@ -651,24 +788,36 @@ const TeacherCheckHomework = () => {
             </div>
 
             {/* Drawer Bottom Actions */}
-            <div className="p-4 border-t border-gray-100 flex gap-4 bg-white shrink-0">
-              <button 
-                onClick={() => setActiveStudent(null)}
-                className="flex-1 py-4 border border-gray-200 hover:bg-gray-50 active:scale-98 transition-all rounded-3xl text-xs font-black text-deep-purple"
-              >
-                Cancel
-              </button>
+            <div className="p-4 border-t border-gray-100 flex flex-col gap-2.5 bg-white shrink-0">
+              <div className="flex gap-4">
+                <button
+                  onClick={() => setActiveStudent(null)}
+                  className="flex-1 py-4 border border-gray-200 hover:bg-gray-50 active:scale-98 transition-all rounded-3xl text-xs font-black text-deep-purple"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveReview}
+                  disabled={savingReview}
+                  className="flex-1 py-4 bg-primary text-white hover:bg-deep-purple active:scale-98 transition-all rounded-3xl text-xs font-black shadow-lg shadow-purple-100 flex items-center justify-center gap-2 disabled:opacity-60"
+                >
+                  {savingReview ? (
+                    <Loader2 size={14} className="animate-spin" />
+                  ) : (
+                    <Check size={14} strokeWidth={2.5} />
+                  )}
+                  <span>{savingReview ? 'Saving…' : 'Save Review'}</span>
+                </button>
+              </div>
+
+              {/* The only way to reopen submission for a student who got it wrong. */}
               <button
-                onClick={handleSaveReview}
+                onClick={handleReturnForRevision}
                 disabled={savingReview}
-                className="flex-1 py-4 bg-primary text-white hover:bg-deep-purple active:scale-98 transition-all rounded-3xl text-xs font-black shadow-lg shadow-purple-100 flex items-center justify-center gap-2 disabled:opacity-60"
+                className="w-full py-3 border border-amber-200 bg-amber-50 hover:bg-amber-100 active:scale-98 transition-all rounded-3xl text-[11px] font-black text-amber-700 flex items-center justify-center gap-2 disabled:opacity-60"
               >
-                {savingReview ? (
-                  <Loader2 size={14} className="animate-spin" />
-                ) : (
-                  <Check size={14} strokeWidth={2.5} />
-                )}
-                <span>{savingReview ? 'Saving…' : 'Save Review'}</span>
+                <RotateCcw size={13} strokeWidth={2.5} />
+                <span>Send Back for Revision</span>
               </button>
             </div>
 

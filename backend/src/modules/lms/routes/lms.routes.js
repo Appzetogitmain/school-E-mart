@@ -213,12 +213,42 @@ router.get(
   validateQuery(validators.paginationQuery),
   lmsController.listSubmissions
 );
+router.get(
+  '/:schoolId/lms/courses/:courseId/assignments/:assignmentId/roster',
+  ...withLms(lmsManage),
+  validateParams(validators.assignmentIdParam),
+  lmsController.getSubmissionRoster
+);
 router.patch(
   '/:schoolId/lms/courses/:courseId/assignments/:assignmentId/submissions/:submissionId/evaluate',
   ...withLms(lmsManage),
   validateParams(validators.submissionIdParam),
   validateBody(validators.evaluateSubmissionSchema),
   lmsController.evaluateSubmission
+);
+router.patch(
+  '/:schoolId/lms/courses/:courseId/assignments/:assignmentId/submissions/:submissionId/return',
+  ...withLms(lmsManage),
+  validateParams(validators.submissionIdParam),
+  validateBody(validators.returnSubmissionSchema),
+  lmsController.returnSubmission
+);
+
+// The parent's homework feed. One call replaces a per-course + per-assignment fan-out,
+// and section filtering happens server side so a child only ever sees their own work.
+router.get(
+  '/:schoolId/lms/homework',
+  ...withLms(learner),
+  validateQuery(validators.studentIdQuerySchema),
+  lmsController.getStudentHomework
+);
+
+// Submitted work is not served statically. Every read goes through this authorization.
+router.get(
+  '/:schoolId/lms/submission-attachments/:attachmentId',
+  ...withLms(lmsRead),
+  validateParams(validators.attachmentIdParam),
+  lmsController.streamSubmissionAttachment
 );
 
 router.get(

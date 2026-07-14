@@ -8,6 +8,31 @@ const errorHandler = (err, req, res, _next) => {
     return fail(res, err.message, err.statusCode, err.code, err.errors, req);
   }
 
+  // body-parser failures. Without these they fall through to the catch-all below and are
+  // reported as a 500, which tells a parent uploading an oversized homework file that the
+  // server broke rather than that their file is too big.
+  if (err.type === 'entity.too.large') {
+    return fail(
+      res,
+      'The uploaded content is too large',
+      httpStatus.PAYLOAD_TOO_LARGE,
+      responseCodes.PAYLOAD_TOO_LARGE,
+      null,
+      req
+    );
+  }
+
+  if (err.type === 'entity.parse.failed') {
+    return fail(
+      res,
+      'Malformed JSON in request body',
+      httpStatus.BAD_REQUEST,
+      responseCodes.MALFORMED_JSON,
+      null,
+      req
+    );
+  }
+
   if (err.name === 'JsonWebTokenError' || err.name === 'TokenExpiredError') {
     return fail(
       res,

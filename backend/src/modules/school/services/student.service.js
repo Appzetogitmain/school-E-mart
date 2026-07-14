@@ -62,6 +62,7 @@ const linkParentByPhone = async (schoolId, student, payload, session) => {
   let parentUser = existingUser;
   let parentProfile;
   let parentCreated = false;
+  let emailBackfilled = false;
 
   if (parentUser) {
     // Backfill the email if the account doesn't have one yet
@@ -70,6 +71,15 @@ const linkParentByPhone = async (schoolId, student, payload, session) => {
         { _id: parentUser._id },
         { $set: { email: normalizedEmail } }
       ).session(session);
+      emailBackfilled = true;
+    }
+    // Backfill the tenantSchoolId if not set
+    if (!parentUser.tenantSchoolId) {
+      await User.updateOne(
+        { _id: parentUser._id },
+        { $set: { tenantSchoolId: schoolId } }
+      ).session(session);
+      parentUser.tenantSchoolId = schoolId;
     }
     parentProfile = await ParentProfile.findOne({
       userId: parentUser._id,
@@ -170,6 +180,7 @@ const linkParentByPhone = async (schoolId, student, payload, session) => {
 
   return {
     parentCreated,
+    emailBackfilled,
     parentName: parentUser.name,
     parentEmail: parentUser.email || normalizedEmail,
     parentPhone: normalizedPhone,
@@ -180,7 +191,7 @@ const linkParentByPhone = async (schoolId, student, payload, session) => {
 // Fire-and-forget after the transaction commits — a failed email must never
 // roll back an enrollment
 const sendParentWelcomeEmail = (linkResult) => {
-  if (!linkResult || !linkResult.parentCreated || !linkResult.parentEmail) return;
+  if (!linkResult || (!linkResult.parentCreated && !linkResult.emailBackfilled) || !linkResult.parentEmail) return;
   const emailService = require('../../../common/email');
   const logger = require('../../../common/logger');
   emailService.sendWelcomeEmail({

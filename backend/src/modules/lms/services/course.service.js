@@ -93,7 +93,7 @@ const courseService = {
 
   async setCourseStatus(schoolId, courseId, status, options = {}) {
     if (!['draft', 'published', 'archived'].includes(status)) {
-      throw new BadRequestError('Invalid course status', 'INVALID_COURSE_STATUS');
+      throw new BadRequestError('Invalid course status', null, 'INVALID_COURSE_STATUS');
     }
     const course = await courseRepository.updateById(
       courseId,

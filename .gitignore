@@ -26,6 +26,7 @@ Thumbs.db
 backend/node_modules/
 backend/.env
 backend/uploads/
+backend/private-uploads/
 
 # Frontend specific
 frontend/node_modules/

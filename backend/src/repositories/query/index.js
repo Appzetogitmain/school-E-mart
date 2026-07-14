@@ -9,8 +9,13 @@ const executePaginatedQuery = async (model, filter = {}, queryString = {}, optio
   const features = new ApiFeatures(baseQuery, queryString);
   features.filter().sort(options.defaultSort).limitFields(options.defaultFields);
 
+  let pageQuery = features.query.clone().skip(skip).limit(limit);
+  if (options.populate) {
+    pageQuery = pageQuery.populate(options.populate);
+  }
+
   const [data, total] = await Promise.all([
-    features.query.clone().skip(skip).limit(limit).lean(),
+    pageQuery.lean(),
     model.countDocuments(mergedFilter),
   ]);
 

@@ -1,6 +1,5 @@
 import apiClient from './apiClient';
-import { listCourses, listAssignments, submitAssignment, getMySubmission } from './lmsApi';
-import { parseClassGrade } from '../utils/mappers/teacherMapper';
+import { submitAssignment, getStudentHomework } from './lmsApi';
 
 const extractRecords = (response) => response.data?.data?.records || [];
 
@@ -12,41 +11,14 @@ export const getAttendanceHistory = async (schoolId, params = {}) => {
   };
 };
 
-export const fetchParentHomework = async (schoolId, gradeLabel, studentId) => {
-  const classGrade = parseClassGrade(gradeLabel || '');
-  const { data: courses } = await listCourses(schoolId, { limit: 50 });
-
-  const matchingCourses = (courses || []).filter(
-    (course) =>
-      course.status === 'published' &&
-      (course.gradeClass === classGrade ||
-        course.title?.includes(classGrade) ||
-        !classGrade)
-  );
-
-  const assignments = [];
-  for (const course of matchingCourses) {
-    const courseId = course._id || course.id;
-    const { data: rows } = await listAssignments(schoolId, courseId, {
-      limit: 50,
-      status: 'published',
-    });
-    for (const assignment of rows || []) {
-      const assignmentId = assignment._id || assignment.id;
-      let submission = null;
-      if (studentId) {
-        try {
-          submission = await getMySubmission(schoolId, courseId, assignmentId, { studentId });
-        } catch {
-          submission = null;
-        }
-      }
-      assignments.push({ assignment, course, submission });
-    }
-  }
-
-  return assignments;
-};
+/**
+ * The server returns the child's homework already filtered to their class AND section,
+ * with each submission joined on. Previously this walked every course and then every
+ * assignment one request at a time, and — because it only ever filtered by grade — showed
+ * a child the homework set for other sections.
+ */
+export const fetchParentHomework = async (schoolId, gradeLabel, studentId) =>
+  getStudentHomework(schoolId, studentId ? { studentId } : {});
 
 export const listParentNotices = async (schoolId, params = {}) => {
   const response = await apiClient.get(`/schools/${schoolId}/notices`, { params });
