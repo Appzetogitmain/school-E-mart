@@ -26,6 +26,11 @@ export const getSchoolRfq = async (schoolId, rfqId) => {
   return unwrapData(response)?.rfq;
 };
 
+/** Drafts only — the server rejects requests already open to vendors. */
+export const deleteRfq = async (schoolId, rfqId) => {
+  await apiClient.delete(schoolRfqPath(schoolId, `/${rfqId}`));
+};
+
 export const updateRfq = async (schoolId, rfqId, payload) => {
   const response = await apiClient.patch(schoolRfqPath(schoolId, `/${rfqId}`), payload);
   return unwrapData(response)?.rfq;

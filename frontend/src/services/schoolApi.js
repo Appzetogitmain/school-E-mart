@@ -187,6 +187,11 @@ export const listEvents = async (schoolId, params = {}) => {
   return extractPaginated(response, 'events');
 };
 
+export const getEvent = async (schoolId, eventId) => {
+  const response = await apiClient.get(schoolPath(schoolId, `/events/${eventId}`));
+  return unwrapData(response)?.event;
+};
+
 export const updateEvent = async (schoolId, eventId, payload) => {
   const response = await apiClient.patch(schoolPath(schoolId, `/events/${eventId}`), payload);
   return unwrapData(response)?.event;

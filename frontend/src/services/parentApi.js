@@ -26,6 +26,15 @@ export const listParentNotices = async (schoolId, params = {}) => {
   return { data: data?.notices || [], pagination: pagination || null };
 };
 
+export const acknowledgeParentNotice = async (schoolId, noticeId, params = {}) => {
+  const response = await apiClient.post(
+    `/schools/${schoolId}/notices/${noticeId}/acknowledge`,
+    null,
+    { params }
+  );
+  return response.data?.data;
+};
+
 export const listParentDiary = async (schoolId, params = {}) => {
   const response = await apiClient.get(`/schools/${schoolId}/diary`, { params });
   const { data, pagination } = response.data;

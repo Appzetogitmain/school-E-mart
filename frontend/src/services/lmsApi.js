@@ -126,3 +126,15 @@ export const getCourseProgress = async (schoolId, courseId, params = {}) => {
   const response = await apiClient.get(lmsPath(schoolId, `/courses/${courseId}/progress`), { params });
   return unwrapData(response)?.progress || null;
 };
+
+/**
+ * Record how far a learner got through a lesson. progressPercent is required by
+ * the server; pass 100 to complete it.
+ */
+export const updateLessonProgress = async (schoolId, courseId, lessonId, payload) => {
+  const response = await apiClient.post(
+    lmsPath(schoolId, `/courses/${courseId}/lessons/${lessonId}/progress`),
+    payload
+  );
+  return unwrapData(response)?.progress || null;
+};

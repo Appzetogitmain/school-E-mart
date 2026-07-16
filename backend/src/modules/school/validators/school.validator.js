@@ -15,20 +15,20 @@ const sectionParam = classGradeParam.keys({ section: Joi.string().trim().require
 
 const createSchoolSchema = Joi.object({
   name: Joi.string().trim().min(2).max(120).required(),
-  code: Joi.string().trim().max(32).optional(),
-  principalName: Joi.string().trim().max(80).optional(),
-  adminEmail: schemas.email.optional(),
+  code: Joi.string().trim().max(32).optional().allow('', null),
+  principalName: Joi.string().trim().max(80).optional().allow('', null),
+  adminEmail: schemas.email.optional().allow('', null),
   schoolRefNo: Joi.string().trim().required(),
   address: Joi.object({
-    line1: Joi.string().trim().optional(),
-    line2: Joi.string().trim().optional(),
-    city: Joi.string().trim().optional(),
-    state: Joi.string().trim().optional(),
-    country: Joi.string().trim().optional(),
-    pinCode: Joi.string().trim().optional(),
-  }).optional(),
+    line1: Joi.string().trim().optional().allow('', null),
+    line2: Joi.string().trim().optional().allow('', null),
+    city: Joi.string().trim().optional().allow('', null),
+    state: Joi.string().trim().optional().allow('', null),
+    country: Joi.string().trim().optional().allow('', null),
+    pinCode: Joi.string().trim().optional().allow('', null),
+  }).optional().allow(null),
   partnerStatus: Joi.string().valid('prospect', 'active', 'suspended').default('prospect'),
-  academicYearCurrent: Joi.string().trim().optional(),
+  academicYearCurrent: Joi.string().trim().optional().allow('', null),
   gradesOffered: Joi.array().items(Joi.string().trim()).optional(),
   sectionsConfig: Joi.array()
     .items(

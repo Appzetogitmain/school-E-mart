@@ -1,6 +1,7 @@
 const { NotFoundError, ForbiddenError } = require('../../../common/errors');
 const { roles } = require('../../../constants');
 const noticeRepository = require('../repositories/notice.repository');
+const NoticeAcknowledgement = require('../../../database/models/NoticeAcknowledgement');
 const { triggerService } = require('../../../services/notification');
 
 const { ROLES } = roles;
@@ -82,13 +83,59 @@ const noticeService = {
   async listNotices(req, schoolId, query) {
     if (req.auth.role === ROLES.PARENT) {
       const filter = await buildParentNoticeFilter(schoolId, req.auth.userId, query.studentId);
-      return noticeRepository.paginateNotices(filter, query);
+      const result = await noticeRepository.paginateNotices(filter, query);
+      return this.decorateWithAcknowledgement(result, req.auth.userId);
     }
 
     const filter = { schoolId };
     if (query.status) filter.status = query.status;
     if (query.targetAudience) filter.targetAudience = query.targetAudience;
     return noticeRepository.paginateNotices(filter, query);
+  },
+
+  /**
+   * Stamp each notice with this parent's own acknowledgement state. Resolved in
+   * one query for the whole page rather than per notice.
+   */
+  async decorateWithAcknowledgement(result, userId) {
+    const notices = result?.data || [];
+    if (!notices.length) return result;
+
+    const acks = await NoticeAcknowledgement.find({
+      userId,
+      noticeId: { $in: notices.map((n) => n._id) },
+    })
+      .select('noticeId acknowledgedAt')
+      .lean();
+
+    const byNotice = new Map(acks.map((a) => [String(a.noticeId), a.acknowledgedAt]));
+    return {
+      ...result,
+      data: notices.map((notice) => {
+        const plain = typeof notice.toObject === 'function' ? notice.toObject() : notice;
+        const acknowledgedAt = byNotice.get(String(plain._id)) || null;
+        return { ...plain, isAcknowledged: Boolean(acknowledgedAt), acknowledgedAt };
+      }),
+    };
+  },
+
+  /**
+   * Record that this parent has read the notice. Idempotent: acknowledging twice
+   * keeps the original timestamp rather than erroring or moving it.
+   */
+  async acknowledgeNotice(req, schoolId, noticeId) {
+    // Reuses the parent visibility check — a notice you cannot see, you cannot acknowledge
+    await this.getNotice(req, schoolId, noticeId);
+
+    const userId = req.auth.userId;
+    await NoticeAcknowledgement.updateOne(
+      { noticeId, userId },
+      { $setOnInsert: { noticeId, userId, schoolId, acknowledgedAt: new Date() } },
+      { upsert: true }
+    );
+
+    const ack = await NoticeAcknowledgement.findOne({ noticeId, userId }).lean();
+    return { acknowledged: true, acknowledgedAt: ack.acknowledgedAt };
   },
 
   async getNotice(req, schoolId, noticeId) {

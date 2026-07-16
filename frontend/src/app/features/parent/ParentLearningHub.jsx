@@ -5,7 +5,12 @@ import {
   Sparkles, Award, BookOpen, Clock,
   ArrowRight, GraduationCap, CheckCircle2, Loader2
 } from 'lucide-react';
-import { listCourses, getResumeBookmark } from '../../../services/lmsApi';
+import {
+  listCourses,
+  getResumeBookmark,
+  listLessons,
+  updateLessonProgress as saveLessonProgress,
+} from '../../../services/lmsApi';
 import { getChildInfoFromStorage } from '../../../utils/parentContext';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 import { mapCourseToLesson, mapResumeToContinueLesson } from '../../../utils/mappers/lmsMapper';
@@ -93,6 +98,51 @@ const ParentLearningHub = () => {
     // Update the selected video state too
     if (selectedVideo && selectedVideo.id === id) {
       setSelectedVideo(prev => ({ ...prev, progress: newProg }));
+    }
+  };
+
+  const [savingProgress, setSavingProgress] = useState(false);
+  const [progressError, setProgressError] = useState('');
+
+  /**
+   * Persist completion. These cards are courses, while the server records
+   * progress per lesson — so a card without a lessonId (anything but "continue
+   * watching") has its lessons resolved first, and all of them are completed.
+   */
+  const handleMarkCompleted = async (video) => {
+    const schoolId = childInfo?.schoolId;
+    const courseId = video?.courseId || video?.id;
+    if (!schoolId || !courseId) return;
+
+    setSavingProgress(true);
+    setProgressError('');
+    try {
+      let lessonIds = video.lessonId ? [video.lessonId] : [];
+      if (!lessonIds.length) {
+        const lessons = await listLessons(schoolId, courseId);
+        lessonIds = (lessons || []).map((l) => l?._id || l?.id).filter(Boolean);
+      }
+      if (!lessonIds.length) {
+        throw new Error('This course has no lessons to complete yet.');
+      }
+
+      await Promise.all(
+        lessonIds.map((lessonId) =>
+          saveLessonProgress(schoolId, courseId, lessonId, {
+            progressPercent: 100,
+            studentId: childInfo?.studentId,
+          })
+        )
+      );
+
+      // Only reflect completion after the server has accepted it
+      setVideoProgress(100);
+      setIsPlaying(false);
+      updateLessonProgress(video.id, 100);
+    } catch (err) {
+      setProgressError(getErrorMessage(err, 'Could not save your progress. Please try again.'));
+    } finally {
+      setSavingProgress(false);
     }
   };
 
@@ -449,22 +499,25 @@ const ParentLearningHub = () => {
 
                 {/* Complete now button */}
                 <button
-                  onClick={() => {
-                    setVideoProgress(100);
-                    setIsPlaying(false);
-                    updateLessonProgress(selectedVideo.id, 100);
-                    alert(`🎉 Well done! "${selectedVideo.title}" marked as fully completed.`);
-                  }}
-                  disabled={videoProgress >= 100}
+                  onClick={() => handleMarkCompleted(selectedVideo)}
+                  disabled={videoProgress >= 100 || savingProgress}
                   className={`px-3 py-2 border rounded-xl text-[10px] font-black flex items-center gap-1 shadow-sm active:scale-95 transition-all ${videoProgress >= 100
                       ? 'bg-[#EBFBF0] border-[#34A853]/15 text-[#34A853]'
                       : 'bg-white border-gray-100 text-[#7F56D9] hover:border-gray-200'
                     }`}
                 >
                   <CheckCircle2 size={11} />
-                  <span>{videoProgress >= 100 ? 'Completed' : 'Mark Completed'}</span>
+                  <span>
+                    {videoProgress >= 100 ? 'Completed' : savingProgress ? 'Saving…' : 'Mark Completed'}
+                  </span>
                 </button>
               </div>
+
+              {progressError && (
+                <p className="text-[11px] font-bold text-red-600 bg-red-50 border border-red-100 rounded-xl px-3 py-2">
+                  {progressError}
+                </p>
+              )}
 
               {/* Class summary syllabus notes */}
               <div>

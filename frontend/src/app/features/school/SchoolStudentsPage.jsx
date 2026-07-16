@@ -6,7 +6,7 @@ import {
   Calendar, CheckCircle, AlertCircle, Sparkles, Upload,
   Download, Award, Shield, MapPin, Phone, Mail, Loader2, UserPlus
 } from 'lucide-react';
-import { listStudents, registerStudent, listClasses } from '../../../services/schoolApi';
+import { listStudents, registerStudent, listClasses, updateStudentStatus } from '../../../services/schoolApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 import { mapStudentForList, formatClassLabel, calculateAge } from '../../../utils/mappers/schoolStudentMapper';
 import { useSchoolId } from '../../../utils/schoolContext';
@@ -84,6 +84,32 @@ const SchoolStudentsPage = () => {
       }
     })();
   }, [schoolId]);
+
+  // Enrolment status had no control anywhere, so a student could never be marked
+  // inactive or graduated even though the endpoint has always existed.
+  const [statusSaving, setStatusSaving] = useState(false);
+  const [statusError, setStatusError] = useState('');
+
+  const handleStatusChange = async (student, nextStatus) => {
+    if (!schoolId || !student) return;
+    setStatusSaving(true);
+    setStatusError('');
+    try {
+      // mongoId, not id — the mapper's `id` is the human-readable schoolRefNo
+      await updateStudentStatus(schoolId, student.mongoId, nextStatus);
+      const label = nextStatus.charAt(0).toUpperCase() + nextStatus.slice(1);
+      setSelectedStudent((prev) =>
+        prev && prev.mongoId === student.mongoId
+          ? { ...prev, status: label, statusRaw: nextStatus }
+          : prev
+      );
+      await loadStudents();
+    } catch (err) {
+      setStatusError(getErrorMessage(err, 'Unable to update the status'));
+    } finally {
+      setStatusSaving(false);
+    }
+  };
 
   const selectedFormClass = classesList.find((c) => c.classGrade === addForm.classGrade);
   const formSections = selectedFormClass?.sections || [];
@@ -518,11 +544,49 @@ const SchoolStudentsPage = () => {
                     <div>📅 DOB: <span className="text-gray-600 font-bold">{selectedStudent.dob}</span></div>
                     <div>🎂 Age: <span className="text-gray-600 font-bold">{selectedStudent.age !== null && selectedStudent.age !== undefined ? `${selectedStudent.age} years` : '—'}</span></div>
                     <div>⚧️ Gender: <span className="text-gray-600 font-bold">{selectedStudent.gender}</span></div>
-                    <div>🛡️ Status: <span className="text-gray-600 font-bold">{selectedStudent.status}</span></div>
                   </div>
                   <div className="mt-2 text-deep-purple font-bold flex items-start gap-1.5">
                     <MapPin size={12} className="text-gray-400 shrink-0 mt-0.5" />
                     <span>Address: <span className="text-gray-600 font-bold">{selectedStudent.address}</span></span>
+                  </div>
+
+                  {/* Enrolment status — editable */}
+                  <div className="mt-3.5 pt-3.5 border-t border-gray-150">
+                    <span className="text-[9px] text-gray-400 font-black uppercase tracking-wider block mb-1.5">
+                      🛡️ Enrolment status
+                    </span>
+                    <div className="flex gap-1.5">
+                      {[
+                        { value: 'active', label: 'Active' },
+                        { value: 'inactive', label: 'Inactive' },
+                        { value: 'alumni', label: 'Alumni' },
+                      ].map((option) => {
+                        const isCurrent = (selectedStudent.statusRaw || 'active') === option.value;
+                        return (
+                          <button
+                            key={option.value}
+                            type="button"
+                            onClick={() => !isCurrent && handleStatusChange(selectedStudent, option.value)}
+                            disabled={statusSaving || isCurrent}
+                            className={`flex-1 py-2 rounded-xl text-[10px] font-black border transition-all active:scale-[0.98] disabled:opacity-60 ${
+                              isCurrent
+                                ? 'bg-[#3b2d7d] border-[#3b2d7d] text-white'
+                                : 'bg-white border-gray-200 text-deep-purple hover:bg-gray-50'
+                            }`}
+                          >
+                            {option.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {statusSaving && (
+                      <p className="text-[10px] font-bold text-gray-400 mt-1.5">Saving…</p>
+                    )}
+                    {statusError && (
+                      <p className="text-[10px] font-bold text-red-600 bg-red-50 border border-red-100 rounded-xl px-2.5 py-1.5 mt-1.5">
+                        {statusError}
+                      </p>
+                    )}
                   </div>
                 </div>
 

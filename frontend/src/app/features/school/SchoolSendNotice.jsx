@@ -101,7 +101,7 @@ const SchoolSendNotice = () => {
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-gray-50/50 pb-36 font-outfit relative">
+    <div className="flex flex-col min-h-screen bg-gray-50/50 pb-48 font-outfit relative">
       {/* Top Banner Success Notification */}
       {isSuccess && (
         <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[200] w-[90%] max-w-md animate-in fade-in zoom-in slide-in-from-top-2 duration-300">
@@ -341,7 +341,7 @@ const SchoolSendNotice = () => {
       </div>
 
       {/* Sticky Bottom Actions Footer Bar */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-150 p-4 flex flex-col gap-3 z-50 max-w-md mx-auto">
+      <div className="fixed bottom-[72px] left-0 right-0 bg-white border-t border-gray-150 p-4 flex flex-col gap-3 z-50 max-w-md mx-auto">
         {error && (
           <p className="text-[10px] font-bold text-red-500 text-center">{error}</p>
         )}

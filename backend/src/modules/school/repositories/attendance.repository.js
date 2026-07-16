@@ -31,9 +31,16 @@ class AttendanceRepository extends BaseRepository {
     const start = new Date(Date.UTC(year, month - 1, 1));
     const end = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999));
 
+    const getClassGradeQuery = (grade) => {
+      if (!grade) return undefined;
+      const match = String(grade).match(/^class\s+(.+)$/i) || String(grade).match(/^(.+)$/);
+      const val = match ? match[1].trim() : String(grade).trim();
+      return { $in: [val, `Class ${val}`] };
+    };
+
     const Student = require('../../../database/models/Student');
     const studentFilter = { schoolId, status: 'active', 'softDelete.isDeleted': { $ne: true } };
-    if (classGrade) studentFilter.classGrade = classGrade;
+    if (classGrade) studentFilter.classGrade = getClassGradeQuery(classGrade);
     if (section) studentFilter.section = section;
 
     const students = await Student.find(studentFilter).select('_id name classGrade section').lean();

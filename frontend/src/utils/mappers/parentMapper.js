@@ -207,8 +207,21 @@ export const mapNoticeForParent = (notice) => {
     bgColor,
     iconColor,
     attachments: notice?.attachments?.length || 0,
+    // The actual files, so the download button has something to open. Entries
+    // without a storageKey (unpopulated ids) are dropped rather than rendered
+    // as a button that cannot work.
+    attachmentFiles: (notice?.attachments || [])
+      .filter((a) => a && typeof a === 'object' && a.storageKey)
+      .map((a) => ({
+        id: a._id?.toString?.() || a.id,
+        url: a.storageKey,
+        mime: a.mime || '',
+        sizeBytes: a.sizeBytes || 0,
+      })),
     pinned: false,
     isImportantSpotlight: false,
+    isAcknowledged: Boolean(notice?.isAcknowledged),
+    acknowledgedAt: notice?.acknowledgedAt || null,
     raw: notice,
   };
 };

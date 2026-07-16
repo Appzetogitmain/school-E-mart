@@ -10,6 +10,9 @@ class NoticeRepository extends BaseRepository {
   paginateNotices(filter, queryString, options = {}) {
     return executePaginatedQuery(Notice, this.mergeFilter(filter), queryString, {
       defaultSort: '-publishDate',
+      // Without this, attachments come back as bare ObjectIds and the client can
+      // only count them — it has no storageKey to actually open the file with.
+      populate: { path: 'attachments', select: 'storageKey mime sizeBytes purpose' },
       ...options,
     });
   }

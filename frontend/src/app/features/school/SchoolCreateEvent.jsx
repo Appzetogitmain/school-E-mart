@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft, Calendar, Clock, MapPin,
   Bell, Users, GraduationCap, Grid, Info,
   Check, ArrowRight, ToggleLeft, ToggleRight
 } from 'lucide-react';
-import { createEvent, listClasses } from '../../../services/schoolApi';
+import { createEvent, updateEvent, getEvent, listClasses } from '../../../services/schoolApi';
 import { useSchoolId } from '../../../utils/schoolContext';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 import { useEffect } from 'react';
@@ -24,9 +24,31 @@ const AUDIENCE_MAP = {
   specific: 'specific_classes',
 };
 
+// Reverse lookup so an existing event's stored audience selects the right chip
+const AUDIENCE_FROM_API = Object.fromEntries(
+  Object.entries(AUDIENCE_MAP).map(([key, value]) => [value, key])
+);
+
+/** Split an ISO timestamp back into the date and time inputs the form uses. */
+const splitDateTime = (iso) => {
+  if (!iso) return { date: '', time: '' };
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return { date: '', time: '' };
+  const pad = (n) => String(n).padStart(2, '0');
+  return {
+    date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
+    time: `${pad(d.getHours())}:${pad(d.getMinutes())}`,
+  };
+};
+
 const SchoolCreateEvent = () => {
   const navigate = useNavigate();
   const schoolId = useSchoolId();
+  // Same form serves both create and edit; ?eventId= switches it to edit.
+  const [searchParams] = useSearchParams();
+  const eventId = searchParams.get('eventId');
+  const isEditing = Boolean(eventId);
+  const [loadingEvent, setLoadingEvent] = useState(false);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [eventType, setEventType] = useState('');
@@ -59,8 +81,41 @@ const SchoolCreateEvent = () => {
     })();
   }, [schoolId]);
 
+  useEffect(() => {
+    if (!schoolId || !eventId) return;
+    let cancelled = false;
+
+    (async () => {
+      setLoadingEvent(true);
+      setError('');
+      try {
+        const event = await getEvent(schoolId, eventId);
+        if (cancelled || !event) return;
+        const start = splitDateTime(event.startDate);
+        const end = splitDateTime(event.endDate);
+
+        setTitle(event.title || '');
+        setDescription(event.description || '');
+        setEventType(event.eventType || '');
+        setStartDate(start.date);
+        setStartTime(start.time);
+        setEndDate(end.date);
+        setEndTime(end.time);
+        setVenue(event.location || '');
+        setAudience(AUDIENCE_FROM_API[event.targetAudience] || 'all');
+        setSelectedClass(event.targetClasses?.[0]?.classGrade || '');
+      } catch (err) {
+        if (!cancelled) setError(getErrorMessage(err, 'Unable to load this event'));
+      } finally {
+        if (!cancelled) setLoadingEvent(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [schoolId, eventId]);
+
   const handleBack = () => {
-    navigate('/school/admin');
+    navigate(isEditing ? '/school/events' : '/school/admin');
   };
 
   const handleCreateEvent = async () => {
@@ -77,7 +132,7 @@ const SchoolCreateEvent = () => {
     setSaving(true);
     try {
       const targetAudience = AUDIENCE_MAP[audience] || 'all';
-      await createEvent(schoolId, {
+      const payload = {
         title: title.trim(),
         description: description.trim() || undefined,
         eventType: eventType || eventCategory || 'General',
@@ -89,21 +144,24 @@ const SchoolCreateEvent = () => {
           targetAudience === 'specific_classes' && selectedClass
             ? [{ classGrade: selectedClass, sections: [] }]
             : undefined,
-      });
+      };
+
+      if (isEditing) await updateEvent(schoolId, eventId, payload);
+      else await createEvent(schoolId, payload);
       setIsSuccess(true);
       setTimeout(() => {
         setIsSuccess(false);
-        navigate('/school/admin');
+        navigate(isEditing ? '/school/events' : '/school/admin');
       }, 2000);
     } catch (err) {
-      setError(getErrorMessage(err, 'Unable to create event'));
+      setError(getErrorMessage(err, isEditing ? 'Unable to update event' : 'Unable to create event'));
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-gray-50/50 pb-36 font-outfit relative">
+    <div className="flex flex-col min-h-screen bg-gray-50/50 pb-48 font-outfit relative">
       {/* Top Banner Success Notification */}
       {isSuccess && (
         <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[200] w-[90%] max-w-md animate-in fade-in zoom-in slide-in-from-top-2 duration-300">
@@ -112,8 +170,12 @@ const SchoolCreateEvent = () => {
               <Check size={18} className="text-white" />
             </div>
             <div>
-              <span className="text-xs font-black block leading-none">Event Created Successfully!</span>
-              <span className="text-[10px] text-emerald-100 font-bold block mt-1">Added to school calendar and notice board.</span>
+              <span className="text-xs font-black block leading-none">
+                {isEditing ? 'Event Updated Successfully!' : 'Event Created Successfully!'}
+              </span>
+              <span className="text-[10px] text-emerald-100 font-bold block mt-1">
+                {isEditing ? 'Changes are live on the school calendar.' : 'Added to school calendar and notice board.'}
+              </span>
             </div>
           </div>
         </div>
@@ -131,10 +193,14 @@ const SchoolCreateEvent = () => {
           </button>
           <div>
             <h1 className="text-lg font-black text-deep-purple flex items-center gap-1.5 leading-none">
-              Create Event
+              {isEditing ? 'Edit Event' : 'Create Event'}
             </h1>
             <span className="text-[11px] text-gray-400 font-bold block mt-1">
-              Add a new event to school calendar.
+              {isEditing
+                ? loadingEvent
+                  ? 'Loading event…'
+                  : 'Update this event on the school calendar.'
+                : 'Add a new event to school calendar.'}
             </span>
           </div>
         </div>
@@ -459,7 +525,7 @@ const SchoolCreateEvent = () => {
       </div>
 
       {/* Sticky Bottom Actions Footer Bar */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-150 p-4 flex flex-col gap-3 z-50 max-w-md mx-auto">
+      <div className="fixed bottom-[72px] left-0 right-0 bg-white border-t border-gray-150 p-4 flex flex-col gap-3 z-50 max-w-md mx-auto">
         {error && (
           <div className="bg-red-50 border border-red-100 text-red-600 text-[11px] font-bold px-4 py-2.5 rounded-2xl">
             {error}
@@ -469,11 +535,13 @@ const SchoolCreateEvent = () => {
           <button
             type="button"
             onClick={handleCreateEvent}
-            disabled={saving}
+            disabled={saving || loadingEvent}
             className="w-full py-3.5 bg-primary text-white rounded-2xl text-xs font-black shadow-lg shadow-purple-100 flex items-center justify-center gap-1.5 active:scale-95 transition-all disabled:opacity-60"
           >
             <Calendar size={14} />
-            {saving ? 'Creating…' : 'Create Event'}
+            {saving
+              ? isEditing ? 'Saving…' : 'Creating…'
+              : isEditing ? 'Save Changes' : 'Create Event'}
           </button>
         </div>
 

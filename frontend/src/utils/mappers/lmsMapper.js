@@ -4,13 +4,18 @@ const DEFAULT_LESSON_IMAGE =
 const defaultAvatar = (name) =>
   `https://ui-avatars.com/api/?name=${encodeURIComponent(name || 'Teacher')}&background=7F56D9&color=fff`;
 
-export const mapCourseToLesson = (course, progress = 0) => {
+export const mapCourseToLesson = (course, progress = 0, lesson = null) => {
   const gradeClass = course?.gradeClass || '';
   const category = course?.category || 'Course';
   const instructor = course?.instructorName || 'Instructor';
 
   return {
     id: course?._id || course?.id,
+    // These cards render a course, but progress is recorded per lesson, so both
+    // ids have to survive the mapping. lessonId is null for a plain course card
+    // — the caller then resolves the course's lessons before writing progress.
+    courseId: course?._id || course?.id,
+    lessonId: lesson?._id || lesson?.id || null,
     title: course?.title || 'Untitled Course',
     subject: course?.subject || category || 'General',
     chapter: gradeClass ? `${gradeClass} • ${category}` : category,
@@ -43,6 +48,7 @@ export const mapResumeToContinueLesson = (resume) => {
       title: lesson.title || course.title,
       description: lesson.description || course.description,
     },
-    progressPercent
+    progressPercent,
+    lesson
   );
 };

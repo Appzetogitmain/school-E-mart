@@ -194,7 +194,7 @@ const SchoolKitDetailsPage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-[#F8F7FF] pb-32 font-outfit relative">
+    <div className="min-h-screen bg-[#F8F7FF] pb-48 font-outfit relative">
       {/* Header */}
       <div className="fixed top-0 left-0 right-0 bg-white/80 backdrop-blur-xl border-b border-gray-100 z-50 px-6 py-4 flex items-center gap-4">
         <button onClick={() => navigate(-1)} className="text-deep-purple p-1 active:scale-90 transition-all">
@@ -359,7 +359,7 @@ const SchoolKitDetailsPage = () => {
       </div>
 
       {/* Sticky Bottom CTA */}
-      <div className="fixed bottom-0 left-0 right-0 p-6 bg-white/80 backdrop-blur-xl border-t border-gray-100 z-[60]">
+      <div className="fixed bottom-[72px] left-0 right-0 p-6 bg-white/80 backdrop-blur-xl border-t border-gray-100 z-[60] max-w-md mx-auto">
         <button 
           onClick={handleAddToCart}
           disabled={selectedItemIds.length === 0}

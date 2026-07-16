@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Search, Filter, ChevronDown, Check, X,
-  MoreVertical, Store, Shirt, FileText, CheckCircle,
+  Store, Shirt, FileText, CheckCircle,
   Star, ChevronRight, UserPlus, Send, Mail, Phone, MapPin,
   Tag, Landmark, HelpCircle, ShieldCheck, Loader2
 } from 'lucide-react';
@@ -52,6 +52,29 @@ const SchoolVendorsPage = () => {
   const [vendors, setVendors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [toast, setToast] = useState('');
+
+  const showToast = (message) => {
+    setToast(message);
+    setTimeout(() => setToast(''), 3000);
+  };
+
+  /**
+   * Copies the vendor sign-up link. This previously claimed "Link copied to
+   * clipboard!" from an alert() without copying anything — the clipboard API is
+   * unavailable on insecure origins, so the fallback keeps the claim honest.
+   */
+  const handleInviteVendor = async () => {
+    const inviteUrl = `${window.location.origin}/vendor/login?signup=1`;
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error('Clipboard unavailable');
+      await navigator.clipboard.writeText(inviteUrl);
+      showToast('Vendor sign-up link copied to clipboard');
+    } catch {
+      // Never claim a copy that did not happen — show the link so it can be copied by hand
+      setError(`Copy failed. Share this link with the vendor: ${inviteUrl}`);
+    }
+  };
 
   const loadVendors = useCallback(async () => {
     if (!schoolId) {
@@ -98,7 +121,13 @@ const SchoolVendorsPage = () => {
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-50 pb-24 font-outfit">
-      
+
+      {toast && (
+        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[100] bg-emerald-600 text-white px-5 py-3 rounded-2xl shadow-2xl flex items-center gap-2.5 max-w-[90vw]">
+          <span className="text-xs font-black truncate">{toast}</span>
+        </div>
+      )}
+
       {/* Top Sticky Header */}
       <div className="bg-[#3b2d7d] text-white px-6 py-6 sticky top-0 z-50 rounded-b-[2rem] shadow-lg flex items-center justify-between shrink-0">
         <div className="flex items-center gap-4">
@@ -118,8 +147,8 @@ const SchoolVendorsPage = () => {
         </div>
         
         {/* Outline Invite Vendor Button */}
-        <button 
-          onClick={() => alert('Inviting new vendor... Link copied to clipboard!')}
+        <button
+          onClick={handleInviteVendor}
           className="px-4 py-2 border border-white/25 rounded-2xl text-[10px] font-black flex items-center gap-1.5 hover:bg-white/10 active:scale-95 transition-all uppercase tracking-wider text-white shrink-0"
         >
           <UserPlus size={14} />
@@ -336,14 +365,6 @@ const SchoolVendorsPage = () => {
                 <ChevronRight size={12} className="stroke-[2.5]" />
               </button>
             </div>
-
-            {/* Three dot context settings */}
-            <button 
-              className="absolute top-4 right-4 w-7 h-7 rounded-full flex items-center justify-center hover:bg-gray-50 text-gray-400 active:scale-90 transition-transform"
-              onClick={() => alert(`Context settings for ${vendor.name}`)}
-            >
-              <MoreVertical size={16} />
-            </button>
 
           </div>
         ))}

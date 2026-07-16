@@ -8,6 +8,13 @@ const normalizeDate = (value) => {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
 };
 
+const getClassGradeQuery = (classGrade) => {
+  if (!classGrade) return undefined;
+  const match = String(classGrade).match(/^class\s+(.+)$/i) || String(classGrade).match(/^(.+)$/);
+  const val = match ? match[1].trim() : String(classGrade).trim();
+  return { $in: [val, `Class ${val}`] };
+};
+
 const attendanceService = {
   async markAttendance(req, { date, classGrade, section, records }) {
     if (req.auth.role === 'teacher') {
@@ -18,11 +25,13 @@ const attendanceService = {
     const attendanceDate = normalizeDate(date);
     const results = [];
 
+    const classGradeQuery = getClassGradeQuery(classGrade);
+
     for (const record of records) {
       const student = await studentRepository.findOne({
         _id: record.studentId,
         schoolId,
-        classGrade,
+        classGrade: classGradeQuery,
         section,
       });
       if (!student) continue;
@@ -57,7 +66,7 @@ const attendanceService = {
   async getDailyAttendance(schoolId, { date, classGrade, section }) {
     const attendanceDate = normalizeDate(date);
     const studentFilter = { schoolId };
-    if (classGrade) studentFilter.classGrade = classGrade;
+    if (classGrade) studentFilter.classGrade = getClassGradeQuery(classGrade);
     if (section) studentFilter.section = section;
 
     const students = await studentRepository.findMany(studentFilter);

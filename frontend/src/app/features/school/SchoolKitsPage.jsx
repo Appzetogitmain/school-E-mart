@@ -3,9 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Search, Filter, ChevronDown, Check, X,
   MoreVertical, Package, CheckCircle, AlertCircle, Plus,
-  Users, Layers, Award, Tag, Sparkles, ShoppingBag, Eye, Loader2
+  Users, Layers, Award, Tag, Sparkles, ShoppingBag, Eye, Loader2,
+  Pencil, Trash2
 } from 'lucide-react';
-import { listKits } from '../../../services/schoolApi';
+import { listKits, deleteKit } from '../../../services/schoolApi';
 import { useSchoolId } from '../../../utils/schoolContext';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 
@@ -76,12 +77,45 @@ const SchoolKitsPage = () => {
     loadKits();
   }, [loadKits]);
 
+  const [openMenuId, setOpenMenuId] = useState(null);
+  const [confirmingDelete, setConfirmingDelete] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+
+  // The card menu is absolutely positioned, so an outside click has to close it
+  useEffect(() => {
+    if (openMenuId === null) return undefined;
+    const close = () => setOpenMenuId(null);
+    window.addEventListener('click', close);
+    return () => window.removeEventListener('click', close);
+  }, [openMenuId]);
+
+  const handleDeleteKit = async () => {
+    if (!confirmingDelete) return;
+    setDeleting(true);
+    setError('');
+    try {
+      await deleteKit(schoolId, confirmingDelete.id);
+      setConfirmingDelete(null);
+      await loadKits();
+    } catch (err) {
+      setError(getErrorMessage(err, 'Unable to delete this kit'));
+      setConfirmingDelete(null);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const totalCount = kits.length;
   const activeCount = kits.filter((k) => k.status === 'Active').length;
   const draftCount = kits.filter((k) => k.status === 'Draft').length;
   const archivedCount = kits.filter((k) => k.status === 'Archived').length;
 
   // Filter kits list
+  // Derived from the kits actually loaded. The list used to be a hardcoded five
+  // plus a "More" button that only popped an alert, so any kit in a category
+  // outside that list could not be filtered to at all.
+  const categories = ['All', ...Array.from(new Set(kits.map((k) => k.category).filter(Boolean))).sort()];
+
   const filteredKits = kits.filter(k => {
     const matchesSearch = k.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
                           k.desc.toLowerCase().includes(searchQuery.toLowerCase()) || 
@@ -183,7 +217,7 @@ const SchoolKitsPage = () => {
 
         {/* Category horizontal scroll pills */}
         <div className="flex items-center gap-2 overflow-x-auto scrollbar-none py-1">
-          {['All', 'Academic', 'Stationery', 'Uniform', 'Sports', 'Lab'].map((cat) => (
+          {categories.map((cat) => (
             <button
               key={cat}
               onClick={() => setActiveCategory(cat)}
@@ -196,13 +230,6 @@ const SchoolKitsPage = () => {
               {cat}
             </button>
           ))}
-          <button 
-            onClick={() => alert('Showing all remaining categories...')}
-            className="px-4 py-2.5 bg-white border border-gray-200 rounded-full text-xs font-black text-deep-purple flex items-center gap-1 hover:bg-gray-50 shrink-0"
-          >
-            More
-            <ChevronDown size={12} />
-          </button>
         </div>
 
       </div>
@@ -325,20 +352,96 @@ const SchoolKitsPage = () => {
             </div>
 
             {/* Three dot context settings */}
-            <button 
-              className="absolute top-4 right-4 w-7 h-7 rounded-full flex items-center justify-center hover:bg-gray-50 text-gray-400 active:scale-90 transition-transform"
-              onClick={(e) => {
-                e.stopPropagation();
-                alert(`Context settings for ${kit.name}`);
-              }}
-            >
-              <MoreVertical size={16} />
-            </button>
+            <div className="absolute top-4 right-4">
+              <button
+                aria-label={`Actions for ${kit.name}`}
+                className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-gray-50 text-gray-400 active:scale-90 transition-transform"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setOpenMenuId((prev) => (prev === kit.id ? null : kit.id));
+                }}
+              >
+                <MoreVertical size={16} />
+              </button>
+
+              {openMenuId === kit.id && (
+                <div
+                  className="absolute right-0 top-8 z-20 w-36 bg-white border border-gray-150 rounded-2xl shadow-xl overflow-hidden"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpenMenuId(null);
+                      navigate(`/school/create-kit?kitId=${kit.id}`);
+                    }}
+                    className="w-full px-4 py-3 flex items-center gap-2.5 text-[11px] font-black text-deep-purple hover:bg-gray-50 text-left"
+                  >
+                    <Pencil size={12} /> Edit kit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpenMenuId(null);
+                      setConfirmingDelete(kit);
+                    }}
+                    className="w-full px-4 py-3 flex items-center gap-2.5 text-[11px] font-black text-red-600 hover:bg-red-50 text-left border-t border-gray-100"
+                  >
+                    <Trash2 size={12} /> Delete kit
+                  </button>
+                </div>
+              )}
+            </div>
 
           </div>
         ))}
 
       </div>
+
+      {/* Delete confirmation — kits can be referenced by orders, so never one-tap */}
+      {confirmingDelete && (
+        <div
+          className="fixed inset-0 z-[1000] bg-black/50 flex items-center justify-center p-5"
+          onClick={() => !deleting && setConfirmingDelete(null)}
+        >
+          <div className="bg-white rounded-[2rem] w-full max-w-sm p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-black text-deep-purple">Delete this kit?</h3>
+              <button
+                type="button"
+                onClick={() => setConfirmingDelete(null)}
+                disabled={deleting}
+                aria-label="Close"
+                className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-200 disabled:opacity-60"
+              >
+                <X size={15} />
+              </button>
+            </div>
+            <p className="text-[11px] font-bold text-gray-500 mb-5">
+              “{confirmingDelete.name}” will no longer be available to parents. This cannot be undone.
+            </p>
+            <div className="flex gap-2.5">
+              <button
+                type="button"
+                onClick={() => setConfirmingDelete(null)}
+                disabled={deleting}
+                className="flex-1 py-3 rounded-2xl bg-gray-50 border border-gray-100 text-gray-600 text-xs font-black disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteKit}
+                disabled={deleting}
+                className="flex-1 py-3 rounded-2xl bg-red-600 text-white text-xs font-black inline-flex items-center justify-center gap-2 hover:bg-red-700 disabled:opacity-60"
+              >
+                {deleting && <Loader2 size={13} className="animate-spin" />}
+                {deleting ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Kit Detailed Item breakdown Modal */}
       {selectedKit && (

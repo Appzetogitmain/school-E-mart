@@ -229,7 +229,7 @@ const SchoolMorePage = () => {
           desc: 'Manage school events and calendar',
           icon: <Calendar className="text-emerald-500 stroke-[2.5]" size={18} />,
           bg: 'bg-emerald-50',
-          path: '/school/create-event',
+          path: '/school/events',
           protected: true
         }
       ]
@@ -336,8 +336,9 @@ const SchoolMorePage = () => {
         </div>
         
         {/* Help / Support icon */}
-        <button 
-          onClick={() => alert('School Admin Help Support Desk')}
+        <button
+          onClick={() => navigate('/school/contact')}
+          aria-label="Help and support"
           className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-white/10 text-white/90 active:scale-90 transition-transform"
         >
           <HelpCircle size={22} />

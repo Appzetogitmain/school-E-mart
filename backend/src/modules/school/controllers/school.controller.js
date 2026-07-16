@@ -314,6 +314,11 @@ const schoolController = {
     return success(res, { notice }, 'Notice fetched successfully', undefined, req);
   }),
 
+  acknowledgeNotice: asyncHandler(async (req, res) => {
+    const result = await noticeService.acknowledgeNotice(req, req.schoolId, req.params.noticeId);
+    return success(res, result, 'Notice acknowledged', undefined, req);
+  }),
+
   updateNotice: asyncHandler(async (req, res) => {
     const notice = await noticeService.updateNotice(req.schoolId, req.params.noticeId, req.body);
     return success(res, { notice }, 'Notice updated successfully', undefined, req);
@@ -377,6 +382,11 @@ const schoolController = {
   listRfqs: asyncHandler(async (req, res) => {
     const { data, pagination } = await rfqService.listSchoolRfqs(req.schoolId, req.query);
     return paginated(res, { rfqs: data }, pagination, 'RFQs fetched successfully', req);
+  }),
+
+  deleteRfq: asyncHandler(async (req, res) => {
+    await rfqService.deleteRfq(req.schoolId, req.params.rfqId, req.auth.userId);
+    return success(res, null, 'Draft request deleted', undefined, req);
   }),
 
   getRfq: asyncHandler(async (req, res) => {

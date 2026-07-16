@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Mail, Lock, ArrowRight, ShoppingCart, Info, User, Phone, Building, MapPin } from 'lucide-react';
 import useAuthStore from '../../store/useAuthStore';
 import * as authApi from '../../services/authApi';
@@ -10,7 +10,11 @@ const VendorLogin = () => {
   const loginFromAuthResponse = useAuthStore((state) => state.loginFromAuthResponse);
   const navigate = useNavigate();
 
-  const [isSignUp, setIsSignUp] = useState(false);
+  // ?signup=1 opens straight on sign-up, so a school's "Invite Vendor" link
+  // lands the vendor on registration rather than a login form they have no
+  // account for.
+  const [searchParams] = useSearchParams();
+  const [isSignUp, setIsSignUp] = useState(searchParams.get('signup') === '1');
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');

@@ -14,7 +14,8 @@ import {
   Sparkles,
   Award,
   Bell,
-  Compass
+  Compass,
+  X
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import AppHeader from '../../components/AppHeader';
@@ -77,6 +78,9 @@ const ParentCalendar = () => {
 
   // School events fetched from the academics API
   const [rawEvents, setRawEvents] = useState([]);
+  // Tapping an event used to alert() its title; every field a detail view needs
+  // is already mapped, so it just needed somewhere to render.
+  const [selectedEvent, setSelectedEvent] = useState(null);
 
   useEffect(() => {
     const schoolId = childInfo?.schoolId;
@@ -239,8 +243,68 @@ const ParentCalendar = () => {
 
   return (
     <>
+      {/* Event detail */}
+      {selectedEvent && (
+        <div
+          className="fixed inset-0 z-[120] bg-black/50 flex items-end sm:items-center justify-center p-4"
+          onClick={() => setSelectedEvent(null)}
+        >
+          <div
+            className="bg-white rounded-[2rem] w-full max-w-md p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3 mb-4">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className={`w-11 h-11 rounded-2xl ${selectedEvent.bgColor} ${selectedEvent.iconColor} flex items-center justify-center shrink-0`}>
+                  {selectedEvent.icon}
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-sm font-black text-deep-purple leading-tight truncate">
+                    {selectedEvent.title}
+                  </h3>
+                  <span className={`text-[9px] font-black uppercase tracking-wider ${categoryStyles[selectedEvent.category]?.text || 'text-gray-400'}`}>
+                    {selectedEvent.category}
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedEvent(null)}
+                aria-label="Close"
+                className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-200 shrink-0"
+              >
+                <X size={15} />
+              </button>
+            </div>
+
+            <div className="space-y-2.5 text-[11px] font-bold text-gray-500">
+              <div className="flex items-center gap-2">
+                <CalendarIcon size={13} className="text-gray-400 shrink-0" />
+                <span>
+                  {selectedEvent.day} {monthNames[selectedEvent.month]} {selectedEvent.year}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Clock size={13} className="text-gray-400 shrink-0" />
+                <span>{selectedEvent.time}</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <MapPin size={13} className="text-gray-400 shrink-0 mt-0.5" />
+                <span>{selectedEvent.location}</span>
+              </div>
+            </div>
+
+            {selectedEvent.content && (
+              <p className="text-[11px] font-bold text-gray-600 mt-4 pt-4 border-t border-gray-100 leading-relaxed whitespace-pre-line">
+                {selectedEvent.content}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Side drawer navigation panel */}
-      
+
       {/* Global Header component */}
       <AppHeader
         scrolled={scrolled}
@@ -370,9 +434,9 @@ const ParentCalendar = () => {
             </div>
           ) : (
             selectedDayEvents.map((evt) => (
-              <div 
+              <div
                 key={evt.id}
-                onClick={() => alert(`Details for event: ${evt.title}`)}
+                onClick={() => setSelectedEvent(evt)}
                 className="bg-white border border-gray-100 rounded-3xl p-4 flex gap-4 shadow-[0_4px_15px_rgba(0,0,0,0.01)] hover:shadow-md hover:border-gray-200/50 transition-all duration-300 cursor-pointer relative"
               >
                 {/* Round Badge Icon */}
@@ -410,32 +474,16 @@ const ParentCalendar = () => {
           )}
         </div>
 
-        {/* 4. Action Banner link */}
-        <div className="px-6 mt-4">
-          <button 
-            onClick={() => alert('View Full Academic Year Planner')}
-            className="w-full bg-[#F6F2FF] border border-[#E9E0FF] text-[#6A47DE] rounded-2xl py-3.5 px-5 flex items-center justify-between text-xs font-black hover:bg-[#EFEBFF] active:scale-95 transition-all shadow-sm shadow-[#6A47DE]/5"
-          >
-            <div className="flex items-center gap-2">
-              <CalendarIcon size={14} className="text-[#6A47DE]" />
-              <span>View Full Schedule</span>
-            </div>
-            <ArrowRight size={14} />
-          </button>
-        </div>
+        {/* No "View Full Schedule" banner — there is no academic-year planner
+            screen to open, and the month grid above already shows the schedule. */}
 
         {/* 5. Upcoming Highlights Slider */}
         <div className="mt-8">
           <div className="px-6 flex items-center justify-between mb-4">
+            {/* No "View All" — every highlight is already listed below */}
             <h2 className="text-sm font-extrabold text-gray-800 tracking-tight">
               Upcoming Highlights
             </h2>
-            <button 
-              onClick={() => alert('View All Highlights')}
-              className="text-xs font-bold text-[#6A47DE] hover:underline"
-            >
-              View All
-            </button>
           </div>
 
           <div className="px-6 overflow-x-auto scrollbar-none pb-4">
@@ -451,7 +499,6 @@ const ParentCalendar = () => {
                 <div 
                   key={evt.id}
                   onClick={() => {
-                    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
                     setCurrentDate(new Date(evt.year, evt.month, 1));
                     setSelectedDay(evt.day);
                   }}

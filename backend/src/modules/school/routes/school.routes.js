@@ -443,6 +443,16 @@ router.get(
   validateQuery(validators.studentIdQuerySchema),
   schoolController.getNotice
 );
+// Parents acknowledge a notice they can see; noticeRead (not noticeWrite) is
+// correct here — it is the parent's own read receipt, not an edit to the notice.
+router.post(
+  '/:schoolId/notices/:noticeId/acknowledge',
+  ...noticeRead,
+  resolveSchool(),
+  validateParams(validators.noticeIdParam),
+  validateQuery(validators.studentIdQuerySchema),
+  schoolController.acknowledgeNotice
+);
 router.patch(
   '/:schoolId/notices/:noticeId',
   ...noticeWrite,
@@ -560,6 +570,15 @@ router.patch(
   validateParams(rfqValidators.rfqIdParam),
   validateBody(rfqValidators.updateRfqSchema),
   schoolController.updateRfq
+);
+
+// Drafts only — the service refuses anything already open to vendors
+router.delete(
+  '/:schoolId/rfqs/:rfqId',
+  ...schoolAdmin,
+  resolveSchool(),
+  validateParams(rfqValidators.rfqIdParam),
+  schoolController.deleteRfq
 );
 
 router.post(

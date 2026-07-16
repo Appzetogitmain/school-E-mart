@@ -223,6 +223,41 @@ const rfqService = {
     return serializeRfq(rfq, { school, quotes: enriched });
   },
 
+  /**
+   * Discard a draft request.
+   *
+   * Deliberately restricted to drafts: once an RFQ is open, vendors have been
+   * invited and may already have priced quotes against it, so removing it would
+   * destroy their work and the school's audit trail. Anything past draft has to
+   * be cancelled (status: 'cancelled'), which keeps the record.
+   */
+  async deleteRfq(schoolId, rfqId, deletedBy) {
+    const rfq = await loadRfqForSchool(schoolId, rfqId);
+
+    if (rfq.status !== 'draft') {
+      throw new BadRequestError(
+        `Only draft requests can be deleted. This request is "${rfq.status}" — cancel it instead.`,
+        null,
+        'RFQ_NOT_DRAFT'
+      );
+    }
+
+    const quoteCount = await Quote.countDocuments({
+      rfqId: rfq._id,
+      'softDelete.isDeleted': { $ne: true },
+    });
+    if (quoteCount > 0) {
+      throw new BadRequestError(
+        'This request already has vendor quotes and cannot be deleted.',
+        null,
+        'RFQ_HAS_QUOTES'
+      );
+    }
+
+    await rfqRepository.softDeleteById(rfqId, { deletedBy });
+    return { deleted: true };
+  },
+
   async listVendorRfqs(vendorId, query = {}) {
     const filter = {
       invitedVendorIds: vendorId,

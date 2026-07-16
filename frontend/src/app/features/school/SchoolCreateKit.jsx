@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft, HelpCircle, Package, Layers,
   Trash2, Plus, Info, Check, ChevronRight, ChevronUp,
   Upload, Sparkles, TrendingUp
 } from 'lucide-react';
-import { createKit, listClasses, uploadSchoolFile } from '../../../services/schoolApi';
+import { createKit, updateKit, getKit, listClasses, uploadSchoolFile } from '../../../services/schoolApi';
 import { listProducts } from '../../../services/catalogApi';
 import { useSchoolId } from '../../../utils/schoolContext';
 import { getErrorMessage } from '../../../utils/apiHelpers';
@@ -13,6 +13,11 @@ import { getErrorMessage } from '../../../utils/apiHelpers';
 const SchoolCreateKit = () => {
   const navigate = useNavigate();
   const schoolId = useSchoolId();
+  // Same form serves both create and edit; ?kitId= switches it to edit.
+  const [searchParams] = useSearchParams();
+  const kitId = searchParams.get('kitId');
+  const isEditing = Boolean(kitId);
+  const [loadingKit, setLoadingKit] = useState(false);
 
   // Basic Info States
   const [kitName, setKitName] = useState('');
@@ -72,6 +77,57 @@ const SchoolCreateKit = () => {
       }
     })();
   }, [schoolId]);
+
+  useEffect(() => {
+    if (!schoolId || !kitId) return undefined;
+    let cancelled = false;
+
+    (async () => {
+      setLoadingKit(true);
+      setError('');
+      try {
+        const kit = await getKit(schoolId, kitId);
+        if (cancelled || !kit) return;
+
+        setKitName(kit.name || '');
+        setClassGrade(kit.classGrade || '');
+        setCategory(kit.category || '');
+        // create() joins description and includes with a blank line; split it back apart
+        const [desc = '', inc = ''] = String(kit.description || '').split('\n\n');
+        setDescription(desc);
+        setIncludes(inc);
+        setSellingPrice(kit.pricePaise ? String(Math.round(kit.pricePaise / 100)) : '');
+        setMrp(kit.mrpPaise ? String(Math.round(kit.mrpPaise / 100)) : '');
+        setKitStatus(kit.status || 'active');
+        if (typeof kit.showOnApp === 'boolean') setShowOnApp(kit.showOnApp);
+        if (typeof kit.availableOnline === 'boolean') setAvailableOnline(kit.availableOnline);
+        if (typeof kit.allowPreorders === 'boolean') setAllowPreorders(kit.allowPreorders);
+
+        setItems(
+          (kit.items || []).map((item) => {
+            // productId arrives populated on read but is a plain id on write
+            const product = item.productId && typeof item.productId === 'object' ? item.productId : null;
+            const id = product?._id || item.productId;
+            return {
+              id,
+              productId: id,
+              name: product?.name || 'Product',
+              detail: product?.brand || 'Catalog product',
+              pricePaise: product?.pricePaise || 0,
+              qty: item.qty || 1,
+              unit: 'Pcs',
+            };
+          })
+        );
+      } catch (err) {
+        if (!cancelled) setError(getErrorMessage(err, 'Unable to load this kit'));
+      } finally {
+        if (!cancelled) setLoadingKit(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [schoolId, kitId]);
 
   const costPrice = items.reduce(
     (sum, item) => sum + item.qty * ((item.pricePaise || 0) / 100),
@@ -152,11 +208,12 @@ const SchoolCreateKit = () => {
 
       const finalStatus = overrideStatus === 'active' || overrideStatus === 'draft' ? overrideStatus : kitStatus;
 
-      await createKit(schoolId, {
+      const payload = {
         name: kitName.trim(),
         classGrade: classGrade || undefined,
         category: category || undefined,
         description: [description.trim(), includes.trim()].filter(Boolean).join('\n\n') || undefined,
+        // Left undefined when no new file was picked, so editing does not clear the existing image
         imageId,
         items: items.map((item) => ({ productId: item.productId, qty: item.qty })),
         pricePaise: parsedSelling > 0 ? Math.round(parsedSelling * 100) : undefined,
@@ -165,19 +222,23 @@ const SchoolCreateKit = () => {
         showOnApp,
         availableOnline,
         allowPreorders,
-      });
+      };
+
+      if (isEditing) await updateKit(schoolId, kitId, payload);
+      else await createKit(schoolId, payload);
+
       setIsSuccess(true);
       setTimeout(() => {
         setIsSuccess(false);
         navigate('/school/kits');
       }, 2000);
     } catch (err) {
-      setError(getErrorMessage(err, 'Unable to create kit'));
+      setError(getErrorMessage(err, isEditing ? 'Unable to update kit' : 'Unable to create kit'));
     }
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-gray-50/50 pb-36 font-outfit relative">
+    <div className="flex flex-col min-h-screen bg-gray-50/50 pb-48 font-outfit relative">
       {/* Top Banner Success Notification */}
       {isSuccess && (
         <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[200] w-[90%] max-w-md animate-in fade-in zoom-in slide-in-from-top-2 duration-300">
@@ -186,8 +247,12 @@ const SchoolCreateKit = () => {
               <Check size={18} className="text-white" />
             </div>
             <div>
-              <span className="text-xs font-black block leading-none">Kit Created Successfully!</span>
-              <span className="text-[10px] text-emerald-100 font-bold block mt-1">Ready for parent procurement.</span>
+              <span className="text-xs font-black block leading-none">
+                {isEditing ? 'Kit Updated Successfully!' : 'Kit Created Successfully!'}
+              </span>
+              <span className="text-[10px] text-emerald-100 font-bold block mt-1">
+                {isEditing ? 'Changes are live for parents.' : 'Ready for parent procurement.'}
+              </span>
             </div>
           </div>
         </div>
@@ -205,9 +270,9 @@ const SchoolCreateKit = () => {
               <ArrowLeft size={22} />
             </button>
             <div>
-              <h1 className="text-xl font-black leading-tight">Create New Kit</h1>
+              <h1 className="text-xl font-black leading-tight">{isEditing ? 'Edit Kit' : 'Create New Kit'}</h1>
               <span className="text-[12px] text-purple-200 font-bold block mt-1">
-                Create a student kit
+                {isEditing ? (loadingKit ? 'Loading kit…' : 'Update this student kit') : 'Create a student kit'}
               </span>
             </div>
           </div>
@@ -723,7 +788,7 @@ const SchoolCreateKit = () => {
       </div>
 
       {/* Sticky Bottom Actions Footer Bar */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-md p-5 flex flex-col gap-3.5 z-50 max-w-md mx-auto shadow-[0_-10px_30px_-5px_rgba(0,0,0,0.06)]">
+      <div className="fixed bottom-[72px] left-0 right-0 bg-white/90 backdrop-blur-md p-5 flex flex-col gap-3.5 z-50 max-w-md mx-auto shadow-[0_-10px_30px_-5px_rgba(0,0,0,0.06)]">
         {error && (
           <div className="bg-red-50 border border-red-100 text-red-600 text-[11px] font-bold px-4 py-2.5 rounded-2xl">
             {error}
@@ -741,11 +806,11 @@ const SchoolCreateKit = () => {
           <button
             type="button"
             onClick={() => handleCreateKit('active')}
-            disabled={saving}
+            disabled={saving || loadingKit}
             className="flex-1 py-4 bg-[#3b2d7d] text-white rounded-2xl text-xs font-black shadow-lg shadow-purple-100 flex items-center justify-center gap-2 active:scale-95 transition-all hover:bg-[#2b2061] disabled:opacity-60 uppercase tracking-wider"
           >
             <Sparkles size={14} />
-            {saving ? 'Saving…' : 'Create Kit'}
+            {saving ? 'Saving…' : isEditing ? 'Save Changes' : 'Create Kit'}
           </button>
         </div>
       </div>

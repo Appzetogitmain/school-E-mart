@@ -24,7 +24,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import AppHeader from '../../components/AppHeader';
 import LoginRequired from '../../components/LoginRequired';
-import { listParentNotices } from '../../../services/parentApi';
+import { listParentNotices, acknowledgeParentNotice } from '../../../services/parentApi';
 import { mapNoticeForParent } from '../../../utils/mappers/parentMapper';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 
@@ -148,6 +148,36 @@ const ParentNotices = () => {
 
     loadNotices();
   }, [childInfo]);
+
+  const [acknowledging, setAcknowledging] = useState(false);
+  const [ackError, setAckError] = useState('');
+
+  const handleAcknowledge = async (notice) => {
+    if (!notice || notice.isAcknowledged) return;
+    const schoolId = childInfo?.schoolId;
+    if (!schoolId) return;
+
+    setAcknowledging(true);
+    setAckError('');
+    try {
+      const result = await acknowledgeParentNotice(schoolId, notice.id, {
+        studentId: childInfo?.studentId,
+      });
+      const acknowledgedAt = result?.acknowledgedAt || new Date().toISOString();
+      setNotices((prev) =>
+        prev.map((n) => (n.id === notice.id ? { ...n, isAcknowledged: true, acknowledgedAt } : n))
+      );
+      setSelectedNotice((prev) =>
+        prev && prev.id === notice.id ? { ...prev, isAcknowledged: true, acknowledgedAt } : prev
+      );
+    } catch (err) {
+      // Leave the notice unacknowledged so the parent can retry — silently
+      // showing "Read" here is what the old alert() effectively did.
+      setAckError(getErrorMessage(err, 'Could not mark this notice as read'));
+    } finally {
+      setAcknowledging(false);
+    }
+  };
 
   // Tab Filtering Logic
   // Tabs: All Notices, General, Academic, Events, Urgent
@@ -563,17 +593,32 @@ const ParentNotices = () => {
             </div>
 
             {/* Attachments trigger */}
-            {selectedNotice.attachments && (
+            {selectedNotice.attachmentFiles?.length > 0 && (
               <div className="flex flex-col gap-2">
                 <span className="text-[10px] font-black uppercase tracking-wider text-gray-400">Attached Documents</span>
-                <button 
-                  onClick={() => alert(`Downloading attached document for: ${selectedNotice.title}`)}
-                  className="w-full bg-[#EBFBF0] border border-[#D1F2D9] text-[#34A853] py-3 rounded-2xl font-black text-xs flex items-center justify-center gap-2 active:scale-[0.98] transition-all"
-                >
-                  <Paperclip size={14} />
-                  <span>Download Attachment ({selectedNotice.attachments})</span>
-                </button>
+                {selectedNotice.attachmentFiles.map((file, index) => (
+                  <a
+                    key={file.id || index}
+                    href={file.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    download
+                    className="w-full bg-[#EBFBF0] border border-[#D1F2D9] text-[#34A853] py-3 rounded-2xl font-black text-xs flex items-center justify-center gap-2 active:scale-[0.98] transition-all"
+                  >
+                    <Paperclip size={14} />
+                    <span>
+                      Download attachment
+                      {selectedNotice.attachmentFiles.length > 1 ? ` ${index + 1}` : ''}
+                    </span>
+                  </a>
+                ))}
               </div>
+            )}
+
+            {ackError && (
+              <p className="text-[11px] font-bold text-red-600 bg-red-50 border border-red-100 rounded-xl px-3 py-2 mb-2 shrink-0">
+                {ackError}
+              </p>
             )}
 
             {/* Actions button */}
@@ -584,11 +629,20 @@ const ParentNotices = () => {
               >
                 Close Notice
               </button>
-              <button 
-                onClick={() => alert(`Acknowledge Notice: ${selectedNotice.title}`)}
-                className="flex-1 py-3.5 bg-[#6A47DE] text-white text-xs font-black rounded-2xl hover:bg-[#5532C8] transition-colors active:scale-95 text-center shadow-lg shadow-[#6A47DE]/20"
+              <button
+                onClick={() => handleAcknowledge(selectedNotice)}
+                disabled={acknowledging || selectedNotice.isAcknowledged}
+                className={`flex-1 py-3.5 text-xs font-black rounded-2xl transition-colors active:scale-95 text-center ${
+                  selectedNotice.isAcknowledged
+                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                    : 'bg-[#6A47DE] text-white hover:bg-[#5532C8] shadow-lg shadow-[#6A47DE]/20 disabled:opacity-60'
+                }`}
               >
-                Mark as Read
+                {selectedNotice.isAcknowledged
+                  ? 'Read'
+                  : acknowledging
+                    ? 'Marking…'
+                    : 'Mark as Read'}
               </button>
             </div>
           </div>

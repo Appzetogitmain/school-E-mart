@@ -10,7 +10,6 @@ import {
   FileText,
   Download,
   BookOpen,
-  Bell,
   Users,
   Check,
   Bookmark,
@@ -29,7 +28,6 @@ import {
 } from '../../../utils/fileUpload';
 
 const ParentHomeworkDetails = ({ homework, childInfo, onClose, onSubmitted }) => {
-  const [reminderSet, setReminderSet] = useState(false);
   const [error, setError] = useState('');
 
   const [uploadedFiles, setUploadedFiles] = useState([]);
@@ -53,13 +51,6 @@ const ParentHomeworkDetails = ({ homework, childInfo, onClose, onSubmitted }) =>
       : isSubmitted
         ? 'Submitted'
         : 'Not Submitted';
-
-  const handleSetReminder = () => {
-    setReminderSet(true);
-    setTimeout(() => {
-      alert('Reminder Set: You will be notified 1 day before the due date.');
-    }, 400);
-  };
 
   // Upload Handlers
   const handleFileChange = (e) => {

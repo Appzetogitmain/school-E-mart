@@ -136,7 +136,7 @@ const SchoolCartPage = () => {
       </div>
 
       {/* Sticky Bottom Actions */}
-      <div className="fixed bottom-20 left-0 right-0 p-6 bg-white/80 backdrop-blur-xl border-t border-gray-100 z-40">
+      <div className="fixed bottom-20 left-0 right-0 p-6 bg-white/80 backdrop-blur-xl border-t border-gray-100 z-40 max-w-md mx-auto">
         <button 
           onClick={() => navigate('/school/checkout')}
           className="w-full py-4 bg-primary text-white rounded-2xl text-sm font-black shadow-lg shadow-primary/20 active:scale-95 transition-all flex items-center justify-center gap-3"

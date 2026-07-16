@@ -210,7 +210,7 @@ const SchoolEditProfilePage = () => {
         <div className="w-10 h-10"></div>
       </div>
 
-      <div className="pt-24 px-6 space-y-8 overflow-y-auto">
+      <div className="pt-24 px-6 space-y-8 overflow-y-auto pb-48">
         {loadError && (
           <div className="px-4 py-3 bg-red-50 border border-red-100 rounded-2xl text-xs font-bold text-red-600">
             {loadError}
@@ -265,7 +265,7 @@ const SchoolEditProfilePage = () => {
         )}
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 p-6 bg-white/80 backdrop-blur-xl border-t border-gray-100 z-50">
+      <div className="fixed bottom-[72px] left-0 right-0 p-6 bg-white/80 backdrop-blur-xl border-t border-gray-100 z-50 max-w-md mx-auto">
         <button onClick={handleSave} disabled={loading} className="w-full py-4 bg-primary text-white rounded-2xl text-sm font-black shadow-lg shadow-primary/20 active:scale-95 transition-all flex items-center justify-center gap-3">
           {loading ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> : <>Save Changes <ShieldCheck size={18} /></>}
         </button>

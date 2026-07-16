@@ -146,7 +146,7 @@ const SchoolCheckoutPage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50/50 flex flex-col font-outfit pb-32">
+    <div className="min-h-screen bg-gray-50/50 flex flex-col font-outfit pb-48">
       <div className="bg-white px-6 pt-6 pb-4 flex items-center justify-center relative border-b border-gray-100 sticky top-0 z-50">
         <button
           onClick={() => navigate(-1)}
@@ -267,7 +267,7 @@ const SchoolCheckoutPage = () => {
         </div>
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 p-6 bg-white border-t border-gray-100 z-[60] flex flex-col gap-3 shadow-[0_-8px_30px_rgb(0,0,0,0.04)]">
+      <div className="fixed bottom-[72px] left-0 right-0 p-6 bg-white border-t border-gray-100 z-[60] flex flex-col gap-3 shadow-[0_-8px_30px_rgb(0,0,0,0.04)] max-w-md mx-auto">
         {orderError && <p className="text-sm text-red-500 text-center">{orderError}</p>}
         {summaryError && <p className="text-sm text-amber-600 text-center">{summaryError}</p>}
         <div className="flex items-center justify-between gap-4">

@@ -5,7 +5,7 @@ import {
   Trash2, Play, Plus, BookOpen, GraduationCap,
   FolderOpen, ChevronRight, Sparkles, Users
 } from 'lucide-react';
-import { listSchoolRfqs } from '../../../services/rfqApi';
+import { listSchoolRfqs, deleteRfq } from '../../../services/rfqApi';
 import { useSchoolId } from '../../../utils/schoolContext';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 
@@ -65,9 +65,24 @@ const SchoolDraftRequests = () => {
 
   const categories = ['All', 'Uniform Requests', 'Purchase Requests', 'Kits', 'Others'];
 
-  const handleDeleteDraft = () => {
-    // No RFQ delete endpoint yet; drafts are managed from the create-request flow.
-    alert('Deleting drafts is not supported yet. Open the draft to edit it instead.');
+  const [confirmingDelete, setConfirmingDelete] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDeleteDraft = async () => {
+    if (!confirmingDelete) return;
+    setDeleting(true);
+    setError('');
+    try {
+      await deleteRfq(schoolId, confirmingDelete.id);
+      setConfirmingDelete(null);
+      await loadDrafts();
+    } catch (err) {
+      // The server refuses anything past draft, or with quotes already attached
+      setError(getErrorMessage(err, 'Unable to delete this draft'));
+      setConfirmingDelete(null);
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const handleResumeDraft = (d) => {
@@ -82,7 +97,39 @@ const SchoolDraftRequests = () => {
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-50/50 pb-12 font-outfit">
-      
+
+      {confirmingDelete && (
+        <div
+          className="fixed inset-0 z-[110] bg-black/40 flex items-center justify-center p-5"
+          onClick={() => !deleting && setConfirmingDelete(null)}
+        >
+          <div className="bg-white rounded-[2rem] w-full max-w-sm p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-sm font-black text-deep-purple mb-2">Delete this draft?</h3>
+            <p className="text-[11px] font-bold text-gray-500 mb-5">
+              “{confirmingDelete.title || 'Untitled request'}” will be removed. This cannot be undone.
+            </p>
+            <div className="flex gap-2.5">
+              <button
+                type="button"
+                onClick={() => setConfirmingDelete(null)}
+                disabled={deleting}
+                className="flex-1 py-3 rounded-2xl bg-gray-50 border border-gray-100 text-gray-600 text-xs font-black disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteDraft}
+                disabled={deleting}
+                className="flex-1 py-3 rounded-2xl bg-red-600 text-white text-xs font-black hover:bg-red-700 disabled:opacity-60"
+              >
+                {deleting ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Top Banner Header Area */}
       <div className="bg-[#3b2d7d] text-white px-6 py-6 sticky top-0 z-50 rounded-b-[2rem] shadow-lg">
         <div className="flex items-center justify-between">
@@ -243,8 +290,8 @@ const SchoolDraftRequests = () => {
                   <Play size={12} className="fill-[#3b2d7d]" />
                   Resume
                 </button>
-                <button 
-                  onClick={() => handleDeleteDraft(d.id)}
+                <button
+                  onClick={() => setConfirmingDelete(d)}
                   className="flex-1 py-3.5 border-2 border-red-500 text-red-500 hover:bg-red-50 active:scale-95 rounded-2xl text-xs font-black flex items-center justify-center gap-1.5 transition-all uppercase bg-white shadow-sm"
                 >
                   <Trash2 size={12} />

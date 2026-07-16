@@ -80,6 +80,7 @@ const SchoolCheckoutPage = React.lazy(() => import('../app/features/school/Schoo
 const SchoolKitDetailsPage = React.lazy(() => import('../app/features/school/SchoolKitDetailsPage'));
 const SchoolSendNotice = React.lazy(() => import('../app/features/school/SchoolSendNotice'));
 const SchoolCreateEvent = React.lazy(() => import('../app/features/school/SchoolCreateEvent'));
+const SchoolEventsPage = React.lazy(() => import('../app/features/school/SchoolEventsPage'));
 const SchoolCreateKit = React.lazy(() => import('../app/features/school/SchoolCreateKit'));
 const SchoolCreateRequest = React.lazy(() => import('../app/features/school/SchoolCreateRequest'));
 const SchoolDraftRequests = React.lazy(() => import('../app/features/school/SchoolDraftRequests'));
@@ -259,6 +260,7 @@ const AppRoutes = () => {
 
           {/* Public — browsing allowed without login (skip-login flow) */}
           <Route path="login" element={<AppAuthPage />} />
+          <Route path="profile-setup" element={<ProfileSetupPage />} />
           <Route path="home" element={<ParentHome />} />
           <Route path="categories" element={<AppCategoryPage />} />
           <Route path="category/:categoryId" element={<SubcategoryPage />} />
@@ -309,6 +311,7 @@ const AppRoutes = () => {
             <Route path="teacher-assignments" element={<SchoolTeacherAssignments />} />
             <Route path="send-notice" element={<SchoolSendNotice />} />
             <Route path="create-event" element={<SchoolCreateEvent />} />
+            <Route path="events" element={<SchoolEventsPage />} />
             <Route path="create-kit" element={<SchoolCreateKit />} />
             <Route path="create-request" element={<SchoolCreateRequest />} />
             <Route path="draft-requests" element={<SchoolDraftRequests />} />
