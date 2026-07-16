@@ -71,11 +71,27 @@ const buildEnv = () => {
   OTP_RESEND_COOLDOWN_MS: Number(process.env.OTP_RESEND_COOLDOWN_MS) || 60_000,
   OTP_MAX_PER_WINDOW: Number(process.env.OTP_MAX_PER_WINDOW) || 5,
   OTP_WINDOW_MS: Number(process.env.OTP_WINDOW_MS) || 15 * 60_000,
-  USE_MOCK_OTP:
-    process.env.USE_MOCK_OTP !== undefined
-      ? process.env.USE_MOCK_OTP === 'true'
-      : nodeEnv !== 'production',
-  DEFAULT_OTP: process.env.DEFAULT_OTP || '1234',
+  // OTPs are always randomly generated and always delivered over SMS. There is
+  // deliberately no bypass code: one would be a login-as-anyone hole the moment
+  // NODE_ENV was not production.
+  SMS_PROVIDER: process.env.SMS_PROVIDER || 'smsindiahub',
+  SMS_TIMEOUT_MS: Number(process.env.SMS_TIMEOUT_MS) || 15_000,
+  SMS_ENTITY_NAME: process.env.SMS_ENTITY_NAME || 'School E-Mart',
+  // Must stay byte-identical to the DLT-registered template (id 1007282516644508833)
+  // — operators drop messages whose text does not match, so the missing space
+  // after "Appzeto." and the trailing ".BGADEC" are intentional, not typos.
+  SMS_OTP_TEMPLATE:
+    process.env.SMS_OTP_TEMPLATE ||
+    'Welcome to the ##var## powered by Appzeto.Your OTP for registration is ##var##.BGADEC',
+
+  SMSINDIAHUB_BASE_URL: process.env.SMSINDIAHUB_BASE_URL || 'http://cloud.smsindiahub.in',
+  SMSINDIAHUB_API_KEY: process.env.SMSINDIAHUB_API_KEY || '',
+  SMSINDIAHUB_SENDER_ID: process.env.SMSINDIAHUB_SENDER_ID || '',
+  SMSINDIAHUB_COUNTRY_CODE: process.env.SMSINDIAHUB_COUNTRY_CODE || '91',
+  // gwid 2 is the transactional route; OTPs must never go via the promo route
+  SMSINDIAHUB_GATEWAY_ID: Number(process.env.SMSINDIAHUB_GATEWAY_ID) || 2,
+  SMSINDIAHUB_PE_ID: process.env.SMSINDIAHUB_PE_ID || '',
+  SMSINDIAHUB_TEMPLATE_ID: process.env.SMSINDIAHUB_TEMPLATE_ID || '',
 
   PASSWORD_RESET_EXPIRY_MS: parseDurationMs(process.env.PASSWORD_RESET_EXPIRY || '24h', 24 * 3_600_000),
   EMAIL_VERIFICATION_EXPIRY: process.env.EMAIL_VERIFICATION_EXPIRY || '24h',
@@ -161,8 +177,10 @@ const validateEnv = (config) => {
       }
     });
 
-    if (config.USE_MOCK_OTP) {
-      throw new Error('USE_MOCK_OTP must not be enabled in production');
+    if (!config.SMSINDIAHUB_API_KEY || !config.SMSINDIAHUB_SENDER_ID) {
+      throw new Error(
+        'SMSINDIAHUB_API_KEY and SMSINDIAHUB_SENDER_ID are required in production: without them no OTP can be delivered'
+      );
     }
   }
 };

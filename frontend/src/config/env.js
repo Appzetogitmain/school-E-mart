@@ -3,9 +3,6 @@ export const ENV = {
   BASE_URL: import.meta.env.VITE_BASE_URL || 'http://localhost:5173',
   RAZORPAY_KEY_ID: import.meta.env.VITE_RAZORPAY_KEY_ID || '',
   APP_NAME: 'School E-Mart',
-  USE_MOCK_OTP:
-    import.meta.env.VITE_USE_MOCK_OTP === 'true' || import.meta.env.DEV,
-  DEFAULT_OTP: import.meta.env.VITE_DEFAULT_OTP || '1234',
   FIREBASE_API_KEY: import.meta.env.VITE_FIREBASE_API_KEY || '',
   FIREBASE_AUTH_DOMAIN: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || '',
   FIREBASE_PROJECT_ID: import.meta.env.VITE_FIREBASE_PROJECT_ID || '',

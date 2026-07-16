@@ -75,6 +75,14 @@ class TooManyRequestsError extends AppError {
   }
 }
 
+/** An upstream dependency (SMS gateway, payment provider) failed or refused us. */
+class ServiceUnavailableError extends AppError {
+  constructor(message = 'Service temporarily unavailable', code = 'SERVICE_UNAVAILABLE') {
+    super(message, httpStatus.SERVICE_UNAVAILABLE, code);
+    this.name = 'ServiceUnavailableError';
+  }
+}
+
 class InternalServerError extends AppError {
   constructor(message = 'An unexpected error occurred', code = 'INTERNAL_ERROR') {
     super(message, httpStatus.INTERNAL_SERVER_ERROR, code);
@@ -93,5 +101,6 @@ module.exports = {
   NotFoundError,
   ConflictError,
   TooManyRequestsError,
+  ServiceUnavailableError,
   InternalServerError,
 };

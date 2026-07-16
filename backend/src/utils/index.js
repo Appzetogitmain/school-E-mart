@@ -24,23 +24,7 @@ const hashOtp = (otp, phone, purpose) =>
 
 const generateSecureToken = (bytes = 32) => crypto.randomHex(bytes);
 
-const resolveMockOtp = (length = 4) => {
-  const base = String(env.DEFAULT_OTP || '1234');
-  if (base.length >= length) return base.slice(0, length);
-  return base.padEnd(length, '0');
-};
-
-const isMockOtp = (otp, length = 4) => {
-  if (!env.USE_MOCK_OTP) return false;
-  const normalized = String(otp);
-  if (normalized === env.DEFAULT_OTP) return true;
-  return normalized === resolveMockOtp(length);
-};
-
 const generateOtp = (length = 4) => {
-  if (env.USE_MOCK_OTP) {
-    return resolveMockOtp(length);
-  }
   const max = 10 ** length;
   const num = require('crypto').randomInt(0, max);
   return String(num).padStart(length, '0');
@@ -63,8 +47,6 @@ module.exports = {
   hashOtp,
   generateSecureToken,
   generateOtp,
-  resolveMockOtp,
-  isMockOtp,
   normalizePhone,
   normalizeEmail,
 };
