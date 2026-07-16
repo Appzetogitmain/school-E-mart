@@ -238,6 +238,7 @@ describe('homework flow: assign -> submit -> grade -> return', () => {
   });
 
   test('publishing homework notifies the parents of that section only', async () => {
+    await Notification.deleteMany({});
     // The parent of the 5-B student must not be told about 5-A homework.
     const otherParentUserId = new mongoose.Types.ObjectId();
     await ChildProfile.create({

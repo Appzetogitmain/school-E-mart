@@ -51,12 +51,18 @@ userSchema.plugin(softDeletePlugin);
 
 // Indexes
 userSchema.index({ refId: 1 }, { unique: true });
+// Scoped to live accounts only. A soft-deleted user keeps its email, and
+// covering those rows made the index disagree with findEmailOwner (which skips
+// them): deleting a teacher then reusing its address was legal in the app but
+// unindexable, so the build failed and the constraint silently never existed.
 userSchema.index(
-  { email: 1 }, 
-  { 
-    unique: true, 
-    sparse: true,
-    partialFilterExpression: { email: { $type: 'string' } }
+  { email: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      email: { $type: 'string' },
+      'softDelete.isDeleted': false,
+    },
   }
 );
 userSchema.index({ phone: 1 }, { unique: true, sparse: true });
@@ -65,5 +71,26 @@ userSchema.index({ tenantSchoolId: 1, role: 1 });
 userSchema.index({ name: 'text', email: 'text', phone: 'text' });
 // Soft delete compound index
 userSchema.index({ 'softDelete.isDeleted': 1, 'audit.updatedAt': -1 });
+
+/**
+ * An email address identifies exactly one account, across every role — a parent
+ * and a teacher must never share one. The unique index above is the backstop,
+ * but it cannot report *which* account holds the address and it is not built on
+ * collections that already contain duplicates, so every write path that accepts
+ * an email calls this first.
+ *
+ * Pass the id of the account being edited as excludeUserId, otherwise saving a
+ * record without changing its email would collide with itself.
+ */
+userSchema.statics.findEmailOwner = function findEmailOwner(email, { excludeUserId, session } = {}) {
+  if (!email) return null;
+  const filter = {
+    email: String(email).trim().toLowerCase(),
+    'softDelete.isDeleted': { $ne: true },
+  };
+  if (excludeUserId) filter._id = { $ne: excludeUserId };
+  const query = this.findOne(filter).select('name role email');
+  return session ? query.session(session) : query;
+};
 
 module.exports = mongoose.model('User', userSchema);

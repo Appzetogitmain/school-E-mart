@@ -3,27 +3,97 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Check, ShoppingCart, 
   ShieldCheck, Package, Truck,
-  Plus, Building2, Loader2
+  Plus, Building2, Loader2, AlertCircle
 } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
 import AuthPrompt from '../../components/AuthPrompt';
+import { getKit } from '../../../services/schoolApi';
+import { useSchoolId } from '../../../utils/schoolContext';
+import { getErrorMessage } from '../../../utils/apiHelpers';
 
 const SchoolKitDetailsPage = () => {
   const { kitId } = useParams();
   const navigate = useNavigate();
   const { addToCart } = useCart();
+  const schoolId = useSchoolId();
+  
   const [isAuthPromptOpen, setIsAuthPromptOpen] = useState(false);
   const isGuest = !localStorage.getItem('childInfo');
   const [loading, setLoading] = useState(true);
   const [currentKitData, setCurrentKitData] = useState(null);
   const [selectedItemIds, setSelectedItemIds] = useState([]);
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    setLoading(true);
-    setCurrentKitData(null);
-    const timer = setTimeout(() => setLoading(false), 300);
-    return () => clearTimeout(timer);
-  }, [kitId]);
+    let cancelled = false;
+    const fetchKitDetails = async () => {
+      if (!schoolId || !kitId) {
+        setLoading(false);
+        return;
+      }
+      setLoading(true);
+      setError('');
+      try {
+        const kitData = await getKit(schoolId, kitId);
+        if (cancelled) return;
+
+        // Map the backend Kit schema to what the UI expects
+        const mappedItems = (kitData.items || []).map((item) => {
+          const prod = item.productId || {};
+          const imageObj = prod.images?.[0] || {};
+          const imageUrl = imageObj.storageKey || imageObj.url || '';
+          const imagePath = imageUrl ? imageUrl : `https://ui-avatars.com/api/?background=3b2d7d&color=fff&bold=true&name=${encodeURIComponent(prod.name || 'Component')}`;
+          return {
+            id: prod._id || item._id,
+            name: prod.name || 'Bulk Component',
+            image: imagePath,
+            type: prod.publishStatus || 'Active',
+            price: (prod.pricePaise || 0) / 100,
+            qty: item.qty || 1,
+          };
+        });
+
+        const mappedAddons = (kitData.addOns || []).map((item) => {
+          const prod = item.productId || {};
+          const imageObj = prod.images?.[0] || {};
+          const imageUrl = imageObj.storageKey || imageObj.url || '';
+          const imagePath = imageUrl ? imageUrl : `https://ui-avatars.com/api/?background=3b2d7d&color=fff&bold=true&name=${encodeURIComponent(prod.name || 'Add-on')}`;
+          return {
+            id: prod._id || item._id,
+            name: prod.name || 'Add-on Item',
+            image: imagePath,
+            type: prod.publishStatus || 'Active',
+            price: (prod.pricePaise || 0) / 100,
+            qty: item.qty || 1,
+          };
+        });
+
+        const kitImageUrl = kitData.imageId?.storageKey || kitData.imageUrl || `https://ui-avatars.com/api/?background=3b2d7d&color=fff&bold=true&name=${encodeURIComponent(kitData.name || 'Kit')}`;
+
+        setCurrentKitData({
+          id: kitData._id,
+          name: kitData.name,
+          description: kitData.description || '',
+          image: kitImageUrl,
+          items: mappedItems,
+          addons: mappedAddons,
+          price: (kitData.pricePaise || 0) / 100,
+        });
+        setSelectedItemIds(mappedItems.map((item) => item.id));
+      } catch (err) {
+        if (!cancelled) {
+          setError(getErrorMessage(err, 'Unable to load kit details'));
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    fetchKitDetails();
+    return () => {
+      cancelled = true;
+    };
+  }, [schoolId, kitId]);
 
   const toggleItem = (id) => {
     setSelectedItemIds(prev => 
@@ -66,14 +136,25 @@ const SchoolKitDetailsPage = () => {
     };
   }, [selectedItemIds, currentKitData]);
 
-  const handleAddToCart = () => {
+  const handleAddToCart = async () => {
     if (!currentKitData) return;
     if (isGuest) {
       setIsAuthPromptOpen(true);
       return;
     }
     const selectedItems = currentKitData.items.filter(item => selectedItemIds.includes(item.id));
-    // Implementation note: In a real flow, we'd ensure all selected items are in cart
+    
+    // Add all selected items to cart
+    for (const item of selectedItems) {
+      await addToCart({
+        id: item.id,
+        name: item.name,
+        price: item.price,
+        image: item.image,
+        type: item.type,
+      });
+    }
+    
     navigate('/school/cart');
   };
 
@@ -82,6 +163,19 @@ const SchoolKitDetailsPage = () => {
       <div className="min-h-screen bg-[#F8F7FF] flex flex-col items-center justify-center font-outfit">
         <Loader2 size={32} className="animate-spin text-primary mb-3" />
         <p className="text-sm text-gray-400">Loading kit details…</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-[#F8F7FF] flex flex-col items-center justify-center px-6 font-outfit text-center">
+        <AlertCircle size={48} className="text-red-500 mb-4" />
+        <h2 className="text-lg font-black text-deep-purple mb-2">Error</h2>
+        <p className="text-sm text-gray-400 mb-6">{error}</p>
+        <button onClick={() => navigate(-1)} className="px-6 py-3 bg-primary text-white rounded-2xl text-sm font-bold">
+          Go Back
+        </button>
       </div>
     );
   }

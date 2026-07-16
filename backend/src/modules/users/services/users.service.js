@@ -83,6 +83,9 @@ const usersService = {
     } else if (user.role === 'admin') {
       const AdminProfile = require('../../../database/models/AdminProfile');
       profile = await AdminProfile.findOne({ userId, 'softDelete.isDeleted': { $ne: true } }).lean();
+    } else if (user.role === 'school') {
+      const SchoolStaffProfile = require('../../../database/models/SchoolStaffProfile');
+      profile = await SchoolStaffProfile.findOne({ userId, 'softDelete.isDeleted': { $ne: true } }).lean();
     }
 
     return {
@@ -117,6 +120,51 @@ const usersService = {
       const existing = await User.findOne({ phone: normalized, _id: { $ne: userId }, 'softDelete.isDeleted': { $ne: true } });
       if (existing) throw new BadRequestError('Phone number already in use', null, 'PHONE_EXISTS');
       user.phone = normalized;
+    }
+
+    if (user.role === 'school') {
+      const SchoolStaffProfile = require('../../../database/models/SchoolStaffProfile');
+      const staffProfile = await SchoolStaffProfile.findOne({ userId, 'softDelete.isDeleted': { $ne: true } });
+
+      if (payload.name) {
+        user.name = payload.name;
+      }
+
+      let savedPhotoUrl = null;
+      if (payload.photo) {
+        savedPhotoUrl = saveBase64Image(payload.photo, 'school-staff-avatar');
+        if (savedPhotoUrl && staffProfile) {
+          staffProfile.avatarUrl = savedPhotoUrl;
+        }
+      }
+
+      if (staffProfile) {
+        if (payload.altPhone !== undefined) {
+          staffProfile.altPhone = payload.altPhone ? normalizePhone(payload.altPhone) : undefined;
+        }
+        await staffProfile.save();
+      }
+
+      if (user.tenantSchoolId) {
+        const school = await School.findOne({ _id: user.tenantSchoolId, 'softDelete.isDeleted': { $ne: true } });
+        if (school) {
+          if (payload.name) {
+            school.principalName = payload.name;
+          }
+          if (payload.email !== undefined) {
+            school.adminEmail = payload.email || undefined;
+          }
+          if (payload.address !== undefined || payload.pinCode !== undefined || payload.city !== undefined || payload.state !== undefined || payload.country !== undefined) {
+            school.address = school.address || {};
+            if (payload.address !== undefined) school.address.line1 = payload.address || '';
+            if (payload.pinCode !== undefined) school.address.pinCode = payload.pinCode || '';
+            if (payload.city !== undefined) school.address.city = payload.city || '';
+            if (payload.state !== undefined) school.address.state = payload.state || '';
+            if (payload.country !== undefined) school.address.country = payload.country || '';
+          }
+          await school.save();
+        }
+      }
     }
 
     if (user.role === 'parent') {

@@ -19,9 +19,12 @@ const teacherService = {
     if (existingPhone) {
       throw new ConflictError('A user with this phone number already exists', 'PHONE_EXISTS');
     }
-    const existingEmail = await User.findOne({ email: payload.email.toLowerCase(), 'softDelete.isDeleted': { $ne: true } });
-    if (existingEmail) {
-      throw new ConflictError('A user with this email address already exists', 'EMAIL_EXISTS');
+    const emailOwner = await User.findEmailOwner(payload.email);
+    if (emailOwner) {
+      throw new ConflictError(
+        `That email address already belongs to another account (${emailOwner.name}, ${emailOwner.role})`,
+        'EMAIL_EXISTS'
+      );
     }
 
     const result = await withTransaction(async (session) => {

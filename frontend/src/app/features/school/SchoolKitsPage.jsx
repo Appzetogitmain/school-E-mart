@@ -12,6 +12,13 @@ import { getErrorMessage } from '../../../utils/apiHelpers';
 const mapKit = (k) => {
   const imageUrl = k.imageId?.storageKey || k.imageUrl || k.image?.url;
   const avatar = imageUrl ? imageUrl : `https://ui-avatars.com/api/?background=3b2d7d&color=fff&bold=true&name=${encodeURIComponent(k.name || 'Kit')}`;
+  const itemsList = (k.items || []).map((item) => {
+    const prod = item.productId || {};
+    return {
+      name: prod.name || 'Bulk Component',
+      qty: item.qty || 1,
+    };
+  });
   return {
     id: k._id,
     name: k.name,
@@ -20,6 +27,7 @@ const mapKit = (k) => {
     tag: k.category || 'Kit',
     classes: k.classGrade || 'All classes',
     itemsCount: (k.items || []).length,
+    itemsList,
     price: ((k.pricePaise || 0) / 100).toFixed(0),
     status: k.status === 'active' ? 'Active' : 'Draft',
     updatedDate: k.audit?.updatedAt

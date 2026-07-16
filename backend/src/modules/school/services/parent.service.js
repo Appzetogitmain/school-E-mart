@@ -1,4 +1,4 @@
-const { NotFoundError, BadRequestError } = require('../../../common/errors');
+const { NotFoundError, BadRequestError, ConflictError } = require('../../../common/errors');
 const { withTransaction } = require('../../../database');
 const User = require('../../../database/models/User');
 const ParentProfile = require('../../../database/models/ParentProfile');
@@ -108,11 +108,33 @@ const parentService = {
                       await ChildProfile.exists({ parentUserId: user._id, schoolId, 'softDelete.isDeleted': { $ne: true } });
     if (!hasAccess) throw new NotFoundError('Parent not found under this school', 'PARENT_NOT_FOUND');
 
+    if (payload.email) {
+      const owner = await User.findEmailOwner(payload.email, { excludeUserId: user._id });
+      if (owner) {
+        throw new ConflictError(
+          `That email address already belongs to another account (${owner.name}, ${owner.role})`,
+          'EMAIL_EXISTS'
+        );
+      }
+    }
+
     if (payload.name) user.name = payload.name;
     if (payload.email !== undefined) user.email = payload.email || undefined;
     if (payload.phone) user.phone = normalizePhone(payload.phone);
 
-    await user.save();
+    try {
+      await user.save();
+    } catch (error) {
+      // Backstop for a racing writer that slipped past the check above
+      if (error?.code === 11000) {
+        const field = Object.keys(error.keyPattern || {})[0] === 'phone' ? 'phone number' : 'email address';
+        throw new ConflictError(
+          `That ${field} is already used by another account`,
+          field === 'phone number' ? 'PHONE_EXISTS' : 'EMAIL_EXISTS'
+        );
+      }
+      throw error;
+    }
     return { ...profile.toObject(), user: user.toObject() };
   },
 
@@ -136,13 +158,22 @@ const parentService = {
 
     const school = await School.findById(schoolId).select('name').lean();
 
-    await emailService.sendWelcomeEmail({
+    const result = await emailService.sendWelcomeEmail({
       to: user.email,
       name: user.name,
       role: 'parent',
       mobile: user.phone,
       schoolName: school?.name || '',
     });
+
+    // A stubbed send (no SMTP configured) must not be reported to the school as sent
+    if (result?.delivered === false) {
+      throw new BadRequestError(
+        'Email could not be sent: this server has no SMTP credentials configured',
+        null,
+        'EMAIL_NOT_CONFIGURED'
+      );
+    }
 
     return { sent: true, email: user.email, name: user.name };
   },

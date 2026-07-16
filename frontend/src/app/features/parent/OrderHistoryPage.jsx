@@ -210,7 +210,7 @@ const OrderHistoryPage = () => {
                 <p className="text-[10px] text-gray-400 max-w-[180px]">Our support team is here to help you 24/7 with any queries.</p>
               </div>
               <button
-                onClick={() => navigate('/user/help')}
+                onClick={() => navigate('/user/contact')}
                 className="w-full py-3.5 bg-deep-purple text-white rounded-2xl text-[11px] font-bold shadow-lg active:scale-95 transition-all"
               >
                 Get Help

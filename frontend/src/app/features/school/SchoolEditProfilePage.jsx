@@ -6,6 +6,7 @@ import {
   ShieldCheck, Check, AlertCircle, ImageIcon, Building2
 } from 'lucide-react';
 import { getSchool, updateSchool } from '../../../services/schoolApi';
+import { getMyProfile, updateMyProfile } from '../../../services/parentApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 import { useSchoolId } from '../../../utils/schoolContext';
 
@@ -36,38 +37,31 @@ const SchoolEditProfilePage = () => {
     const saved = localStorage.getItem('childInfo');
     const parsed = saved ? JSON.parse(saved) : {};
 
-    if (!schoolId) {
-      setFormData({
-        fullName: parsed.name || 'School Admin',
-        email: parsed.email || '',
-        phone: parsed.phone || '',
-        altPhone: parsed.altPhone || '',
-        address: parsed.address || '',
-        pinCode: parsed.pinCode || '',
-        city: parsed.city || '',
-        state: parsed.state || '',
-        country: parsed.country || 'India',
-        photo: parsed.photo || '',
-      });
-      setInitialLoading(false);
-      return;
-    }
-
     setInitialLoading(true);
     setLoadError('');
     try {
-      const school = await getSchool(schoolId);
+      // Load user profile details first
+      const profileData = await getMyProfile();
+      const user = profileData?.user;
+      const profile = profileData?.profile;
+
+      // Load school details
+      let school = null;
+      if (schoolId) {
+        school = await getSchool(schoolId);
+      }
+
       setFormData({
-        fullName: school?.principalName || parsed.name || 'School Admin',
-        email: school?.adminEmail || parsed.email || '',
-        phone: parsed.phone || '',
-        altPhone: parsed.altPhone || '',
+        fullName: user?.name || school?.principalName || parsed.name || 'School Admin',
+        email: user?.email || school?.adminEmail || parsed.email || '',
+        phone: user?.phone || parsed.phone || '',
+        altPhone: profile?.altPhone || parsed.altPhone || '',
         address: school?.address?.line1 || parsed.address || '',
         pinCode: school?.address?.pinCode || parsed.pinCode || '',
         city: school?.address?.city || parsed.city || '',
         state: school?.address?.state || parsed.state || '',
         country: school?.address?.country || parsed.country || 'India',
-        photo: parsed.photo || '',
+        photo: profile?.avatarUrl || parsed.photo || '',
       });
     } catch (err) {
       setLoadError(getErrorMessage(err, 'Unable to load school profile'));
@@ -136,6 +130,21 @@ const SchoolEditProfilePage = () => {
     };
 
     try {
+      // 1. Update backend user profile credentials, phone, altPhone & photo avatar
+      await updateMyProfile({
+        name: formData.fullName,
+        email: formData.email,
+        phone: formData.phone,
+        altPhone: formData.altPhone,
+        address: formData.address,
+        pinCode: formData.pinCode,
+        city: formData.city,
+        state: formData.state,
+        country: formData.country,
+        photo: formData.photo,
+      });
+
+      // 2. Sync with School document directly
       if (schoolId) {
         await updateSchool(schoolId, {
           principalName: formData.fullName,
@@ -237,6 +246,7 @@ const SchoolEditProfilePage = () => {
           <InputField label="Contact Person" icon={User} field="fullName" placeholder="Enter name" />
           <InputField label="School Email" icon={Mail} field="email" type="email" placeholder="admin@school.com" />
           <InputField label="Direct Phone" icon={Phone} field="phone" placeholder="+91 XXXXX XXXXX" />
+          <InputField label="Alternate Phone" icon={Phone} field="altPhone" placeholder="+91 XXXXX XXXXX" />
         </div>
 
         <div className="space-y-5 pb-10">
@@ -245,6 +255,10 @@ const SchoolEditProfilePage = () => {
           <div className="grid grid-cols-2 gap-4">
             <InputField label="Pin Code" icon={MapPin} field="pinCode" placeholder="XXXXXX" />
             <InputField label="City" icon={Globe} field="city" placeholder="City" />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <InputField label="State" icon={Globe} field="state" placeholder="State" />
+            <InputField label="Country" icon={Globe} field="country" placeholder="Country" />
           </div>
         </div>
         </>

@@ -47,13 +47,13 @@ const linkParentByPhone = async (schoolId, student, payload, session) => {
   }
 
   if (normalizedEmail) {
-    const emailOwner = await User.findOne({
-      email: normalizedEmail,
-      'softDelete.isDeleted': { $ne: true },
-    }).session(session);
-    if (emailOwner && (!existingUser || !emailOwner._id.equals(existingUser._id))) {
+    const emailOwner = await User.findEmailOwner(normalizedEmail, {
+      excludeUserId: existingUser?._id,
+      session,
+    });
+    if (emailOwner) {
       throw new ConflictError(
-        'A user with this email address already exists',
+        `That email address already belongs to another account (${emailOwner.name}, ${emailOwner.role})`,
         'EMAIL_EXISTS'
       );
     }

@@ -199,7 +199,7 @@ const MySchoolPage = () => {
               <section>
                 <SectionHeader
                   title="Recommended Kits"
-                  onViewAll={() => navigate('/user/category')}
+                  onViewAll={() => navigate('/user/products')}
                   viewAllLabel="All Kits"
                   className="px-0"
                 />

@@ -2,7 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, HelpCircle, Calendar,
-  Save, CheckCircle2, AlertCircle, GraduationCap, Loader2, Users
+  Save, CheckCircle2, AlertCircle, GraduationCap, Loader2, Users,
+  Edit2, Trash2
 } from 'lucide-react';
 import {
   listClasses,
@@ -10,6 +11,10 @@ import {
   createSection,
   getSchool,
   updateSchool,
+  updateClass,
+  deleteClass,
+  updateSection,
+  deleteSection,
 } from '../../../services/schoolApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 import { flattenClassesForList } from '../../../utils/mappers/schoolClassMapper';
@@ -23,6 +28,13 @@ const SchoolAddClass = () => {
   const [academicYear, setAcademicYear] = useState('2025 - 2026');
   const [savedYear, setSavedYear] = useState('');
   const [section, setSection] = useState('');
+
+  const [activeModal, setActiveModal] = useState(null); // 'edit' | 'delete' | null
+  const [selectedClassItem, setSelectedClassItem] = useState(null);
+  const [editType, setEditType] = useState('class'); // 'class' | 'section'
+  const [editValue, setEditValue] = useState('');
+  const [editError, setEditError] = useState('');
+  const [deleteType, setDeleteType] = useState('class'); // 'class' | 'section'
 
   const [showToast, setShowToast] = useState(false);
   const [errors, setErrors] = useState({});
@@ -133,6 +145,76 @@ const SchoolAddClass = () => {
       setTimeout(() => setShowToast(false), 2000);
     } catch (err) {
       setError(getErrorMessage(err, 'Unable to save class'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleStartEdit = (item) => {
+    setSelectedClassItem(item);
+    setEditType('class');
+    setEditValue(item.className);
+    setEditError('');
+    setActiveModal('edit');
+  };
+
+  const handleStartDelete = (item) => {
+    setSelectedClassItem(item);
+    setDeleteType(item.section === '-' ? 'class' : 'section');
+    setActiveModal('delete');
+  };
+
+  const handleSaveEdit = async (e) => {
+    e.preventDefault();
+    if (!editValue.trim() || !schoolId || !selectedClassItem) return;
+
+    setSaving(true);
+    setEditError('');
+    try {
+      const newValue = editValue.trim();
+      if (editType === 'class') {
+        await updateClass(schoolId, selectedClassItem.className, { newClassGrade: newValue });
+      } else {
+        await updateSection(
+          schoolId,
+          selectedClassItem.className,
+          selectedClassItem.section,
+          newValue.toUpperCase()
+        );
+      }
+      await loadData();
+      setActiveModal(null);
+      setSelectedClassItem(null);
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 2000);
+    } catch (err) {
+      setEditError(getErrorMessage(err, 'Unable to update class/section'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!schoolId || !selectedClassItem) return;
+
+    setSaving(true);
+    try {
+      if (deleteType === 'class') {
+        await deleteClass(schoolId, selectedClassItem.className);
+      } else {
+        await deleteSection(
+          schoolId,
+          selectedClassItem.className,
+          selectedClassItem.section
+        );
+      }
+      await loadData();
+      setActiveModal(null);
+      setSelectedClassItem(null);
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 2000);
+    } catch (err) {
+      alert(getErrorMessage(err, 'Unable to delete class/section'));
     } finally {
       setSaving(false);
     }
@@ -313,19 +395,20 @@ const SchoolAddClass = () => {
                     <th className="px-4 py-3 text-[10px] font-black uppercase tracking-wider text-gray-400">Year</th>
                     <th className="px-4 py-3 text-[10px] font-black uppercase tracking-wider text-gray-400">Section</th>
                     <th className="px-4 py-3 text-[10px] font-black uppercase tracking-wider text-gray-400">Teacher</th>
+                    <th className="px-4 py-3 text-[10px] font-black uppercase tracking-wider text-gray-400 text-right pr-6">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {loading ? (
                     <tr>
-                      <td colSpan={4} className="px-4 py-8 text-center text-xs font-bold text-gray-400">
+                      <td colSpan={5} className="px-4 py-8 text-center text-xs font-bold text-gray-400">
                         <Loader2 size={20} className="animate-spin inline-block mr-2" />
                         Loading classes…
                       </td>
                     </tr>
                   ) : classesList.length === 0 ? (
                     <tr>
-                      <td colSpan={4} className="px-4 py-8 text-center text-xs font-bold text-gray-400">
+                      <td colSpan={5} className="px-4 py-8 text-center text-xs font-bold text-gray-400">
                         No classes recorded yet
                       </td>
                     </tr>
@@ -336,6 +419,24 @@ const SchoolAddClass = () => {
                         <td className="px-4 py-3.5 text-xs font-medium text-gray-400">{cls.academicYear}</td>
                         <td className="px-4 py-3.5 text-xs font-black text-deep-purple uppercase">{cls.section}</td>
                         <td className="px-4 py-3.5 text-xs font-bold text-primary">{cls.classTeacher}</td>
+                        <td className="px-4 py-3.5 text-xs font-bold text-right pr-6 space-x-2">
+                          <button
+                            type="button"
+                            onClick={() => handleStartEdit(cls)}
+                            className="inline-flex items-center justify-center w-8 h-8 rounded-xl bg-purple-50 text-primary hover:bg-primary hover:text-white transition-colors"
+                            title="Edit Class/Section"
+                          >
+                            <Edit2 size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleStartDelete(cls)}
+                            className="inline-flex items-center justify-center w-8 h-8 rounded-xl bg-red-50 text-red-500 hover:bg-red-500 hover:text-white transition-colors"
+                            title="Delete Class/Section"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </td>
                       </tr>
                     ))
                   )}
@@ -345,6 +446,139 @@ const SchoolAddClass = () => {
           </div>
         </div>
       </div>
+
+      {/* Edit Modal */}
+      {activeModal === 'edit' && selectedClassItem && (
+        <div className="fixed inset-0 z-50 bg-[#0B1528]/40 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-sm rounded-[2rem] p-6 shadow-2xl border border-gray-100 flex flex-col gap-5 animate-in zoom-in-95 duration-200">
+            <div>
+              <h3 className="text-base font-black text-deep-purple">Edit Class/Section</h3>
+              <p className="text-[10px] text-gray-400 font-bold mt-1">Update name details for this record</p>
+            </div>
+
+            {selectedClassItem.section !== '-' && (
+              <div className="flex gap-2 p-1 bg-gray-50 rounded-2xl">
+                <button
+                  type="button"
+                  onClick={() => { setEditType('class'); setEditValue(selectedClassItem.className); }}
+                  className={`flex-1 py-2 text-[10px] font-black rounded-xl transition-all uppercase tracking-wider ${editType === 'class' ? 'bg-white text-primary shadow-sm' : 'text-gray-400 hover:text-gray-700'}`}
+                >
+                  Class Grade
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setEditType('section'); setEditValue(selectedClassItem.section); }}
+                  className={`flex-1 py-2 text-[10px] font-black rounded-xl transition-all uppercase tracking-wider ${editType === 'section' ? 'bg-white text-primary shadow-sm' : 'text-gray-400 hover:text-gray-700'}`}
+                >
+                  Section
+                </button>
+              </div>
+            )}
+
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">
+                {editType === 'class' ? 'Class Name' : 'Section Name'}
+              </label>
+              <input
+                type="text"
+                value={editValue}
+                onChange={(e) => setEditValue(e.target.value)}
+                placeholder={editType === 'class' ? 'e.g. Class 2' : 'e.g. A'}
+                className="w-full px-4 py-3 bg-gray-50 border-2 border-transparent rounded-2xl text-xs font-bold text-deep-purple outline-none focus:border-primary/10 focus:bg-white transition-all"
+              />
+            </div>
+
+            {editError && (
+              <p className="text-[9px] font-bold text-red-500 flex items-center gap-1 ml-1">
+                <AlertCircle size={10} /> {editError}
+              </p>
+            )}
+
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => { setActiveModal(null); setSelectedClassItem(null); }}
+                className="flex-1 py-3 bg-gray-50 hover:bg-gray-100 text-gray-500 rounded-2xl text-[10px] font-black uppercase tracking-wider transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveEdit}
+                disabled={saving || !editValue.trim()}
+                className="flex-1 py-3 bg-primary hover:bg-[#4a32b3] text-white rounded-2xl text-[10px] font-black uppercase tracking-wider shadow-md shadow-primary/10 transition-all flex items-center justify-center gap-1.5 disabled:opacity-60"
+              >
+                {saving && <Loader2 size={12} className="animate-spin" />}
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Modal */}
+      {activeModal === 'delete' && selectedClassItem && (
+        <div className="fixed inset-0 z-50 bg-[#0B1528]/40 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-sm rounded-[2rem] p-6 shadow-2xl border border-gray-100 flex flex-col gap-5 animate-in zoom-in-95 duration-200">
+            <div>
+              <h3 className="text-base font-black text-[#FF3B30]">Delete Class/Section</h3>
+              <p className="text-[10px] text-gray-400 font-bold mt-1">This operation cannot be reversed</p>
+            </div>
+
+            {selectedClassItem.section !== '-' ? (
+              <div className="space-y-3">
+                <p className="text-xs text-gray-500 leading-normal font-bold">
+                  Choose if you want to delete this specific section or the entire class grade.
+                </p>
+                <div className="flex gap-2 p-1 bg-gray-50 rounded-2xl">
+                  <button
+                    type="button"
+                    onClick={() => setDeleteType('section')}
+                    className={`flex-1 py-2 text-[10px] font-black rounded-xl transition-all uppercase tracking-wider ${deleteType === 'section' ? 'bg-white text-red-500 shadow-sm' : 'text-gray-400 hover:text-gray-700'}`}
+                  >
+                    Delete Section
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDeleteType('class')}
+                    className={`flex-1 py-2 text-[10px] font-black rounded-xl transition-all uppercase tracking-wider ${deleteType === 'class' ? 'bg-white text-red-500 shadow-sm' : 'text-gray-400 hover:text-gray-700'}`}
+                  >
+                    Delete Class
+                  </button>
+                </div>
+                <div className="px-3.5 py-2.5 bg-red-50 rounded-2xl text-[9px] font-bold text-[#FF3B30]">
+                  {deleteType === 'class'
+                    ? `Warning: This will delete "${selectedClassItem.className}" and ALL sections associated with it.`
+                    : `Notice: This will delete section "${selectedClassItem.section}" of "${selectedClassItem.className}".`}
+                </div>
+              </div>
+            ) : (
+              <p className="text-xs text-gray-500 leading-normal font-bold">
+                Are you sure you want to delete the class grade <span className="text-deep-purple font-black">"{selectedClassItem.className}"</span>?
+              </p>
+            )}
+
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => { setActiveModal(null); setSelectedClassItem(null); }}
+                className="flex-1 py-3 bg-gray-50 hover:bg-gray-100 text-gray-500 rounded-2xl text-[10px] font-black uppercase tracking-wider transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteConfirm}
+                disabled={saving}
+                className="flex-1 py-3 bg-[#FF3B30] hover:bg-[#E03126] text-white rounded-2xl text-[10px] font-black uppercase tracking-wider shadow-md shadow-red-500/10 transition-all flex items-center justify-center gap-1.5"
+              >
+                {saving && <Loader2 size={12} className="animate-spin" />}
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

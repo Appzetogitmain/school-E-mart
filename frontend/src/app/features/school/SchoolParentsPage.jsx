@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft, Search, Users, Loader2, GraduationCap, UserPlus, Mail, Send, CheckCircle2
+  ArrowLeft, Search, Users, Loader2, GraduationCap, UserPlus, Mail, Send, CheckCircle2, Pencil, X
 } from 'lucide-react';
 import {
   listParents,
   resendParentWelcome,
   resendParentWelcomeBulk,
+  updateParent,
 } from '../../../services/schoolApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 import { useSchoolId } from '../../../utils/schoolContext';
@@ -70,6 +71,55 @@ const SchoolParentsPage = () => {
     }
   };
 
+  // Correcting contact details: a parent enrolled without an email (or with a
+  // typo'd one) can otherwise never be mailed, and enrollment is the only other
+  // place these fields are set.
+  const [editing, setEditing] = useState(null);
+  const [editForm, setEditForm] = useState({ name: '', email: '', phone: '' });
+  const [editError, setEditError] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const openEdit = (parent) => {
+    setEditing(parent);
+    setEditForm({
+      name: parent.user?.name || '',
+      email: parent.user?.email || '',
+      phone: parent.user?.phone || '',
+    });
+    setEditError('');
+  };
+
+  const handleSaveEdit = async () => {
+    const email = editForm.email.trim();
+    const phone = editForm.phone.trim();
+    if (email && !/\S+@\S+\.\S+/.test(email)) {
+      setEditError('Enter a valid email address');
+      return;
+    }
+    if (phone && !/^[6-9]\d{9}$/.test(phone)) {
+      setEditError('Enter a valid 10-digit Indian mobile number');
+      return;
+    }
+
+    setSaving(true);
+    setEditError('');
+    try {
+      await updateParent(schoolId, editing._id, {
+        name: editForm.name.trim(),
+        email,
+        phone,
+      });
+      setEditing(null);
+      showToast('Parent details updated');
+      await loadParents();
+    } catch (err) {
+      // Surfaces the server's duplicate-email/phone message as-is
+      setEditError(getErrorMessage(err, 'Unable to update this parent'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
   // Filter parents based on search query
   const filteredParents = parents.filter(p => {
     const name = (p.user?.name || '').toLowerCase();
@@ -112,6 +162,69 @@ const SchoolParentsPage = () => {
         <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[100] bg-emerald-600 text-white px-5 py-3 rounded-2xl shadow-2xl flex items-center gap-2.5 animate-in slide-in-from-top-4 duration-300 max-w-[90vw]">
           <CheckCircle2 size={16} strokeWidth={3} className="shrink-0" />
           <span className="text-xs font-black truncate">{toast}</span>
+        </div>
+      )}
+
+      {/* Edit parent contact details */}
+      {editing && (
+        <div
+          className="fixed inset-0 z-[110] bg-black/40 flex items-center justify-center p-5"
+          onClick={() => !saving && setEditing(null)}
+        >
+          <div
+            className="bg-white rounded-[2rem] w-full max-w-sm p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-sm font-black text-deep-purple">Edit parent details</h3>
+              <button
+                type="button"
+                onClick={() => setEditing(null)}
+                disabled={saving}
+                aria-label="Close"
+                className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-200 transition-colors disabled:opacity-60"
+              >
+                <X size={15} />
+              </button>
+            </div>
+
+            <div className="space-y-3.5">
+              {[
+                { key: 'name', label: 'Name', type: 'text', placeholder: 'Parent name' },
+                { key: 'email', label: 'Email address', type: 'email', placeholder: 'parent@example.com' },
+                { key: 'phone', label: 'Login phone number', type: 'tel', placeholder: '10-digit mobile' },
+              ].map((field) => (
+                <div key={field.key}>
+                  <label className="text-[9px] text-gray-400 font-black uppercase tracking-wider block mb-1.5">
+                    {field.label}
+                  </label>
+                  <input
+                    type={field.type}
+                    value={editForm[field.key]}
+                    placeholder={field.placeholder}
+                    onChange={(e) => setEditForm((f) => ({ ...f, [field.key]: e.target.value }))}
+                    className="w-full px-4 py-3 bg-white border border-gray-200 rounded-2xl text-sm font-bold text-deep-purple focus:outline-none focus:border-[#3b2d7d]/50 transition-colors"
+                  />
+                </div>
+              ))}
+
+              {editError && (
+                <p className="text-[10px] font-bold text-red-600 bg-red-50 border border-red-100 rounded-xl px-3 py-2">
+                  {editError}
+                </p>
+              )}
+
+              <button
+                type="button"
+                onClick={handleSaveEdit}
+                disabled={saving}
+                className="w-full py-3 rounded-2xl bg-[#3b2d7d] text-white text-xs font-black inline-flex items-center justify-center gap-2 hover:bg-[#33276b] active:scale-[0.98] transition-all disabled:opacity-60"
+              >
+                {saving && <Loader2 size={14} className="animate-spin" />}
+                {saving ? 'Saving…' : 'Save changes'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -298,26 +411,41 @@ const SchoolParentsPage = () => {
                     </div>
                   </div>
 
-                  {/* Resend account/login email */}
-                  <div className="mb-3">
+                  {/* Resend account/login email, and edit contact details */}
+                  <div className="mb-3 space-y-2">
                     {parent.user?.email ? (
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleResend(parent)}
+                          disabled={sendingId === parent._id || sendingAll}
+                          className="flex-1 py-2.5 rounded-xl border border-[#3b2d7d]/20 bg-[#3b2d7d]/5 text-[#3b2d7d] text-[11px] font-black inline-flex items-center justify-center gap-1.5 hover:bg-[#3b2d7d]/10 active:scale-[0.98] transition-all disabled:opacity-60"
+                        >
+                          {sendingId === parent._id ? (
+                            <Loader2 size={13} className="animate-spin" />
+                          ) : (
+                            <Mail size={13} />
+                          )}
+                          {sendingId === parent._id ? 'Sending…' : 'Send login email'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openEdit(parent)}
+                          aria-label={`Edit ${name}'s contact details`}
+                          className="px-3 py-2.5 rounded-xl border border-gray-200 bg-white text-gray-500 inline-flex items-center justify-center hover:bg-gray-50 hover:text-[#3b2d7d] active:scale-[0.98] transition-all"
+                        >
+                          <Pencil size={13} />
+                        </button>
+                      </div>
+                    ) : (
                       <button
                         type="button"
-                        onClick={() => handleResend(parent)}
-                        disabled={sendingId === parent._id || sendingAll}
-                        className="w-full py-2.5 rounded-xl border border-[#3b2d7d]/20 bg-[#3b2d7d]/5 text-[#3b2d7d] text-[11px] font-black inline-flex items-center justify-center gap-1.5 hover:bg-[#3b2d7d]/10 active:scale-[0.98] transition-all disabled:opacity-60"
+                        onClick={() => openEdit(parent)}
+                        className="w-full py-2.5 rounded-xl border border-amber-200 bg-amber-50 text-amber-700 text-[10px] font-black inline-flex items-center justify-center gap-1.5 hover:bg-amber-100 active:scale-[0.98] transition-all"
                       >
-                        {sendingId === parent._id ? (
-                          <Loader2 size={13} className="animate-spin" />
-                        ) : (
-                          <Mail size={13} />
-                        )}
-                        {sendingId === parent._id ? 'Sending…' : 'Send login email'}
+                        <Pencil size={12} />
+                        No email on record — add one
                       </button>
-                    ) : (
-                      <p className="text-[10px] font-bold text-amber-600 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2 text-center">
-                        No email on record — add one to send login details
-                      </p>
                     )}
                   </div>
 

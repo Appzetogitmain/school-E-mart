@@ -14,6 +14,15 @@ const getTransporter = () => {
         user: env.SMTP_USER,
         pass: env.SMTP_PASS,
       },
+      // Bulk sends hand us every message at once. Without a pool each one opens
+      // its own TCP+TLS+AUTH handshake, and Gmail refuses that many concurrent
+      // connections (421/454) — so most of a bulk run fails. Reuse a few
+      // connections and stay under Gmail's ~20 messages/sec ceiling instead.
+      pool: true,
+      maxConnections: 5,
+      maxMessages: 100,
+      rateDelta: 1000,
+      rateLimit: 10,
     });
   }
   return transporter;
@@ -51,6 +60,14 @@ const resolveFrom = () => {
 };
 
 const emailService = {
+  /** Release the pooled SMTP connections on shutdown. */
+  closeTransport() {
+    if (transporter) {
+      transporter.close();
+      transporter = null;
+    }
+  },
+
   async sendMail(options) {
     try {
       const { from, replyTo } = resolveFrom();
@@ -63,15 +80,23 @@ const emailService = {
         html: options.html,
       };
 
-      // If credentials aren't set in development, just log it.
+      // Without credentials nothing can be delivered. Never report that as a
+      // success: callers (and the school-facing UI) treat a resolved promise as
+      // "the parent has been emailed", so a silent stub turns a misconfigured
+      // environment into mail that is dropped without a trace.
       if (!env.SMTP_USER || !env.SMTP_PASS) {
-        logger.info('SMTP Credentials not configured. Logging mail content instead:', mailOptions);
-        return { success: true, provider: 'stub-logged' };
+        if (env.NODE_ENV === 'production') {
+          throw new Error(
+            'Email not sent: SMTP_USER/SMTP_PASS are not configured on this environment.'
+          );
+        }
+        logger.warn('SMTP credentials not configured — mail NOT sent, logging it instead:', mailOptions);
+        return { success: false, delivered: false, provider: 'stub-logged' };
       }
 
       const info = await getTransporter().sendMail(mailOptions);
       logger.info('Email sent successfully via Nodemailer:', { messageId: info.messageId, to: options.to });
-      return { success: true, messageId: info.messageId };
+      return { success: true, delivered: true, messageId: info.messageId };
     } catch (error) {
       logger.error('Nodemailer failed to send email:', error);
       throw error;

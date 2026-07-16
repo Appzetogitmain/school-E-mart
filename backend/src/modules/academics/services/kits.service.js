@@ -78,7 +78,14 @@ const kitsService = {
     if (query.classGrade) filter.classGrade = query.classGrade;
     if (query.category) filter.category = query.category;
     if (query.search) filter.name = { $regex: query.search, $options: 'i' };
-    return executePaginatedQuery(Kit, filter, query, { defaultSort: '-audit.createdAt' });
+    const result = await executePaginatedQuery(Kit, filter, query, { defaultSort: '-audit.createdAt' });
+    if (result.data && result.data.length) {
+      result.data = await Kit.populate(result.data, [
+        { path: 'items.productId', select: 'name images pricePaise originalPricePaise publishStatus' },
+        { path: 'addOns.productId', select: 'name images pricePaise originalPricePaise publishStatus' }
+      ]);
+    }
+    return result;
   },
 
   async getKit(schoolId, kitId) {

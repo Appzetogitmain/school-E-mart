@@ -283,3 +283,39 @@ export const uploadSchoolFile = async (schoolId, file, purpose = 'kit_image') =>
   });
   return unwrapData(response)?.attachment;
 };
+
+export const updateClass = async (schoolId, classGrade, payload) => {
+  const response = await apiClient.patch(
+    schoolPath(schoolId, `/classes/${encodeURIComponent(classGrade)}`),
+    payload
+  );
+  return unwrapData(response)?.school;
+};
+
+export const deleteClass = async (schoolId, classGrade) => {
+  const response = await apiClient.delete(
+    schoolPath(schoolId, `/classes/${encodeURIComponent(classGrade)}`)
+  );
+  return unwrapData(response)?.school;
+};
+
+export const updateSection = async (schoolId, classGrade, section, newSection) => {
+  const response = await apiClient.patch(
+    schoolPath(
+      schoolId,
+      `/classes/${encodeURIComponent(classGrade)}/sections/${encodeURIComponent(section)}`
+    ),
+    { newSection }
+  );
+  return unwrapData(response)?.school;
+};
+
+export const deleteSection = async (schoolId, classGrade, section) => {
+  const response = await apiClient.delete(
+    schoolPath(
+      schoolId,
+      `/classes/${encodeURIComponent(classGrade)}/sections/${encodeURIComponent(section)}`
+    )
+  );
+  return unwrapData(response)?.school;
+};

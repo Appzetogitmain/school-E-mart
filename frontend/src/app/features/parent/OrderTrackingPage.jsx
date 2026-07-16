@@ -254,7 +254,7 @@ const OrderTrackingPage = () => {
         <div className="bg-white rounded-3xl overflow-hidden shadow-sm border border-gray-100 divide-y divide-gray-50">
           <button
             type="button"
-            onClick={() => navigate('/user/help')}
+            onClick={() => navigate('/user/contact')}
             className="w-full p-4 flex items-center justify-between group active:bg-gray-50 transition-colors text-left"
           >
             <div className="flex items-center gap-4">
@@ -263,7 +263,7 @@ const OrderTrackingPage = () => {
               </div>
               <div>
                 <h3 className="text-sm font-bold text-deep-purple">Need Help?</h3>
-                <p className="text-[12px] text-gray-400 font-medium">Visit FAQ</p>
+                <p className="text-[12px] text-gray-400 font-medium">Contact support</p>
               </div>
             </div>
           </button>
