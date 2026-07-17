@@ -302,16 +302,22 @@ const lmsController = {
   }),
 
   streamSubmissionAttachment: asyncHandler(async (req, res) => {
-    const { attachment, submission, assignment } = await assignmentService.getSubmissionAttachmentContext(
+    const { attachment, submission, assignment, isHomeworkAttachment } = await assignmentService.getAttachmentContext(
       req.schoolId,
       req.params.attachmentId
     );
 
-    // A parent may only read their own child's work; staff go through the same course
-    // manage check that guards the rest of the grading surface.
+    // A parent may only read their own child's work or homework attachments that are published.
+    // Staff go through the same course manage check that guards the rest of the grading surface.
     if (req.auth.role === ROLES.PARENT) {
-      if (String(submission.userId) !== String(req.auth.userId)) {
-        throw new ForbiddenError('You cannot access this submission', 'SUBMISSION_ACCESS_DENIED');
+      if (isHomeworkAttachment) {
+        if (assignment.status !== 'published') {
+          throw new ForbiddenError('You cannot access this attachment', 'ATTACHMENT_ACCESS_DENIED');
+        }
+      } else {
+        if (String(submission.userId) !== String(req.auth.userId)) {
+          throw new ForbiddenError('You cannot access this submission', 'SUBMISSION_ACCESS_DENIED');
+        }
       }
     } else {
       const course = await assertCourseInSchool(req.schoolId, assignment.courseId);

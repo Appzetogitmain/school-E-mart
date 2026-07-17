@@ -11,6 +11,7 @@ import { parseClassGrade, parseSection } from '../../../utils/mappers/teacherMap
 import { ensureCourse } from '../../../utils/teacherApiHelpers';
 import { useAuthUser, useTeacherSchoolId } from '../../../utils/teacherContext';
 import { useTeacherClassOptions } from '../../../hooks/useTeacherClassOptions';
+import { filesToCompressedDataUrls, validateSubmissionFiles } from '../../../utils/fileUpload';
 
 const TeacherHomework = () => {
   const navigate = useNavigate();
@@ -77,12 +78,27 @@ const TeacherHomework = () => {
   };
 
   const handleAttachmentSelected = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setAttachments((prev) => [
-      ...prev,
-      { id: Date.now(), name: file.name, size: `${Math.round(file.size / 1024)} KB`, file },
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+
+    const validationError = validateSubmissionFiles([
+      ...attachments.map((att) => att.file),
+      ...files,
     ]);
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
+    setError('');
+    const newAttachments = files.map((file, idx) => ({
+      id: Date.now() + idx,
+      name: file.name,
+      size: `${(file.size / (1024 * 1024)).toFixed(2)} MB`,
+      file,
+    }));
+
+    setAttachments((prev) => [...prev, ...newAttachments]);
     e.target.value = '';
   };
 
@@ -121,6 +137,8 @@ const TeacherHomework = () => {
         ...(chapter.trim() ? { chapter: chapter.trim() } : {}),
       };
 
+      const files = await filesToCompressedDataUrls(attachments.map((att) => att.file));
+
       await createAssignment(schoolId, course._id || course.id, {
         title: title.trim(),
         description: description.trim() || undefined,
@@ -134,6 +152,7 @@ const TeacherHomework = () => {
         ...(Object.keys(reference).length ? { reference } : {}),
         maxScore: parsedMaxScore,
         status: 'published',
+        files,
       });
 
       setShowToast(true);
@@ -512,6 +531,8 @@ const TeacherHomework = () => {
             <input
               ref={fileInputRef}
               type="file"
+              multiple
+              accept="image/*,application/pdf"
               className="hidden"
               onChange={handleAttachmentSelected}
             />

@@ -3,6 +3,9 @@ const LmsAssignmentSubmission = require('../../../database/models/LmsAssignmentS
 const { BaseRepository } = require('../../../repositories');
 const { executePaginatedQuery } = require('../../../repositories/query');
 
+// The teacher and the parent both need the actual files, not the attachment ids.
+const ATTACHMENT_FIELDS = 'storageKey mime sizeBytes purpose';
+
 class AssignmentRepository extends BaseRepository {
   constructor() {
     super(LmsAssignment);
@@ -11,13 +14,23 @@ class AssignmentRepository extends BaseRepository {
   paginateAssignments(filter, queryString, options = {}) {
     return executePaginatedQuery(LmsAssignment, this.mergeFilter(filter), queryString, {
       defaultSort: '-dueDate',
+      populate: { path: 'attachments', select: ATTACHMENT_FIELDS },
       ...options,
     });
   }
-}
 
-// The teacher and the parent both need the actual files, not the attachment ids.
-const ATTACHMENT_FIELDS = 'storageKey mime sizeBytes purpose';
+  findOnePopulated(filter) {
+    return LmsAssignment.findOne(this.mergeFilter(filter))
+      .populate('attachments', ATTACHMENT_FIELDS)
+      .lean();
+  }
+
+  findManyPopulated(filter) {
+    return LmsAssignment.find(this.mergeFilter(filter))
+      .populate('attachments', ATTACHMENT_FIELDS)
+      .lean();
+  }
+}
 
 class AssignmentSubmissionRepository extends BaseRepository {
   constructor() {

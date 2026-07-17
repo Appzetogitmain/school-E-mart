@@ -18,6 +18,32 @@ const resolveBannerImageUrl = (banner) => {
   return storageKey || null;
 };
 
+const resolveStorageUrl = (storageKey) => {
+  if (typeof storageKey !== 'string') return null;
+  return storageKey || null;
+};
+
+// Populated refs come back as objects; flatten them so ids stay ids and names/urls
+// are exposed as plain fields for the admin list.
+const refId = (ref) => (ref && typeof ref === 'object' ? ref._id : ref) || null;
+
+const mapAdminProduct = (product) => ({
+  ...product,
+  headerId: refId(product.headerId),
+  headerName: product.headerId?.name || null,
+  categoryId: refId(product.categoryId),
+  categoryName: product.categoryId?.name || null,
+  subcategoryId: refId(product.subcategoryId),
+  subcategoryName: product.subcategoryId?.name || null,
+  vendorId: refId(product.vendorId),
+  vendorName: product.vendorId?.storeName || null,
+  images: (product.images || []).map((image) => ({
+    attachmentId: refId(image.attachmentId),
+    alt: image.alt || null,
+    url: resolveStorageUrl(image.attachmentId?.storageKey),
+  })),
+});
+
 const mapPublicBanner = (banner) => ({
   id: banner._id,
   title: banner.title,
@@ -60,7 +86,11 @@ const marketplaceController = {
   }),
 
   getCategoryTree: asyncHandler(async (req, res) => {
-    const tree = await taxonomyService.getCategoryTree(req.query.status || 'active');
+    // `status=all` returns inactive nodes too, so admin screens can manage them.
+    const requestedStatus = req.query.status || 'active';
+    const tree = await taxonomyService.getCategoryTree(
+      requestedStatus === 'all' ? null : requestedStatus
+    );
     return success(res, { tree }, 'Category tree fetched', undefined, req);
   }),
 
@@ -124,6 +154,16 @@ const marketplaceController = {
     return paginated(res, { products }, pagination, 'Products fetched', req);
   }),
 
+  listAdminProducts: asyncHandler(async (req, res) => {
+    const { data, pagination } = await productService.listProductsForAdmin(req.query);
+    const products = data.map((product) => ({
+      ...mapAdminProduct(product),
+      offer: productService.getOfferDisplay(product),
+      inventory: productService.getInventoryStatus(product),
+    }));
+    return paginated(res, { products }, pagination, 'Products fetched', req);
+  }),
+
   listFeaturedProducts: asyncHandler(async (req, res) => {
     const { data, pagination } = await productService.listFeatured(req.query);
     return paginated(res, { products: data }, pagination, 'Featured products fetched', req);
@@ -175,7 +215,17 @@ const marketplaceController = {
   updateProduct: asyncHandler(async (req, res) => {
     const product = await productService.getProduct(req.params.productId);
     await marketplaceAccessPolicy.assertProductOwnership(req.auth, product);
-    const updated = await productService.updateProduct(req.params.productId, req.body);
+
+    const payload = { ...req.body };
+    if (!marketplaceAccessPolicy.isCatalogAdmin(req.auth)) {
+      // Moderation state and ownership are admin-only. Without this a vendor could
+      // PATCH their own product to approvalStatus:'approved' and bypass review
+      // entirely, or reassign it to another vendor.
+      delete payload.approvalStatus;
+      delete payload.vendorId;
+    }
+
+    const updated = await productService.updateProduct(req.params.productId, payload);
     return success(res, { product: updated }, 'Product updated', undefined, req);
   }),
 

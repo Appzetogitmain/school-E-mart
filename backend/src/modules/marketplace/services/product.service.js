@@ -5,6 +5,15 @@ const { uniqueSlug } = require('../utils/slug');
 const { buildProductFilter, resolveSort } = require('./search.service');
 const Product = require('../../../database/models/Product');
 
+// Refs the admin product list renders by name rather than by id.
+const ADMIN_PRODUCT_POPULATE = [
+  { path: 'headerId', select: 'name' },
+  { path: 'categoryId', select: 'name' },
+  { path: 'subcategoryId', select: 'name' },
+  { path: 'vendorId', select: 'storeName' },
+  { path: 'images.attachmentId', select: 'storageKey' },
+];
+
 const productService = {
   async createProduct(vendorId, payload) {
     const slug = await uniqueSlug(Product, payload.name);
@@ -39,6 +48,20 @@ const productService = {
     const filter = buildProductFilter(query, options);
     return productRepository.paginateProducts(filter, query, {
       defaultSort: resolveSort(query.sort),
+      populate: options.populate,
+    });
+  },
+
+  /**
+   * Admin catalog listing: unlike listProducts, this returns products in every
+   * moderation state (pending/rejected/draft) so they can actually be moderated,
+   * and resolves the taxonomy/vendor/image refs the list UI needs to render.
+   * Callers must gate this behind an admin guard.
+   */
+  listProductsForAdmin(query) {
+    return this.listProducts(query, {
+      publicOnly: false,
+      populate: ADMIN_PRODUCT_POPULATE,
     });
   },
 

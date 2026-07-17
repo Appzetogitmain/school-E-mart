@@ -17,9 +17,11 @@ import {
   Image,
   Trash2,
   Award,
-  Loader2
+  Loader2,
+  Paperclip
 } from 'lucide-react';
 import { submitHomework } from '../../../services/parentApi';
+import { fetchSubmissionAttachment } from '../../../services/lmsApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 import {
   filesToCompressedDataUrls,
@@ -37,6 +39,44 @@ const ParentHomeworkDetails = ({ homework, childInfo, onClose, onSubmitted }) =>
   // overwrite work they had already handed in.
   const [submissionStatus, setSubmissionStatus] = useState(homework?.submissionStatus || null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const [attachmentUrls, setAttachmentUrls] = useState({});
+  const [loadingAttachments, setLoadingAttachments] = useState(false);
+
+  React.useEffect(() => {
+    if (!homework?.attachments?.length || !childInfo?.schoolId) return undefined;
+
+    let cancelled = false;
+    const created = [];
+
+    (async () => {
+      setLoadingAttachments(true);
+      const entries = await Promise.all(
+        homework.attachments.map(async (file) => {
+          try {
+            const url = await fetchSubmissionAttachment(childInfo.schoolId, file.id);
+            created.push(url);
+            return [file.id, url];
+          } catch {
+            return null;
+          }
+        })
+      );
+
+      if (cancelled) {
+        created.forEach((url) => URL.revokeObjectURL(url));
+        return;
+      }
+      setAttachmentUrls(Object.fromEntries(entries.filter(Boolean)));
+      setLoadingAttachments(false);
+    })();
+
+    return () => {
+      cancelled = true;
+      created.forEach((url) => URL.revokeObjectURL(url));
+      setAttachmentUrls({});
+    };
+  }, [homework?.attachments, childInfo?.schoolId]);
 
   const isGraded = submissionStatus === 'graded';
   const isReturned = submissionStatus === 'returned';
@@ -305,6 +345,64 @@ const ParentHomeworkDetails = ({ homework, childInfo, onClose, onSubmitted }) =>
                 </p>
               )}
             </div>
+          </div>
+        )}
+
+        {/* Teacher's Attachments */}
+        {homework.attachments && homework.attachments.length > 0 && (
+          <div className="bg-white border border-gray-100 rounded-3xl p-5 shadow-sm">
+            <h4 className="text-xs font-black text-gray-800 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+              <Paperclip size={13} className="text-[#6A47DE]" />
+              <span>Teacher's Attachments</span>
+            </h4>
+            
+            {loadingAttachments ? (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 size={16} className="animate-spin text-[#6A47DE]" />
+                <span className="text-xs font-bold text-gray-400 ml-2">Loading attachments...</span>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {homework.attachments.map((file) => {
+                  const url = attachmentUrls[file.id];
+                  return (
+                    <div key={file.id} className="flex items-center justify-between p-2.5 bg-gray-50 border border-gray-100 rounded-2xl">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        {/* Thumbnail image or file badge */}
+                        <div className="w-10 h-10 rounded-xl overflow-hidden bg-white border border-gray-100 shrink-0">
+                          {file.isImage && url ? (
+                            <img src={url} alt={file.name} className="w-full h-full object-cover" />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center bg-purple-50 text-purple-600">
+                              <FileText size={16} />
+                            </div>
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <h5 className="text-[11px] font-black text-gray-800 truncate leading-snug">
+                            {file.name}
+                          </h5>
+                          <p className="text-[9px] font-bold text-gray-400 mt-0.5 uppercase">
+                            {file.mime.split('/')[1] || 'File'}
+                          </p>
+                        </div>
+                      </div>
+                      {url && (
+                        <a
+                          href={url}
+                          download={file.name}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="w-8 h-8 rounded-xl bg-white border border-gray-100 flex items-center justify-center text-gray-400 hover:text-[#6A47DE] active:scale-95 transition-all shadow-sm shrink-0"
+                        >
+                          <Download size={13} />
+                        </a>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
 

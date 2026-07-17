@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { 
-  Plus, Search, Download, ChevronDown, ChevronRight, Edit, Trash2, 
-  X, Check, LayoutGrid, List, Upload, Loader2
+  Plus, Search, Download, ChevronDown, ChevronRight, Edit, Trash2,
+  X, LayoutGrid, List, Upload, Loader2
 } from 'lucide-react';
 import { 
   getCategoryTree, 
@@ -24,12 +24,8 @@ const CategoryManagement = () => {
   const [statusFilter, setStatusFilter] = useState('All Status');
   const [searchQuery, setSearchQuery] = useState('');
   
-  // Collapse/Expand state for category nodes
-  const [expandedNodes, setExpandedNodes] = useState({
-    '1': true, // Ice Cream expanded by default as in mockup screenshot
-    '2': true,
-    '3': false
-  });
+  // Collapse/Expand state for category nodes, keyed by category id
+  const [expandedNodes, setExpandedNodes] = useState({});
 
   // Modal states
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -42,12 +38,20 @@ const CategoryManagement = () => {
 
   // New category form state
   const [newCatName, setNewCatName] = useState('');
-  const [newCatHeader, setNewCatHeader] = useState('Ice Creams');
+  const [newCatHeader, setNewCatHeader] = useState('');
   const [newCatOrder, setNewCatOrder] = useState('0');
+  const [newCatImage, setNewCatImage] = useState(null);
+  const [newCatImagePreview, setNewCatImagePreview] = useState('');
+  const newCatFileInputRef = React.useRef(null);
+
+  // New subcategory form state (kept separate so the two modals never share values)
+  const [newSubName, setNewSubName] = useState('');
+  const [newSubOrder, setNewSubOrder] = useState('0');
 
   // Edit Category/Subcategory Modal states
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingCategoryId, setEditingCategoryId] = useState(null);
+  const [editingIsSub, setEditingIsSub] = useState(false);
   const [editCatName, setEditCatName] = useState('');
   const [editCatHeader, setEditCatHeader] = useState('');
   const [editCatParent, setEditCatParent] = useState('none');
@@ -74,8 +78,13 @@ const CategoryManagement = () => {
     setLoading(true);
     setError('');
     try {
-      const tree = await getCategoryTree();
-      setCategories(mapCategoryTreeForAdmin(tree));
+      // Admin manages inactive nodes too, so ask for the unfiltered tree.
+      const tree = await getCategoryTree({ status: 'all' });
+      const mapped = mapCategoryTreeForAdmin(tree);
+      setCategories(mapped);
+      setExpandedNodes((prev) =>
+        Object.fromEntries(mapped.map((cat) => [cat.id, prev[cat.id] ?? true]))
+      );
     } catch (err) {
       setCategories([]);
       setError(getErrorMessage(err, 'Unable to load categories'));
@@ -107,11 +116,41 @@ const CategoryManagement = () => {
   };
 
   const handleExpandAll = () => {
-    setExpandedNodes({ '1': true, '2': true, '3': true });
+    setExpandedNodes(Object.fromEntries(categories.map((cat) => [cat.id, true])));
   };
 
   const handleCollapseAll = () => {
-    setExpandedNodes({ '1': false, '2': false, '3': false });
+    setExpandedNodes(Object.fromEntries(categories.map((cat) => [cat.id, false])));
+  };
+
+  // Category and subcategory ids are both Mongo ObjectIds, so they can only be
+  // told apart by looking them up in the loaded tree.
+  const findNode = useCallback((id) => {
+    for (const cat of categories) {
+      if (cat.id === id) return { node: cat, parent: null, isSub: false };
+      const sub = cat.subcategories.find((s) => s.id === id);
+      if (sub) return { node: sub, parent: cat, isSub: true };
+    }
+    return null;
+  }, [categories]);
+
+  const resetAddCategoryForm = () => {
+    setNewCatName('');
+    setNewCatOrder('0');
+    setNewCatHeader(headerCategories[0]?.id || '');
+    setNewCatImage(null);
+    setNewCatImagePreview('');
+    setActiveStatus(true);
+    setIsAdvancedOpen(false);
+  };
+
+  const resetAddSubcategoryForm = () => {
+    setNewSubName('');
+    setNewSubOrder('0');
+    setNewSubcatImage(null);
+    setNewSubcatImagePreview('');
+    setActiveStatus(true);
+    setIsAdvancedOpen(false);
   };
 
   // Add Category Handler
@@ -126,13 +165,24 @@ const CategoryManagement = () => {
       if (matchedHeader) {
         headerId = matchedHeader.id;
       }
+
+      let imageUrl;
+      if (newCatImage) {
+        const formData = new FormData();
+        formData.append('file', newCatImage);
+        formData.append('purpose', 'category_image');
+        const attachment = await uploadAdminFile(formData);
+        imageUrl = attachment?.url;
+      }
+
       await createCategory({
         name: newCatName,
         headerId,
         displayOrder: parseInt(newCatOrder) || 0,
-        status: 'active'
+        status: activeStatus ? 'active' : 'inactive',
+        ...(imageUrl ? { imageUrl } : {})
       });
-      setNewCatName('');
+      resetAddCategoryForm();
       setIsAddModalOpen(false);
       await loadCategories();
     } catch (err) {
@@ -145,12 +195,12 @@ const CategoryManagement = () => {
   // Add Subcategory Handler
   const handleAddSubcategory = async (e) => {
     e.preventDefault();
-    if (!newCatName.trim() || !selectedParentId) return;
+    if (!newSubName.trim() || !selectedParentId) return;
 
     try {
       setLoading(true);
 
-      let imageUrl = undefined;
+      let imageUrl;
       if (newSubcatImage) {
         const formData = new FormData();
         formData.append('file', newSubcatImage);
@@ -160,17 +210,13 @@ const CategoryManagement = () => {
       }
 
       await createSubcategory({
-        name: newCatName,
+        name: newSubName,
         categoryId: selectedParentId,
-        displayOrder: parseInt(newCatOrder) || 0,
+        displayOrder: parseInt(newSubOrder) || 0,
         status: activeStatus ? 'active' : 'inactive',
-        imageUrl
+        ...(imageUrl ? { imageUrl } : {})
       });
-      setNewCatName('');
-      setNewCatOrder('0');
-      setActiveStatus(true);
-      setNewSubcatImage(null);
-      setNewSubcatImagePreview('');
+      resetAddSubcategoryForm();
       setIsAddSubModalOpen(false);
       await loadCategories();
     } catch (err) {
@@ -181,42 +227,26 @@ const CategoryManagement = () => {
   };
 
   // Open Edit Dialog pre-populating current attributes
-  const openEditModal = (catOrSubId, isSub = false) => {
+  const openEditModal = (catOrSubId) => {
+    const found = findNode(catOrSubId);
+    if (!found) return;
+    const { node, parent, isSub } = found;
+
     setEditingCategoryId(catOrSubId);
+    setEditingIsSub(isSub);
     setIsAdvancedOpen(false);
     setEditCatImageFile(null);
     setEditCatImagePreview('');
-    
-    if (!isSub) {
-      const cat = categories.find(c => c.id === catOrSubId);
-      if (cat) {
-        setEditCatName(cat.name);
-        setEditCatHeader(cat.headerId || cat.header || '');
-        setEditCatParent('none');
-        setEditCatOrder(String(cat.order));
-        setEditCatStatus(cat.status === 'Active');
-        setEditCatImage(cat.image);
-      }
-    } else {
-      let foundSub = null;
-      let parentCat = null;
-      for (const cat of categories) {
-        const sub = cat.subcategories.find(s => s.id === catOrSubId);
-        if (sub) {
-          foundSub = sub;
-          parentCat = cat;
-          break;
-        }
-      }
-      if (foundSub && parentCat) {
-        setEditCatName(foundSub.name);
-        setEditCatHeader(parentCat.headerId || parentCat.header || '');
-        setEditCatParent(parentCat.id);
-        setEditCatOrder(String(foundSub.order));
-        setEditCatStatus(foundSub.status === 'Active');
-        setEditCatImage(''); // Subcategory standard empty image placeholder
-      }
-    }
+
+    setEditCatName(node.name);
+    setEditCatHeader((isSub ? parent.headerId : node.headerId) || '');
+    setEditCatParent(isSub ? parent.id : 'none');
+    setEditCatOrder(String(node.order));
+    setEditCatStatus(node.status === 'Active');
+    // Use the stored url, never the display placeholder, or saving would
+    // persist the placeholder as the record's real image.
+    setEditCatImage(node.imageUrl || '');
+
     setIsEditModalOpen(true);
   };
 
@@ -225,7 +255,10 @@ const CategoryManagement = () => {
     e.preventDefault();
     if (!editCatName.trim() || !editingCategoryId) return;
 
-    const isSub = editingCategoryId.includes('-');
+    if (editingIsSub && editCatParent === 'none') {
+      alert('Please choose a parent category for this subcategory.');
+      return;
+    }
 
     try {
       setLoading(true);
@@ -239,7 +272,7 @@ const CategoryManagement = () => {
         imageUrl = attachment?.url;
       }
 
-      if (!isSub) {
+      if (!editingIsSub) {
         let headerId = editCatHeader;
         const matchedHeader = headerCategories.find(hc => hc.id === editCatHeader || hc.name === editCatHeader);
         if (matchedHeader) {
@@ -274,19 +307,17 @@ const CategoryManagement = () => {
 
   // Deactivate Handler
   const handleDeactivate = async (id) => {
-    const isSub = id.includes('-');
-    const item = !isSub 
-      ? categories.find(c => c.id === id) 
-      : categories.flatMap(c => c.subcategories).find(s => s.id === id);
-    if (!item) return;
+    const found = findNode(id);
+    if (!found) return;
+    const { node, isSub } = found;
 
-    const nextStatus = item.status === 'Active' ? 'inactive' : 'active';
+    const nextStatus = node.status === 'Active' ? 'inactive' : 'active';
     try {
       setLoading(true);
       if (!isSub) {
         await updateCategory(id, { status: nextStatus });
       } else {
-        await updateSubcategory(id, { categoryId: item.categoryId || selectedParentId || item.raw?.categoryId, status: nextStatus });
+        await updateSubcategory(id, { status: nextStatus });
       }
       await loadCategories();
     } catch (err) {
@@ -298,8 +329,15 @@ const CategoryManagement = () => {
 
   // Delete Handler
   const handleDelete = async (id) => {
-    const isSub = id.includes('-');
-    if (confirm(`Are you sure you want to delete this ${isSub ? 'subcategory' : 'category'}?`)) {
+    const found = findNode(id);
+    if (!found) return;
+    const { node, isSub } = found;
+
+    const label = isSub ? 'subcategory' : 'category';
+    const warning = !isSub && node.subcategories.length > 0
+      ? `\n\nIt has ${node.subcategories.length} subcategory(ies).`
+      : '';
+    if (confirm(`Are you sure you want to delete the ${label} "${node.name}"?${warning}`)) {
       try {
         setLoading(true);
         if (!isSub) {
@@ -325,8 +363,8 @@ const CategoryManagement = () => {
 
   // Parent Category dynamic helpers
   const parentCategory = categories.find(cat => cat.id === selectedParentId);
-  const parentName = parentCategory ? parentCategory.name : 'Ice Cream';
-  const parentHeader = parentCategory ? parentCategory.header : 'Ice Creams';
+  const parentName = parentCategory ? parentCategory.name : '—';
+  const parentHeader = parentCategory ? parentCategory.header : '—';
 
   return (
     <div className="space-y-6 font-sans antialiased text-gray-800">
@@ -353,7 +391,7 @@ const CategoryManagement = () => {
           <div className="flex flex-wrap items-center gap-3 flex-1">
             {/* + Add Category Button */}
             <button 
-              onClick={() => setIsAddModalOpen(true)}
+              onClick={() => { resetAddCategoryForm(); setIsAddModalOpen(true); }}
               className="border border-indigo-950 text-[#0B1528] font-black text-xs px-4 py-2.5 rounded-xl hover:bg-gray-50 transition-all flex items-center gap-1.5 shrink-0"
             >
               <Plus size={14} className="stroke-[3]" />
@@ -396,7 +434,7 @@ const CategoryManagement = () => {
               >
                 <option>All Status</option>
                 <option>Active</option>
-                <option>Deactivated</option>
+                <option>Inactive</option>
               </select>
             </div>
 
@@ -441,9 +479,27 @@ const CategoryManagement = () => {
           </div>
         )}
 
+        {/* Load failure banner */}
+        {error && (
+          <div className="mt-4 flex items-center justify-between gap-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+            <span className="text-xs font-bold text-red-700">{error}</span>
+            <button
+              onClick={loadCategories}
+              className="shrink-0 rounded-lg border border-red-300 px-3 py-1.5 text-[10px] font-black uppercase text-red-700 transition-all hover:bg-red-100"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
         {/* Data View viewport */}
         <div className="mt-2 space-y-4">
-          {viewType === 'tree' ? (
+          {loading ? (
+            <div className="flex items-center justify-center gap-2 py-12 text-xs font-black text-gray-400">
+              <Loader2 size={16} className="animate-spin" />
+              <span>Loading categories…</span>
+            </div>
+          ) : viewType === 'tree' ? (
             /* TREE STRUCTURE VIEW MODE */
             <div className="space-y-3.5">
               {filteredCategories.length === 0 ? (
@@ -518,6 +574,7 @@ const CategoryManagement = () => {
                           {/* Add Subcategory */}
                           <button 
                             onClick={() => {
+                              resetAddSubcategoryForm();
                               setSelectedParentId(cat.id);
                               setIsAddSubModalOpen(true);
                             }}
@@ -540,7 +597,7 @@ const CategoryManagement = () => {
 
                           {/* Edit Category */}
                           <button 
-                            onClick={() => openEditModal(cat.id, false)}
+                            onClick={() => openEditModal(cat.id)}
                             className="p-2 rounded-xl border border-gray-200 text-gray-500 hover:text-indigo-600 hover:bg-gray-50 transition-all shrink-0"
                           >
                             <Edit size={14} className="stroke-[2.5]" />
@@ -567,23 +624,33 @@ const CategoryManagement = () => {
                               <div className="flex items-center gap-2">
                                 <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0"></div>
                                 <span className="text-xs font-black text-gray-800">{sub.name}</span>
-                                <span className="px-1.5 py-0.5 rounded-full border border-emerald-100 bg-emerald-50 text-emerald-700 text-[8px] font-black uppercase tracking-wider ml-2">
+                                <span className={`px-1.5 py-0.5 rounded-full border text-[8px] font-black uppercase tracking-wider ml-2 ${
+                                  sub.status === 'Active'
+                                    ? 'border-emerald-100 bg-emerald-50 text-emerald-700'
+                                    : 'border-red-100 bg-red-50 text-red-700'
+                                }`}>
                                   {sub.status}
                                 </span>
                                 <span className="text-[9px] text-gray-400 font-bold ml-1">Order: {sub.order}</span>
                               </div>
 
                               <div className="flex items-center gap-1.5 self-end sm:self-auto">
-                                <button className="text-[9px] font-bold border border-gray-200 hover:bg-gray-50 text-gray-500 px-2.5 py-1.5 rounded-lg transition-all">
-                                  Deactivate
+                                <button
+                                  onClick={() => handleDeactivate(sub.id)}
+                                  className="text-[9px] font-bold border border-gray-200 hover:bg-gray-50 text-gray-500 px-2.5 py-1.5 rounded-lg transition-all"
+                                >
+                                  {sub.status === 'Active' ? 'Deactivate' : 'Activate'}
                                 </button>
-                                <button 
-                                  onClick={() => openEditModal(sub.id, true)}
+                                <button
+                                  onClick={() => openEditModal(sub.id)}
                                   className="p-1.5 rounded-lg border border-gray-200 text-gray-400 hover:text-indigo-600 hover:bg-gray-50 transition-all shrink-0"
                                 >
                                   <Edit size={11} className="stroke-[2.5]" />
                                 </button>
-                                <button className="p-1.5 rounded-lg border border-red-100 text-red-400 hover:bg-red-50 transition-all shrink-0">
+                                <button
+                                  onClick={() => handleDelete(sub.id)}
+                                  className="p-1.5 rounded-lg border border-red-100 text-red-400 hover:bg-red-50 transition-all shrink-0"
+                                >
                                   <Trash2 size={11} className="stroke-[2.5]" />
                                 </button>
                               </div>
@@ -647,7 +714,7 @@ const CategoryManagement = () => {
                               {cat.status === 'Active' ? 'Deactivate' : 'Activate'}
                             </button>
                             <button 
-                              onClick={() => openEditModal(cat.id, false)}
+                              onClick={() => openEditModal(cat.id)}
                               className="p-1.5 rounded-lg border border-gray-200 text-gray-400 hover:text-indigo-600 hover:bg-gray-50 transition-all shrink-0"
                             >
                               <Edit size={12} />
@@ -680,7 +747,7 @@ const CategoryManagement = () => {
             <div className="p-5 border-b border-gray-100 flex items-center justify-between bg-gray-50">
               <h3 className="text-sm font-black text-gray-900 uppercase tracking-wide">Add New Category</h3>
               <button 
-                onClick={() => setIsAddModalOpen(false)}
+                onClick={() => { resetAddCategoryForm(); setIsAddModalOpen(false); }}
                 className="p-1.5 rounded-xl hover:bg-gray-200 text-gray-400 hover:text-gray-900 transition-all"
               >
                 <X size={18} />
@@ -716,32 +783,90 @@ const CategoryManagement = () => {
                         </option>
                       ))
                     ) : (
-                      <>
-                        <option value="Ice Creams">Ice Creams</option>
-                        <option value="School Uniforms">School Uniforms</option>
-                        <option value="Textbooks & Guides">Textbooks & Guides</option>
-                        <option value="Stationery & Gifts">Stationery & Gifts</option>
-                      </>
+                      <option value="">No header categories available</option>
                     )}
                   </select>
                 </div>
                 <div className="space-y-1">
                   <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider block">Sort Order</label>
-                  <input 
-                    type="number" 
+                  <input
+                    type="number"
                     value={newCatOrder}
                     onChange={(e) => setNewCatOrder(e.target.value)}
-                    placeholder="0" 
+                    placeholder="0"
                     className="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-2.5 text-xs text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
                   />
                 </div>
+              </div>
+
+              {/* Category Image Upload */}
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider block">Category Image</label>
+                <input
+                  type="file"
+                  ref={newCatFileInputRef}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      setNewCatImage(file);
+                      setNewCatImagePreview(URL.createObjectURL(file));
+                    }
+                  }}
+                  accept="image/*"
+                  className="hidden"
+                />
+                <div
+                  onClick={() => newCatFileInputRef.current?.click()}
+                  className="border-2 border-dashed border-gray-200 rounded-xl p-5 flex flex-col items-center justify-center bg-gray-50/50 hover:bg-gray-50 transition-colors cursor-pointer select-none min-h-[110px]"
+                >
+                  {newCatImagePreview ? (
+                    <div className="flex flex-col items-center justify-center text-center">
+                      <img
+                        src={newCatImagePreview}
+                        alt="Preview"
+                        className="w-24 h-24 object-cover rounded-xl border border-gray-200 shadow-sm mb-1"
+                      />
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setNewCatImage(null);
+                          setNewCatImagePreview('');
+                        }}
+                        className="text-[10px] text-red-500 font-bold hover:underline"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <Upload size={22} className="text-gray-400 mb-2 stroke-[2.5]" />
+                      <span className="text-xs font-black text-gray-700">Choose File or Drag & Drop</span>
+                      <span className="text-[10px] text-gray-400 mt-1 font-bold">Max 5MB</span>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Active Status Checkbox */}
+              <div className="flex items-center gap-2 select-none py-1">
+                <input
+                  type="checkbox"
+                  id="newCatActiveStatus"
+                  checked={activeStatus}
+                  onChange={(e) => setActiveStatus(e.target.checked)}
+                  className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 focus:ring-2 accent-indigo-600 cursor-pointer"
+                />
+                <label htmlFor="newCatActiveStatus" className="text-xs font-black text-gray-700 cursor-pointer">
+                  Active Status
+                </label>
               </div>
 
               {/* Actions */}
               <div className="pt-4 flex items-center justify-end gap-2 border-t border-gray-100">
                 <button 
                   type="button"
-                  onClick={() => setIsAddModalOpen(false)}
+                  onClick={() => { resetAddCategoryForm(); setIsAddModalOpen(false); }}
                   className="text-xs font-bold text-gray-500 px-4 py-2 hover:bg-gray-50 rounded-xl transition-all"
                 >
                   Cancel
@@ -770,7 +895,7 @@ const CategoryManagement = () => {
               <h3 className="text-base font-black text-[#0B1528]">Create Subcategory</h3>
               <button 
                 type="button"
-                onClick={() => setIsAddSubModalOpen(false)}
+                onClick={() => { resetAddSubcategoryForm(); setIsAddSubModalOpen(false); }}
                 className="p-1 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-900 transition-all"
               >
                 <X size={18} />
@@ -786,16 +911,16 @@ const CategoryManagement = () => {
                 <div className="text-sm font-black text-gray-900">{parentName}</div>
               </div>
 
-              {/* Category Name Input */}
+              {/* Subcategory Name Input */}
               <div className="space-y-1">
                 <label className="text-xs font-black text-gray-700 mb-1.5 block">
-                  Category Name <span className="text-red-500">*</span>
+                  Subcategory Name <span className="text-red-500">*</span>
                 </label>
-                <input 
-                  type="text" 
-                  value={newCatName}
-                  onChange={(e) => setNewCatName(e.target.value)}
-                  placeholder="Enter category name" 
+                <input
+                  type="text"
+                  value={newSubName}
+                  onChange={(e) => setNewSubName(e.target.value)}
+                  placeholder="Enter subcategory name"
                   className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-xs text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
                   required
                 />
@@ -865,10 +990,10 @@ const CategoryManagement = () => {
               {/* Display Order Input */}
               <div className="space-y-1">
                 <label className="text-xs font-black text-gray-700 mb-1.5 block">Display Order</label>
-                <input 
-                  type="number" 
-                  value={newCatOrder}
-                  onChange={(e) => setNewCatOrder(e.target.value)}
+                <input
+                  type="number"
+                  value={newSubOrder}
+                  onChange={(e) => setNewSubOrder(e.target.value)}
                   className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-xs text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
                 />
               </div>
@@ -910,7 +1035,7 @@ const CategoryManagement = () => {
               <div className="pt-4 border-t border-gray-150 flex items-center justify-end gap-2.5 shrink-0">
                 <button 
                   type="button"
-                  onClick={() => setIsAddSubModalOpen(false)}
+                  onClick={() => { resetAddSubcategoryForm(); setIsAddSubModalOpen(false); }}
                   className="border border-gray-200 hover:bg-gray-50 text-gray-600 font-black text-xs px-5 py-2.5 rounded-xl transition-all"
                 >
                   Cancel
@@ -919,7 +1044,7 @@ const CategoryManagement = () => {
                   type="submit"
                   className="bg-[#0B1528] hover:bg-gray-900 text-white font-black text-xs px-5 py-2.5 rounded-xl transition-all shadow-md shadow-indigo-950/10"
                 >
-                  Create Category
+                  Create Subcategory
                 </button>
               </div>
 
@@ -937,7 +1062,7 @@ const CategoryManagement = () => {
             
             {/* Header */}
             <div className="p-5 border-b border-gray-150 flex items-center justify-between bg-white px-6 shrink-0">
-              <h3 className="text-base font-black text-[#0B1528]">Edit Category</h3>
+              <h3 className="text-base font-black text-[#0B1528]">{editingIsSub ? 'Edit Subcategory' : 'Edit Category'}</h3>
               <button 
                 type="button"
                 onClick={() => setIsEditModalOpen(false)}
@@ -953,10 +1078,10 @@ const CategoryManagement = () => {
               {/* Category Name Input */}
               <div className="space-y-1">
                 <label className="text-xs font-black text-gray-700 mb-1.5 block">
-                  Category Name <span className="text-red-500">*</span>
+                  {editingIsSub ? 'Subcategory Name' : 'Category Name'} <span className="text-red-500">*</span>
                 </label>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   value={editCatName}
                   onChange={(e) => setEditCatName(e.target.value)}
                   placeholder="Enter category name" 
@@ -968,29 +1093,30 @@ const CategoryManagement = () => {
               {/* Header Category Select Dropdown */}
               <div className="space-y-1">
                 <label className="text-xs font-black text-gray-700 mb-1.5 block">
-                  Header Category <span className="text-red-500">*</span>
+                  Header Category {!editingIsSub && <span className="text-red-500">*</span>}
                 </label>
-                <select 
+                <select
                   value={editCatHeader}
                   onChange={(e) => setEditCatHeader(e.target.value)}
-                  className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-xs font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                  disabled={editingIsSub}
+                  className={`w-full border border-gray-200 rounded-xl px-4 py-3 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/20 ${
+                    editingIsSub
+                      ? 'bg-gray-50 text-gray-400 cursor-not-allowed'
+                      : 'bg-white text-gray-700'
+                  }`}
                 >
                   <option value="">-- Select Header Category --</option>
-                  {headerCategories.length > 0 ? (
-                    headerCategories.map(hc => (
-                      <option key={hc.id} value={hc.id}>
-                        {hc.name}
-                      </option>
-                    ))
-                  ) : (
-                    <>
-                      <option value="Ice Creams">Ice Creams</option>
-                      <option value="School Uniforms">School Uniforms</option>
-                      <option value="Textbooks & Guides">Textbooks & Guides</option>
-                      <option value="Stationery & Gifts">Stationery & Gifts</option>
-                    </>
-                  )}
+                  {headerCategories.map(hc => (
+                    <option key={hc.id} value={hc.id}>
+                      {hc.name}
+                    </option>
+                  ))}
                 </select>
+                {editingIsSub && (
+                  <span className="text-[10px] text-gray-400 font-semibold mt-1 block">
+                    Inherited from the parent category
+                  </span>
+                )}
               </div>
 
               {/* Category Image upload/preview dropzone */}
@@ -1061,20 +1187,25 @@ const CategoryManagement = () => {
                 </div>
               </div>
 
-              {/* Parent Category Select Dropdown */}
-              <div className="space-y-1">
-                <label className="text-xs font-black text-gray-700 mb-1.5 block">Parent Category</label>
-                <select 
-                  value={editCatParent}
-                  onChange={(e) => setEditCatParent(e.target.value)}
-                  className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-xs font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-                >
-                  <option value="none">None (Root Category)</option>
-                  {categories.filter(cat => cat.id !== editingCategoryId).map(cat => (
-                    <option key={cat.id} value={cat.id}>{cat.name}</option>
-                  ))}
-                </select>
-              </div>
+              {/* Parent Category Select Dropdown — subcategories only; a category's
+                  parent is its header category, set above. */}
+              {editingIsSub && (
+                <div className="space-y-1">
+                  <label className="text-xs font-black text-gray-700 mb-1.5 block">
+                    Parent Category <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={editCatParent}
+                    onChange={(e) => setEditCatParent(e.target.value)}
+                    className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-xs font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                    required
+                  >
+                    {categories.map(cat => (
+                      <option key={cat.id} value={cat.id}>{cat.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               {/* Display Order Input */}
               <div className="space-y-1">
@@ -1133,7 +1264,7 @@ const CategoryManagement = () => {
                   type="submit"
                   className="bg-[#0B1528] hover:bg-gray-900 text-white font-black text-xs px-5 py-2.5 rounded-xl transition-all shadow-md shadow-indigo-950/10"
                 >
-                  Update Category
+                  {editingIsSub ? 'Update Subcategory' : 'Update Category'}
                 </button>
               </div>
 

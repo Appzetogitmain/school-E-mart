@@ -2,6 +2,11 @@ const { Joi, schemas } = require('../../../common/validation');
 
 const objectId = schemas.objectId;
 
+// Base64 inflates the raw bytes by ~4/3, so a 5 MB file arrives as a ~6.8 MB string.
+// This bound must stay above the writer's 5 MB decoded cap, or a file the writer would
+// have accepted gets rejected here with a far less helpful message.
+const MAX_BASE64_FILE_CHARS = 7 * 1024 * 1024;
+
 const paginationQuery = Joi.object({
   page: Joi.number().integer().min(1).default(1),
   limit: Joi.number().integer().min(1).max(100).default(20),
@@ -93,14 +98,10 @@ const createAssignmentSchema = Joi.object({
   }).optional(),
   maxScore: Joi.number().min(0).default(100),
   status: Joi.string().valid('draft', 'published', 'archived').optional(),
+  files: Joi.array().items(Joi.string().max(MAX_BASE64_FILE_CHARS)).max(5).optional(),
 });
 
 const updateAssignmentSchema = createAssignmentSchema.fork(['title'], (s) => s.optional());
-
-// Base64 inflates the raw bytes by ~4/3, so a 5 MB file arrives as a ~6.8 MB string.
-// This bound must stay above the writer's 5 MB decoded cap, or a file the writer would
-// have accepted gets rejected here with a far less helpful message.
-const MAX_BASE64_FILE_CHARS = 7 * 1024 * 1024;
 
 const submitAssignmentSchema = Joi.object({
   content: Joi.string().trim().max(10000).allow('').optional(),

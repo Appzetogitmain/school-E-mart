@@ -12,6 +12,11 @@ const buildProductFilter = (query = {}, { publicOnly = true, vendorId = null } =
   if (publicOnly) {
     filter.approvalStatus = 'approved';
     filter.publishStatus = 'published';
+  } else {
+    // Only trusted (admin/vendor) callers may narrow by moderation state; for public
+    // callers these stay pinned to approved/published above.
+    if (query.approvalStatus) filter.approvalStatus = query.approvalStatus;
+    if (query.publishStatus) filter.publishStatus = query.publishStatus;
   }
   if (vendorId) filter.vendorId = vendorId;
   if (query.headerId) filter.headerId = query.headerId;

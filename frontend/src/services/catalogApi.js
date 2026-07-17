@@ -16,8 +16,8 @@ const extractPaginated = (response) => {
   };
 };
 
-export const getCategoryTree = async () => {
-  const response = await apiClient.get('/catalog/categories/tree');
+export const getCategoryTree = async (params = {}) => {
+  const response = await apiClient.get('/catalog/categories/tree', { params });
   return unwrapData(response)?.tree || [];
 };
 
@@ -115,6 +115,26 @@ export const updateSubcategory = async (id, payload) => {
 
 export const deleteSubcategory = async (id) => {
   const response = await apiClient.delete(`/catalog/subcategories/${id}`);
+  return unwrapData(response);
+};
+
+/**
+ * Admin-only catalog listing. Unlike listProducts (public, approved+published only)
+ * this returns products in every moderation state, so pending/rejected items are
+ * visible and actionable.
+ */
+export const listAdminProducts = async (params = {}) => {
+  const response = await apiClient.get('/catalog/admin/products', { params: withSearchQuery(params) });
+  return extractPaginated(response);
+};
+
+export const updateProduct = async (productId, payload) => {
+  const response = await apiClient.patch(`/catalog/products/${productId}`, payload);
+  return unwrapData(response);
+};
+
+export const deleteProduct = async (productId) => {
+  const response = await apiClient.delete(`/catalog/products/${productId}`);
   return unwrapData(response);
 };
 

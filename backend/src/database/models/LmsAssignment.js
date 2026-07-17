@@ -35,6 +35,7 @@ const lmsAssignmentSchema = new mongoose.Schema({
   assignedByUserId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   assignedByName: { type: String },
   maxScore: { type: Number, default: 100, min: 0 },
+  attachments: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Attachment' }],
   status: {
     type: String,
     enum: ['draft', 'published', 'archived'],

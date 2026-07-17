@@ -1,21 +1,37 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useSearchParams } from 'react-router-dom';
-import { 
-  Plus, Search, Edit, Trash2, X, ChevronRight, Upload, 
-  Package, CheckCircle, AlertCircle, ShoppingBag, Check, Filter,
+import {
+  Search, Edit, Trash2, X,
+  Package, CheckCircle, AlertCircle, Check, Filter,
   FileText, Tag, Folder, Image, ChevronDown, UploadCloud, Loader2
 } from 'lucide-react';
-import { listProducts, setProductApprovalStatus } from '../../../services/catalogApi';
+import {
+  listAdminProducts,
+  updateProduct,
+  deleteProduct,
+  setProductApprovalStatus,
+  getCategoryTree,
+} from '../../../services/catalogApi';
+import { listVendors, uploadAdminFile } from '../../../services/adminApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 import { mapProductForAdminList } from '../../../utils/mappers/vendorProductMapper';
+
+// Backend approval values <-> display labels. Filtering and counting always use the
+// raw value; the labels are display only.
+const APPROVAL_TABS = [
+  { label: 'All', value: 'all' },
+  { label: 'Approved', value: 'approved' },
+  { label: 'Pending Approval', value: 'pending' },
+  { label: 'Rejected', value: 'rejected' },
+];
 
 const ProductListManagement = () => {
   const [searchParams] = useSearchParams();
   const initialStockFilter = searchParams.get('stock') === 'low' ? 'Low Stock' : 'All';
   // Filter and search states
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState('All'); // 'All' | 'Approved' | 'Pending Approval' | 'Rejected'
+  const [activeTab, setActiveTab] = useState('all'); // raw approvalStatus, or 'all'
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [sortBy, setSortBy] = useState('Newest first');
   const [stockFilter, setStockFilter] = useState(initialStockFilter);
@@ -24,23 +40,29 @@ const ProductListManagement = () => {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingProductId, setEditingProductId] = useState(null);
   const [activeFormTab, setActiveFormTab] = useState('General Info');
+  const [saving, setSaving] = useState(false);
 
   // Full Vendor-parity product fields state
   const [editName, setEditName] = useState('');
   const [editDescription, setEditDescription] = useState('');
   const [editBrand, setEditBrand] = useState('');
   const [editSku, setEditSku] = useState('');
-  const [editPrice, setEditPrice] = useState('499');
-  const [editStock, setEditStock] = useState('35');
+  const [editPrice, setEditPrice] = useState('');
+  const [editStock, setEditStock] = useState('');
   const [editVariant, setEditVariant] = useState('');
-  const [editHeaderGroup, setEditHeaderGroup] = useState('');
-  const [editCategory, setEditCategory] = useState('Accessories');
-  const [editSubcategory, setEditSubcategory] = useState('Backpacks');
-  const [editVendor, setEditVendor] = useState('');
-  const [editApprovalStatus, setEditApprovalStatus] = useState('Approved');
+  const [editHeaderId, setEditHeaderId] = useState('');
+  const [editCategoryId, setEditCategoryId] = useState('');
+  const [editSubcategoryId, setEditSubcategoryId] = useState('');
+  const [editVendorId, setEditVendorId] = useState('');
+  const [editApprovalStatus, setEditApprovalStatus] = useState('approved');
   const [editImage, setEditImage] = useState('');
+  const [editImageFile, setEditImageFile] = useState(null);
+  const [editImagePreview, setEditImagePreview] = useState('');
+  const editImageInputRef = React.useRef(null);
 
   const [products, setProducts] = useState([]);
+  const [categoryTree, setCategoryTree] = useState([]);
+  const [vendors, setVendors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -48,24 +70,42 @@ const ProductListManagement = () => {
     setStockFilter(searchParams.get('stock') === 'low' ? 'Low Stock' : 'All');
   }, [searchParams]);
 
+  const loadProducts = useCallback(async () => {
+    setLoading(true);
+    try {
+      // Admin listing: includes pending/rejected/draft, which the public
+      // /catalog/products route deliberately excludes.
+      const { data } = await listAdminProducts({ limit: 100 });
+      setProducts((data || []).map(mapProductForAdminList));
+      setError('');
+    } catch (err) {
+      setProducts([]);
+      setError(getErrorMessage(err, 'Unable to load products'));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadProducts();
+  }, [loadProducts]);
+
+  // Taxonomy + vendors back the edit form's dropdowns, which must submit ObjectIds.
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    listProducts({ limit: 100 })
+    getCategoryTree({ status: 'all' })
+      .then((tree) => {
+        if (!cancelled) setCategoryTree(tree || []);
+      })
+      .catch(() => {
+        if (!cancelled) setCategoryTree([]);
+      });
+    listVendors({ limit: 100 })
       .then(({ data }) => {
-        if (!cancelled) {
-          setProducts((data || []).map(mapProductForAdminList));
-          setError('');
-        }
+        if (!cancelled) setVendors(data || []);
       })
-      .catch((err) => {
-        if (!cancelled) {
-          setProducts([]);
-          setError(getErrorMessage(err, 'Unable to load products'));
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
+      .catch(() => {
+        if (!cancelled) setVendors([]);
       });
     return () => {
       cancelled = true;
@@ -100,90 +140,144 @@ const ProductListManagement = () => {
     }
   };
 
-  // Safe product deletion handler
-  const handleDeleteProduct = (id) => {
-    if (confirm('Are you sure you want to delete this product?')) {
-      setProducts(prev => prev.filter(p => p.id !== id));
+  const handleDeleteProduct = async (product) => {
+    if (!product?.mongoId) return;
+    if (!confirm(`Are you sure you want to delete "${product.name}"?`)) return;
+    try {
+      await deleteProduct(product.mongoId);
+      setProducts((prev) => prev.filter((p) => p.mongoId !== product.mongoId));
+    } catch (err) {
+      alert(getErrorMessage(err, 'Unable to delete product'));
     }
   };
 
   // Open Edit Modal pre-populating parameters
   const openEditModal = (p) => {
-    setEditingProductId(p.id);
-    setEditName(p.name);
+    setEditingProductId(p.mongoId);
+    setEditName(p.name || '');
     setEditDescription(p.description || '');
     setEditBrand(p.brand || '');
-    setEditSku(p.sku);
-    setEditPrice(String(p.price || '499'));
-    setEditStock(String(p.stock || '35'));
-    setEditVariant(p.variant || '');
-    setEditHeaderGroup(p.headerGroup || '');
-    setEditCategory(p.category);
-    setEditSubcategory(p.subcategory);
-    setEditVendor(p.vendor || '');
-    setEditApprovalStatus(p.approvalStatus);
+    setEditSku(p.sku || '');
+    setEditPrice(String(p.price ?? ''));
+    setEditStock(String(p.stock ?? ''));
+    setEditVariant(p.variant === 'Standard' ? '' : p.variant || '');
+    setEditHeaderId(p.headerId || '');
+    setEditCategoryId(p.categoryId || '');
+    setEditSubcategoryId(p.subcategoryId || '');
+    setEditVendorId(p.vendorId || '');
+    setEditApprovalStatus(p.approvalRaw || 'pending');
     setEditImage(p.image);
+    setEditImageFile(null);
+    setEditImagePreview('');
     setActiveFormTab('General Info');
     setIsEditModalOpen(true);
   };
 
-  // Update Product attributes
-  const handleUpdateProduct = (e) => {
+  // Persist the edit. Product fields go through PATCH /products/:id; approval state
+  // has its own admin-guarded endpoint, so it is sent separately rather than smuggled
+  // into the product payload.
+  const handleUpdateProduct = async (e) => {
     e.preventDefault();
     if (!editName.trim() || !editingProductId) return;
 
-    const numericStock = parseInt(editStock) || 0;
-    let computedStockStatus = 'In Stock';
-    if (numericStock === 0) computedStockStatus = 'Out of Stock';
-    else if (numericStock <= 5) computedStockStatus = 'Low Stock';
+    const original = products.find((p) => p.mongoId === editingProductId);
+    if (!original) return;
 
-    setProducts(prev => prev.map(p => {
-      if (p.id === editingProductId) {
-        return {
-          ...p,
-          name: editName,
-          description: editDescription,
-          brand: editBrand,
-          sku: editSku,
-          price: editPrice,
-          stock: numericStock,
-          variant: editVariant,
-          headerGroup: editHeaderGroup,
-          category: editCategory,
-          subcategory: editSubcategory,
-          stockStatus: computedStockStatus,
-          approvalStatus: editApprovalStatus,
-          image: editImage,
-          vendor: editVendor
-        };
+    const payload = {
+      name: editName.trim(),
+      description: editDescription.trim(),
+      brand: editBrand.trim(),
+      sku: editSku.trim(),
+      pricePaise: Math.round((parseFloat(editPrice) || 0) * 100),
+      stock: parseInt(editStock, 10) || 0,
+      sizes: editVariant.trim() ? [editVariant.trim()] : [],
+    };
+    if (editHeaderId) payload.headerId = editHeaderId;
+    if (editCategoryId) payload.categoryId = editCategoryId;
+    if (editSubcategoryId) payload.subcategoryId = editSubcategoryId;
+    if (editVendorId) payload.vendorId = editVendorId;
+
+    // The API rejects a blank brand/description, so drop rather than send empties.
+    if (!payload.brand) delete payload.brand;
+    if (!payload.description) delete payload.description;
+
+    try {
+      setSaving(true);
+
+      // Images are stored as attachment refs, so a replacement has to be uploaded
+      // first and sent as an attachmentId — there is no url-based path.
+      if (editImageFile) {
+        const formData = new FormData();
+        formData.append('file', editImageFile);
+        formData.append('purpose', 'product_image');
+        const attachment = await uploadAdminFile(formData);
+        const attachmentId = attachment?._id || attachment?.id;
+        if (attachmentId) payload.images = [{ attachmentId }];
       }
-      return p;
-    }));
 
-    setIsEditModalOpen(false);
+      await updateProduct(editingProductId, payload);
+      if (editApprovalStatus !== original.approvalRaw) {
+        await setProductApprovalStatus(editingProductId, editApprovalStatus);
+      }
+      setIsEditModalOpen(false);
+      await loadProducts();
+    } catch (err) {
+      alert(getErrorMessage(err, 'Unable to update product'));
+    } finally {
+      setSaving(false);
+    }
   };
 
-  // Filter products dynamically
-  const filteredProducts = products.filter(p => {
-    const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          p.sku.toLowerCase().includes(searchQuery.toLowerCase());
-    
-    let matchesTab = true;
-    if (activeTab === 'Approved') matchesTab = p.approvalStatus === 'Approved';
-    if (activeTab === 'Pending Approval') matchesTab = p.approvalStatus === 'Pending';
-    if (activeTab === 'Rejected') matchesTab = p.approvalStatus === 'Rejected';
+  // Subcategories available for the currently selected category in the edit form.
+  const categoriesFlat = categoryTree.flatMap((header) =>
+    (header?.categories || []).map((category) => ({
+      id: category?._id?.toString?.() || category?.id,
+      name: category?.name,
+      headerId: header?._id?.toString?.() || header?.id,
+      headerName: header?.name,
+      subcategories: category?.subcategories || [],
+    }))
+  );
+  const selectedEditCategory = categoriesFlat.find((c) => c.id === editCategoryId);
+  const editSubcategoryOptions = selectedEditCategory?.subcategories || [];
 
-    let matchesCategory = true;
-    if (selectedCategory !== 'All') matchesCategory = p.category === selectedCategory;
+  const SORTERS = {
+    'Newest first': null, // backend already returns newest-first
+    'Oldest first': (a, b) => String(a.mongoId).localeCompare(String(b.mongoId)),
+    'Stock: Low to High': (a, b) => a.stock - b.stock,
+  };
+
+  // Filter products dynamically. Comparisons use the raw backend value
+  // ('pending'|'approved'|'rejected'), never the display label.
+  const filteredProducts = products.filter(p => {
+    const q = searchQuery.toLowerCase();
+    const matchesSearch =
+      (p.name || '').toLowerCase().includes(q) || (p.sku || '').toLowerCase().includes(q);
+
+    const matchesTab = activeTab === 'all' || p.approvalRaw === activeTab;
+
+    const matchesCategory = selectedCategory === 'All' || p.categoryId === selectedCategory;
 
     const matchesStock = stockFilter === 'All' || p.stockStatus === stockFilter;
 
     return matchesSearch && matchesTab && matchesCategory && matchesStock;
   });
 
+  const sorter = SORTERS[sortBy];
+  const visibleProducts = sorter ? [...filteredProducts].sort(sorter) : filteredProducts;
+
+  const resetFilters = () => {
+    setSearchQuery('');
+    setActiveTab('all');
+    setSelectedCategory('All');
+    setStockFilter('All');
+    setSortBy('Newest first');
+  };
+
   // Calculate dynamic stats metrics
+  const countByApproval = (value) => products.filter(p => p.approvalRaw === value).length;
   const totalCount = products.length;
-  const activeCount = products.filter(p => p.approvalStatus === 'Approved').length;
+  const activeCount = countByApproval('approved');
   const lowStockCount = products.filter(p => p.stockStatus === 'Low Stock').length;
   const outOfStockCount = products.filter(p => p.stockStatus === 'Out of Stock').length;
 
@@ -254,24 +348,20 @@ const ProductListManagement = () => {
 
       {/* 3. TABS FILTER ROW */}
       <div className="bg-white rounded-2xl border border-gray-200/75 p-3 flex flex-wrap gap-2 select-none shadow-sm">
-        {['All', 'Approved', 'Pending Approval', 'Rejected'].map(tab => {
-          let count = totalCount;
-          if (tab === 'Approved') count = activeCount;
-          if (tab === 'Pending Approval') count = products.filter(p => p.approvalStatus === 'Pending').length;
-          if (tab === 'Rejected') count = products.filter(p => p.approvalStatus === 'Rejected').length;
-
-          const isActive = activeTab === tab;
+        {APPROVAL_TABS.map(tab => {
+          const count = tab.value === 'all' ? totalCount : countByApproval(tab.value);
+          const isActive = activeTab === tab.value;
           return (
             <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
+              key={tab.value}
+              onClick={() => setActiveTab(tab.value)}
               className={`px-4 py-2 rounded-xl text-xs font-black transition-all ${
-                isActive 
-                  ? 'bg-[#0B1528] text-white shadow-sm' 
+                isActive
+                  ? 'bg-[#0B1528] text-white shadow-sm'
                   : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50 border border-transparent hover:border-gray-200/60'
               }`}
             >
-              {tab} ({count})
+              {tab.label} ({count})
             </button>
           );
         })}
@@ -301,14 +391,16 @@ const ProductListManagement = () => {
             className="bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-xs font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer"
           >
             <option value="All">All Categories</option>
-            <option value="Accessories">Accessories</option>
-            <option value="Fashion">Fashion</option>
-            <option value="School Uniforms">School Uniforms</option>
-            <option value="Stationery">Stationery</option>
+            {categoriesFlat.map((cat) => (
+              <option key={cat.id} value={cat.id}>{cat.name}</option>
+            ))}
           </select>
 
-          {/* Show All filter */}
-          <button className="bg-white hover:bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-xs font-extrabold text-gray-700 flex items-center gap-1.5 transition-all">
+          {/* Reset every filter back to defaults */}
+          <button
+            onClick={resetFilters}
+            className="bg-white hover:bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-xs font-extrabold text-gray-700 flex items-center gap-1.5 transition-all"
+          >
             <Filter size={13} className="stroke-[2.5]" />
             <span>SHOW ALL</span>
           </button>
@@ -327,6 +419,19 @@ const ProductListManagement = () => {
 
       </div>
 
+      {/* Load failure banner */}
+      {error && (
+        <div className="flex items-center justify-between gap-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3">
+          <span className="text-xs font-bold text-red-700">{error}</span>
+          <button
+            onClick={loadProducts}
+            className="shrink-0 rounded-lg border border-red-300 px-3 py-1.5 text-[10px] font-black uppercase text-red-700 transition-all hover:bg-red-100"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
       {/* 5. DATATABLE MAIN PANEL */}
       <div className="bg-white rounded-[1.25rem] border border-gray-250/60 shadow-sm overflow-hidden p-6">
         <div className="overflow-x-auto border border-gray-200/80 rounded-2xl shadow-inner bg-[#FCFDFE]">
@@ -343,14 +448,23 @@ const ProductListManagement = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 bg-white">
-              {filteredProducts.length === 0 ? (
+              {loading ? (
+                <tr>
+                  <td colSpan="7" className="py-12">
+                    <div className="flex items-center justify-center gap-2 text-xs font-black text-gray-400">
+                      <Loader2 size={16} className="animate-spin" />
+                      <span>Loading products…</span>
+                    </div>
+                  </td>
+                </tr>
+              ) : visibleProducts.length === 0 ? (
                 <tr>
                   <td colSpan="7" className="py-12 text-center text-xs font-black text-gray-400">
                     No matching product records found.
                   </td>
                 </tr>
               ) : (
-                filteredProducts.map(p => (
+                visibleProducts.map(p => (
                   <tr key={p.id} className="hover:bg-gray-50/50 transition-colors">
                     
                     {/* PRODUCT COLUMN */}
@@ -465,7 +579,7 @@ const ProductListManagement = () => {
 
                         {/* Delete Button */}
                         <button 
-                          onClick={() => handleDeleteProduct(p.id)}
+                          onClick={() => handleDeleteProduct(p)}
                           title="Delete Product Listing"
                           className="w-7 h-7 rounded-xl border border-red-200 text-red-500 hover:bg-red-50 flex items-center justify-center transition-all shrink-0"
                         >
@@ -543,9 +657,9 @@ const ProductListManagement = () => {
                       onChange={(e) => setEditApprovalStatus(e.target.value)}
                       className="w-full appearance-none pl-3.5 pr-8 py-2.5 bg-white border border-gray-200 rounded-xl text-xs font-black text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
                     >
-                      <option value="Approved">Approved</option>
-                      <option value="Pending">Pending</option>
-                      <option value="Rejected">Rejected</option>
+                      <option value="approved">Approved</option>
+                      <option value="pending">Pending</option>
+                      <option value="rejected">Rejected</option>
                     </select>
                     <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                   </div>
@@ -650,46 +764,71 @@ const ProductListManagement = () => {
                   <div className="space-y-5">
                     <h4 className="font-extrabold text-sm text-gray-900 border-b border-gray-100 pb-2">Category Associations</h4>
                     
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider block">Header Group</label>
-                      <input 
-                        type="text" 
-                        value={editHeaderGroup}
-                        onChange={(e) => setEditHeaderGroup(e.target.value)}
-                        placeholder="e.g. Accessories" 
-                        className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-xs text-gray-800 focus:outline-none focus:ring-2"
-                      />
-                    </div>
-
+                    {/* These bind to ObjectIds, not names — the API matches on id. */}
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-1">
                         <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider block">Category</label>
-                        <input 
-                          type="text" 
-                          value={editCategory}
-                          onChange={(e) => setEditCategory(e.target.value)}
-                          className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-xs text-gray-800 focus:outline-none focus:ring-2"
-                        />
+                        <select
+                          value={editCategoryId}
+                          onChange={(e) => {
+                            const next = categoriesFlat.find((c) => c.id === e.target.value);
+                            setEditCategoryId(e.target.value);
+                            // Header is implied by the category, and the old
+                            // subcategory belongs to the previous parent.
+                            setEditHeaderId(next?.headerId || '');
+                            setEditSubcategoryId('');
+                          }}
+                          className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-xs font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                        >
+                          <option value="">-- Select Category --</option>
+                          {categoriesFlat.map((cat) => (
+                            <option key={cat.id} value={cat.id}>
+                              {cat.headerName} › {cat.name}
+                            </option>
+                          ))}
+                        </select>
                       </div>
                       <div className="space-y-1">
                         <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider block">Subcategory</label>
-                        <input 
-                          type="text" 
-                          value={editSubcategory}
-                          onChange={(e) => setEditSubcategory(e.target.value)}
-                          className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-xs text-gray-800 focus:outline-none focus:ring-2"
-                        />
+                        <select
+                          value={editSubcategoryId}
+                          onChange={(e) => setEditSubcategoryId(e.target.value)}
+                          disabled={!editCategoryId}
+                          className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-xs font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed"
+                        >
+                          <option value="">— None —</option>
+                          {editSubcategoryOptions.map((sub) => {
+                            const id = sub?._id?.toString?.() || sub?.id;
+                            return <option key={id} value={id}>{sub.name}</option>;
+                          })}
+                        </select>
                       </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider block">Header Group</label>
+                      <input
+                        type="text"
+                        value={selectedEditCategory?.headerName || '—'}
+                        disabled
+                        className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-xs text-gray-400 cursor-not-allowed focus:outline-none"
+                      />
+                      <span className="text-[10px] text-gray-400 font-semibold mt-1 block">Inherited from the selected category</span>
                     </div>
 
                     <div className="space-y-1">
                       <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider block">Vendor Hub</label>
-                      <input 
-                        type="text" 
-                        value={editVendor}
-                        onChange={(e) => setEditVendor(e.target.value)}
-                        className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-xs text-gray-800 focus:outline-none focus:ring-2"
-                      />
+                      <select
+                        value={editVendorId}
+                        onChange={(e) => setEditVendorId(e.target.value)}
+                        className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-xs font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                      >
+                        <option value="">-- Select Vendor --</option>
+                        {vendors.map((v) => {
+                          const id = v?._id?.toString?.() || v?.id;
+                          return <option key={id} value={id}>{v.storeName || v.name}</option>;
+                        })}
+                      </select>
                     </div>
                   </div>
                 )}
@@ -698,24 +837,58 @@ const ProductListManagement = () => {
                   <div className="space-y-5">
                     <h4 className="font-extrabold text-sm text-gray-900 border-b border-gray-100 pb-2">Product Images</h4>
                     
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider block">Product Image URL</label>
-                      <input 
-                        type="text" 
-                        value={editImage}
-                        onChange={(e) => setEditImage(e.target.value)}
-                        placeholder="https://images.unsplash.com/photo-..." 
-                        className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-xs text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-                      />
-                    </div>
+                    <input
+                      type="file"
+                      ref={editImageInputRef}
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          setEditImageFile(file);
+                          setEditImagePreview(URL.createObjectURL(file));
+                        }
+                      }}
+                    />
 
-                    <div className="border-2 border-dashed border-indigo-150 hover:border-indigo-300 bg-indigo-50/10 rounded-2xl p-10 text-center transition-all cursor-pointer">
+                    <div
+                      onClick={() => editImageInputRef.current?.click()}
+                      className="border-2 border-dashed border-indigo-150 hover:border-indigo-300 bg-indigo-50/10 rounded-2xl p-10 text-center transition-all cursor-pointer"
+                    >
                       <div className="flex flex-col items-center justify-center space-y-3">
-                        <UploadCloud size={28} className="text-indigo-500" />
-                        <div>
-                          <p className="text-xs font-black text-gray-950">Drag & Drop replacement photos or browse</p>
-                          <p className="text-[10px] font-bold text-gray-400 mt-1">PNG, JPG formats supported up to 5MB.</p>
-                        </div>
+                        {editImagePreview || editImage ? (
+                          <>
+                            <img
+                              src={editImagePreview || editImage}
+                              alt="Product"
+                              className="w-32 h-32 object-cover rounded-2xl border border-gray-200 shadow-sm"
+                            />
+                            <p className="text-[10px] font-bold text-gray-400">
+                              {editImagePreview ? 'New image — saves when you update' : 'Current image'}
+                            </p>
+                            {editImagePreview && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setEditImageFile(null);
+                                  setEditImagePreview('');
+                                }}
+                                className="text-[10px] text-red-500 font-black hover:underline"
+                              >
+                                Discard new image
+                              </button>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            <UploadCloud size={28} className="text-indigo-500" />
+                            <div>
+                              <p className="text-xs font-black text-gray-950">Click to browse a replacement photo</p>
+                              <p className="text-[10px] font-bold text-gray-400 mt-1">PNG, JPG formats supported up to 5MB.</p>
+                            </div>
+                          </>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -734,12 +907,14 @@ const ProductListManagement = () => {
               >
                 Cancel
               </button>
-              <button 
+              <button
                 type="button"
                 onClick={handleUpdateProduct}
-                className="bg-[#0B1528] hover:bg-gray-900 text-white font-black text-xs px-5 py-2.5 rounded-xl transition-all shadow-md shadow-indigo-950/10"
+                disabled={saving}
+                className="bg-[#0B1528] hover:bg-gray-900 text-white font-black text-xs px-5 py-2.5 rounded-xl transition-all shadow-md shadow-indigo-950/10 disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2"
               >
-                Save & Update Product
+                {saving && <Loader2 size={12} className="animate-spin" />}
+                <span>{saving ? 'Saving…' : 'Save & Update Product'}</span>
               </button>
             </div>
 

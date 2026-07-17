@@ -274,4 +274,30 @@ describe('homework flow: assign -> submit -> grade -> return', () => {
     expect(String(notifications[0].userId)).toBe(String(teacherUserId));
     expect(notifications[0].body).toContain('Asha');
   });
+
+  test('creating homework with files stores them as homework_attachment and lets students access them', async () => {
+    const assignment = await createHomework({
+      files: [PNG_DATA_URI],
+    });
+
+    expect(assignment.attachments).toHaveLength(1);
+
+    const attachment = await Attachment.findById(assignment.attachments[0]).lean();
+    expect(attachment.purpose).toBe('homework_attachment');
+    expect(attachment.storageKey).not.toMatch(/^\/uploads\//);
+    const onDisk = resolvePrivatePath(attachment.storageKey);
+    expect(fs.existsSync(onDisk)).toBe(true);
+
+    // Verify it is returned in the student homework feed
+    const feed = await assignmentService.getStudentHomeworkFeed(schoolId, studentA);
+    expect(feed[0].assignment.attachments).toHaveLength(1);
+    expect(String(feed[0].assignment.attachments[0]._id)).toBe(String(attachment._id));
+    expect(feed[0].assignment.attachments[0].storageKey).toBe(attachment.storageKey);
+
+    // Verify the attachment context can be retrieved for the teacher homework attachment
+    const context = await assignmentService.getAttachmentContext(schoolId, attachment._id);
+    expect(context.isHomeworkAttachment).toBe(true);
+    expect(String(context.assignment._id)).toBe(String(assignment._id));
+    expect(String(context.attachment._id)).toBe(String(attachment._id));
+  });
 });

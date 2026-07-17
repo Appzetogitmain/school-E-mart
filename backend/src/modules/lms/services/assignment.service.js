@@ -2,6 +2,7 @@ const { NotFoundError, ConflictError, BadRequestError } = require('../../../comm
 const Attachment = require('../../../database/models/Attachment');
 const Student = require('../../../database/models/Student');
 const User = require('../../../database/models/User');
+const LmsAssignment = require('../../../database/models/LmsAssignment');
 const attachmentService = require('../../admin/services/attachment.service');
 const triggerService = require('../../../services/notification/trigger.service');
 const { assignmentRepository, assignmentSubmissionRepository } = require('../repositories/assignment.repository');
@@ -35,8 +36,19 @@ const assignmentService = {
       assignedByName = user?.name || null;
     }
 
+    const { files, ...assignmentData } = payload;
+    const hasFiles = Boolean(files?.length);
+    const attachments = hasFiles
+      ? await attachmentService.createManyFromBase64({
+          ownerUserId: assignedByUserId || actor.userId,
+          purpose: 'homework_attachment',
+          files,
+          prefix: 'homework',
+        })
+      : [];
+
     const assignment = await assignmentRepository.create({
-      ...payload,
+      ...assignmentData,
       schoolId,
       courseId,
       // Fall back to the course's grade/subject so the record is self-describing
@@ -46,6 +58,7 @@ const assignmentService = {
       assignedByUserId,
       assignedByName,
       status: payload.status || 'draft',
+      attachments: attachments.map((a) => a._id),
     });
 
     if (assignment.status === 'published') {
@@ -64,14 +77,31 @@ const assignmentService = {
 
   async getAssignment(schoolId, courseId, assignmentId) {
     await courseService.getCourse(schoolId, courseId);
-    const assignment = await assignmentRepository.findOne({ _id: assignmentId, schoolId, courseId });
+    const assignment = await assignmentRepository.findOnePopulated({ _id: assignmentId, schoolId, courseId });
     if (!assignment) throw new NotFoundError('Assignment not found', 'ASSIGNMENT_NOT_FOUND');
     return assignment;
   },
 
   async updateAssignment(schoolId, courseId, assignmentId, payload) {
     const before = await this.getAssignment(schoolId, courseId, assignmentId);
-    const assignment = await assignmentRepository.updateById(assignmentId, { $set: payload }, { schoolId, courseId });
+
+    const { files, ...updateData } = payload;
+    let attachments = before.attachments || [];
+    if (files) {
+      const newAttachments = await attachmentService.createManyFromBase64({
+        ownerUserId: before.assignedByUserId,
+        purpose: 'homework_attachment',
+        files,
+        prefix: 'homework',
+      });
+      attachments = newAttachments.map((a) => a._id);
+    }
+
+    const assignment = await assignmentRepository.updateById(
+      assignmentId,
+      { $set: { ...updateData, attachments } },
+      { schoolId, courseId }
+    );
     if (!assignment) throw new NotFoundError('Assignment not found', 'ASSIGNMENT_NOT_FOUND');
 
     // Homework drafted first and published later must still reach parents.
@@ -296,7 +326,7 @@ const assignmentService = {
 
     const courseById = new Map(gradeCourses.map((course) => [String(course._id), course]));
 
-    const assignments = await assignmentRepository.findMany({
+    const assignments = await assignmentRepository.findManyPopulated({
       schoolId,
       courseId: { $in: gradeCourses.map((course) => course._id) },
       status: 'published',
@@ -337,30 +367,40 @@ const assignmentService = {
   },
 
   /**
-   * Resolve a submission attachment together with the submission that owns it, so the
+   * Resolve an attachment together with the submission or assignment that owns it, so the
    * caller can decide whether this requester is allowed to read a child's work.
    */
-  async getSubmissionAttachmentContext(schoolId, attachmentId) {
+  async getAttachmentContext(schoolId, attachmentId) {
     const attachment = await Attachment.findById(attachmentId).lean();
     if (!attachment || !attachmentService.PRIVATE_PURPOSES.has(attachment.purpose)) {
       throw new NotFoundError('Attachment not found', 'ATTACHMENT_NOT_FOUND');
     }
 
-    // Scoped by school so an attachment id from another tenant cannot be read here.
-    const submission = await assignmentSubmissionRepository.findOne({
-      schoolId,
-      attachments: attachment._id,
-    });
-    if (!submission) {
-      throw new NotFoundError('Attachment not found', 'ATTACHMENT_NOT_FOUND');
-    }
+    if (attachment.purpose === 'homework_attachment') {
+      const assignment = await LmsAssignment.findOne({
+        schoolId,
+        attachments: attachment._id,
+      }).lean();
+      if (!assignment) {
+        throw new NotFoundError('Attachment not found', 'ATTACHMENT_NOT_FOUND');
+      }
+      return { attachment, assignment, isHomeworkAttachment: true };
+    } else {
+      const submission = await assignmentSubmissionRepository.findOne({
+        schoolId,
+        attachments: attachment._id,
+      });
+      if (!submission) {
+        throw new NotFoundError('Attachment not found', 'ATTACHMENT_NOT_FOUND');
+      }
 
-    const assignment = await assignmentRepository.findOne({ _id: submission.assignmentId, schoolId });
-    if (!assignment) {
-      throw new NotFoundError('Attachment not found', 'ATTACHMENT_NOT_FOUND');
-    }
+      const assignment = await LmsAssignment.findOne({ _id: submission.assignmentId, schoolId }).lean();
+      if (!assignment) {
+        throw new NotFoundError('Attachment not found', 'ATTACHMENT_NOT_FOUND');
+      }
 
-    return { attachment, submission, assignment };
+      return { attachment, submission, assignment, isHomeworkAttachment: false };
+    }
   },
 };
 

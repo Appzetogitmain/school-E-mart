@@ -32,6 +32,10 @@ class ProductRepository extends BaseRepository {
       'headerId',
       'categoryId',
       'subcategoryId',
+      // Owned by buildProductFilter; leaving them here would re-apply them as raw
+      // ApiFeatures conditions.
+      'approvalStatus',
+      'publishStatus',
     ].forEach((key) => delete featureQuery[key]);
 
     let baseQuery = Product.find(mergedFilter);
@@ -41,6 +45,9 @@ class ProductRepository extends BaseRepository {
 
     const features = new ApiFeatures(baseQuery, featureQuery);
     features.filter().sort(options.defaultSort).limitFields(options.defaultFields);
+    if (options.populate) {
+      features.query = features.query.populate(options.populate);
+    }
 
     const [data, total] = await Promise.all([
       features.query.clone().skip(skip).limit(limit).lean(),

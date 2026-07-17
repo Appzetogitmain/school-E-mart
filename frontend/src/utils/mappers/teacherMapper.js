@@ -81,6 +81,12 @@ export const mapAssignmentForHomework = (assignment, course) => ({
   type: assignment?.homeworkType || 'Written',
   priority: assignment?.priority || null,
   maxScore: assignment?.maxScore ?? 100,
+  attachments: (assignment?.attachments || []).map((attachment, idx) => ({
+    id: attachment?._id?.toString?.() || attachment?.toString?.(),
+    name: `Attachment ${idx + 1}`,
+    mime: attachment?.mime || '',
+    isImage: String(attachment?.mime || '').startsWith('image/'),
+  })),
   raw: assignment,
 });
 

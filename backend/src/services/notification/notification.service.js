@@ -4,7 +4,7 @@ const fcmService = require('./fcm.service');
 const tokenService = require('./token.service');
 
 const notificationService = {
-  async createInAppRecord({ userId, title, body, type, channel = 'push', actionUrl, payload }) {
+  async createInAppRecord({ userId, title, body, type, channel = 'push', actionUrl, payload, campaignId }) {
     const [record] = await Notification.create([
       {
         userId,
@@ -14,6 +14,7 @@ const notificationService = {
         channel,
         actionUrl,
         payload,
+        campaignId,
         status: 'pending',
         isRead: false,
       },
@@ -21,10 +22,11 @@ const notificationService = {
     return record.toObject();
   },
 
-  async sendToUser(userId, { notification, data, type = 'system', channel = 'push', persist = true }) {
+  async sendToUser(userId, { notification, data, type = 'system', channel = 'push', persist = true, campaignId }) {
     const title = notification?.title || data?.title || 'Notification';
     const body = notification?.body || data?.body || '';
     const actionUrl = data?.route || null;
+    const resolvedCampaignId = campaignId || data?.campaignId || null;
 
     let record = null;
     if (persist) {
@@ -36,6 +38,7 @@ const notificationService = {
         channel,
         actionUrl,
         payload: { notification, data },
+        campaignId: resolvedCampaignId,
       });
     }
 

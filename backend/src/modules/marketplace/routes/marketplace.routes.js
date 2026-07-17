@@ -104,6 +104,14 @@ router.delete(
 router.get('/products', validateQuery(validators.paginationQuery), marketplaceController.listProducts);
 router.get('/products/featured', validateQuery(validators.paginationQuery), marketplaceController.listFeaturedProducts);
 router.get('/products/offers', validateQuery(validators.paginationQuery), marketplaceController.listOfferProducts);
+// Admin catalog listing: returns every moderation state, so it must stay behind the
+// admin guard — the public /products route above is deliberately approved-only.
+router.get(
+  '/admin/products',
+  ...adminCatalog,
+  validateQuery(validators.adminProductQuery),
+  marketplaceController.listAdminProducts
+);
 router.get('/products/:productId', validateParams(validators.productIdParam), marketplaceController.getProduct);
 router.get(
   '/products/:productId/related',

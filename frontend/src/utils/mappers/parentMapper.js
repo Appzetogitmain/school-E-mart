@@ -90,6 +90,12 @@ export const mapAssignmentForParentHomework = (assignment, course, submission = 
     textbook: assignment?.reference?.textbook || '',
     chapter: assignment?.reference?.chapter || '',
     attachmentsCount: assignment?.attachments?.length || 0,
+    attachments: (assignment?.attachments || []).map((attachment, idx) => ({
+      id: attachment?._id?.toString?.() || attachment?.toString?.(),
+      name: `Attachment ${idx + 1}`,
+      mime: attachment?.mime || '',
+      isImage: String(attachment?.mime || '').startsWith('image/'),
+    })),
     tabType,
     maxScore,
 

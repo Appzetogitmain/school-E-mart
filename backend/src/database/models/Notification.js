@@ -6,7 +6,7 @@ const notificationSchema = new mongoose.Schema({
   body: { type: String, required: true },
   type: {
     type: String,
-    enum: ['system', 'order_update', 'promo', 'school_notice', 'event', 'rfq_update', 'homework'],
+    enum: ['system', 'order_update', 'promo', 'school_notice', 'event', 'rfq_update', 'homework', 'campaign'],
     required: true
   },
   channel: {
