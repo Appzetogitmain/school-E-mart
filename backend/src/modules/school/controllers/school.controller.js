@@ -240,8 +240,11 @@ const schoolController = {
   }),
 
   markAttendance: asyncHandler(async (req, res) => {
-    const records = await attendanceService.markAttendance(req, req.body);
-    return success(res, { records }, 'Attendance marked successfully', undefined, req);
+    const { records, skipped } = await attendanceService.markAttendance(req, req.body);
+    const message = skipped.length
+      ? `Attendance marked for ${records.length} students, ${skipped.length} skipped`
+      : 'Attendance marked successfully';
+    return success(res, { records, skipped }, message, undefined, req);
   }),
 
   updateAttendance: asyncHandler(async (req, res) => {
@@ -255,17 +258,17 @@ const schoolController = {
   }),
 
   getDailyAttendance: asyncHandler(async (req, res) => {
-    const data = await attendanceService.getDailyAttendance(req.schoolId, req.query);
+    const data = await attendanceService.getDailyAttendance(req, req.query);
     return success(res, { attendance: data }, 'Daily attendance fetched successfully', undefined, req);
   }),
 
   getAttendanceHistory: asyncHandler(async (req, res) => {
-    const { data, pagination } = await attendanceService.getAttendanceHistory(req.schoolId, req.query);
+    const { data, pagination } = await attendanceService.getAttendanceHistory(req, req.query);
     return paginated(res, { records: data }, pagination, 'Attendance history fetched successfully', req);
   }),
 
   getMonthlyAttendanceSummary: asyncHandler(async (req, res) => {
-    const summary = await attendanceService.getMonthlySummary(req.schoolId, req.query);
+    const summary = await attendanceService.getMonthlySummary(req, req.query);
     return success(res, { summary }, 'Monthly attendance summary fetched successfully', undefined, req);
   }),
 

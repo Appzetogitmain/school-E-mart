@@ -26,32 +26,47 @@ export const mapStudentForTeacherManage = (student) => ({
   raw: student,
 });
 
+// A student with no record yet is UNMARKED, never Present. Defaulting to 'P' meant
+// saving an untouched roster silently recorded the whole class present.
+export const UNMARKED = 'U';
+
+// These two maps must stay exact inverses. When they were not, loading a day marked
+// 'holiday' and saving it again rewrote it as 'leave'.
 const UI_TO_API_STATUS = {
   P: 'present',
   A: 'absent',
   L: 'leave',
-  Late: 'half_day',
+  Late: 'late',
+  Half: 'half_day',
+  H: 'holiday',
 };
 
 const API_TO_UI_STATUS = {
   present: 'P',
   absent: 'A',
   leave: 'L',
-  half_day: 'Late',
-  holiday: 'L',
+  late: 'Late',
+  half_day: 'Half',
+  holiday: 'H',
 };
 
-export const mapAttendanceRow = (row, index = 0) => ({
-  roll: Number(row?.student?.rollNo) || index + 1,
+// The roster only offers P/A/L/Late. 'Half' and 'H' can arrive from records made
+// elsewhere; they are shown read-only so re-saving a day cannot silently rewrite them.
+export const MARKABLE_UI_STATUSES = ['P', 'A', 'L', 'Late'];
+
+export const mapAttendanceRow = (row) => ({
+  id: row?.student?._id?.toString?.(),
   mongoId: row?.student?._id?.toString?.(),
+  // rollNo is optional, so it is display-only — never an identity. Rows are keyed by id.
+  roll: row?.student?.rollNo || '—',
   name: row?.student?.name || 'Student',
   avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(row?.student?.name || 'S')}&background=3b2d7d&color=fff`,
-  status: API_TO_UI_STATUS[row?.attendance?.status] || 'P',
-  statusRaw: row?.attendance?.status || 'present',
+  status: API_TO_UI_STATUS[row?.attendance?.status] || UNMARKED,
+  statusRaw: row?.attendance?.status || null,
   raw: row,
 });
 
-export const mapUiStatusToApi = (status) => UI_TO_API_STATUS[status] || 'present';
+export const mapUiStatusToApi = (status) => UI_TO_API_STATUS[status] || null;
 
 export const mapAssignmentForHomework = (assignment, course) => ({
   id: assignment?._id?.toString?.(),

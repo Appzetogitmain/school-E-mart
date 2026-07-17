@@ -166,19 +166,30 @@ const assignSubjectSchema = Joi.object({
   teacherProfileId: objectId.required(),
 });
 
+const attendanceStatus = Joi.string().valid(
+  'present',
+  'absent',
+  'half_day',
+  'late',
+  'holiday',
+  'leave'
+);
+
 const markAttendanceSchema = Joi.object({
-  date: Joi.date().required(),
+  // Attendance records what already happened, so a future date is always a mistake
+  date: Joi.date().max('now').required(),
   classGrade: Joi.string().trim().required(),
   section: Joi.string().trim().required(),
   records: Joi.array()
     .items(
       Joi.object({
         studentId: objectId.required(),
-        status: Joi.string().valid('present', 'absent', 'half_day', 'holiday', 'leave').required(),
+        status: attendanceStatus.required(),
         remarks: Joi.string().trim().max(300).optional(),
       })
     )
     .min(1)
+    .unique('studentId')
     .required(),
 });
 
@@ -186,7 +197,7 @@ const attendanceQuerySchema = Joi.object({
   ...paginationQuery,
   studentId: objectId.optional(),
   date: Joi.date().optional(),
-  status: Joi.string().valid('present', 'absent', 'half_day', 'holiday', 'leave').optional(),
+  status: attendanceStatus.optional(),
   classGrade: Joi.string().trim().optional(),
   section: Joi.string().trim().optional(),
 });
@@ -323,9 +334,9 @@ module.exports = {
   removeAssignmentQuerySchema,
   updateSubjectSchema: subjectSchema.fork(['code'], (schema) => schema.optional()),
   updateAttendanceSchema: Joi.object({
-    status: Joi.string().valid('present', 'absent', 'half_day', 'holiday', 'leave').optional(),
-    remarks: Joi.string().trim().max(300).optional(),
-  }),
+    status: attendanceStatus.optional(),
+    remarks: Joi.string().trim().max(300).optional().allow('', null),
+  }).min(1),
   teacherIdParam: schoolIdParam.keys({ teacherId: objectId.required() }),
   studentIdParam: schoolIdParam.keys({ studentId: objectId.required() }),
   subjectCodeParam: schoolIdParam.keys({ code: Joi.string().trim().required() }),

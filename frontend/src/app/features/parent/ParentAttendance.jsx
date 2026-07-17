@@ -114,12 +114,12 @@ const ParentAttendance = () => {
     let holidayDays = 0;
 
     records.forEach(r => {
+      // 'late' and 'half_day' are real statuses. Lateness used to be inferred from
+      // remarks text, which the teacher's roster never actually writes.
       if (r.status === 'present') {
-        if (r.remarks === 'Late') {
-          lateDays++;
-        } else {
-          presentDays++;
-        }
+        presentDays++;
+      } else if (r.status === 'late' || r.status === 'half_day') {
+        lateDays++;
       } else if (r.status === 'absent') {
         absentDays++;
       } else if (r.status === 'leave') {
@@ -166,10 +166,9 @@ const ParentAttendance = () => {
     const dateKey = getLocalDateString(year, month, day);
     const record = recordMap[dateKey];
     if (record) {
-      if (record.status === 'present' && record.remarks === 'Late') {
-        return 'late';
-      }
-      return record.status; // 'present', 'absent', 'leave', 'holiday'
+      // The calendar has no half-day swatch; it reads closest to 'late'.
+      if (record.status === 'half_day') return 'late';
+      return record.status; // 'present', 'absent', 'late', 'leave', 'holiday'
     }
 
     const dateObj = new Date(year, month, day);

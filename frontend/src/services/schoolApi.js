@@ -138,7 +138,10 @@ export const getDailyAttendance = async (schoolId, params) => {
 
 export const markAttendance = async (schoolId, payload) => {
   const response = await apiClient.post(schoolPath(schoolId, '/attendance'), payload);
-  return unwrapData(response)?.records || [];
+  const data = unwrapData(response);
+  // `skipped` carries students the server refused to mark (moved class, deactivated).
+  // Callers must surface it — the request still succeeds.
+  return { records: data?.records || [], skipped: data?.skipped || [] };
 };
 
 export const getMonthlyAttendanceSummary = async (schoolId, params) => {

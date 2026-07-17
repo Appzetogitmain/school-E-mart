@@ -7,7 +7,7 @@ const attendanceRecordSchema = new mongoose.Schema({
   date: { type: Date, required: true },
   status: {
     type: String,
-    enum: ['present', 'absent', 'half_day', 'holiday', 'leave'],
+    enum: ['present', 'absent', 'half_day', 'late', 'holiday', 'leave'],
     required: true
   },
   remarks: { type: String },

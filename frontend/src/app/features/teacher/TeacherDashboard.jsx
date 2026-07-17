@@ -9,6 +9,7 @@ import { getDailyAttendance, listStudents } from '../../../services/schoolApi';
 import { listCourses, listAssignments } from '../../../services/lmsApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 import { parseClassGrade, parseSection } from '../../../utils/mappers/teacherMapper';
+import { toLocalDateKey } from '../../../utils/date';
 import { useAuthUser, useTeacherSchoolId } from '../../../utils/teacherContext';
 import { useTeacherClassOptions } from '../../../hooks/useTeacherClassOptions';
 
@@ -67,7 +68,7 @@ const TeacherDashboard = () => {
     try {
       const classGrade = parseClassGrade(selectedClass);
       const section = parseSection(selectedSection);
-      const attendanceDate = new Date().toISOString().slice(0, 10);
+      const attendanceDate = toLocalDateKey();
 
       const [{ data: students }, attendanceRows, { data: courses }] = await Promise.all([
         listStudents(schoolId, { classGrade, section, limit: 100 }),

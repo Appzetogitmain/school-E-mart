@@ -7,18 +7,29 @@ import {
 } from 'lucide-react';
 import { getDailyAttendance, markAttendance } from '../../../services/schoolApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
-import { mapAttendanceRow, mapUiStatusToApi, parseClassGrade, parseSection } from '../../../utils/mappers/teacherMapper';
+import {
+  mapAttendanceRow,
+  mapUiStatusToApi,
+  parseClassGrade,
+  parseSection,
+  UNMARKED,
+} from '../../../utils/mappers/teacherMapper';
+import { toLocalDateKey } from '../../../utils/date';
 import { useTeacherSchoolId } from '../../../utils/teacherContext';
 import { useTeacherClassOptions } from '../../../hooks/useTeacherClassOptions';
 
 const formatDisplayDate = (date = new Date()) =>
   date.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric', weekday: 'long' });
 
+// Statuses the roster cannot set. They only arrive on records created elsewhere, and
+// are shown as a read-only badge so re-saving the day does not rewrite them.
+const READ_ONLY_LABELS = { Half: 'Half Day', H: 'Holiday' };
+
 const TeacherAttendance = () => {
   const navigate = useNavigate();
   const schoolId = useTeacherSchoolId();
   const { classLabels, getSectionLabels } = useTeacherClassOptions(schoolId);
-  const attendanceDate = new Date().toISOString().slice(0, 10);
+  const attendanceDate = toLocalDateKey();
 
   const [selectedClass, setSelectedClass] = useState('');
   const [selectedSection, setSelectedSection] = useState('');
@@ -78,14 +89,17 @@ const TeacherAttendance = () => {
   const absentCount = students.filter(s => s.status === 'A').length;
   const leaveCount = students.filter(s => s.status === 'L').length;
   const lateCount = students.filter(s => s.status === 'Late').length;
+  const unmarkedCount = students.filter(s => s.status === UNMARKED).length;
 
   // 4. Handlers
-  const handleStatusChange = (roll, newStatus) => {
-    setStudents(prev => prev.map(s => s.roll === roll ? { ...s, status: newStatus } : s));
+  const handleStatusChange = (id, newStatus) => {
+    setStudents(prev => prev.map(s => s.id === id ? { ...s, status: newStatus } : s));
   };
 
   const handleMarkAllPresent = () => {
-    setStudents(prev => prev.map(s => ({ ...s, status: 'P' })));
+    // Only fills in students still awaiting a decision — it must not overwrite marks
+    // the teacher already made, nor statuses this roster cannot set.
+    setStudents(prev => prev.map(s => (s.status === UNMARKED ? { ...s, status: 'P' } : s)));
   };
 
   const handleReset = () => {
@@ -95,11 +109,6 @@ const TeacherAttendance = () => {
     setRemark('');
   };
 
-  const handleSaveDraft = () => {
-    setShowSuccessToast(true);
-    setTimeout(() => setShowSuccessToast(false), 3000);
-  };
-
   const handleSaveAttendance = async () => {
     if (!schoolId) {
       setError('School context is missing. Please log in again.');
@@ -107,21 +116,41 @@ const TeacherAttendance = () => {
     }
     if (students.length === 0) return;
 
+    // Refuse to save a partly-marked roster rather than quietly omitting students:
+    // an unsaved student is indistinguishable from one who was never marked.
+    if (unmarkedCount > 0) {
+      setError(
+        `${unmarkedCount} ${unmarkedCount === 1 ? 'student is' : 'students are'} still unmarked. ` +
+          'Mark everyone, or use "Mark All Present" to fill in the rest.'
+      );
+      return;
+    }
+
     setSaving(true);
     setError('');
     try {
-      await markAttendance(schoolId, {
+      const { skipped } = await markAttendance(schoolId, {
         date: attendanceDate,
         classGrade: parseClassGrade(selectedClass),
         section: parseSection(selectedSection),
         records: students
-          .filter((s) => s.mongoId)
+          .filter((s) => s.mongoId && mapUiStatusToApi(s.status))
           .map((s) => ({
             studentId: s.mongoId,
             status: mapUiStatusToApi(s.status),
             remarks: remark || undefined,
           })),
       });
+
+      // The server drops students who are not active in this class. Say so instead of
+      // reporting a clean save.
+      if (skipped.length > 0) {
+        setError(
+          `Saved, but ${skipped.length} ${skipped.length === 1 ? 'student was' : 'students were'} ` +
+            'skipped because they are no longer active in this class. Please reload.'
+        );
+        return;
+      }
 
       setShowSuccessToast(true);
       setTimeout(() => {
@@ -137,13 +166,14 @@ const TeacherAttendance = () => {
 
   // Filter students based on search query AND active status card filter
   const filteredStudents = students.filter(s => {
-    const matchesSearch = s.name.toLowerCase().includes(searchQuery.toLowerCase()) || s.roll.toString() === searchQuery;
+    const matchesSearch = s.name.toLowerCase().includes(searchQuery.toLowerCase()) || String(s.roll) === searchQuery;
     if (!matchesSearch) return false;
 
     if (statusFilter === 'all') return true;
     if (statusFilter === 'P') return s.status === 'P';
     if (statusFilter === 'A') return s.status === 'A';
     if (statusFilter === 'L') return s.status === 'L' || s.status === 'Late';
+    if (statusFilter === UNMARKED) return s.status === UNMARKED;
     return true;
   });
 
@@ -299,9 +329,39 @@ const TeacherAttendance = () => {
         >
           <Clock size={18} className="text-[#F2994A]" />
           <span className="text-base font-black text-deep-purple mt-1.5 leading-none">{leaveCount + lateCount}</span>
-          <span className="text-[9px] text-[#F2994A] font-bold mt-1 uppercase tracking-tight">Leave</span>
+          {/* Groups leave and late, matching what this card filters to */}
+          <span className="text-[9px] text-[#F2994A] font-bold mt-1 uppercase tracking-tight">Leave/Late</span>
         </button>
       </div>
+
+      {/* Unmarked students still awaiting a decision */}
+      {!loading && unmarkedCount > 0 && (
+        <div className="px-6 mt-4">
+          <button
+            onClick={() => setStatusFilter(statusFilter === UNMARKED ? 'all' : UNMARKED)}
+            className={`w-full px-4 py-3 rounded-2xl border flex items-center justify-center gap-2 transition-all ${
+              statusFilter === UNMARKED
+                ? 'bg-amber-100 border-amber-300'
+                : 'bg-amber-50 border-amber-200 hover:bg-amber-100'
+            }`}
+          >
+            <AlertCircle size={14} className="text-amber-600" />
+            <span className="text-[11px] font-black text-amber-700">
+              {unmarkedCount} {unmarkedCount === 1 ? 'student' : 'students'} not marked yet
+            </span>
+          </button>
+        </div>
+      )}
+
+      {/* Errors: save failures and partial saves both surface here */}
+      {error && (
+        <div className="px-6 mt-4">
+          <div className="px-4 py-3 rounded-2xl bg-red-50 border border-red-200 flex items-start gap-2">
+            <AlertCircle size={14} className="text-red-500 mt-0.5 shrink-0" />
+            <span className="text-[11px] font-bold text-red-600 leading-relaxed">{error}</span>
+          </div>
+        </div>
+      )}
 
       {/* 4. Action Buttons Grid */}
       <div className="px-6 mt-4 grid grid-cols-2 gap-4">
@@ -349,20 +409,26 @@ const TeacherAttendance = () => {
         <div className="divide-y divide-gray-200/40 max-h-[380px] overflow-y-auto">
           {filteredStudents.length > 0 ? (
             filteredStudents.map((stud) => (
-              <div key={stud.roll} className="px-2 py-4 grid grid-cols-12 items-center hover:bg-gray-200/10 transition-colors">
+              <div key={stud.id} className={`px-2 py-4 grid grid-cols-12 items-center transition-colors ${stud.status === UNMARKED ? 'bg-amber-50/40' : 'hover:bg-gray-200/10'}`}>
                 {/* Roll No */}
                 <span className="col-span-2 text-xs font-black text-gray-400">{stud.roll}</span>
-                
+
                 {/* Student Name */}
                 <div className="col-span-5 flex items-center">
                   <span className="text-xs font-black text-deep-purple truncate">{stud.name}</span>
                 </div>
 
-                {/* Status Toggles (P, A, L, Late) */}
+                {READ_ONLY_LABELS[stud.status] ? (
+                  <div className="col-span-5 flex items-center justify-end pr-6">
+                    <span className="px-3 py-1.5 rounded-lg bg-gray-100 text-gray-500 text-[9px] font-black uppercase tracking-tight">
+                      {READ_ONLY_LABELS[stud.status]}
+                    </span>
+                  </div>
+                ) : (
                 <div className="col-span-5 flex items-center justify-end gap-1.5">
                   {/* Present button */}
-                  <button 
-                    onClick={() => handleStatusChange(stud.roll, 'P')}
+                  <button
+                    onClick={() => handleStatusChange(stud.id, 'P')}
                     className={`w-7 h-7 rounded-lg text-[9px] font-black transition-all flex items-center justify-center ${
                       stud.status === 'P' 
                         ? 'bg-[#34A853] text-white shadow-md shadow-green-100' 
@@ -373,8 +439,8 @@ const TeacherAttendance = () => {
                   </button>
 
                   {/* Absent button */}
-                  <button 
-                    onClick={() => handleStatusChange(stud.roll, 'A')}
+                  <button
+                    onClick={() => handleStatusChange(stud.id, 'A')}
                     className={`w-7 h-7 rounded-lg text-[9px] font-black transition-all flex items-center justify-center ${
                       stud.status === 'A' 
                         ? 'bg-[#E04F5F] text-white shadow-md shadow-red-100' 
@@ -385,8 +451,8 @@ const TeacherAttendance = () => {
                   </button>
 
                   {/* Leave button */}
-                  <button 
-                    onClick={() => handleStatusChange(stud.roll, 'L')}
+                  <button
+                    onClick={() => handleStatusChange(stud.id, 'L')}
                     className={`w-7 h-7 rounded-lg text-[9px] font-black transition-all flex items-center justify-center ${
                       stud.status === 'L' 
                         ? 'bg-[#F2994A] text-white shadow-md shadow-orange-100' 
@@ -397,17 +463,18 @@ const TeacherAttendance = () => {
                   </button>
 
                   {/* Late button */}
-                  <button 
-                    onClick={() => handleStatusChange(stud.roll, 'Late')}
+                  <button
+                    onClick={() => handleStatusChange(stud.id, 'Late')}
                     className={`w-11 h-7 rounded-lg text-[9px] font-black transition-all flex items-center justify-center ${
-                      stud.status === 'Late' 
-                        ? 'bg-[#EA580C] text-white shadow-md shadow-orange-100' 
+                      stud.status === 'Late'
+                        ? 'bg-[#EA580C] text-white shadow-md shadow-orange-100'
                         : 'bg-white border border-[#EA580C]/35 text-[#EA580C] hover:bg-[#EA580C]/5'
                     }`}
                   >
                     Late
                   </button>
                 </div>
+                )}
               </div>
             ))
           ) : (

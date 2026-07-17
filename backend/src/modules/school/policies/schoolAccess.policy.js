@@ -3,6 +3,7 @@ const { ForbiddenError, NotFoundError } = require('../../../common/errors');
 const { roles } = require('../../../constants');
 const tenantPolicy = require('../../auth/policies/tenant.policy');
 const TeacherProfile = require('../../../database/models/TeacherProfile');
+const { classGradeMatches } = require('../utils/classGrade');
 
 const { ROLES } = roles;
 
@@ -77,8 +78,13 @@ const assertTeacherClassAccess = async (req, { classGrade, section }) => {
     throw new ForbiddenError('Teacher profile not found', 'TEACHER_PROFILE_NOT_FOUND');
   }
 
+  // Assignments and requests disagree on whether the grade carries the "Class "
+  // prefix, so compare the normalized forms rather than the raw strings.
   const hasAssignment = (profile.classAssignments || []).some(
-    (item) => item.class === classGrade && (!section || item.section === section)
+    (item) =>
+      classGradeMatches(item.class, classGrade) &&
+      (!section ||
+        String(item.section).trim().toUpperCase() === String(section).trim().toUpperCase())
   );
 
   if (!hasAssignment) {

@@ -1,96 +1,202 @@
-const { NotFoundError, ConflictError } = require('../../../common/errors');
+const { NotFoundError, ForbiddenError, BadRequestError } = require('../../../common/errors');
+const { roles } = require('../../../constants');
 const attendanceRepository = require('../repositories/attendance.repository');
 const studentRepository = require('../repositories/student.repository');
 const { assertTeacherClassAccess } = require('../policies/schoolAccess.policy');
+const { classGradeQuery } = require('../utils/classGrade');
 
+const { ROLES } = roles;
+
+// Attendance is keyed by calendar day, so every record is pinned to UTC midnight.
+// Callers may send a bare "2026-07-17" or a full timestamp; both collapse to the
+// same instant here, which is what the unique index relies on.
 const normalizeDate = (value) => {
   const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    throw new BadRequestError('A valid attendance date is required', null, 'INVALID_ATTENDANCE_DATE');
+  }
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
 };
 
-const getClassGradeQuery = (classGrade) => {
-  if (!classGrade) return undefined;
-  const match = String(classGrade).match(/^class\s+(.+)$/i) || String(classGrade).match(/^(.+)$/);
-  const val = match ? match[1].trim() : String(classGrade).trim();
-  return { $in: [val, `Class ${val}`] };
+const findActiveStudentIds = async (schoolId, { classGrade, section } = {}) => {
+  const filter = { schoolId, status: 'active' };
+  if (classGrade) filter.classGrade = classGradeQuery(classGrade);
+  if (section) filter.section = section;
+  const students = await studentRepository.findMany(filter);
+  return students.map((student) => student._id);
+};
+
+// A parent may only ever see their own children. Resolves the student ids they own
+// within the current school; an empty list means they see nothing.
+const resolveParentStudentIds = async (req) => {
+  const ParentProfile = require('../../../database/models/ParentProfile');
+  const profile = await ParentProfile.findOne({
+    userId: req.auth.userId,
+    'softDelete.isDeleted': { $ne: true },
+  }).lean();
+
+  if (!profile) {
+    throw new ForbiddenError('You can only access your own children', 'STUDENT_ACCESS_DENIED');
+  }
+
+  const children = await studentRepository.findMany({
+    schoolId: req.schoolId,
+    parentProfileIds: profile._id,
+  });
+
+  return children.map((child) => child._id);
+};
+
+// Teachers read only the classes they are assigned to. Without a class filter the
+// query would span the whole school, so require one rather than silently widening.
+const assertTeacherReadScope = async (req, { classGrade, section }) => {
+  if (req.auth.role !== ROLES.TEACHER) return;
+  if (!classGrade) {
+    throw new ForbiddenError(
+      'A class is required for this request',
+      'CLASS_FILTER_REQUIRED'
+    );
+  }
+  await assertTeacherClassAccess(req, { classGrade, section });
 };
 
 const attendanceService = {
   async markAttendance(req, { date, classGrade, section, records }) {
-    if (req.auth.role === 'teacher') {
-      await assertTeacherClassAccess(req, { classGrade, section });
-    }
+    await assertTeacherClassAccess(req, { classGrade, section });
 
     const schoolId = req.schoolId;
     const attendanceDate = normalizeDate(date);
-    const results = [];
 
-    const classGradeQuery = getClassGradeQuery(classGrade);
+    // Resolve the whole roster in one query rather than one per record, and only
+    // accept students actually enrolled in the class being marked.
+    const students = await studentRepository.findMany({
+      schoolId,
+      classGrade: classGradeQuery(classGrade),
+      section,
+      status: 'active',
+      _id: { $in: records.map((record) => record.studentId) },
+    });
 
-    for (const record of records) {
-      const student = await studentRepository.findOne({
-        _id: record.studentId,
-        schoolId,
-        classGrade: classGradeQuery,
-        section,
-      });
-      if (!student) continue;
+    const studentsById = new Map(students.map((student) => [String(student._id), student]));
+    const applicable = records.filter((record) => studentsById.has(String(record.studentId)));
 
-      const saved = await attendanceRepository.upsertRecord(
-        { schoolId, studentId: student._id, date: attendanceDate },
-        {
-          $set: {
-            status: record.status,
-            remarks: record.remarks || null,
-            recordedBy: req.auth.userId,
-          },
-          $setOnInsert: { schoolId, studentId: student._id, date: attendanceDate },
-        }
+    // Anything left over belongs to another class, is inactive, or does not exist.
+    // Report it rather than dropping it silently — otherwise the teacher is told
+    // the save succeeded while part of their roster went unrecorded.
+    const skipped = records
+      .filter((record) => !studentsById.has(String(record.studentId)))
+      .map((record) => String(record.studentId));
+
+    if (applicable.length === 0) {
+      throw new BadRequestError(
+        'None of the submitted students are active in this class',
+        null,
+        'NO_MARKABLE_STUDENTS'
       );
-      results.push(saved);
     }
 
-    return results;
+    const saved = await attendanceRepository.bulkUpsertRecords(
+      applicable.map((record) => {
+        const studentId = studentsById.get(String(record.studentId))._id;
+        return {
+          filter: { schoolId, studentId, date: attendanceDate },
+          update: {
+            $set: {
+              status: record.status,
+              remarks: record.remarks || null,
+              recordedBy: req.auth.userId,
+            },
+            $setOnInsert: { schoolId, studentId, date: attendanceDate },
+          },
+        };
+      })
+    );
+
+    return { records: saved, skipped };
   },
 
   async updateAttendance(schoolId, attendanceId, payload, recordedBy) {
-    const record = await attendanceRepository.findOne({ _id: attendanceId, schoolId });
-    if (!record) throw new NotFoundError('Attendance record not found', 'ATTENDANCE_NOT_FOUND');
-
-    return attendanceRepository.upsertRecord(
+    const updated = await attendanceRepository.updateRecord(
       { _id: attendanceId, schoolId },
       { $set: { ...payload, recordedBy } }
     );
+
+    if (!updated) throw new NotFoundError('Attendance record not found', 'ATTENDANCE_NOT_FOUND');
+    return updated;
   },
 
-  async getDailyAttendance(schoolId, { date, classGrade, section }) {
+  async getDailyAttendance(req, { date, classGrade, section }) {
+    const schoolId = req.schoolId;
     const attendanceDate = normalizeDate(date);
-    const studentFilter = { schoolId };
-    if (classGrade) studentFilter.classGrade = getClassGradeQuery(classGrade);
+
+    await assertTeacherReadScope(req, { classGrade, section });
+
+    // Only active students belong on a roster — matches how the monthly summary counts.
+    const studentFilter = { schoolId, status: 'active' };
+    if (classGrade) studentFilter.classGrade = classGradeQuery(classGrade);
     if (section) studentFilter.section = section;
 
     const students = await studentRepository.findMany(studentFilter);
-    const records = await attendanceRepository.findMany({ schoolId, date: attendanceDate });
-
-    return students.map((student) => {
-      const record = records.find((r) => String(r.studentId) === String(student._id));
-      return {
-        student,
-        attendance: record || null,
-      };
+    const records = await attendanceRepository.findMany({
+      schoolId,
+      date: attendanceDate,
+      studentId: { $in: students.map((student) => student._id) },
     });
+
+    const recordsByStudent = new Map(records.map((record) => [String(record.studentId), record]));
+
+    return students.map((student) => ({
+      student,
+      attendance: recordsByStudent.get(String(student._id)) || null,
+    }));
   },
 
-  async getAttendanceHistory(schoolId, query) {
+  async getAttendanceHistory(req, query) {
+    const schoolId = req.schoolId;
     const filter = { schoolId };
-    if (query.studentId) filter.studentId = query.studentId;
+
+    // The role decides which students are in range; the query may only narrow that
+    // set further, never widen it.
+    let allowedIds = null;
+
+    if (req.auth.role === ROLES.PARENT) {
+      allowedIds = await resolveParentStudentIds(req);
+    } else {
+      await assertTeacherReadScope(req, query);
+      if (query.classGrade || query.section) {
+        allowedIds = await findActiveStudentIds(schoolId, query);
+      }
+    }
+
+    if (query.studentId) {
+      const permitted =
+        allowedIds === null || allowedIds.some((id) => String(id) === String(query.studentId));
+      if (!permitted) {
+        throw new ForbiddenError(
+          'You do not have access to this student',
+          'STUDENT_ACCESS_DENIED'
+        );
+      }
+      filter.studentId = query.studentId;
+    } else if (allowedIds !== null) {
+      filter.studentId = { $in: allowedIds };
+    }
+
     if (query.date) filter.date = normalizeDate(query.date);
     if (query.status) filter.status = query.status;
-    return attendanceRepository.paginateAttendance(filter, query);
+
+    // Only pagination keys go through to the query builder. It would otherwise
+    // re-apply studentId/date/classGrade straight from the URL, and a chained
+    // .find() overwrites the matching key in the filter above — handing the caller
+    // a way to shed the access scope and skewing the total, which is counted off
+    // the filter alone.
+    const { page, limit, sort, fields } = query;
+    return attendanceRepository.paginateAttendance(filter, { page, limit, sort, fields });
   },
 
-  async getMonthlySummary(schoolId, { year, month, classGrade, section }) {
-    return attendanceRepository.monthlySummary(schoolId, year, month, classGrade, section);
+  async getMonthlySummary(req, { year, month, classGrade, section }) {
+    await assertTeacherReadScope(req, { classGrade, section });
+    return attendanceRepository.monthlySummary(req.schoolId, year, month, classGrade, section);
   },
 };
 

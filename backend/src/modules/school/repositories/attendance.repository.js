@@ -1,6 +1,7 @@
 const AttendanceRecord = require('../../../database/models/AttendanceRecord');
 const { BaseRepository } = require('../../../repositories');
 const { executePaginatedQuery } = require('../../../repositories/query');
+const { classGradeQuery } = require('../utils/classGrade');
 
 class AttendanceRepository extends BaseRepository {
   constructor() {
@@ -18,12 +19,35 @@ class AttendanceRepository extends BaseRepository {
     return AttendanceRecord.findOne({ schoolId, studentId, date }).lean();
   }
 
-  upsertRecord(filter, data) {
+  /** Update an existing record only — never creates one. */
+  updateRecord(filter, data) {
     return AttendanceRecord.findOneAndUpdate(filter, data, {
-      upsert: true,
       new: true,
       runValidators: true,
-      setDefaultsOnInsert: true,
+    }).lean();
+  }
+
+  /**
+   * Upsert a whole class in one round trip. Marking a class one findOneAndUpdate at
+   * a time meant a 40-student class cost 40 sequential writes and could fail halfway,
+   * leaving the day partly recorded.
+   */
+  async bulkUpsertRecords(operations) {
+    if (operations.length === 0) return [];
+
+    await AttendanceRecord.bulkWrite(
+      operations.map(({ filter, update }) => ({
+        updateOne: { filter, update, upsert: true },
+      })),
+      { ordered: false }
+    );
+
+    // bulkWrite returns write results, not documents, so read back what was stored.
+    const { schoolId, date } = operations[0].filter;
+    return AttendanceRecord.find({
+      schoolId,
+      date,
+      studentId: { $in: operations.map((operation) => operation.filter.studentId) },
     }).lean();
   }
 
@@ -31,16 +55,9 @@ class AttendanceRepository extends BaseRepository {
     const start = new Date(Date.UTC(year, month - 1, 1));
     const end = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999));
 
-    const getClassGradeQuery = (grade) => {
-      if (!grade) return undefined;
-      const match = String(grade).match(/^class\s+(.+)$/i) || String(grade).match(/^(.+)$/);
-      const val = match ? match[1].trim() : String(grade).trim();
-      return { $in: [val, `Class ${val}`] };
-    };
-
     const Student = require('../../../database/models/Student');
     const studentFilter = { schoolId, status: 'active', 'softDelete.isDeleted': { $ne: true } };
-    if (classGrade) studentFilter.classGrade = getClassGradeQuery(classGrade);
+    if (classGrade) studentFilter.classGrade = classGradeQuery(classGrade);
     if (section) studentFilter.section = section;
 
     const students = await Student.find(studentFilter).select('_id name classGrade section').lean();
@@ -59,7 +76,7 @@ class AttendanceRepository extends BaseRepository {
           acc[record.status] = (acc[record.status] || 0) + 1;
           return acc;
         },
-        { present: 0, absent: 0, half_day: 0, holiday: 0, leave: 0 }
+        { present: 0, absent: 0, half_day: 0, late: 0, holiday: 0, leave: 0 }
       );
       return {
         studentId: student._id,

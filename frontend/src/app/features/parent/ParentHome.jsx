@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import AppHeader from '../../components/AppHeader';
 import { getAttendanceHistory, fetchParentHomework, listParentNotices } from '../../../services/parentApi';
+import { toLocalDateKey } from '../../../utils/date';
 import { buildHomeworkStats, mapAssignmentForParentHomework } from '../../../utils/mappers/parentMapper';
 import ProductCard from '../../components/ProductCard';
 import SectionHeader from '../../components/SectionHeader';
@@ -82,7 +83,7 @@ const ParentHome = () => {
       if (!studentId || !schoolId || schoolId === 'explore-schools') return;
 
       try {
-        const today = new Date().toISOString().slice(0, 10);
+        const today = toLocalDateKey();
         const { data: records } = await getAttendanceHistory(schoolId, { studentId, date: today });
         setTodayAttendance(records[0] || null);
       } catch (err) {
