@@ -7,6 +7,7 @@ const { protectedRoute } = require('../../../middlewares/auth/guards');
 const { PERMISSIONS } = require('../../../constants/permissions');
 const { ROLES } = require('../../../constants/roles');
 const { authLimiter } = require('../../../middlewares/rateLimit');
+const { uploadDocument } = require('../../admin/middlewares/upload.middleware');
 
 const router = express.Router();
 
@@ -65,6 +66,7 @@ router.patch(
   vendorController.updateBankDetails
 );
 router.patch('/me/address', ...vendorProfile, validateBody(validators.addressSchema), vendorController.updateAddress);
+router.post('/me/uploads', ...vendorProfile, uploadDocument, vendorController.uploadDocument);
 router.post('/me/documents', ...vendorProfile, validateBody(validators.documentSchema), vendorController.addDocument);
 router.get('/me/status', ...vendorProfile, vendorController.getStatus);
 

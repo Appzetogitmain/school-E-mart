@@ -156,6 +156,29 @@ const adminController = {
     return success(res, { vendor }, 'Vendor fetched', undefined, req);
   }),
 
+  createVendor: asyncHandler(async (req, res) => {
+    const vendor = await vendorApprovalService.createVendor(req.body, actorFrom(req), {
+      ipAddress: req.ip,
+      userAgent: req.get('user-agent'),
+      requestId: req.id,
+    });
+    return created(res, { vendor }, 'Vendor created', req);
+  }),
+
+  updateVendor: asyncHandler(async (req, res) => {
+    const vendor = await vendorApprovalService.updateVendor(
+      req.params.vendorId,
+      req.body,
+      actorFrom(req)
+    );
+    return success(res, { vendor }, 'Vendor updated', undefined, req);
+  }),
+
+  deleteVendor: asyncHandler(async (req, res) => {
+    await vendorApprovalService.deleteVendor(req.params.vendorId, actorFrom(req));
+    return success(res, null, 'Vendor deleted', undefined, req);
+  }),
+
   approveVendor: asyncHandler(async (req, res) => {
     const vendor = await vendorApprovalService.approveVendor(
       req.params.vendorId,

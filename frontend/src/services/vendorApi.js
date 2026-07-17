@@ -25,6 +25,35 @@ export const updateVendorAddress = async (payload) => {
   return unwrapData(response)?.profile;
 };
 
+export const updateVendorBusiness = async (payload) => {
+  const response = await apiClient.patch('/vendor/me/business', payload);
+  return unwrapData(response)?.profile;
+};
+
+export const updateVendorTax = async (payload) => {
+  const response = await apiClient.patch('/vendor/me/tax', payload);
+  return unwrapData(response)?.profile;
+};
+
+export const updateVendorBank = async (payload) => {
+  const response = await apiClient.patch('/vendor/me/bank', payload);
+  return unwrapData(response)?.profile;
+};
+
+// KYC files must be uploaded first; the returned attachment id is then attached
+// to the profile via addVendorDocument.
+export const uploadVendorDocument = async (formData) => {
+  const response = await apiClient.post('/vendor/me/uploads', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return unwrapData(response)?.attachment;
+};
+
+export const addVendorDocument = async (payload) => {
+  const response = await apiClient.post('/vendor/me/documents', payload);
+  return unwrapData(response)?.profile;
+};
+
 export const getVendorStatus = async () => {
   const response = await apiClient.get('/vendor/me/status');
   return unwrapData(response)?.status;

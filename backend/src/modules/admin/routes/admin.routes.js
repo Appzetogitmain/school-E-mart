@@ -148,11 +148,30 @@ router.get(
   validateQuery(validators.paginationQuery),
   adminController.listVendors
 );
+router.post(
+  '/vendors',
+  ...adminOnly,
+  validateBody(validators.createVendorSchema),
+  adminController.createVendor
+);
 router.get(
   '/vendors/:vendorId',
   ...adminOnly,
   validateParams(validators.vendorIdParam),
   adminController.getVendor
+);
+router.patch(
+  '/vendors/:vendorId',
+  ...adminOnly,
+  validateParams(validators.vendorIdParam),
+  validateBody(validators.updateVendorSchema),
+  adminController.updateVendor
+);
+router.delete(
+  '/vendors/:vendorId',
+  ...adminOnly,
+  validateParams(validators.vendorIdParam),
+  adminController.deleteVendor
 );
 router.post(
   '/vendors/:vendorId/approve',

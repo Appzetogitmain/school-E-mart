@@ -2,8 +2,8 @@ export const ROUTES = {
   // Public
   HOME: '/',
   MARKETPLACE: '/home',
-  LOGIN: '/login',
-  REGISTER: '/register',
+  LOGIN: '/user/login',
+  REGISTER: '/user/login',
   ABOUT: '/about',
   HOW_IT_WORKS: '/how-it-works',
   CATEGORY: '/category/:slug',

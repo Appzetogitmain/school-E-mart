@@ -21,7 +21,7 @@ const TermsAndConditions = React.lazy(() => import('../features/legal/TermsAndCo
 const PrivacyPolicy = React.lazy(() => import('../features/legal/PrivacyPolicy'));
 const RefundPolicy = React.lazy(() => import('../features/legal/RefundPolicy'));
 
-const AuthPage = React.lazy(() => import('../features/auth/AuthPage'));
+
 
 // Mobile App Components
 const AppLayout = React.lazy(() => import('../app/layouts/AppLayout'));
@@ -180,8 +180,8 @@ const AppRoutes = () => {
           <Route path={ROUTES.REFUND_POLICY} element={<RefundPolicy />} />
         </Route>
         
-        <Route path={ROUTES.LOGIN} element={<AuthPage />} />
-        <Route path={ROUTES.REGISTER} element={<AuthPage />} />
+        <Route path="/login" element={<Navigate to="/user/login" replace />} />
+        <Route path="/register" element={<Navigate to="/user/login" replace />} />
         <Route path={ROUTES.VENDOR.LOGIN} element={<VendorLogin />} />
         <Route path={ROUTES.SUPER_ADMIN.LOGIN} element={<SuperAdminLogin />} />
         <Route element={<RoleRoute allowedRoles={[ROLES.ADMIN]} redirectTo={ROUTES.SUPER_ADMIN.LOGIN} />}>

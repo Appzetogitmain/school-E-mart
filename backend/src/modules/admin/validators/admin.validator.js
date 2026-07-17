@@ -300,9 +300,44 @@ const adminProfileSchema = Joi.object({
   mobile: Joi.string().trim().pattern(/^[6-9]\d{9}$/).required(),
 });
 
+// Vendor field rules are shared with the vendor-facing routes so the two surfaces
+// cannot drift apart — they write the same VendorProfile.
+const vendorFields = require('../../vendor/validators/vendorFields');
+
+const createVendorSchema = Joi.object({
+  name: vendorFields.identityFields.name.required(),
+  storeName: vendorFields.identityFields.storeName.required(),
+  phone: schemas.indianMobile.required(),
+  email: schemas.email.required(),
+  password: schemas.password.required(),
+  commissionPercent: Joi.number().min(0).max(100).default(10),
+  serviceRadiusKm: vendorFields.identityFields.serviceRadiusKm.default(10),
+  categories: vendorFields.identityFields.categories.optional(),
+  address: vendorFields.addressSchema.optional(),
+  ...vendorFields.geoFields,
+  autoApprove: Joi.boolean().default(true),
+});
+
+const updateVendorSchema = Joi.object({
+  name: vendorFields.identityFields.name.optional(),
+  storeName: vendorFields.identityFields.storeName.optional(),
+  phone: schemas.indianMobile.optional(),
+  email: schemas.email.optional(),
+  // Only an admin may set the marketplace's commission.
+  commissionPercent: Joi.number().min(0).max(100).optional(),
+  serviceRadiusKm: vendorFields.identityFields.serviceRadiusKm.optional(),
+  categories: vendorFields.identityFields.categories.optional(),
+  address: vendorFields.addressSchema.optional(),
+  ...vendorFields.geoFields,
+  ...vendorFields.taxFields,
+  bank: vendorFields.bankSchema.optional(),
+}).min(1);
+
 module.exports = {
   paginationQuery,
   analyticsQuery,
+  createVendorSchema,
+  updateVendorSchema,
   userIdParam,
   vendorIdParam,
   schoolIdParam,

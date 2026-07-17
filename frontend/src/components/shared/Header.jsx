@@ -67,13 +67,13 @@ const Header = () => {
               Sell with Us
             </button>
             
-            {/* Primary CTA: Register (Prominent & Green) */}
+            {/* Primary CTA: Login / Register (Prominent & Green) */}
             <NavLink 
-              to={ROUTES.REGISTER} 
+              to={ROUTES.LOGIN} 
               className="flex items-center gap-2 px-7 py-2.5 bg-accent-orange text-deep-purple rounded-full text-[13px] font-medium hover:bg-accent-gold hover:shadow-[0_8px_20px_-6px_rgba(244,180,0,0.4)] transition-all duration-300 active:scale-95 shadow-md"
             >
               <UserPlus size={18} />
-              Register
+              Login / Register
             </NavLink>
           </div>
 
@@ -128,8 +128,8 @@ const Header = () => {
             </div>
             
             <div className="grid grid-cols-1 gap-3">
-              <NavLink to={ROUTES.REGISTER} className="flex items-center justify-between p-5 bg-accent-orange rounded-xl font-medium text-deep-purple border border-accent-gold">
-                <div className="flex items-center gap-3"><UserPlus size={22} /> Join School E-Mart</div>
+              <NavLink to={ROUTES.LOGIN} className="flex items-center justify-between p-5 bg-accent-orange rounded-xl font-medium text-deep-purple border border-accent-gold">
+                <div className="flex items-center gap-3"><UserPlus size={22} /> Login / Register</div>
               </NavLink>
               <button 
                 onClick={() => {

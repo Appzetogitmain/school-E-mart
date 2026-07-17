@@ -9,6 +9,7 @@ const vendorReturnService = require('../services/return.service');
 const settlementService = require('../services/settlement.service');
 const analyticsService = require('../services/analytics.service');
 const verificationService = require('../services/verification.service');
+const attachmentService = require('../../admin/services/attachment.service');
 const vendorAccessPolicy = require('../policies/vendorAccess.policy');
 const productService = require('../../marketplace/services/product.service');
 const rfqService = require('../../rfq/services/rfq.service');
@@ -56,6 +57,17 @@ const vendorController = {
   addDocument: asyncHandler(async (req, res) => {
     const profile = await profileService.addDocument(req.auth.userId, req.body);
     return success(res, { profile }, 'Document added', undefined, req);
+  }),
+
+  // Vendors have no other way to create an Attachment, so POST /me/documents
+  // (which needs an attachmentId) is unusable without this.
+  uploadDocument: asyncHandler(async (req, res) => {
+    const attachment = await attachmentService.createFromUpload({
+      ownerUserId: req.auth.userId,
+      purpose: 'kyc_doc',
+      file: req.file,
+    });
+    return created(res, { attachment }, 'File uploaded', req);
   }),
 
   getStatus: asyncHandler(async (req, res) => {

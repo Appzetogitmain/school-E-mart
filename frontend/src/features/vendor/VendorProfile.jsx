@@ -1,479 +1,600 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
-  User, ShieldCheck, Mail, Phone, Building, MapPin,
-  Globe, Compass, Edit3, X, Check, AlertTriangle, HelpCircle, ShieldAlert, Loader2
+  ShieldCheck, Building, MapPin, Landmark, FileText, Check,
+  AlertTriangle, Loader2, Upload, Trash2, Percent,
 } from 'lucide-react';
 import useAuthStore from '../../store/useAuthStore';
-import { getVendorProfile, updateVendorProfile } from '../../services/vendorApi';
+import {
+  getVendorProfile,
+  updateVendorProfile,
+  updateVendorAddress,
+  updateVendorTax,
+  updateVendorBank,
+  uploadVendorDocument,
+  addVendorDocument,
+} from '../../services/vendorApi';
 import { getErrorMessage } from '../../utils/apiHelpers';
+
+// Signup only collects name/store/email/phone/password, so the API fills the rest
+// with these placeholders. Treat them as "not filled in yet" rather than real data.
+const PLACEHOLDER_TEXT = 'Pending';
+const PLACEHOLDER_PIN = '000000';
+const DEFAULT_COORDS = [77.209, 28.6139];
+
+const isBlank = (v) => !v || String(v).trim() === '' || v === PLACEHOLDER_TEXT;
+const isDefaultCoords = (coords = []) =>
+  coords.length !== 2 || (coords[0] === DEFAULT_COORDS[0] && coords[1] === DEFAULT_COORDS[1]);
+
+const KYC_TYPES = [
+  { value: 'pan', label: 'PAN Card' },
+  { value: 'gst', label: 'GST Certificate' },
+  { value: 'cheque', label: 'Cancelled Cheque' },
+  { value: 'shop_licence', label: 'Shop Licence' },
+  { value: 'other', label: 'Other' },
+];
+
+const SECTIONS = [
+  { id: 'business', label: 'Business', Icon: Building },
+  { id: 'address', label: 'Address', Icon: MapPin },
+  { id: 'tax', label: 'Tax', Icon: FileText },
+  { id: 'bank', label: 'Bank', Icon: Landmark },
+  { id: 'documents', label: 'Documents', Icon: ShieldCheck },
+];
+
+const inputCls =
+  'w-full bg-white border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 font-medium';
+const labelCls = 'text-[11px] font-black text-gray-400 uppercase tracking-wider block mb-1.5';
+
+// Declared outside the page component: defining it inline would recreate the
+// component on every render and remount it.
+const SaveButton = ({ section, savingSection, savedSection }) => {
+  const isSaving = savingSection === section;
+  const isSaved = savedSection === section && !isSaving;
+  return (
+    <button
+      type="submit"
+      disabled={isSaving}
+      className="bg-[#0B1528] hover:bg-gray-900 text-white font-black text-xs px-5 py-2.5 rounded-xl transition-all shadow-sm disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2"
+    >
+      {isSaving && <Loader2 size={12} className="animate-spin" />}
+      {isSaved && <Check size={12} />}
+      <span>{isSaving ? 'Saving…' : isSaved ? 'Saved' : 'Save'}</span>
+    </button>
+  );
+};
 
 const VendorProfile = () => {
   const { user, setUser } = useAuthStore();
+  const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [savingSection, setSavingSection] = useState('');
+  const [savedSection, setSavedSection] = useState('');
+  const [activeSection, setActiveSection] = useState('business');
 
-  const [name, setName] = useState(user?.name || '');
-  const [storeName, setStoreName] = useState(user?.school || '');
-  const [phone, setPhone] = useState(user?.phone || '');
-  const [email, setEmail] = useState(user?.email || '');
-  const [serviceRadius, setServiceRadius] = useState(8);
-  const [latitude, setLatitude] = useState(22.715188);
-  const [longitude, setLongitude] = useState(75.899109);
-  const [address, setAddress] = useState(user?.location || '');
+  const [business, setBusiness] = useState(null);
+  const [address, setAddress] = useState(null);
+  const [tax, setTax] = useState(null);
+  const [bank, setBank] = useState(null);
 
-  // UI Interactive States
-  const [isEditing, setIsEditing] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [successSave, setSuccessSave] = useState(false);
+  const [docType, setDocType] = useState('pan');
+  const [docFile, setDocFile] = useState(null);
+  const fileInputRef = React.useRef(null);
 
-  // Edit states
-  const [editName, setEditName] = useState(name);
-  const [editStoreName, setEditStoreName] = useState(storeName);
-  const [editPhone, setEditPhone] = useState(phone);
-  const [editEmail, setEditEmail] = useState(email);
-  const [editAddress, setEditAddress] = useState(address);
+  const hydrate = useCallback((p) => {
+    setProfile(p);
+    setBusiness({
+      name: p.user?.name || '',
+      storeName: p.storeName || '',
+      email: p.user?.email || '',
+      phone: p.user?.phone || '',
+      serviceRadiusKm: String(p.serviceRadiusKm ?? ''),
+    });
+    setAddress({
+      line1: isBlank(p.address?.line1) ? '' : p.address.line1,
+      line2: p.address?.line2 || '',
+      city: isBlank(p.address?.city) ? '' : p.address.city,
+      state: isBlank(p.address?.state) ? '' : p.address.state,
+      country: p.address?.country || 'India',
+      pinCode: p.address?.pinCode === PLACEHOLDER_PIN ? '' : p.address?.pinCode || '',
+      latitude: isDefaultCoords(p.location?.coordinates) ? '' : String(p.location.coordinates[1]),
+      longitude: isDefaultCoords(p.location?.coordinates) ? '' : String(p.location.coordinates[0]),
+    });
+    setTax({ panCard: p.panCard || '', gstin: p.gstin || '' });
+    setBank({
+      accountName: p.bank?.accountName || '',
+      bankName: p.bank?.bankName || '',
+      branch: p.bank?.branch || '',
+      ifsc: p.bank?.ifsc || '',
+      accountNumber: '',
+    });
+  }, []);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const p = await getVendorProfile();
+      if (p) hydrate(p);
+    } catch (err) {
+      setError(getErrorMessage(err, 'Unable to load profile'));
+    } finally {
+      setLoading(false);
+    }
+  }, [hydrate]);
 
   useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
+    load();
+  }, [load]);
 
-    getVendorProfile()
-      .then((profile) => {
-        if (cancelled || !profile) return;
-        const displayName = profile.user?.name || user?.name || '';
-        const displayStore = profile.storeName || '';
-        const displayPhone = profile.user?.phone || '';
-        const displayEmail = profile.user?.email || '';
-        const formattedAddress = [
-          profile.address?.line1,
-          profile.address?.city,
-          profile.address?.state,
-          profile.address?.pinCode,
-        ].filter(Boolean).join(', ');
-
-        setName(displayName);
-        setStoreName(displayStore);
-        setPhone(displayPhone);
-        setEmail(displayEmail);
-        setAddress(formattedAddress);
-        setServiceRadius(profile.serviceRadiusKm || 8);
-        if (profile.location?.coordinates?.length === 2) {
-          setLongitude(profile.location.coordinates[0]);
-          setLatitude(profile.location.coordinates[1]);
-        }
-      })
-      .catch((err) => {
-        if (!cancelled) setError(getErrorMessage(err, 'Unable to load profile'));
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
+  const afterSave = (updated, section) => {
+    hydrate(updated);
+    setSavedSection(section);
+    setTimeout(() => setSavedSection(''), 2500);
+    if (section === 'business' && user) {
+      setUser({
+        ...user,
+        name: updated.user?.name || user.name,
+        school: updated.storeName || user.school,
+        phone: updated.user?.phone || user.phone,
+        email: updated.user?.email || user.email,
       });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [user?.name]);
-
-  const handleEditProfileSubmit = async (e) => {
-    e.preventDefault();
-    setIsSaving(true);
-    setError('');
-
-    try {
-      const profile = await updateVendorProfile({
-        name: editName,
-        storeName: editStoreName,
-        phone: editPhone,
-        email: editEmail,
-        serviceRadiusKm: serviceRadius,
-        latitude,
-        longitude,
-        address: {
-          line1: editAddress,
-          city: 'Indore',
-          state: 'Madhya Pradesh',
-          country: 'India',
-          pinCode: '452018',
-        },
-      });
-
-      setName(profile.user?.name || editName);
-      setStoreName(profile.storeName || editStoreName);
-      setPhone(profile.user?.phone || editPhone);
-      setEmail(profile.user?.email || editEmail);
-      setAddress(editAddress);
-
-      if (user) {
-        setUser({
-          ...user,
-          name: profile.user?.name || editName,
-          school: profile.storeName || editStoreName,
-          phone: profile.user?.phone || editPhone,
-          email: profile.user?.email || editEmail,
-          location: editAddress,
-        });
-      }
-
-      setSuccessSave(true);
-      setTimeout(() => {
-        setSuccessSave(false);
-        setIsEditing(false);
-      }, 1200);
-    } catch (err) {
-      setError(getErrorMessage(err, 'Unable to save profile'));
-    } finally {
-      setIsSaving(false);
     }
   };
 
-  const startEditing = () => {
-    setEditName(name);
-    setEditStoreName(storeName);
-    setEditPhone(phone);
-    setEditEmail(email);
-    setEditAddress(address);
-    setIsEditing(true);
+  const save = async (section, fn) => {
+    setSavingSection(section);
+    setError('');
+    try {
+      const updated = await fn();
+      afterSave(updated, section);
+    } catch (err) {
+      setError(getErrorMessage(err, 'Unable to save changes'));
+    } finally {
+      setSavingSection('');
+    }
   };
 
+  const saveBusiness = (e) => {
+    e.preventDefault();
+    save('business', () =>
+      updateVendorProfile({
+        name: business.name.trim(),
+        storeName: business.storeName.trim(),
+        email: business.email.trim(),
+        phone: business.phone.trim(),
+        ...(business.serviceRadiusKm !== ''
+          ? { serviceRadiusKm: parseFloat(business.serviceRadiusKm) || 0 }
+          : {}),
+      })
+    );
+  };
+
+  const saveAddress = (e) => {
+    e.preventDefault();
+    // Send only filled fields: the API merges, so blanks would fail validation
+    // rather than clear anything useful.
+    const payload = {};
+    ['line1', 'line2', 'city', 'state', 'country', 'pinCode'].forEach((k) => {
+      if (address[k].trim()) payload[k] = address[k].trim();
+    });
+    if (address.latitude !== '' && address.longitude !== '') {
+      payload.latitude = parseFloat(address.latitude);
+      payload.longitude = parseFloat(address.longitude);
+    }
+    save('address', () => updateVendorAddress(payload));
+  };
+
+  const saveTax = (e) => {
+    e.preventDefault();
+    save('tax', () =>
+      updateVendorTax({
+        panCard: tax.panCard.trim().toUpperCase(),
+        gstin: tax.gstin.trim().toUpperCase(),
+      })
+    );
+  };
+
+  const saveBank = (e) => {
+    e.preventDefault();
+    const payload = {};
+    ['accountName', 'bankName', 'branch'].forEach((k) => {
+      if (bank[k].trim()) payload[k] = bank[k].trim();
+    });
+    if (bank.ifsc.trim()) payload.ifsc = bank.ifsc.trim().toUpperCase();
+    // Blank means "keep the stored one" — it is hashed and cannot be read back.
+    if (bank.accountNumber.trim()) payload.accountNumber = bank.accountNumber.trim();
+    save('bank', () => updateVendorBank(payload));
+  };
+
+  const saveDocument = async (e) => {
+    e.preventDefault();
+    if (!docFile) return;
+    setSavingSection('documents');
+    setError('');
+    try {
+      const formData = new FormData();
+      formData.append('file', docFile);
+      const attachment = await uploadVendorDocument(formData);
+      const attachmentId = attachment?._id || attachment?.id;
+      if (!attachmentId) throw new Error('Upload did not return an attachment');
+      const updated = await addVendorDocument({ type: docType, attachmentId });
+      setDocFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      afterSave(updated, 'documents');
+    } catch (err) {
+      setError(getErrorMessage(err, 'Unable to upload document'));
+    } finally {
+      setSavingSection('');
+    }
+  };
+
+  // What still needs filling in. Bank details genuinely block payouts, so they
+  // are listed as required rather than optional.
+  const checklist = profile
+    ? [
+        { label: 'Street address', done: !isBlank(profile.address?.line1), section: 'address' },
+        { label: 'City', done: !isBlank(profile.address?.city), section: 'address' },
+        { label: 'State', done: !isBlank(profile.address?.state), section: 'address' },
+        { label: 'PIN code', done: !!profile.address?.pinCode && profile.address.pinCode !== PLACEHOLDER_PIN, section: 'address' },
+        { label: 'Map location', done: !isDefaultCoords(profile.location?.coordinates), section: 'address' },
+        { label: 'PAN card', done: !!profile.panCard, section: 'tax' },
+        { label: 'Bank account (needed for payouts)', done: !!profile.bank?.accountNumberMasked && !!profile.bank?.ifsc, section: 'bank' },
+        { label: 'KYC document', done: (profile.kycDocs?.length || 0) > 0, section: 'documents' },
+      ]
+    : [];
+  const missing = checklist.filter((c) => !c.done);
+  const pct = checklist.length ? Math.round(((checklist.length - missing.length) / checklist.length) * 100) : 0;
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center gap-2 py-24 text-sm font-black text-gray-400">
+        <Loader2 size={18} className="animate-spin" />
+        <span>Loading your profile…</span>
+      </div>
+    );
+  }
+
+  if (!profile) {
+    return (
+      <div className="p-6">
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 flex items-center justify-between gap-4">
+          <span className="text-sm font-bold text-red-700">{error || 'Profile unavailable'}</span>
+          <button onClick={load} className="rounded-lg border border-red-300 px-3 py-1.5 text-[11px] font-black uppercase text-red-700 hover:bg-red-100">
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+
   return (
-    <div className="space-y-6 pb-12 font-sans text-gray-900 selection:bg-purple-100">
-      {loading && (
-        <div className="flex items-center gap-2 text-gray-400 text-sm">
-          <Loader2 size={16} className="animate-spin" /> Loading profile...
+    <div className="space-y-6 font-sans antialiased text-gray-800 pb-10">
+
+      {/* HEADER */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-gray-200">
+        <div>
+          <h1 className="text-xl font-black text-[#0B1528] tracking-tight">Store Profile</h1>
+          <p className="text-xs text-gray-400 font-bold mt-1.5">
+            Complete the details we could not collect at signup.
+          </p>
+        </div>
+        <div className="flex items-center gap-2 self-start">
+          <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Account</span>
+          <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase border tracking-wider ${
+            profile.status === 'approved'
+              ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+              : profile.status === 'rejected' || profile.status === 'suspended'
+              ? 'bg-rose-50 text-rose-700 border-rose-100'
+              : 'bg-amber-50 text-amber-700 border-amber-100'
+          }`}>
+            {profile.status}
+          </span>
+        </div>
+      </div>
+
+      {/* COMPLETION BANNER */}
+      {missing.length > 0 && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50/70 p-5">
+          <div className="flex items-start gap-3">
+            <AlertTriangle size={18} className="text-amber-600 shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <h2 className="text-sm font-black text-amber-900">
+                Your profile is {pct}% complete
+              </h2>
+              <p className="text-xs font-semibold text-amber-700/80 mt-0.5">
+                Signup only asked for the basics. Add the rest so your store can trade and get paid.
+              </p>
+
+              <div className="w-full h-1.5 bg-amber-100 rounded-full overflow-hidden mt-3">
+                <div className="h-full bg-amber-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
+              </div>
+
+              <div className="flex flex-wrap gap-1.5 mt-3">
+                {missing.map((m) => (
+                  <button
+                    key={m.label}
+                    type="button"
+                    onClick={() => setActiveSection(m.section)}
+                    className="px-2.5 py-1 rounded-lg bg-white border border-amber-200 text-[10px] font-black text-amber-800 hover:bg-amber-100 transition-all"
+                  >
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
       )}
+
+      {missing.length === 0 && (
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4 flex items-center gap-3">
+          <Check size={18} className="text-emerald-600 shrink-0" />
+          <span className="text-sm font-black text-emerald-900">Your profile is complete.</span>
+        </div>
+      )}
+
       {error && (
-        <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">{error}</div>
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3">
+          <span className="text-xs font-bold text-red-700">{error}</span>
+        </div>
       )}
-      
-      {/* 1. Immersive Top Banner Header Card */}
-      <div className="bg-[#0E0E2C] rounded-[2rem] p-8 flex flex-col md:flex-row md:items-center justify-between text-white shadow-xl relative overflow-hidden shrink-0 group">
-        
-        {/* Abstract Background Design */}
-        <div className="absolute top-0 right-0 w-80 h-80 bg-gradient-to-br from-[#5B3FD6]/10 to-transparent rounded-full blur-3xl pointer-events-none transition-transform group-hover:scale-110 duration-500"></div>
 
-        <div className="flex items-center gap-6 relative z-10">
-          {/* Avatar Circle */}
-          <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center shrink-0 shadow-lg text-[#0E0E2C] text-4xl font-black">
-            {name.charAt(0).toUpperCase()}
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="bg-gray-800 border border-gray-700 text-gray-300 text-[9px] font-black tracking-widest uppercase px-2.5 py-0.5 rounded-full">
-                Seller
-              </span>
-              <span className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[9px] font-black tracking-widest uppercase px-2.5 py-0.5 rounded-full flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                Active
-              </span>
-            </div>
-            <h2 className="text-3xl font-extrabold tracking-tight mt-2">{name}</h2>
-            <p className="text-[#5B3FD6] text-xs font-bold mt-1 uppercase tracking-wider">{storeName}</p>
-          </div>
-        </div>
-
-        <button 
-          onClick={startEditing}
-          className="mt-6 md:mt-0 bg-transparent border border-gray-700 hover:bg-white/5 text-white font-extrabold flex items-center gap-1.5 px-5 py-2.5 rounded-xl text-xs transition-all shadow-md cursor-pointer relative z-10 shrink-0 self-start md:self-auto"
-        >
-          <Edit3 size={14} />
-          <span>EDIT PROFILE</span>
-        </button>
-
+      {/* SECTION NAV */}
+      <div className="bg-white rounded-2xl border border-gray-200/75 p-3 flex flex-wrap gap-2 shadow-sm">
+        {SECTIONS.map((s) => {
+          const incomplete = checklist.some((c) => c.section === s.id && !c.done);
+          return (
+            <button
+              key={s.id}
+              onClick={() => setActiveSection(s.id)}
+              className={`px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 ${
+                activeSection === s.id
+                  ? 'bg-[#0B1528] text-white shadow-sm'
+                  : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50 border border-transparent hover:border-gray-200/60'
+              }`}
+            >
+              <s.Icon size={13} />
+              <span>{s.label}</span>
+              {incomplete && <span className="w-1.5 h-1.5 rounded-full bg-amber-400" title="Incomplete" />}
+            </button>
+          );
+        })}
       </div>
 
-      {/* 2. Content Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        {/* Left Span: Business Settings Info cards */}
-        <div className="lg:col-span-2 space-y-6">
-          
-          {/* Business Profile */}
-          <div className="bg-white border border-gray-100 rounded-[1.5rem] p-6 shadow-sm space-y-5">
-            <h3 className="font-extrabold text-sm text-gray-900 tracking-tight">Business Profile</h3>
-            
+      {/* PANELS */}
+      <div className="bg-white rounded-[1.25rem] border border-gray-200 shadow-sm p-6">
+
+        {activeSection === 'business' && (
+          <form onSubmit={saveBusiness} className="space-y-5">
+            <h2 className="text-base font-black text-gray-900 border-b border-gray-100 pb-3">Business & Contact</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              
-              {/* Seller Identity */}
-              <div className="space-y-1.5">
-                <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider ml-0.5">Seller Identity</span>
-                <div className="bg-gray-50/50 border border-gray-200/50 rounded-xl px-4 py-3 text-xs font-bold text-gray-800 flex items-center gap-2">
-                  <User size={14} className="text-gray-400 shrink-0" />
-                  <span>{name}</span>
+              <div>
+                <label className={labelCls}>Owner Name</label>
+                <input type="text" className={inputCls} value={business.name} onChange={(e) => setBusiness({ ...business, name: e.target.value })} />
+              </div>
+              <div>
+                <label className={labelCls}>Store Name</label>
+                <input type="text" className={inputCls} value={business.storeName} onChange={(e) => setBusiness({ ...business, storeName: e.target.value })} />
+              </div>
+              <div>
+                <label className={labelCls}>Email</label>
+                <input type="email" className={inputCls} value={business.email} onChange={(e) => setBusiness({ ...business, email: e.target.value })} />
+              </div>
+              <div>
+                <label className={labelCls}>Phone</label>
+                <input type="tel" pattern="[6-9]\d{9}" title="10-digit Indian mobile starting with 6-9" className={inputCls} value={business.phone} onChange={(e) => setBusiness({ ...business, phone: e.target.value })} />
+              </div>
+              <div>
+                <label className={labelCls}>Delivery Radius (km)</label>
+                <input type="number" step="0.1" min="0" max="500" className={inputCls} value={business.serviceRadiusKm} onChange={(e) => setBusiness({ ...business, serviceRadiusKm: e.target.value })} />
+              </div>
+              <div>
+                <label className={labelCls}>Commission</label>
+                <div className="relative">
+                  <input type="text" disabled value={Number(profile.commissionPercent?.$numberDecimal ?? profile.commissionPercent ?? 0).toFixed(2)} className={`${inputCls} bg-gray-50 text-gray-400 cursor-not-allowed`} />
+                  <Percent size={12} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-300" />
                 </div>
-              </div>
-
-              {/* Store Name */}
-              <div className="space-y-1.5">
-                <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider ml-0.5">Store Name</span>
-                <div className="bg-gray-50/50 border border-gray-200/50 rounded-xl px-4 py-3 text-xs font-bold text-gray-800 flex items-center gap-2">
-                  <Building size={14} className="text-gray-400 shrink-0" />
-                  <span>{storeName}</span>
-                </div>
-              </div>
-
-              {/* Contact */}
-              <div className="space-y-1.5">
-                <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider ml-0.5">Contact Number</span>
-                <div className="bg-gray-50/50 border border-gray-200/50 rounded-xl px-4 py-3 text-xs font-bold text-gray-800 flex items-center gap-2">
-                  <Phone size={14} className="text-gray-400 shrink-0" />
-                  <span>{phone}</span>
-                </div>
-              </div>
-
-              {/* Email */}
-              <div className="space-y-1.5">
-                <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider ml-0.5">Email Address</span>
-                <div className="bg-gray-50/50 border border-gray-200/50 rounded-xl px-4 py-3 text-xs font-bold text-gray-800 flex items-center gap-2">
-                  <Mail size={14} className="text-gray-400 shrink-0" />
-                  <span>{email}</span>
-                </div>
-              </div>
-
-            </div>
-          </div>
-
-          {/* Location & Service Settings */}
-          <div className="bg-white border border-gray-100 rounded-[1.5rem] p-6 shadow-sm space-y-5">
-            <div className="flex items-center justify-between">
-              <h3 className="font-extrabold text-sm text-gray-900 tracking-tight">Location & Service Settings</h3>
-              <button 
-                onClick={() => alert('Map Location Manager feature is api-ready!')}
-                className="bg-[#0E0E2C] hover:opacity-95 text-white font-extrabold px-4 py-2 rounded-xl text-[10px] uppercase tracking-wider cursor-pointer shadow-md"
-              >
-                Manage
-              </button>
-            </div>
-
-            {/* Address Pin Row */}
-            <div className="bg-gray-50/50 border border-gray-200/50 rounded-2xl p-4 flex items-start gap-4">
-              <div className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center shrink-0 border border-emerald-100/50 shadow-sm mt-0.5">
-                <MapPin size={18} />
-              </div>
-              <div className="space-y-1">
-                <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block">Store Location Pin</span>
-                <p className="text-xs font-bold text-gray-800 leading-relaxed">{address}</p>
+                <span className="text-[10px] text-gray-400 font-semibold mt-1 block">Set by the marketplace admin.</span>
               </div>
             </div>
+            <div className="flex justify-end pt-2 border-t border-gray-100"><SaveButton section="business" savingSection={savingSection} savedSection={savedSection} /></div>
+          </form>
+        )}
 
-            {/* Details Metrics Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="bg-gray-50/30 border border-gray-100 rounded-xl p-3 flex flex-col">
-                <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Service Radius</span>
-                <div className="flex items-center gap-1.5 mt-1">
-                  <span className="text-sm font-extrabold text-gray-900">{serviceRadius}</span>
-                  <span className="bg-gray-100 text-gray-700 text-[10px] px-1.5 py-0.5 rounded font-black border border-gray-200/50 uppercase">km</span>
-                </div>
+        {activeSection === 'address' && (
+          <form onSubmit={saveAddress} className="space-y-5">
+            <h2 className="text-base font-black text-gray-900 border-b border-gray-100 pb-3">Store Address</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="sm:col-span-2">
+                <label className={labelCls}>Street / Line 1 {isBlank(profile.address?.line1) && <span className="text-amber-500">• needed</span>}</label>
+                <input type="text" placeholder="e.g. 12 M.G. Road" className={inputCls} value={address.line1} onChange={(e) => setAddress({ ...address, line1: e.target.value })} />
               </div>
-
-              <div className="bg-gray-50/30 border border-gray-100 rounded-xl p-3 flex flex-col">
-                <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Latitude</span>
-                <span className="text-sm font-extrabold text-gray-900 mt-1">{latitude}</span>
+              <div className="sm:col-span-2">
+                <label className={labelCls}>Line 2</label>
+                <input type="text" placeholder="Optional" className={inputCls} value={address.line2} onChange={(e) => setAddress({ ...address, line2: e.target.value })} />
               </div>
-
-              <div className="bg-gray-50/30 border border-gray-100 rounded-xl p-3 flex flex-col">
-                <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Longitude</span>
-                <span className="text-sm font-extrabold text-gray-900 mt-1">{longitude}</span>
+              <div>
+                <label className={labelCls}>City {isBlank(profile.address?.city) && <span className="text-amber-500">• needed</span>}</label>
+                <input type="text" className={inputCls} value={address.city} onChange={(e) => setAddress({ ...address, city: e.target.value })} />
+              </div>
+              <div>
+                <label className={labelCls}>State {isBlank(profile.address?.state) && <span className="text-amber-500">• needed</span>}</label>
+                <input type="text" className={inputCls} value={address.state} onChange={(e) => setAddress({ ...address, state: e.target.value })} />
+              </div>
+              <div>
+                <label className={labelCls}>Country</label>
+                <input type="text" className={inputCls} value={address.country} onChange={(e) => setAddress({ ...address, country: e.target.value })} />
+              </div>
+              <div>
+                <label className={labelCls}>
+                  PIN Code {(!profile.address?.pinCode || profile.address.pinCode === PLACEHOLDER_PIN) && <span className="text-amber-500">• needed</span>}
+                </label>
+                <input type="text" pattern="\d{6}" title="Six digits" placeholder="6 digits" className={inputCls} value={address.pinCode} onChange={(e) => setAddress({ ...address, pinCode: e.target.value })} />
               </div>
             </div>
 
-            {/* Location Notice Block */}
-            <div className="bg-amber-50/50 border border-amber-200/60 rounded-2xl p-4 flex gap-3.5 text-[10px] text-amber-800 font-semibold leading-normal">
-              <Compass size={16} className="shrink-0 text-amber-600 mt-0.5" />
-              <span>Your shop location and service radius determine which customers can view your products. Ensure the marker is placed exactly at your physical storefront for accurate delivery assignments.</span>
-            </div>
-
-          </div>
-
-        </div>
-
-        {/* Right Span: Security & Trust Block */}
-        <div className="bg-[#0E0E2C] text-white rounded-[2rem] p-8 shadow-xl flex flex-col justify-between shrink-0 space-y-6 self-start">
-          
-          <div className="space-y-6">
-            <span className="text-[9px] font-black text-[#5B3FD6] tracking-widest uppercase block">Security & Trust</span>
-            
-            {/* List */}
-            <div className="space-y-5">
-              
-              {/* Verification */}
-              <div className="flex items-center gap-4.5">
-                <div className="w-10 h-10 bg-white/5 text-[#5B3FD6] rounded-xl flex items-center justify-center shrink-0 border border-white/10">
-                  <ShieldCheck size={18} />
+            <div className="border-t border-gray-100 pt-4">
+              <span className={labelCls}>
+                Map Location {isDefaultCoords(profile.location?.coordinates) && <span className="text-amber-500">• needed</span>}
+              </span>
+              <p className="text-[11px] text-gray-400 font-semibold mb-3">
+                Used to match your store to nearby customers within your delivery radius.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className={labelCls}>Latitude</label>
+                  <input type="number" step="any" min="-90" max="90" placeholder="e.g. 22.7196" className={inputCls} value={address.latitude} onChange={(e) => setAddress({ ...address, latitude: e.target.value })} />
                 </div>
                 <div>
-                  <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block">Verification</span>
-                  <span className="text-xs font-bold text-white block mt-0.5">Verified Merchant</span>
+                  <label className={labelCls}>Longitude</label>
+                  <input type="number" step="any" min="-180" max="180" placeholder="e.g. 75.8577" className={inputCls} value={address.longitude} onChange={(e) => setAddress({ ...address, longitude: e.target.value })} />
                 </div>
               </div>
-
-              {/* Partner Tier */}
-              <div className="flex items-center gap-4.5">
-                <div className="w-10 h-10 bg-white/5 text-[#5B3FD6] rounded-xl flex items-center justify-center shrink-0 border border-white/10">
-                  <Compass size={18} />
-                </div>
-                <div>
-                  <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block">Partner Tier</span>
-                  <span className="text-xs font-bold text-white block mt-0.5">Standard Growth</span>
-                </div>
-              </div>
-
-              {/* Region */}
-              <div className="flex items-center gap-4.5">
-                <div className="w-10 h-10 bg-white/5 text-[#5B3FD6] rounded-xl flex items-center justify-center shrink-0 border border-white/10">
-                  <Globe size={18} />
-                </div>
-                <div>
-                  <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block">Region</span>
-                  <span className="text-xs font-bold text-white block mt-0.5">Pan India Reach</span>
-                </div>
-              </div>
-
-            </div>
-          </div>
-
-          <div className="pt-6 border-t border-white/5 flex items-center gap-2 text-[10px] text-gray-500 font-bold">
-            <ShieldCheck size={14} className="text-gray-500" />
-            <span>Secured Admin Portal</span>
-          </div>
-
-        </div>
-
-      </div>
-
-      {/* 3. Centered Edit Profile Modal */}
-      {isEditing && (
-        <div className="fixed inset-0 bg-[#0E0E2C]/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 transition-all animate-fade-in">
-          <div className="w-full max-w-[440px] bg-white rounded-[2rem] shadow-2xl p-7.5 space-y-6 animate-scale-up relative">
-            
-            {/* Header */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Edit3 size={18} className="text-[#5B3FD6]" />
-                <h3 className="text-base font-extrabold text-gray-900 tracking-tight">Edit Profile</h3>
-              </div>
-              <button 
-                onClick={() => setIsEditing(false)}
-                className="p-1 rounded-xl hover:bg-gray-50 text-gray-400 hover:text-gray-700 transition-colors cursor-pointer"
-              >
-                <X size={16} />
-              </button>
             </div>
 
-            {/* Form */}
-            <form onSubmit={handleEditProfileSubmit} className="space-y-4">
-              
-              {/* Seller Identity */}
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider block ml-0.5">Seller Name</label>
-                <div className="relative group">
-                  <User className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-[#5B3FD6] transition-colors" size={14} />
-                  <input 
-                    type="text" 
-                    required
-                    value={editName}
-                    onChange={(e) => setEditName(e.target.value)}
-                    className="w-full pl-9 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-[#5B3FD6]/10 focus:border-[#5B3FD6]"
+            <div className="flex justify-end pt-2 border-t border-gray-100"><SaveButton section="address" savingSection={savingSection} savedSection={savedSection} /></div>
+          </form>
+        )}
+
+        {activeSection === 'tax' && (
+          <form onSubmit={saveTax} className="space-y-5">
+            <h2 className="text-base font-black text-gray-900 border-b border-gray-100 pb-3">Tax Details</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className={labelCls}>PAN {!profile.panCard && <span className="text-amber-500">• needed</span>}</label>
+                <input type="text" placeholder="ABCDE1234F" className={`${inputCls} uppercase`} value={tax.panCard} onChange={(e) => setTax({ ...tax, panCard: e.target.value })} />
+                <span className="text-[10px] text-gray-400 font-semibold mt-1 block">Five letters, four digits, one letter.</span>
+              </div>
+              <div>
+                <label className={labelCls}>GSTIN</label>
+                <input type="text" placeholder="22ABCDE1234F1Z5" className={`${inputCls} uppercase`} value={tax.gstin} onChange={(e) => setTax({ ...tax, gstin: e.target.value })} />
+                <span className="text-[10px] text-gray-400 font-semibold mt-1 block">Optional — leave blank if not GST registered.</span>
+              </div>
+            </div>
+            <div className="flex justify-end pt-2 border-t border-gray-100"><SaveButton section="tax" savingSection={savingSection} savedSection={savedSection} /></div>
+          </form>
+        )}
+
+        {activeSection === 'bank' && (
+          <form onSubmit={saveBank} className="space-y-5">
+            <h2 className="text-base font-black text-gray-900 border-b border-gray-100 pb-3">Bank Account</h2>
+            <p className="text-xs font-semibold text-gray-500 -mt-2">
+              Required before you can request a payout.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className={labelCls}>Account Holder Name</label>
+                <input type="text" className={inputCls} value={bank.accountName} onChange={(e) => setBank({ ...bank, accountName: e.target.value })} />
+              </div>
+              <div>
+                <label className={labelCls}>Bank Name</label>
+                <input type="text" className={inputCls} value={bank.bankName} onChange={(e) => setBank({ ...bank, bankName: e.target.value })} />
+              </div>
+              <div>
+                <label className={labelCls}>Branch</label>
+                <input type="text" className={inputCls} value={bank.branch} onChange={(e) => setBank({ ...bank, branch: e.target.value })} />
+              </div>
+              <div>
+                <label className={labelCls}>IFSC {!profile.bank?.ifsc && <span className="text-amber-500">• needed</span>}</label>
+                <input type="text" placeholder="HDFC0001234" className={`${inputCls} uppercase`} value={bank.ifsc} onChange={(e) => setBank({ ...bank, ifsc: e.target.value })} />
+              </div>
+              <div className="sm:col-span-2">
+                <label className={labelCls}>
+                  Account Number {!profile.bank?.accountNumberMasked && <span className="text-amber-500">• needed</span>}
+                </label>
+                <input
+                  type="text"
+                  placeholder={profile.bank?.accountNumberMasked ? 'Saved — type a new number to replace it' : '8–20 digits'}
+                  className={inputCls}
+                  value={bank.accountNumber}
+                  onChange={(e) => setBank({ ...bank, accountNumber: e.target.value })}
+                />
+                <span className="text-[10px] text-gray-400 font-semibold mt-1 block">
+                  {profile.bank?.accountNumberMasked
+                    ? 'An account number is on file. It is stored securely and cannot be displayed again — leave blank to keep it.'
+                    : 'Stored securely and never shown again once saved.'}
+                </span>
+              </div>
+            </div>
+            <div className="flex justify-end pt-2 border-t border-gray-100"><SaveButton section="bank" savingSection={savingSection} savedSection={savedSection} /></div>
+          </form>
+        )}
+
+        {activeSection === 'documents' && (
+          <div className="space-y-5">
+            <h2 className="text-base font-black text-gray-900 border-b border-gray-100 pb-3">KYC Documents</h2>
+
+            {profile.kycDocs?.length > 0 ? (
+              <div className="space-y-2">
+                {profile.kycDocs.map((doc, i) => (
+                  <div key={doc._id || i} className="flex items-center gap-3 p-3 rounded-xl border border-gray-150 bg-gray-50/50">
+                    <FileText size={15} className="text-gray-400 shrink-0" />
+                    <span className="text-xs font-black text-gray-700 flex-1">
+                      {KYC_TYPES.find((t) => t.value === doc.type)?.label || doc.type}
+                    </span>
+                    <span className="text-[10px] font-black text-emerald-600 uppercase">Uploaded</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs font-semibold text-gray-400">No documents uploaded yet.</p>
+            )}
+
+            <form onSubmit={saveDocument} className="border-t border-gray-100 pt-4 space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className={labelCls}>Document Type</label>
+                  <select className={inputCls} value={docType} onChange={(e) => setDocType(e.target.value)}>
+                    {KYC_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className={labelCls}>File</label>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*,application/pdf"
+                    onChange={(e) => setDocFile(e.target.files?.[0] || null)}
+                    className="hidden"
                   />
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="w-full border-2 border-dashed border-gray-200 hover:border-indigo-300 rounded-xl px-3.5 py-2.5 text-xs font-bold text-gray-500 flex items-center justify-center gap-2 transition-all"
+                  >
+                    <Upload size={13} />
+                    <span className="truncate">{docFile ? docFile.name : 'Choose image or PDF (max 5MB)'}</span>
+                  </button>
                 </div>
               </div>
 
-              {/* Store Name */}
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider block ml-0.5">Store Hub Name</label>
-                <div className="relative group">
-                  <Building className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-[#5B3FD6] transition-colors" size={14} />
-                  <input 
-                    type="text" 
-                    required
-                    value={editStoreName}
-                    onChange={(e) => setEditStoreName(e.target.value)}
-                    className="w-full pl-9 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-[#5B3FD6]/10 focus:border-[#5B3FD6]"
-                  />
-                </div>
-              </div>
-
-              {/* Phone */}
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider block ml-0.5">Contact Number</label>
-                <div className="relative group">
-                  <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-[#5B3FD6] transition-colors" size={14} />
-                  <input 
-                    type="text" 
-                    required
-                    value={editPhone}
-                    onChange={(e) => setEditPhone(e.target.value)}
-                    className="w-full pl-9 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-[#5B3FD6]/10 focus:border-[#5B3FD6]"
-                  />
-                </div>
-              </div>
-
-              {/* Email */}
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider block ml-0.5">Email Address</label>
-                <div className="relative group">
-                  <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-[#5B3FD6] transition-colors" size={14} />
-                  <input 
-                    type="email" 
-                    required
-                    value={editEmail}
-                    onChange={(e) => setEditEmail(e.target.value)}
-                    className="w-full pl-9 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-[#5B3FD6]/10 focus:border-[#5B3FD6]"
-                  />
-                </div>
-              </div>
-
-              {/* Store Location */}
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider block ml-0.5">Store Location Address</label>
-                <div className="relative group">
-                  <MapPin className="absolute left-3.5 top-3 text-gray-400 group-focus-within:text-[#5B3FD6] transition-colors" size={14} />
-                  <textarea 
-                    required
-                    rows={2}
-                    value={editAddress}
-                    onChange={(e) => setEditAddress(e.target.value)}
-                    className="w-full pl-9 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-[#5B3FD6]/10 focus:border-[#5B3FD6] resize-none"
-                  />
-                </div>
-              </div>
-
-              {/* Success Notification */}
-              {successSave && (
-                <div className="p-3 bg-emerald-50 border border-emerald-100 rounded-xl flex items-center gap-2 text-xs text-emerald-800 font-extrabold uppercase tracking-wider">
-                  <Check size={14} className="text-emerald-500 shrink-0" />
-                  <span>Profile Saved Successfully!</span>
-                </div>
-              )}
-
-              {/* Action Buttons */}
-              <div className="pt-2 flex items-center gap-3">
+              {docFile && (
                 <button
                   type="button"
-                  onClick={() => setIsEditing(false)}
-                  className="flex-1 py-3.5 border border-gray-200 hover:bg-gray-50 text-gray-500 font-extrabold rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer text-center"
+                  onClick={() => { setDocFile(null); if (fileInputRef.current) fileInputRef.current.value = ''; }}
+                  className="text-[10px] text-red-500 font-black hover:underline flex items-center gap-1"
                 >
-                  Cancel
+                  <Trash2 size={11} /> Remove selected file
                 </button>
+              )}
+
+              <div className="flex justify-end pt-2 border-t border-gray-100">
                 <button
                   type="submit"
-                  disabled={isSaving}
-                  className="flex-1 py-3.5 bg-[#5B3FD6] hover:bg-[#492eb3] text-white font-extrabold rounded-xl text-xs uppercase tracking-wider transition-all shadow-lg cursor-pointer text-center flex items-center justify-center"
+                  disabled={!docFile || savingSection === 'documents'}
+                  className="bg-[#0B1528] hover:bg-gray-900 text-white font-black text-xs px-5 py-2.5 rounded-xl transition-all shadow-sm disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2"
                 >
-                  {isSaving ? (
-                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                  ) : (
-                    'Save Details'
-                  )}
+                  {savingSection === 'documents' && <Loader2 size={12} className="animate-spin" />}
+                  <span>{savingSection === 'documents' ? 'Uploading…' : 'Upload Document'}</span>
                 </button>
               </div>
-
             </form>
-
           </div>
-        </div>
-      )}
+        )}
 
+      </div>
     </div>
   );
 };

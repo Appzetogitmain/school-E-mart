@@ -21,13 +21,13 @@ const FinalCTASection = () => {
           
           <div className="flex flex-col sm:flex-row items-center justify-center gap-6">
             <button 
-              onClick={() => navigate(`${ROUTES.REGISTER}?role=school`)}
+              onClick={() => navigate('/school/login')}
               className="w-full sm:w-auto px-10 py-4 bg-white text-primary font-normal rounded-2xl hover:bg-gray-50 transition-all flex items-center justify-center gap-2 shadow-lg"
             >
               School Portal <ArrowRight size={20} />
             </button>
             <button 
-              onClick={() => navigate(`${ROUTES.REGISTER}?role=parent`)}
+              onClick={() => navigate('/user/login')}
               className="w-full sm:w-auto px-10 py-4 bg-golden-yellow text-deep-purple font-normal rounded-2xl hover:bg-accent-gold transition-all flex items-center justify-center gap-2 shadow-lg"
             >
               Parent Portal <ArrowRight size={20} />

@@ -36,6 +36,15 @@ const mediaFilter = (_req, file, cb) => {
   cb(new Error('Only image or video files are allowed'));
 };
 
+// KYC paperwork is routinely a scanned PDF, so documents accept more than images.
+const documentFilter = (_req, file, cb) => {
+  if (file.mimetype.startsWith('image/') || file.mimetype === 'application/pdf') {
+    cb(null, true);
+    return;
+  }
+  cb(new Error('Only image or PDF files are allowed'));
+};
+
 const uploadImage = multer({
   storage,
   limits: { fileSize: 5 * 1024 * 1024 },
@@ -48,8 +57,15 @@ const uploadMedia = multer({
   fileFilter: mediaFilter,
 }).single('file');
 
+const uploadDocument = multer({
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: documentFilter,
+}).single('file');
+
 module.exports = {
   uploadImage,
   uploadMedia,
+  uploadDocument,
   UPLOAD_DIR,
 };

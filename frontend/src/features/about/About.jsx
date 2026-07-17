@@ -56,13 +56,13 @@ const About = () => {
               
               <div className="flex flex-col sm:flex-row gap-4 mb-12 justify-center lg:justify-start">
                 <button 
-                  onClick={() => navigate(ROUTES.REGISTER)}
+                  onClick={() => navigate('/school/login')}
                   className="px-8 py-4 bg-accent-orange text-deep-purple rounded-xl font-bold tracking-wider hover:bg-accent-gold transition-all shadow-xl shadow-orange-950/20 active:scale-95 flex items-center justify-center gap-3"
                 >
                   Register Your School <ArrowRight size={18} />
                 </button>
                 <button 
-                  onClick={() => navigate(ROUTES.REGISTER)}
+                  onClick={() => navigate('/user/login')}
                   className="px-8 py-4 border-2 border-primary text-primary rounded-xl font-bold tracking-wider hover:bg-primary hover:text-white transition-all flex items-center justify-center gap-3 active:scale-95"
                 >
                   Register as Parent <ArrowRight size={18} />
@@ -337,7 +337,7 @@ const About = () => {
                    ))}
                 </ul>
                 <button 
-                  onClick={() => navigate(ROUTES.REGISTER)}
+                  onClick={() => navigate('/school/login')}
                   className="w-full sm:w-auto px-10 py-4 bg-accent-orange text-deep-purple rounded-xl font-bold tracking-wider hover:bg-accent-gold transition-all active:scale-95 flex items-center justify-center gap-3"
                 >
                   Onboard Your School <ArrowRight size={18} />
@@ -383,13 +383,13 @@ const About = () => {
            <p className="text-lg opacity-80 mb-12 max-w-2xl mx-auto font-normal">Join thousands of schools and families already using School E-Mart.</p>
            <div className="flex flex-col sm:flex-row justify-center gap-6">
               <button 
-                onClick={() => navigate(ROUTES.REGISTER)}
+                onClick={() => navigate('/school/login')}
                 className="px-12 py-5 bg-accent-orange text-deep-purple rounded-2xl font-bold tracking-wider hover:bg-accent-gold hover:shadow-2xl transition-all active:scale-95 text-lg"
               >
                 Register Your School
               </button>
               <button 
-                onClick={() => navigate(ROUTES.REGISTER)}
+                onClick={() => navigate('/user/login')}
                 className="px-12 py-5 border-2 border-white/30 text-white rounded-2xl font-bold tracking-wider hover:bg-white/10 transition-all active:scale-95 text-lg"
               >
                 Register as Parent

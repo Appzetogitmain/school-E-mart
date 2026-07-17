@@ -438,7 +438,7 @@ const HowItWorks = () => {
             </p>
             <div className="flex flex-col sm:flex-row justify-center gap-6">
               <button
-                onClick={() => navigate(ROUTES.REGISTER)}
+                onClick={() => navigate('/school/login')}
                 className="px-12 py-5 bg-accent-orange text-deep-purple rounded-2xl font-semibold hover:shadow-2xl hover:bg-accent-gold transition-all active:scale-95 text-lg"
               >
                 Register Your School
@@ -456,7 +456,7 @@ const HowItWorks = () => {
               <p className="text-text-secondary text-sm font-normal">
                 Already a registered partner?
                 <button
-                  onClick={() => navigate(ROUTES.LOGIN)}
+                  onClick={() => navigate('/school/login')}
                   className="ml-2 text-primary font-semibold hover:underline transition-all"
                 >
                   Login here
@@ -483,7 +483,7 @@ const HowItWorks = () => {
         <div className="bg-white/70 backdrop-blur-xl border border-white shadow-[0_20px_50px_rgba(0,0,0,0.15)] rounded-full p-2 flex items-center gap-3 pr-4">
           <div className="flex gap-2 p-1">
             <button
-              onClick={() => navigate(ROUTES.REGISTER)}
+              onClick={() => navigate('/school/login')}
               className="px-8 py-3 bg-accent-orange text-deep-purple rounded-full text-[15px] font-semibold hover:shadow-lg hover:scale-105 transition-all whitespace-nowrap active:scale-95"
             >
               Register School

@@ -44,6 +44,21 @@ export const listPendingVendors = async (params = {}) => {
   return extractPaginated(response, 'vendors');
 };
 
+export const createVendor = async (payload) => {
+  const response = await apiClient.post('/admin/vendors', payload);
+  return unwrapData(response)?.vendor;
+};
+
+export const updateVendor = async (vendorId, payload) => {
+  const response = await apiClient.patch(`/admin/vendors/${vendorId}`, payload);
+  return unwrapData(response)?.vendor;
+};
+
+export const deleteVendor = async (vendorId) => {
+  const response = await apiClient.delete(`/admin/vendors/${vendorId}`);
+  return unwrapData(response);
+};
+
 export const approveVendor = async (vendorId, payload = {}) => {
   const response = await apiClient.post(`/admin/vendors/${vendorId}/approve`, payload);
   return unwrapData(response)?.vendor;

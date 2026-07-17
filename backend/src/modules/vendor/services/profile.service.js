@@ -50,6 +50,14 @@ const profileService = {
     const vendorUpdate = {};
     const userUpdate = {};
 
+    // Without this a vendor could take over another account's email or phone: the
+    // write would otherwise succeed and leave two users sharing a login identifier.
+    await registrationService.assertContactAvailable({
+      email: payload.email,
+      phone: payload.phone,
+      exceptUserId: userId,
+    });
+
     if (payload.name) userUpdate.name = payload.name;
     if (payload.email) userUpdate.email = payload.email;
     if (payload.phone) userUpdate.phone = payload.phone;

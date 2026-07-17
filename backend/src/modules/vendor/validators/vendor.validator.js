@@ -1,4 +1,5 @@
 const { Joi, schemas } = require('../../../common/validation');
+const vendorFields = require('./vendorFields');
 
 const objectId = schemas.objectId;
 
@@ -23,76 +24,45 @@ const orderIdParam = Joi.object({ orderId: objectId.required() });
 const returnIdParam = Joi.object({ returnId: objectId.required() });
 const vendorIdParam = Joi.object({ vendorId: objectId.required() });
 
-const addressSchema = Joi.object({
-  line1: Joi.string().trim().max(200).optional(),
-  line2: Joi.string().trim().max(200).optional(),
-  city: Joi.string().trim().max(80).optional(),
-  state: Joi.string().trim().max(80).optional(),
-  country: Joi.string().trim().max(80).optional(),
-  pinCode: Joi.string().trim().pattern(/^\d{6}$/).optional(),
-  latitude: Joi.number().min(-90).max(90).optional(),
-  longitude: Joi.number().min(-180).max(180).optional(),
-});
+// Postal fields come from the shared definition; coordinates travel alongside as
+// latitude/longitude rather than nested in the address.
+const addressSchema = vendorFields.addressSchema.keys({ ...vendorFields.geoFields });
 
+// Signup deliberately asks for the minimum; everything else is completed later on
+// the vendor profile page. commissionPercent is intentionally absent: it is the
+// marketplace's cut, so a self-registering vendor must not be able to set it.
 const registerSchema = Joi.object({
-  name: Joi.string().trim().min(2).max(80).required(),
-  storeName: Joi.string().trim().min(2).max(80).required(),
+  name: vendorFields.identityFields.name.required(),
+  storeName: vendorFields.identityFields.storeName.required(),
   phone: schemas.indianMobile.required(),
   email: schemas.email.required(),
   password: schemas.password.required(),
-  location: Joi.string().trim().max(200).optional(),
-  city: Joi.string().trim().max(80).optional(),
-  state: Joi.string().trim().max(80).optional(),
-  country: Joi.string().trim().max(80).default('India'),
-  pinCode: Joi.string().trim().pattern(/^\d{6}$/).optional(),
-  coordinates: Joi.array().items(Joi.number()).length(2).optional(),
-  serviceRadiusKm: Joi.number().min(0).max(500).default(10),
-  categories: Joi.array().items(objectId).optional(),
-  commissionPercent: Joi.number().min(0).max(100).optional(),
-  address: addressSchema.optional(),
+  serviceRadiusKm: vendorFields.identityFields.serviceRadiusKm.default(10),
+  categories: vendorFields.identityFields.categories.optional(),
+  address: vendorFields.addressSchema.optional(),
+  ...vendorFields.geoFields,
 });
 
 const updateProfileSchema = Joi.object({
-  name: Joi.string().trim().min(2).max(80).optional(),
-  storeName: Joi.string().trim().min(2).max(80).optional(),
+  name: vendorFields.identityFields.name.optional(),
+  storeName: vendorFields.identityFields.storeName.optional(),
   phone: schemas.indianMobile.optional(),
   email: schemas.email.optional(),
-  serviceRadiusKm: Joi.number().min(0).max(500).optional(),
-  categories: Joi.array().items(objectId).optional(),
-  address: addressSchema.optional(),
-  latitude: Joi.number().min(-90).max(90).optional(),
-  longitude: Joi.number().min(-180).max(180).optional(),
+  serviceRadiusKm: vendorFields.identityFields.serviceRadiusKm.optional(),
+  categories: vendorFields.identityFields.categories.optional(),
+  address: vendorFields.addressSchema.optional(),
+  ...vendorFields.geoFields,
 });
 
 const businessInfoSchema = Joi.object({
-  storeName: Joi.string().trim().min(2).max(80).optional(),
-  categories: Joi.array().items(objectId).optional(),
-  serviceRadiusKm: Joi.number().min(0).max(500).optional(),
+  storeName: vendorFields.identityFields.storeName.optional(),
+  categories: vendorFields.identityFields.categories.optional(),
+  serviceRadiusKm: vendorFields.identityFields.serviceRadiusKm.optional(),
 });
 
-const taxInfoSchema = Joi.object({
-  gstin: Joi.string()
-    .trim()
-    .pattern(/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z][Z][0-9A-Z]$/)
-    .optional()
-    .allow(''),
-  panCard: Joi.string()
-    .trim()
-    .pattern(/^[A-Z]{5}[0-9]{4}[A-Z]$/)
-    .optional()
-    .allow(''),
-});
+const taxInfoSchema = Joi.object({ ...vendorFields.taxFields });
 
-const bankDetailsSchema = Joi.object({
-  accountName: Joi.string().trim().max(120).optional(),
-  bankName: Joi.string().trim().max(120).optional(),
-  branch: Joi.string().trim().max(120).optional(),
-  ifsc: Joi.string()
-    .trim()
-    .pattern(/^[A-Z]{4}0[A-Z0-9]{6}$/)
-    .optional(),
-  accountNumber: Joi.string().trim().min(8).max(20).optional(),
-});
+const bankDetailsSchema = vendorFields.bankSchema;
 
 const documentSchema = Joi.object({
   type: Joi.string().trim().required(),

@@ -44,7 +44,9 @@ const VendorLogin = () => {
           phone: phone.replace(/\D/g, '').slice(-10),
           email: email.trim(),
           password: password.trim(),
-          location: location.trim(),
+          // Same address shape the admin and profile screens use. The rest of the
+          // address is completed later on the vendor profile page.
+          address: { line1: location.trim() },
         });
 
         const authData = await authApi.vendorLogin(email.trim(), password.trim());

@@ -12,6 +12,8 @@ const ALLOWED_PURPOSES = new Set([
   'category_image',
   'kit_image',
   'notice_attachment',
+  // Vendor KYC paperwork, uploaded during onboarding.
+  'kyc_doc',
 ]);
 
 // Purposes whose bytes live outside the statically-served /uploads dir and are only
