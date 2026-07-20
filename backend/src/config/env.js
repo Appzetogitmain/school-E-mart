@@ -54,10 +54,11 @@ const buildEnv = () => {
   COOKIE_SAME_SITE: process.env.COOKIE_SAME_SITE || 'strict',
   REFRESH_COOKIE_NAME: process.env.REFRESH_COOKIE_NAME || 'refreshToken',
 
-  CORS_ORIGIN: process.env.CORS_ORIGIN || 'http://localhost:5173,http://127.0.0.1:5173',
+  CORS_ORIGIN: process.env.CORS_ORIGIN || 'http://localhost:5173,http://127.0.0.1:5173,https://schoolemart.com',
   CORS_ORIGINS: parseList(process.env.CORS_ORIGIN, [
     'http://localhost:5173',
     'http://127.0.0.1:5173',
+    'https://schoolemart.com',
   ]),
 
   MAX_LOGIN_ATTEMPTS: Number(process.env.MAX_LOGIN_ATTEMPTS) || 5,
@@ -96,7 +97,7 @@ const buildEnv = () => {
   PASSWORD_RESET_EXPIRY_MS: parseDurationMs(process.env.PASSWORD_RESET_EXPIRY || '24h', 24 * 3_600_000),
   EMAIL_VERIFICATION_EXPIRY: process.env.EMAIL_VERIFICATION_EXPIRY || '24h',
 
-  FRONTEND_URL: process.env.FRONTEND_URL || 'http://localhost:5173',
+  FRONTEND_URL: process.env.FRONTEND_URL || 'https://schoolemart.com',
 
   RAZORPAY_KEY_ID: process.env.RAZORPAY_KEY_ID || null,
   RAZORPAY_KEY_SECRET: process.env.RAZORPAY_KEY_SECRET || null,

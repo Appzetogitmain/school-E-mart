@@ -1,4 +1,5 @@
 const { Joi, schemas } = require('../../../common/validation');
+const schoolFields = require('../../school/validators/schoolFields');
 
 const loginSchema = Joi.object({
   email: schemas.email.required(),
@@ -107,12 +108,18 @@ const teacherRegisterSchema = Joi.object({
   password: schemas.password.required(),
 });
 
+// Shares schoolFields with the admin "Add School" form so both entry points
+// accept the same values. The profile fields are optional: signup stays short,
+// and anything omitted is filled in later — but when a school does provide them
+// at signup the admin table has real data instead of empty columns.
 const schoolAdminRegisterSchema = Joi.object({
-  schoolName: Joi.string().trim().max(120).required(),
-  fullName: Joi.string().trim().max(80).required(),
+  schoolName: schoolFields.identityFields.schoolName.required(),
+  fullName: schoolFields.identityFields.fullName.required(),
+  principalName: schoolFields.identityFields.principalName.optional(),
   email: schemas.email.required(),
   mobile: schemas.indianMobile.required(),
   password: schemas.password.required(),
+  ...schoolFields.profileFields,
 });
 
 module.exports = {

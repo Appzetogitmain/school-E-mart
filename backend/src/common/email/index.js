@@ -153,7 +153,67 @@ const emailService = {
       text,
       html,
     });
-  }
+  },
+
+  /**
+   * Sent when a school registers itself. Their account exists but cannot sign in
+   * until an admin approves the school, so say so plainly — otherwise the first
+   * login attempt looks like a broken password.
+   */
+  async sendSchoolRegistrationPendingEmail({ to, name, schoolName, schoolRefNo }) {
+    return this.sendMail({
+      to,
+      subject: 'Registration Received - School E-Mart',
+      text: `Hello ${name},\n\nThank you for registering ${schoolName} with School E-Mart.\n\nYour reference number is ${schoolRefNo}. Please keep it for your records.\n\nOur team is reviewing your registration. You will receive another email as soon as your school is approved, and you will be able to sign in from that point.`,
+      html: `<p>Hello <strong>${name}</strong>,</p>
+             <p>Thank you for registering <strong>${schoolName}</strong> with School E-Mart.</p>
+             <p>Your reference number is <strong>${schoolRefNo}</strong>. Please keep it for your records.</p>
+             <p>Our team is reviewing your registration. You will receive another email as soon as your school is approved, and you will be able to sign in from that point.</p>`,
+    });
+  },
+
+  /** Sent when an admin creates the school directly, so it is already approved. */
+  async sendSchoolWelcomeEmail({ to, name, schoolName, schoolRefNo, password }) {
+    const loginUrl = `${env.FRONTEND_URL}/school/login`;
+    const credentials = password
+      ? {
+        text: `\nLogin Credentials:\n- Email Address: ${to}\n- Password: ${password}\n\nPlease change your password after your first login.\n`,
+        html: `<p><strong>Login Credentials:</strong></p>
+               <ul>
+                 <li><strong>Email Address:</strong> ${to}</li>
+                 <li><strong>Password:</strong> ${password}</li>
+               </ul>
+               <p>Please change your password after your first login.</p>`,
+      }
+      : { text: `\nSign in with the email address ${to}.\n`, html: `<p>Sign in with the email address <strong>${to}</strong>.</p>` };
+
+    return this.sendMail({
+      to,
+      subject: 'Your School Account is Ready - School E-Mart',
+      text: `Hello ${name},\n\nAn account for ${schoolName} has been created for you on School E-Mart and is ready to use.\n\nYour school reference number is ${schoolRefNo}.\n${credentials.text}\nSign in at ${loginUrl}`,
+      html: `<p>Hello <strong>${name}</strong>,</p>
+             <p>An account for <strong>${schoolName}</strong> has been created for you on School E-Mart and is ready to use.</p>
+             <p>Your school reference number is <strong>${schoolRefNo}</strong>.</p>
+             ${credentials.html}
+             <p>Sign in at <a href="${loginUrl}">${loginUrl}</a></p>`,
+    });
+  },
+
+  /**
+   * Sent when an admin approves a pending school. This is the only signal the
+   * school gets that login has been unblocked, so it is not optional polish.
+   */
+  async sendSchoolApprovedEmail({ to, name, schoolName }) {
+    const loginUrl = `${env.FRONTEND_URL}/school/login`;
+    return this.sendMail({
+      to,
+      subject: 'School Approved - School E-Mart',
+      text: `Hello ${name},\n\nGood news — ${schoolName} has been approved on School E-Mart.\n\nYou can now sign in at ${loginUrl} using the email address ${to} and the password you chose during registration.`,
+      html: `<p>Hello <strong>${name}</strong>,</p>
+             <p>Good news — <strong>${schoolName}</strong> has been approved on School E-Mart.</p>
+             <p>You can now sign in at <a href="${loginUrl}">${loginUrl}</a> using the email address <strong>${to}</strong> and the password you chose during registration.</p>`,
+    });
+  },
 };
 
 module.exports = emailService;

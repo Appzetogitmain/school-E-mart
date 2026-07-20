@@ -222,6 +222,12 @@ router.get(
   validateQuery(validators.paginationQuery),
   adminController.listSchools
 );
+router.post(
+  '/schools',
+  ...adminOnly,
+  validateBody(validators.createSchoolSchema),
+  adminController.createSchool
+);
 router.get(
   '/schools/:schoolId',
   ...adminOnly,

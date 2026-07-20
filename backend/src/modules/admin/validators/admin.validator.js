@@ -1,5 +1,6 @@
 const { Joi, schemas } = require('../../../common/validation');
 const { ALL_ROLES } = require('../../../constants/roles');
+const schoolFields = require('../../school/validators/schoolFields');
 
 const objectId = schemas.objectId;
 
@@ -318,6 +319,17 @@ const createVendorSchema = Joi.object({
   autoApprove: Joi.boolean().default(true),
 });
 
+// Shares schoolFields with public signup so the two entry points cannot drift.
+const createSchoolSchema = Joi.object({
+  schoolName: schoolFields.identityFields.schoolName.required(),
+  fullName: schoolFields.identityFields.fullName.required(),
+  principalName: schoolFields.identityFields.principalName.optional(),
+  email: schoolFields.contactFields.email.required(),
+  mobile: schoolFields.contactFields.mobile.required(),
+  password: schemas.password.required(),
+  ...schoolFields.profileFields,
+});
+
 const updateVendorSchema = Joi.object({
   name: vendorFields.identityFields.name.optional(),
   storeName: vendorFields.identityFields.storeName.optional(),
@@ -338,6 +350,7 @@ module.exports = {
   analyticsQuery,
   createVendorSchema,
   updateVendorSchema,
+  createSchoolSchema,
   userIdParam,
   vendorIdParam,
   schoolIdParam,

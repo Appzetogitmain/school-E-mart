@@ -18,6 +18,8 @@ module.exports = {
     ROLE_MISMATCH: 'Invalid credentials for this portal',
     TEACHER_NOT_APPROVED: 'Teacher account is pending approval',
     VENDOR_NOT_APPROVED: 'Vendor account is not approved',
+    SCHOOL_NOT_APPROVED: 'School account is pending approval',
+    SCHOOL_REJECTED: 'School registration was not approved',
     PASSWORD_CHANGED: 'Password changed successfully',
     PASSWORD_RESET_SENT: 'If an account exists, a password reset link has been sent',
     PASSWORD_RESET_SUCCESS: 'Password reset successfully',

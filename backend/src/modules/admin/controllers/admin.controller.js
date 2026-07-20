@@ -239,6 +239,11 @@ const adminController = {
     return success(res, { school }, 'School fetched', undefined, req);
   }),
 
+  createSchool: asyncHandler(async (req, res) => {
+    const school = await schoolApprovalService.createSchool(req.body, actorFrom(req));
+    return created(res, { school }, 'School created', req);
+  }),
+
   approveSchool: asyncHandler(async (req, res) => {
     const school = await schoolApprovalService.approveSchool(
       req.params.schoolId,

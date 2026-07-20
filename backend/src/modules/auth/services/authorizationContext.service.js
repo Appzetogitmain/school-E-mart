@@ -62,14 +62,14 @@ const resolveAuthorizationContext = async (user) => {
   return { permissions, scopes, profile };
 };
 
-const assertAccountEligible = async (user) => {
-  if (user.status === 'suspended') {
-    throw new ForbiddenError(messages.AUTH.ACCOUNT_SUSPENDED, 'ACCOUNT_SUSPENDED');
-  }
-  if (user.status === 'inactive') {
-    throw new ForbiddenError(messages.AUTH.ACCOUNT_INACTIVE, 'ACCOUNT_INACTIVE');
-  }
-
+/**
+ * Role-specific gates run BEFORE the generic status checks, because rejection is
+ * recorded as `user.status = 'inactive'` for every role. Checked the other way
+ * round, a generic "Account is inactive" always won and every rejected-account
+ * branch below was unreachable — the caller could never tell a rejected
+ * application apart from a deactivated account.
+ */
+const assertRoleEligible = async (user) => {
   if (user.role === ROLES.TEACHER) {
     const teacherProfile = await profileRepository.getTeacherByUserId(user._id);
     if (teacherProfile?.approvalStatus === 'rejected') {
@@ -77,6 +77,26 @@ const assertAccountEligible = async (user) => {
     }
     if (teacherProfile?.approvalStatus === 'pending' || user.status === 'pending_approval') {
       throw new ForbiddenError(messages.AUTH.TEACHER_NOT_APPROVED, 'TEACHER_PENDING');
+    }
+  }
+
+  // A school admin's access depends on the School row, not just their own user
+  // record: signup creates the account immediately but leaves the school as a
+  // 'prospect' awaiting review. Without this the approval step decides nothing —
+  // the admin could run the school the moment they signed up.
+  if (user.role === ROLES.SCHOOL_ADMIN && user.tenantSchoolId) {
+    const school = await profileRepository.getSchoolById(user.tenantSchoolId);
+    if (school && school.partnerStatus !== 'active') {
+      if (school.partnerStatus === 'suspended') {
+        throw new ForbiddenError(messages.AUTH.ACCOUNT_SUSPENDED, 'SCHOOL_SUSPENDED');
+      }
+      // 'rejected' is not a stored partnerStatus — it is 'prospect' plus an
+      // inactive admin user, so tell the two apart before choosing the message.
+      const rejected = user.status === 'inactive';
+      throw new ForbiddenError(
+        rejected ? messages.AUTH.SCHOOL_REJECTED : messages.AUTH.SCHOOL_NOT_APPROVED,
+        rejected ? 'SCHOOL_REJECTED' : 'SCHOOL_PENDING'
+      );
     }
   }
 
@@ -88,6 +108,17 @@ const assertAccountEligible = async (user) => {
     if (vendorProfile?.approvalStatus === 'suspended' && user.status === 'inactive') {
       throw new ForbiddenError(messages.AUTH.VENDOR_NOT_APPROVED, 'VENDOR_REJECTED');
     }
+  }
+};
+
+const assertAccountEligible = async (user) => {
+  await assertRoleEligible(user);
+
+  if (user.status === 'suspended') {
+    throw new ForbiddenError(messages.AUTH.ACCOUNT_SUSPENDED, 'ACCOUNT_SUSPENDED');
+  }
+  if (user.status === 'inactive') {
+    throw new ForbiddenError(messages.AUTH.ACCOUNT_INACTIVE, 'ACCOUNT_INACTIVE');
   }
 };
 

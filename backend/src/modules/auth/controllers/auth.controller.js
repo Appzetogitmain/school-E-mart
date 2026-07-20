@@ -324,16 +324,25 @@ const authController = {
 
   registerSchoolAdmin: asyncHandler(async (req, res) => {
     const schoolAdminRegistrationService = require('../../school/services/schoolAdminRegistration.service');
-    const { issueAuthenticatedSession } = require('../services/sessionIssue.service');
 
-    const { user, schoolRefNo } = await schoolAdminRegistrationService.register(req.body);
-    const sessionResponse = await issueAuthenticatedSession(user, getRequestMeta(req), 'auth.register.school.success');
+    const { user, school, schoolRefNo } = await schoolAdminRegistrationService.register(req.body);
 
-    if (sessionResponse.user) {
-      sessionResponse.user.schoolRefNo = schoolRefNo;
-    }
-
-    return sendAuthResponse(res, req, sessionResponse, 'School registration successful');
+    // Deliberately no session. A self-registered school starts as a 'prospect'
+    // and cannot sign in until an admin approves it — issuing tokens here would
+    // hand out access the very next login is going to refuse, which reads as the
+    // account breaking rather than as a review step.
+    return success(
+      res,
+      {
+        schoolRefNo,
+        status: 'pending_approval',
+        school: { id: school._id, name: school.name, code: school.code },
+        user: { name: user.name, email: user.email, schoolRefNo },
+      },
+      'Registration received. Your school is pending approval.',
+      undefined,
+      req
+    );
   }),
 };
 
