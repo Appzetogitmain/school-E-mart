@@ -539,6 +539,49 @@ router.get(
   schoolController.listVendors
 );
 
+// School finance: kit-commission earnings, transactions, bank details, and
+// withdrawal requests the admin later approves.
+router.get(
+  '/:schoolId/finance/summary',
+  ...schoolAdmin,
+  resolveSchool(),
+  schoolController.getFinanceSummary
+);
+router.get(
+  '/:schoolId/finance/transactions',
+  ...schoolAdmin,
+  resolveSchool(),
+  validateQuery(validators.paginationQuery),
+  schoolController.listFinanceTransactions
+);
+router.get(
+  '/:schoolId/finance/bank',
+  ...schoolAdmin,
+  resolveSchool(),
+  schoolController.getSchoolBank
+);
+router.put(
+  '/:schoolId/finance/bank',
+  ...schoolWrite,
+  resolveSchool(),
+  validateBody(validators.schoolBankSchema),
+  schoolController.updateSchoolBank
+);
+router.get(
+  '/:schoolId/finance/payouts',
+  ...schoolAdmin,
+  resolveSchool(),
+  validateQuery(validators.paginationQuery),
+  schoolController.listSchoolPayouts
+);
+router.post(
+  '/:schoolId/finance/payouts',
+  ...schoolWrite,
+  resolveSchool(),
+  validateBody(validators.schoolPayoutSchema),
+  schoolController.createSchoolPayout
+);
+
 router.post(
   '/:schoolId/rfqs',
   ...schoolAdmin,

@@ -26,6 +26,18 @@ const schoolSchema = new mongoose.Schema({
     required: true,
     default: 'prospect'
   },
+  // Bank details for withdrawing kit-commission earnings. Account number is
+  // stored one-way (HMAC) like the vendor side — set once, never read back.
+  bank: {
+    accountName: { type: String },
+    bankName: { type: String },
+    branch: { type: String },
+    accountNumberEnc: { type: String },
+    ifsc: {
+      type: String,
+      match: /^[A-Z]{4}0[A-Z0-9]{6}$/
+    }
+  },
   academicYearCurrent: { type: String },
   gradesOffered: [{ type: String }],
   sectionsConfig: [{

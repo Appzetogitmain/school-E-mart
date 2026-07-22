@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useSearchParams } from 'react-router-dom';
 import {
-  Eye, Search, Download, ChevronRight, X, Calendar, User, MapPin, DollarSign, Clock, FileText
+  Eye, Search, Download, ChevronRight, X, Calendar, User, MapPin, Clock, FileText
 } from 'lucide-react';
 import { listOrders } from '../../../services/ordersApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';

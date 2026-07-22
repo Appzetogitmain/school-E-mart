@@ -20,6 +20,7 @@ const ParentReels = () => {
   const [savedReels, setSavedReels] = useState({});
   const [floatingHearts, setFloatingHearts] = useState([]);
   const heartIdCounter = useRef(0);
+  const videoRef = useRef(null);
 
   const [reelsData, setReelsData] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -46,6 +47,18 @@ const ParentReels = () => {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (videoRef.current) {
+      if (isPlaying) {
+        videoRef.current.play().catch((err) => {
+          console.warn("Video playback failed or was blocked:", err);
+        });
+      } else {
+        videoRef.current.pause();
+      }
+    }
+  }, [isPlaying, currentReelIndex, activeTab]);
 
   const categories = ['All', 'Kits', 'Uniforms', 'Stationery', 'Activities'];
 
@@ -111,16 +124,28 @@ const ParentReels = () => {
 
   return (
     <div className="relative h-full w-full bg-black flex flex-col justify-between overflow-hidden font-outfit select-none">
-      {/* Background Simulation Player */}
+      {/* Background Video/Image Player */}
       <div 
         onClick={() => setIsPlaying(!isPlaying)}
-        className="absolute inset-0 z-0 cursor-pointer"
+        className="absolute inset-0 z-0 cursor-pointer bg-black flex items-center justify-center"
       >
-        <img 
-          src={currentReel.thumb} 
-          alt={currentReel.title} 
-          className="w-full h-full object-cover transition-all duration-700 brightness-[0.7]" 
-        />
+        {currentReel.videoUrl ? (
+          <video
+            ref={videoRef}
+            src={currentReel.videoUrl}
+            poster={currentReel.thumb}
+            muted={isMuted}
+            playsInline
+            loop
+            className="w-full h-full object-cover transition-all duration-700 brightness-[0.8]"
+          />
+        ) : (
+          <img 
+            src={currentReel.thumb} 
+            alt={currentReel.title} 
+            className="w-full h-full object-cover transition-all duration-700 brightness-[0.7]" 
+          />
+        )}
         
         {/* Pulsing Play Overlay Indicator */}
         {!isPlaying && (

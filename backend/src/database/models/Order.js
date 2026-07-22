@@ -19,6 +19,17 @@ const orderSchema = new mongoose.Schema({
   items: [{
     productId: { type: mongoose.Schema.Types.ObjectId, ref: 'Product', required: true },
     vendorId: { type: mongoose.Schema.Types.ObjectId, ref: 'VendorProfile', required: true },
+    // Set only for kit line items: the school that authored the kit (earns the
+    // school commission) and the kit itself. Left empty for ordinary products.
+    schoolId: { type: mongoose.Schema.Types.ObjectId, ref: 'School' },
+    kitId: { type: mongoose.Schema.Types.ObjectId, ref: 'Kit' },
+    // Commission split snapshotted at order time so a later rate change never
+    // rewrites the economics of an order already placed. When present, settlement
+    // uses these; when absent it falls back to the vendor's flat rate.
+    commission: {
+      adminPercent: { type: Number },
+      schoolPercent: { type: Number }
+    },
     name: { type: String, required: true },
     sku: { type: String, required: true },
     image: { type: String },
@@ -40,6 +51,9 @@ const orderSchema = new mongoose.Schema({
   deliveryChargePaise: { type: Number, required: true, min: 0, default: 0 },
   handlingChargePaise: { type: Number, required: true, min: 0, default: 0 },
   totalPaise: { type: Number, required: true, min: 0 },
+  // Portion of totalPaise paid from the customer's wallet balance. The gateway /
+  // COD collects (totalPaise - walletAmountPaise). Refunded to the wallet on cancel.
+  walletAmountPaise: { type: Number, required: true, min: 0, default: 0 },
   address: { type: mongoose.Schema.Types.Mixed, required: true }, // Embedded snapshot
   gstin: { type: String },
   deliveryType: {

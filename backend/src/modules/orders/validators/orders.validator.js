@@ -46,6 +46,9 @@ const checkoutSummarySchema = Joi.object({
 
 const createOrderSchema = checkoutSummarySchema.keys({
   address: addressSchema.required(),
+  // Amount to draw from the customer's wallet. Clamped server-side to the actual
+  // balance and order total, so an over-large value is safe.
+  walletAmountPaise: Joi.number().integer().min(0).optional(),
 });
 
 const orderIdParam = Joi.object({ orderId: objectId.required() });

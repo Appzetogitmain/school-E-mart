@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Building2, GraduationCap, ChevronLeft, Mail,
   Lock, User, Phone, ArrowRight, CheckCircle2,
-  Sparkles, School
+  Sparkles, School, MapPin
 } from 'lucide-react';
 import useAuthStore from '../../../store/useAuthStore';
 import * as authApi from '../../../services/authApi';
@@ -33,6 +33,10 @@ const SchoolAuthPage = () => {
     mobile: '',
     email: '',
     schoolCode: '',
+    // Optional at signup, but captured here so the admin school list has a
+    // location to show instead of an empty column.
+    city: '',
+    state: '',
     password: '',
     confirmPassword: ''
   });
@@ -92,7 +96,13 @@ const SchoolAuthPage = () => {
       if (role === 'teacher' && !formData.schoolCode.trim()) return 'School Code is required';
 
       if (!formData.password) return 'Password is required';
-      if (formData.password.length < 6) return 'Password must be at least 6 characters long';
+      // Must match the API's rule. This said "at least 6 characters", so a 6-character
+      // password passed here and was then rejected by the server with a message the
+      // form had already contradicted.
+      if (formData.password.length < 8) return 'Password must be at least 8 characters long';
+      if (!/(?=.*[0-9])(?=.*[^A-Za-z0-9])/.test(formData.password)) {
+        return 'Password must contain at least one number and one special character';
+      }
       if (formData.password !== formData.confirmPassword) return 'Passwords do not match';
     }
     return '';
@@ -149,18 +159,30 @@ const SchoolAuthPage = () => {
 
     if (role === 'admin') {
       try {
-        const authData = await authApi.schoolAdminRegister({
+        const address = {
+          city: formData.city.trim(),
+          state: formData.state.trim(),
+        };
+        const cleanAddress = Object.fromEntries(
+          Object.entries(address).filter(([, value]) => value !== '')
+        );
+
+        const result = await authApi.schoolAdminRegister({
           schoolName: formData.schoolName.trim(),
           fullName: formData.fullName.trim(),
           email: formData.email.trim(),
           mobile: formData.mobile.replace(/\D/g, '').slice(-10),
           password: formData.password,
+          ...(Object.keys(cleanAddress).length ? { address: cleanAddress } : {}),
         });
-        loginFromAuthResponse(authData, 'school');
+
+        // No auto-login: the school is a 'prospect' until an admin approves it,
+        // so there is no session to adopt here.
         setSuccessInfo({
-          id: authData.user?.schoolRefNo || authData.user?.refId || '',
-          name: authData.user?.name || formData.fullName,
+          id: result?.schoolRefNo || '',
+          name: result?.user?.name || formData.fullName,
           role: 'School Administrator',
+          pendingApproval: true,
         });
         setStep(3);
       } catch (err) {
@@ -356,6 +378,42 @@ const SchoolAuthPage = () => {
                   </div>
                 )}
 
+                {/* 1b. City / State (Admin Signup Only) — optional, but without them
+                    the admin school list has no location to show. */}
+                {role === 'admin' && mode === 'signup' && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">
+                        City <span className="text-gray-300">(optional)</span>
+                      </label>
+                      <div className="relative group">
+                        <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-primary transition-colors" size={18} />
+                        <input
+                          type="text"
+                          value={formData.city}
+                          onChange={(e) => handleInputChange('city', e.target.value)}
+                          placeholder="e.g. Indore"
+                          className="w-full pl-12 pr-4 py-4 bg-gray-50 border-none rounded-2xl text-sm font-bold text-deep-purple focus:ring-2 focus:ring-primary/10 outline-none transition-all placeholder-gray-400"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">
+                        State <span className="text-gray-300">(optional)</span>
+                      </label>
+                      <div className="relative group">
+                        <input
+                          type="text"
+                          value={formData.state}
+                          onChange={(e) => handleInputChange('state', e.target.value)}
+                          placeholder="e.g. MP"
+                          className="w-full px-4 py-4 bg-gray-50 border-none rounded-2xl text-sm font-bold text-deep-purple focus:ring-2 focus:ring-primary/10 outline-none transition-all placeholder-gray-400"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* 2. Full Name (Signup Only) */}
                 {mode === 'signup' && (
                   <div className="space-y-1.5">
@@ -491,7 +549,18 @@ const SchoolAuthPage = () => {
 
               <h2 className="text-2xl font-black text-deep-purple mb-2">Registration Successful!</h2>
               <p className="text-gray-400 text-sm leading-relaxed max-w-xs mb-8">
-                Welcome to School E-Mart, <strong>{successInfo.name}</strong>. Your school access has been generated.
+                {successInfo.pendingApproval ? (
+                  <>
+                    Thanks, <strong>{successInfo.name}</strong>. Your school is now waiting for
+                    approval — we&apos;ll email you as soon as it&apos;s approved, and you can sign
+                    in from then.
+                  </>
+                ) : (
+                  <>
+                    Welcome to School E-Mart, <strong>{successInfo.name}</strong>. Your school access
+                    has been generated.
+                  </>
+                )}
               </p>
 
               <div className="bg-[#fafbff] border-2 border-dashed border-primary/20 rounded-3xl p-6 w-full max-w-sm mb-10 shadow-inner">
@@ -503,11 +572,20 @@ const SchoolAuthPage = () => {
                 </span>
               </div>
 
+              {/* A pending school has no session, so there is no dashboard to send
+                  them to — offer the sign-in page for once they are approved. */}
               <button
-                onClick={() => navigate(successInfo.role === 'Teacher' ? '/school/teacher/dashboard' : '/school/admin')}
+                onClick={() => {
+                  if (!successInfo.pendingApproval) {
+                    navigate(successInfo.role === 'Teacher' ? '/school/teacher/dashboard' : '/school/admin');
+                    return;
+                  }
+                  setMode('login');
+                  setStep(2);
+                }}
                 className="w-full py-4.5 bg-primary text-white font-black rounded-2xl hover:bg-deep-purple transition-all shadow-xl shadow-primary/20 flex items-center justify-center gap-3 uppercase text-sm tracking-wider active:scale-[0.98]"
               >
-                Go to Dashboard <ArrowRight size={18} />
+                {successInfo.pendingApproval ? 'Back to Sign In' : 'Go to Dashboard'} <ArrowRight size={18} />
               </button>
             </div>
           )}

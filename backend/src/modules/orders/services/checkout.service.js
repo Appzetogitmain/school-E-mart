@@ -3,10 +3,19 @@ const cartService = require('../../marketplace/services/cart.service');
 const productRepository = require('../../marketplace/repositories/product.repository');
 const variantRepository = require('../../marketplace/repositories/variant.repository');
 const orderAccessPolicy = require('../policies/orderAccess.policy');
+const BillingConfig = require('../../../database/models/BillingConfig');
 
+// Fallbacks used only if the admin has never saved a BillingConfig. Real values
+// come from the admin's Billing & Charges page and are resolved per checkout.
 const DEFAULT_DELIVERY_CHARGE_PAISE = 0;
 const DEFAULT_PLATFORM_FEE_PAISE = 0;
 const DEFAULT_HANDLING_CHARGE_PAISE = 0;
+
+const toNumber = (value) => {
+  if (value == null) return 0;
+  // Decimal128 (baseDistanceKm etc.) stringifies cleanly; Number() handles the rest.
+  return Number(value.toString());
+};
 
 const checkoutService = {
   resolveAudience(auth, requestedAudience) {
@@ -66,16 +75,46 @@ const checkoutService = {
     return lineItems;
   },
 
-  computeOrderTotals(lineItems, options = {}) {
+  /**
+   * Server-authoritative charges. Fees are read from the admin's BillingConfig,
+   * never from the client payload — otherwise a caller could zero out its own
+   * delivery/platform fees. Delivery is waived once the subtotal clears the
+   * free-delivery threshold.
+   */
+  async resolveCharges(subtotalPaise) {
+    const config = await BillingConfig.findById('default').lean();
+    if (!config) {
+      return {
+        deliveryChargePaise: DEFAULT_DELIVERY_CHARGE_PAISE,
+        platformFeePaise: DEFAULT_PLATFORM_FEE_PAISE,
+        handlingChargePaise: DEFAULT_HANDLING_CHARGE_PAISE,
+      };
+    }
+
+    const platformFeePaise = toNumber(config.platformFeePaise);
+    const freeDeliveryThresholdPaise = toNumber(config.freeDeliveryThresholdPaise);
+    const qualifiesForFreeDelivery =
+      freeDeliveryThresholdPaise > 0 && subtotalPaise >= freeDeliveryThresholdPaise;
+
+    // Distance-based pricing needs a rider distance we don't have at checkout, so
+    // it falls back to the fixed charge until that path is wired.
+    const deliveryChargePaise = qualifiesForFreeDelivery
+      ? 0
+      : toNumber(config.fixedDeliveryChargePaise);
+
+    return { deliveryChargePaise, platformFeePaise, handlingChargePaise: DEFAULT_HANDLING_CHARGE_PAISE };
+  },
+
+  async computeOrderTotals(lineItems) {
     const subtotalPaise = lineItems.reduce((sum, item) => sum + item.pricePaise * item.quantity, 0);
     const taxPaise = lineItems.reduce((sum, item) => sum + item.taxPaise, 0);
     const discountPaise = lineItems.reduce(
       (sum, item) => sum + Math.max(0, (item.mrpPaise - item.pricePaise) * item.quantity),
       0
     );
-    const deliveryChargePaise = options.deliveryChargePaise ?? DEFAULT_DELIVERY_CHARGE_PAISE;
-    const platformFeePaise = options.platformFeePaise ?? DEFAULT_PLATFORM_FEE_PAISE;
-    const handlingChargePaise = options.handlingChargePaise ?? DEFAULT_HANDLING_CHARGE_PAISE;
+
+    const { deliveryChargePaise, platformFeePaise, handlingChargePaise } =
+      await this.resolveCharges(subtotalPaise);
     const totalPaise =
       subtotalPaise + taxPaise + deliveryChargePaise + platformFeePaise + handlingChargePaise;
 
@@ -118,7 +157,7 @@ const checkoutService = {
 
   async getOrderSummary(userId, audience, payload = {}) {
     const { cart, lineItems } = await this.validateCheckout(userId, audience, payload);
-    const totals = this.computeOrderTotals(lineItems, payload);
+    const totals = await this.computeOrderTotals(lineItems);
     const vendorIds = [...new Set(lineItems.map((item) => String(item.vendorId)))];
 
     return {

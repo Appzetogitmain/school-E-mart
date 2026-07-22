@@ -66,6 +66,20 @@ const categorySchema = Joi.object({
   name: Joi.string().trim().min(2).max(80).required(),
   imageUrl: Joi.string().trim().uri({ allowRelative: true }).allow('').optional(),
   status: Joi.string().valid('active', 'inactive').default('active'),
+  // Admin-controlled profit split. adminPercent + schoolPercent must leave a
+  // non-negative remainder for the vendor, so their sum cannot exceed 100.
+  commission: Joi.object({
+    adminPercent: Joi.number().min(0).max(100).default(0),
+    schoolPercent: Joi.number().min(0).max(100).default(0),
+  })
+    .custom((value, helpers) => {
+      if ((value.adminPercent || 0) + (value.schoolPercent || 0) > 100) {
+        return helpers.error('any.invalid');
+      }
+      return value;
+    })
+    .messages({ 'any.invalid': 'Admin % + School % cannot exceed 100' })
+    .optional(),
   displayOrder: Joi.number().integer().min(0).optional(),
 });
 

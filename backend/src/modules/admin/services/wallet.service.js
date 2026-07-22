@@ -1,6 +1,9 @@
 const PayoutRequest = require('../../../database/models/PayoutRequest');
 const VendorLedger = require('../../../database/models/VendorLedger');
+const SchoolLedger = require('../../../database/models/SchoolLedger');
+const PlatformLedger = require('../../../database/models/PlatformLedger');
 const VendorProfile = require('../../../database/models/VendorProfile');
+const School = require('../../../database/models/School');
 const { executePaginatedQuery } = require('../../../repositories');
 const { NotFoundError, BadRequestError } = require('../../../common/errors');
 
@@ -12,19 +15,40 @@ const buildStatusFilter = (query = {}) => {
   return filter;
 };
 
-const attachVendors = async (rows = []) => {
+// Resolve the payee for each row — a vendor or a school — so the admin list can
+// name who is withdrawing regardless of owner type.
+const attachOwners = async (rows = []) => {
   const vendorIds = [...new Set(rows.map((row) => String(row.vendorId)).filter(Boolean))];
-  if (!vendorIds.length) return rows;
+  const schoolIds = [...new Set(rows.map((row) => String(row.schoolId)).filter(Boolean))];
 
-  const vendors = await VendorProfile.find({ _id: { $in: vendorIds } })
-    .select('storeName storeSlug gstin approvalStatus')
-    .lean();
-  const map = new Map(vendors.map((v) => [String(v._id), v]));
+  const [vendors, schools] = await Promise.all([
+    vendorIds.length
+      ? VendorProfile.find({ _id: { $in: vendorIds } })
+          .select('storeName storeSlug gstin approvalStatus')
+          .lean()
+      : [],
+    schoolIds.length
+      ? School.find({ _id: { $in: schoolIds } })
+          .select('name code schoolRefNo')
+          .lean()
+      : [],
+  ]);
 
-  return rows.map((row) => ({
-    ...row,
-    vendor: map.get(String(row.vendorId)) || null,
-  }));
+  const vendorMap = new Map(vendors.map((v) => [String(v._id), v]));
+  const schoolMap = new Map(schools.map((s) => [String(s._id), s]));
+
+  return rows.map((row) => {
+    const vendor = vendorMap.get(String(row.vendorId)) || null;
+    const school = schoolMap.get(String(row.schoolId)) || null;
+    return {
+      ...row,
+      vendor,
+      school,
+      // A single label the UI can render without caring about owner type.
+      payeeName: school ? school.name : vendor ? vendor.storeName : null,
+      payeeType: row.ownerType || (school ? 'school' : 'vendor'),
+    };
+  });
 };
 
 const adminWalletService = {
@@ -35,7 +59,7 @@ const adminWalletService = {
       query,
       { defaultSort: '-audit.createdAt' }
     );
-    return { data: await attachVendors(data), pagination };
+    return { data: await attachOwners(data), pagination };
   },
 
   async listVendorTransactions(query = {}) {
@@ -46,43 +70,86 @@ const adminWalletService = {
     const { data, pagination } = await executePaginatedQuery(VendorLedger, filter, query, {
       defaultSort: '-audit.createdAt',
     });
-    return { data: await attachVendors(data), pagination };
+    return { data: await attachOwners(data), pagination };
   },
 
   async getOverview() {
-    const [ledgerTotals, payoutTotals] = await Promise.all([
-      VendorLedger.aggregate([
-        { $group: { _id: '$transactionType', total: { $sum: '$amountPaise' } } },
+    const [vendorLedgerTotals, schoolLedgerTotals, platformTotal, payoutTotals] = await Promise.all([
+      VendorLedger.aggregate([{ $group: { _id: '$transactionType', total: { $sum: '$amountPaise' } } }]),
+      SchoolLedger.aggregate([{ $group: { _id: '$transactionType', total: { $sum: '$amountPaise' } } }]),
+      PlatformLedger.aggregate([
+        { $match: { transactionType: 'commission_credit' } },
+        { $group: { _id: null, total: { $sum: '$amountPaise' } } },
       ]),
+      // Payout stats split by owner type so pending vendor vs school requests can
+      // be surfaced separately.
       PayoutRequest.aggregate([
         { $match: { 'softDelete.isDeleted': { $ne: true } } },
-        { $group: { _id: '$status', total: { $sum: '$amountPaise' }, count: { $sum: 1 } } },
+        {
+          $group: {
+            _id: { status: '$status', ownerType: '$ownerType' },
+            total: { $sum: '$amountPaise' },
+            count: { $sum: 1 },
+          },
+        },
       ]),
     ]);
 
-    const byType = Object.fromEntries(ledgerTotals.map((r) => [r._id, r.total]));
-    const byStatus = Object.fromEntries(payoutTotals.map((r) => [r._id, r]));
+    const vendorByType = Object.fromEntries(vendorLedgerTotals.map((r) => [r._id, r.total]));
+    const schoolByType = Object.fromEntries(schoolLedgerTotals.map((r) => [r._id, r.total]));
 
-    const totalEarningsPaise = byType.order_credit || 0;
-    const totalCommissionPaise = Math.abs(byType.commission_deduction || 0);
-    const totalPaidOutPaise = Math.abs(byType.payout_debit || 0);
+    const sumPayouts = (predicate) =>
+      payoutTotals.filter(predicate).reduce(
+        (acc, r) => ({ total: acc.total + r.total, count: acc.count + r.count }),
+        { total: 0, count: 0 }
+      );
+
+    const pending = sumPayouts((r) => r._id.status === 'pending');
+    const processing = sumPayouts((r) => r._id.status === 'processing');
+    const completed = sumPayouts((r) => r._id.status === 'completed');
+    const pendingVendor = sumPayouts((r) => r._id.status === 'pending' && r._id.ownerType !== 'school');
+    const pendingSchool = sumPayouts((r) => r._id.status === 'pending' && r._id.ownerType === 'school');
+
+    const vendorEarningsPaise = vendorByType.order_credit || 0;
+    const vendorCommissionPaise = Math.abs(vendorByType.commission_deduction || 0);
+    const vendorPaidOutPaise = Math.abs(vendorByType.payout_debit || 0);
+
+    const schoolEarningsPaise = schoolByType.kit_commission_credit || 0;
+    const schoolPaidOutPaise = Math.abs(schoolByType.payout_debit || 0);
+
+    // Platform revenue is the admin's own commission ledger. Older orders settled
+    // before PlatformLedger existed only recorded the vendor-side deduction, so
+    // fall back to that when the platform ledger is empty.
+    const platformRevenuePaise = platformTotal[0]?.total || vendorCommissionPaise;
 
     return {
-      totalEarningsPaise,
-      totalCommissionPaise,
-      totalPaidOutPaise,
-      platformRevenuePaise: totalCommissionPaise,
-      pendingPayoutPaise: byStatus.pending?.total || 0,
-      pendingPayoutCount: byStatus.pending?.count || 0,
-      processingPayoutPaise: byStatus.processing?.total || 0,
-      completedPayoutPaise: byStatus.completed?.total || 0,
-      outstandingBalancePaise: totalEarningsPaise - totalCommissionPaise - totalPaidOutPaise,
+      // Vendor side
+      totalEarningsPaise: vendorEarningsPaise,
+      totalCommissionPaise: vendorCommissionPaise,
+      totalPaidOutPaise: vendorPaidOutPaise + schoolPaidOutPaise,
+      vendorOutstandingBalancePaise: vendorEarningsPaise - vendorCommissionPaise - vendorPaidOutPaise,
+      // School side
+      schoolEarningsPaise,
+      schoolPaidOutPaise,
+      schoolOutstandingBalancePaise: schoolEarningsPaise - schoolPaidOutPaise,
+      // Platform
+      platformRevenuePaise,
+      // Payouts
+      pendingPayoutPaise: pending.total,
+      pendingPayoutCount: pending.count,
+      pendingVendorPayoutPaise: pendingVendor.total,
+      pendingSchoolPayoutPaise: pendingSchool.total,
+      processingPayoutPaise: processing.total,
+      completedPayoutPaise: completed.total,
+      outstandingBalancePaise:
+        vendorEarningsPaise - vendorCommissionPaise - vendorPaidOutPaise
+        + schoolEarningsPaise - schoolPaidOutPaise,
     };
   },
 
   /**
-   * Approve/complete a payout and post the debit to the vendor ledger so the
-   * running balance stays consistent with settlements.
+   * Approve/complete a payout and post the debit to the payee's ledger (vendor or
+   * school) so the running balance stays consistent with settlements.
    */
   async approvePayout(payoutId, actorUserId, { transactionReference } = {}) {
     const payout = await PayoutRequest.findById(payoutId);
@@ -93,20 +160,34 @@ const adminWalletService = {
       throw new BadRequestError(`Cannot approve a ${payout.status} payout`);
     }
 
-    const latest = await VendorLedger.findOne({ vendorId: payout.vendorId })
-      .sort({ 'audit.createdAt': -1 })
-      .lean();
-    const currentBalance = latest?.balancePaise || 0;
-    const newBalance = currentBalance - payout.amountPaise;
-
-    await VendorLedger.create({
-      vendorId: payout.vendorId,
-      transactionType: 'payout_debit',
-      amountPaise: -payout.amountPaise,
-      balancePaise: newBalance,
-      reference: { kind: 'PayoutRequest', id: payout._id },
-      description: `Payout ${transactionReference || payout._id}`,
-    });
+    const description = `Payout ${transactionReference || payout._id}`;
+    if (payout.ownerType === 'school') {
+      const latest = await SchoolLedger.findOne({ schoolId: payout.schoolId })
+        .sort({ 'audit.createdAt': -1 })
+        .lean();
+      const newBalance = (latest?.balancePaise || 0) - payout.amountPaise;
+      await SchoolLedger.create({
+        schoolId: payout.schoolId,
+        transactionType: 'payout_debit',
+        amountPaise: -payout.amountPaise,
+        balancePaise: newBalance,
+        reference: { kind: 'PayoutRequest', id: payout._id },
+        description,
+      });
+    } else {
+      const latest = await VendorLedger.findOne({ vendorId: payout.vendorId })
+        .sort({ 'audit.createdAt': -1 })
+        .lean();
+      const newBalance = (latest?.balancePaise || 0) - payout.amountPaise;
+      await VendorLedger.create({
+        vendorId: payout.vendorId,
+        transactionType: 'payout_debit',
+        amountPaise: -payout.amountPaise,
+        balancePaise: newBalance,
+        reference: { kind: 'PayoutRequest', id: payout._id },
+        description,
+      });
+    }
 
     payout.status = 'completed';
     payout.processedBy = actorUserId;

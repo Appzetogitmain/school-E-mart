@@ -23,6 +23,5 @@ export const SIDEBAR_MENU = {
     { label: 'Manage Users', path: ROUTES.ADMIN.USERS, icon: Users },
     { label: 'Categories', path: ROUTES.ADMIN.CATEGORIES, icon: Layers },
     { label: 'All Orders', path: ROUTES.ADMIN.ORDERS, icon: ClipboardList },
-    { label: 'Reports', path: ROUTES.ADMIN.REPORTS, icon: FileText },
   ],
 };

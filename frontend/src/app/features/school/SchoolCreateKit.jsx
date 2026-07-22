@@ -5,7 +5,7 @@ import {
   Trash2, Plus, Info, Check, ChevronRight, ChevronUp,
   Upload, Sparkles, TrendingUp
 } from 'lucide-react';
-import { createKit, updateKit, getKit, listClasses, uploadSchoolFile } from '../../../services/schoolApi';
+import { createKit, updateKit, getKit, listClasses, listVendors, uploadSchoolFile } from '../../../services/schoolApi';
 import { listProducts } from '../../../services/catalogApi';
 import { useSchoolId } from '../../../utils/schoolContext';
 import { getErrorMessage } from '../../../utils/apiHelpers';
@@ -23,6 +23,10 @@ const SchoolCreateKit = () => {
   const [kitName, setKitName] = useState('');
   const [classGrade, setClassGrade] = useState('');
   const [category, setCategory] = useState('');
+  // The single vendor that will fulfil this kit's orders. Required before a kit
+  // can go live.
+  const [vendorId, setVendorId] = useState('');
+  const [vendorsList, setVendorsList] = useState([]);
   const [description, setDescription] = useState('');
   const [includes, setIncludes] = useState('');
   const [imageFile, setImageFile] = useState(null);
@@ -79,6 +83,19 @@ const SchoolCreateKit = () => {
   }, [schoolId]);
 
   useEffect(() => {
+    if (!schoolId) return;
+    (async () => {
+      try {
+        const { data } = await listVendors(schoolId, { limit: 100 });
+        setVendorsList(data || []);
+      } catch (err) {
+        console.error('Failed to load vendors:', err);
+        setVendorsList([]);
+      }
+    })();
+  }, [schoolId]);
+
+  useEffect(() => {
     if (!schoolId || !kitId) return undefined;
     let cancelled = false;
 
@@ -92,6 +109,7 @@ const SchoolCreateKit = () => {
         setKitName(kit.name || '');
         setClassGrade(kit.classGrade || '');
         setCategory(kit.category || '');
+        setVendorId(kit.vendorId ? String(kit.vendorId) : '');
         // create() joins description and includes with a blank line; split it back apart
         const [desc = '', inc = ''] = String(kit.description || '').split('\n\n');
         setDescription(desc);
@@ -210,6 +228,7 @@ const SchoolCreateKit = () => {
 
       const payload = {
         name: kitName.trim(),
+        vendorId: vendorId || undefined,
         classGrade: classGrade || undefined,
         category: category || undefined,
         description: [description.trim(), includes.trim()].filter(Boolean).join('\n\n') || undefined,
@@ -378,6 +397,28 @@ const SchoolCreateKit = () => {
                 <option value="stationery">Stationery Packs</option>
               </select>
             </div>
+          </div>
+
+          {/* Fulfilling Vendor */}
+          <div className="space-y-2">
+            <label className="text-[12px] font-black text-gray-500 uppercase tracking-wider">
+              Fulfilling Vendor <span className="text-red-500">*</span>
+            </label>
+            <select
+              value={vendorId}
+              onChange={(e) => setVendorId(e.target.value)}
+              className="w-full px-4.5 py-3.5 bg-white border border-gray-200 rounded-2xl text-sm font-bold text-deep-purple focus:outline-none focus:border-primary/50 transition-colors appearance-none cursor-pointer leading-relaxed"
+            >
+              <option value="">Select the vendor who will supply this kit</option>
+              {vendorsList.map((v) => (
+                <option key={v._id || v.id} value={v._id || v.id}>
+                  {v.storeName || v.name || 'Vendor'}
+                </option>
+              ))}
+            </select>
+            <p className="text-[11px] font-semibold text-gray-400">
+              Every order for this kit is routed to this vendor to fulfil.
+            </p>
           </div>
 
           {/* Kit Description */}

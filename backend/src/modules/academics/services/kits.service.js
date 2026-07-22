@@ -45,12 +45,19 @@ const kitsService = {
       throw new BadRequestError('A kit needs at least one product');
     }
 
+    // A live kit takes real orders, so it must have a vendor to fulfil them.
+    const goingLive = payload.status === 'active' || payload.availableOnline;
+    if (goingLive && !payload.vendorId) {
+      throw new BadRequestError('Select a fulfilling vendor before publishing the kit', null, 'KIT_VENDOR_REQUIRED');
+    }
+
     const totals = await computeItemTotals(payload.items);
     const base = slugify(payload.name) || 'kit';
     const suffix = uniqueSuffix();
 
     const kit = await Kit.create({
       schoolId,
+      vendorId: payload.vendorId || null,
       name: payload.name,
       slug: `${base}-${suffix}`,
       classGrade: payload.classGrade,
@@ -106,6 +113,16 @@ const kitsService = {
       const totals = await computeItemTotals(payload.items);
       if (payload.pricePaise == null) update.pricePaise = totals.pricePaise;
       if (payload.mrpPaise == null) update.mrpPaise = totals.mrpPaise;
+    }
+
+    // Block publishing a kit that still has no vendor to fulfil it.
+    const goingLive = payload.status === 'active' || payload.flags?.availableOnline;
+    if (goingLive) {
+      const current = await Kit.findOne({ _id: kitId, schoolId, ...notDeleted }).select('vendorId').lean();
+      const resolvedVendor = payload.vendorId ?? current?.vendorId;
+      if (!resolvedVendor) {
+        throw new BadRequestError('Select a fulfilling vendor before publishing the kit', null, 'KIT_VENDOR_REQUIRED');
+      }
     }
 
     const kit = await Kit.findOneAndUpdate(

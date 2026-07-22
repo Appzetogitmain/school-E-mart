@@ -70,7 +70,19 @@ const buildEnv = () => {
 
   OTP_EXPIRY_MS: parseDurationMs(process.env.OTP_EXPIRY || '10m', 10 * 60_000),
   OTP_RESEND_COOLDOWN_MS: Number(process.env.OTP_RESEND_COOLDOWN_MS) || 60_000,
-  OTP_MAX_PER_WINDOW: Number(process.env.OTP_MAX_PER_WINDOW) || 5,
+
+  // Per PHONE NUMBER. This is the meaningful control: it caps how many SMS a
+  // single number can be made to receive, so it bounds both SMS spend and using
+  // the endpoint to harass someone.
+  OTP_MAX_PER_WINDOW: Number(process.env.OTP_MAX_PER_WINDOW) || 8,
+
+  // Per IP, and deliberately much higher. This used to share OTP_MAX_PER_WINDOW,
+  // which meant one budget of 5 covered an entire IP: every parent at a school
+  // behind one NAT competed for it, and the sixth in 15 minutes was refused even
+  // though each had asked only once. It is a crude flood net, not the real limit
+  // — the per-phone cap above is what protects an individual number.
+  OTP_IP_MAX_PER_WINDOW: Number(process.env.OTP_IP_MAX_PER_WINDOW) || 60,
+
   OTP_WINDOW_MS: Number(process.env.OTP_WINDOW_MS) || 15 * 60_000,
   // OTPs are always randomly generated and always delivered over SMS. There is
   // deliberately no bypass code: one would be a login-as-anyone hole the moment

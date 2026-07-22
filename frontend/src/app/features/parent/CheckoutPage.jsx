@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ChevronLeft, ShoppingBag,
@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
 import { createOrder, confirmPayment } from '../../../services/ordersApi';
+import { getMyWallet } from '../../../services/walletApi';
 import { openRazorpayCheckout } from '../../../utils/razorpay';
 import { ENV } from '../../../config/env';
 import useAuthStore from '../../../store/useAuthStore';
@@ -23,6 +24,15 @@ const CheckoutPage = () => {
   const [paymentMethod, setPaymentMethod] = useState('online');
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [orderError, setOrderError] = useState('');
+  const [walletBalancePaise, setWalletBalancePaise] = useState(0);
+  const [applyWallet, setApplyWallet] = useState(false);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    getMyWallet()
+      .then((w) => setWalletBalancePaise(w?.balancePaise || 0))
+      .catch(() => setWalletBalancePaise(0));
+  }, [isAuthenticated]);
   const [childInfo] = useState(() => {
     const saved = localStorage.getItem('childInfo');
     return saved ? JSON.parse(saved) : {
@@ -84,6 +94,12 @@ const CheckoutPage = () => {
   const deliveryCharge = totals.deliveryCharge ?? (deliveryType === 'home' ? 0 : 0);
   const grandTotal = totals.grandTotal || subtotal + handlingCharge + deliveryCharge;
 
+  // Wallet can cover up to the whole order; the gateway/COD collects the rest.
+  const grandTotalPaise = Math.round(grandTotal * 100);
+  const walletAmountPaise =
+    applyWallet && walletBalancePaise > 0 ? Math.min(walletBalancePaise, grandTotalPaise) : 0;
+  const payableAfterWallet = (grandTotalPaise - walletAmountPaise) / 100;
+
   const handlePlaceOrder = async () => {
     if (!isAuthenticated) {
       navigate('/user/login');
@@ -94,7 +110,10 @@ const CheckoutPage = () => {
     setIsPlacingOrder(true);
 
     try {
-      const { order, checkout } = await createOrder(buildPayload(), { audience: 'parent' });
+      const { order, checkout } = await createOrder(
+        { ...buildPayload(), walletAmountPaise },
+        { audience: 'parent' }
+      );
 
       if (paymentMethod === 'online' && checkout?.razorpayOrderId) {
         const razorpayResponse = await openRazorpayCheckout({
@@ -287,6 +306,40 @@ const CheckoutPage = () => {
           
           {!deliveryType && <p className="mt-4 text-xs text-primary font-medium">Please select a delivery type to proceed</p>}
         </div>
+
+        {/* Wallet balance */}
+        {walletBalancePaise > 0 && (
+          <div className="bg-white rounded-3xl p-5 shadow-sm border border-gray-100">
+            <button
+              type="button"
+              onClick={() => setApplyWallet((v) => !v)}
+              className={`w-full flex items-center gap-4 p-4 rounded-2xl border-2 transition-all text-left ${
+                applyWallet ? 'border-primary bg-primary/5' : 'border-gray-100 bg-gray-50/40'
+              }`}
+            >
+              <div className={`w-11 h-11 rounded-2xl flex items-center justify-center ${applyWallet ? 'bg-primary text-white' : 'bg-gray-100 text-gray-400'}`}>
+                <Wallet size={20} />
+              </div>
+              <div className="flex-1">
+                <span className="block text-sm font-black text-deep-purple">Use Wallet Balance</span>
+                <span className="block text-[11px] font-bold text-gray-400 mt-0.5">
+                  Available: ₹{(walletBalancePaise / 100).toFixed(2)}
+                  {applyWallet && walletAmountPaise > 0 && (
+                    <span className="text-emerald-600"> · Applying ₹{(walletAmountPaise / 100).toFixed(2)}</span>
+                  )}
+                </span>
+              </div>
+              <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${applyWallet ? 'border-primary bg-primary' : 'border-gray-300'}`}>
+                {applyWallet && <CheckCircle2 size={14} className="text-white" />}
+              </div>
+            </button>
+            {applyWallet && (
+              <p className="text-[11px] font-bold text-gray-400 mt-3 text-center">
+                Remaining ₹{payableAfterWallet.toFixed(2)} to pay by {paymentMethod === 'cod' ? 'cash' : 'online payment'}.
+              </p>
+            )}
+          </div>
+        )}
 
         {/* Payment Method */}
         <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100">

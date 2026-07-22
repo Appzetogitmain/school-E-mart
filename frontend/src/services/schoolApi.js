@@ -16,6 +16,37 @@ export const listSchools = async (params = {}) => {
   return extractPaginated(response, 'schools');
 };
 
+// --- School finance: kit-commission earnings + withdrawals ---
+export const getSchoolFinanceSummary = async (schoolId) => {
+  const response = await apiClient.get(schoolPath(schoolId, '/finance/summary'));
+  return unwrapData(response)?.summary;
+};
+
+export const listSchoolFinanceTransactions = async (schoolId, params = {}) => {
+  const response = await apiClient.get(schoolPath(schoolId, '/finance/transactions'), { params });
+  return extractPaginated(response, 'transactions');
+};
+
+export const getSchoolBank = async (schoolId) => {
+  const response = await apiClient.get(schoolPath(schoolId, '/finance/bank'));
+  return unwrapData(response)?.bank;
+};
+
+export const updateSchoolBank = async (schoolId, payload) => {
+  const response = await apiClient.put(schoolPath(schoolId, '/finance/bank'), payload);
+  return unwrapData(response)?.bank;
+};
+
+export const listSchoolPayouts = async (schoolId, params = {}) => {
+  const response = await apiClient.get(schoolPath(schoolId, '/finance/payouts'), { params });
+  return extractPaginated(response, 'payouts');
+};
+
+export const createSchoolPayout = async (schoolId, amountPaise) => {
+  const response = await apiClient.post(schoolPath(schoolId, '/finance/payouts'), { amountPaise });
+  return unwrapData(response)?.payout;
+};
+
 export const getSchool = async (schoolId) => {
   const response = await apiClient.get(schoolPath(schoolId));
   return unwrapData(response)?.school;

@@ -10,6 +10,7 @@ const { generateOrderNumber } = require('../utils/orderNumber');
 const { runAtomic } = require('../utils/atomic');
 const { canTransition } = require('../utils/statusMachine');
 const settlementService = require('../../vendor/services/settlement.service');
+const walletService = require('../../wallet/services/wallet.service');
 const { deliveryShipmentQueue } = require('../../../queues/deliveryQueues');
 const { triggerService } = require('../../../services/notification');
 
@@ -42,14 +43,23 @@ const orderService = {
     const paymentMethod = payload.paymentMethod || 'cod';
     const vendorIds = [...new Set(summary.items.map((item) => item.vendorId))];
 
+    // Wallet application: clamp the requested amount to the wallet balance and the
+    // order total; the gateway / COD collects only the remaining payable amount.
+    const walletBalance = await walletService.getBalance(userId);
+    const requestedWallet = Math.max(0, Math.round(Number(payload.walletAmountPaise) || 0));
+    const walletAmountPaise = Math.min(requestedWallet, walletBalance.balancePaise, summary.totalPaise);
+    const payablePaise = summary.totalPaise - walletAmountPaise;
+
     return runAtomic(async (session) => {
       const opts = session ? { session } : {};
 
       await inventoryService.deductStock(summary.items, session);
 
       const orderNumber = generateOrderNumber();
-      const initialStatus = paymentMethod === 'cod' ? 'placed' : 'placed';
-      const paymentStatus = paymentMethod === 'cod' ? 'paid' : 'pending';
+      const initialStatus = 'placed';
+      // COD and fully wallet-paid orders are settled up front; online orders with
+      // a payable remainder wait for gateway confirmation.
+      const paymentStatus = paymentMethod === 'cod' || payablePaise === 0 ? 'paid' : 'pending';
 
       const [order] = await Order.create(
         [
@@ -81,6 +91,7 @@ const orderService = {
             deliveryChargePaise: summary.deliveryChargePaise,
             handlingChargePaise: summary.handlingChargePaise,
             totalPaise: summary.totalPaise,
+            walletAmountPaise,
             address: payload.address,
             gstin: payload.gstin,
             deliveryType: payload.deliveryType || 'home',
@@ -102,8 +113,24 @@ const orderService = {
         opts
       );
 
-      const payment = await paymentService.createPaymentForOrder(order, { method: paymentMethod, session });
-      if (paymentMethod === 'cod') {
+      // Debit the wallet portion first so an insufficient balance aborts before
+      // any gateway work (the amount was already clamped, so this rarely throws).
+      if (walletAmountPaise > 0) {
+        await walletService.postTransaction(userId, {
+          type: 'debit',
+          category: 'order_payment',
+          amountPaise: walletAmountPaise,
+          reference: { kind: 'Order', id: order._id },
+          description: `Wallet applied to order ${orderNumber}`,
+        });
+      }
+
+      const payment = await paymentService.createPaymentForOrder(order, {
+        method: paymentMethod,
+        amountPaise: payablePaise,
+        session,
+      });
+      if (paymentMethod === 'cod' && payablePaise > 0) {
         await paymentService.confirmPayment(order._id, { session });
       }
 

@@ -6,6 +6,7 @@ export const mapReelForAdmin = (reel) => ({
   videoUrl: reel?.videoUrl || '',
   thumbnailUrl: reel?.thumbnailUrl || '',
   storeName: reel?.storeName || '',
+  category: reel?.category || 'All',
   productTitle: reel?.linkedProduct?.title || '',
   productPrice: reel?.linkedProduct?.price || 0,
   productMrp: reel?.linkedProduct?.mrp || 0,
@@ -23,6 +24,7 @@ export const mapAdminReelToPayload = ({
   videoId,
   thumbnailId,
   storeName,
+  category,
   productTitle,
   productPrice,
   productMrp,
@@ -35,7 +37,7 @@ export const mapAdminReelToPayload = ({
   videoId,
   thumbnailId,
   storeName: storeName?.trim(),
-  category: 'All',
+  category: category || 'All',
   musicLabel: storeName ? `Original Audio - ${storeName}` : undefined,
   linkedProduct: productTitle
     ? {

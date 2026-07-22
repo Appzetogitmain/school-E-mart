@@ -77,6 +77,9 @@ const kitItemSchema = Joi.object({
 
 const createKitSchema = Joi.object({
   name: Joi.string().trim().min(2).max(150).required(),
+  // The vendor the school picks to supply and fulfil the kit. Optional while a
+  // kit is a draft; required before it can go live (enforced in the service).
+  vendorId: objectId.optional().allow(null),
   classGrade: Joi.string().trim().max(30).optional().allow('', null),
   category: Joi.string().trim().max(60).optional().allow('', null),
   description: Joi.string().trim().max(2000).optional().allow('', null),
@@ -93,6 +96,7 @@ const createKitSchema = Joi.object({
 
 const updateKitSchema = Joi.object({
   name: Joi.string().trim().min(2).max(150).optional(),
+  vendorId: objectId.optional().allow(null),
   classGrade: Joi.string().trim().max(30).optional().allow('', null),
   category: Joi.string().trim().max(60).optional().allow('', null),
   description: Joi.string().trim().max(2000).optional().allow('', null),

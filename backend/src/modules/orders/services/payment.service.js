@@ -7,24 +7,49 @@ const Order = require('../../../database/models/Order');
 const { triggerService } = require('../../../services/notification');
 
 const paymentService = {
-  async createPaymentForOrder(order, { method, session = null }) {
+  async createPaymentForOrder(order, { method, amountPaise, session = null }) {
+    // The gateway collects only what the wallet did not cover. Defaults to the
+    // full total when no explicit amount is given (unchanged legacy behaviour).
+    const chargePaise = amountPaise == null ? order.totalPaise : amountPaise;
     const idempotencyKey = `order-${order._id}-${randomHex(8)}`;
     const existing = await paymentRepository.findByIdempotencyKey(idempotencyKey);
     if (existing) return existing;
 
+    const opts = session ? { session } : {};
+
+    // Fully wallet-paid: nothing to collect, so skip the gateway and record a
+    // captured wallet payment directly.
+    if (chargePaise <= 0) {
+      const [walletPayment] = await Payment.create(
+        [
+          {
+            orderId: order._id,
+            userId: order.userId,
+            amountPaise: 0,
+            currency: 'INR',
+            method: 'wallet',
+            gateway: 'internal',
+            status: 'captured',
+            idempotencyKey,
+          },
+        ],
+        opts
+      );
+      return walletPayment;
+    }
+
     const intent = await paymentGateway.createPaymentIntent({
       orderId: order._id,
-      amountPaise: order.totalPaise,
+      amountPaise: chargePaise,
       method: method === 'cod' ? 'cod' : 'upi',
     });
 
-    const opts = session ? { session } : {};
     const [payment] = await Payment.create(
       [
         {
           orderId: order._id,
           userId: order.userId,
-          amountPaise: order.totalPaise,
+          amountPaise: chargePaise,
           currency: 'INR',
           method: method === 'cod' ? 'cod' : 'upi',
           gateway: intent.gateway,

@@ -4,6 +4,11 @@ const softDeletePlugin = require('../plugins/softDelete.plugin');
 
 const kitSchema = new mongoose.Schema({
   schoolId: { type: mongoose.Schema.Types.ObjectId, ref: 'School' }, // null = platform-curated
+  // The single vendor the school selects to supply and fulfil this kit. Every
+  // order for the kit is routed to this vendor regardless of who owns the
+  // individual products; the school earns commission, the vendor is paid to
+  // fulfil, the platform keeps its cut.
+  vendorId: { type: mongoose.Schema.Types.ObjectId, ref: 'VendorProfile' },
   name: { type: String, required: true },
   slug: { type: String, required: true, unique: true },
   classGrade: { type: String },

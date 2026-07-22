@@ -29,10 +29,18 @@ const authLimiter = createRateLimiter({
   skipSuccessfulRequests: true,
 });
 
+// Keyed per IP (express-rate-limit's default), so this is a shared budget for
+// everyone behind one address — a school or office NAT, or a whole test session.
+// It therefore uses its own generous ceiling rather than the per-phone cap; the
+// real per-number protection lives in otp.service.
+//
+// The wording differs from the service's message on purpose. Both used to read
+// "Too many OTP requests. Please try again later.", so there was no way to tell
+// which limit had tripped, and the IP one looked like a per-user limit.
 const otpLimiter = createRateLimiter({
   windowMs: config.rateLimit.otpWindowMs,
-  max: config.rateLimit.otpMax,
-  message: 'Too many OTP requests. Please try again later.',
+  max: config.rateLimit.otpIpMax,
+  message: 'Too many OTP requests from this network. Please try again later.',
 });
 
 module.exports = {

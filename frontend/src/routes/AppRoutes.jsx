@@ -1,5 +1,5 @@
 import React from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { ProtectedRoute, RoleRoute } from './ProtectedRoute';
 import { ROLES } from '../constants/roles';
 import { ROUTES } from '../constants/routes';
@@ -73,7 +73,6 @@ const SchoolOrderHistoryPage = React.lazy(() => import('../app/features/school/S
 const SchoolProductsPage = React.lazy(() => import('../app/features/school/SchoolProductsPage'));
 const SchoolReferEarnPage = React.lazy(() => import('../app/features/school/SchoolReferEarnPage'));
 const SchoolPartnerPage = React.lazy(() => import('../app/features/school/SchoolPartnerPage'));
-const SchoolWalletPage = React.lazy(() => import('../app/features/school/SchoolWalletPage'));
 const SchoolContactUsPage = React.lazy(() => import('../app/features/school/SchoolContactUsPage'));
 const SchoolAboutUsPage = React.lazy(() => import('../app/features/school/SchoolAboutUsPage'));
 const SchoolCheckoutPage = React.lazy(() => import('../app/features/school/SchoolCheckoutPage'));
@@ -91,6 +90,7 @@ const SchoolStudentsPage = React.lazy(() => import('../app/features/school/Schoo
 const SchoolVendorsPage = React.lazy(() => import('../app/features/school/SchoolVendorsPage'));
 const SchoolQuotationsPage = React.lazy(() => import('../app/features/school/SchoolQuotationsPage'));
 const SchoolKitsPage = React.lazy(() => import('../app/features/school/SchoolKitsPage'));
+const SchoolWallet = React.lazy(() => import('../app/features/school/SchoolWallet'));
 const SchoolChangePasswordPage = React.lazy(() => import('../app/features/school/SchoolChangePasswordPage'));
 const SchoolAddClass = React.lazy(() => import('../app/features/school/SchoolAddClass'));
 const SchoolTeacherAssignments = React.lazy(() => import('../app/features/school/SchoolTeacherAssignments'));
@@ -155,6 +155,15 @@ const LoadingFallback = () => (
 
 const Dashboard = () => <div className="p-10"><h1>Dashboard</h1><p>Welcome back!</p></div>;
 
+// Forwards /admin/<rest> to /superadmin/<rest> so deep links and old bookmarks
+// keep working. A path with no /superadmin counterpart falls through to the 404
+// route, exactly as mistyping the /superadmin URL directly would.
+const AdminAliasRedirect = () => {
+  const { pathname, search, hash } = useLocation();
+  const rest = pathname.slice('/admin'.length);
+  return <Navigate to={`${ROUTES.SUPER_ADMIN.ROOT}${rest}${search}${hash}`} replace />;
+};
+
 const AppRoutes = () => {
   return (
     <React.Suspense fallback={<LoadingFallback />}>
@@ -184,6 +193,14 @@ const AppRoutes = () => {
         <Route path="/register" element={<Navigate to="/user/login" replace />} />
         <Route path={ROUTES.VENDOR.LOGIN} element={<VendorLogin />} />
         <Route path={ROUTES.SUPER_ADMIN.LOGIN} element={<SuperAdminLogin />} />
+
+        {/* The admin console lives under /superadmin, but /admin is the address
+            people reach for first. These aliases must stay outside ProtectedRoute:
+            nested inside it, /admin/login is treated as a protected page and a
+            logged-out admin gets bounced to the customer login instead. */}
+        <Route path="/admin/login" element={<Navigate to={ROUTES.SUPER_ADMIN.LOGIN} replace />} />
+        <Route path="/admin" element={<Navigate to={ROUTES.SUPER_ADMIN.ROOT} replace />} />
+        <Route path="/admin/*" element={<AdminAliasRedirect />} />
         <Route element={<RoleRoute allowedRoles={[ROLES.ADMIN]} redirectTo={ROUTES.SUPER_ADMIN.LOGIN} />}>
         <Route path={ROUTES.SUPER_ADMIN.ROOT} element={<SuperAdminLayout />}>
           <Route index element={<Navigate to="dashboard" replace />} />
@@ -249,9 +266,6 @@ const AppRoutes = () => {
             </Route>
           </Route>
 
-          <Route element={<RoleRoute allowedRoles={[ROLES.ADMIN]} />}>
-            <Route path={`${ROUTES.ADMIN.ROOT}/*`} element={<div>Admin Panel</div>} />
-          </Route>
         </Route>
 
         {/* Mobile App Experience Routes */}
@@ -322,6 +336,7 @@ const AppRoutes = () => {
             <Route path="vendors" element={<SchoolVendorsPage />} />
             <Route path="quotations" element={<SchoolQuotationsPage />} />
             <Route path="kits" element={<SchoolKitsPage />} />
+            <Route path="wallet" element={<SchoolWallet />} />
             <Route path="grade" element={<SchoolGradePage />} />
             <Route path="categories" element={<SchoolCategoryPage />} />
             <Route path="cart" element={<SchoolCartPage />} />
@@ -335,7 +350,6 @@ const AppRoutes = () => {
             <Route path="products" element={<SchoolProductsPage />} />
             <Route path="refer" element={<SchoolReferEarnPage />} />
             <Route path="partner" element={<SchoolPartnerPage />} />
-            <Route path="wallet" element={<SchoolWalletPage />} />
             <Route path="contact" element={<SchoolContactUsPage />} />
             <Route path="about" element={<SchoolAboutUsPage />} />
             <Route path="checkout" element={<SchoolCheckoutPage />} />

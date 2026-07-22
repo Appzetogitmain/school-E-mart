@@ -13,6 +13,7 @@ const path = require('path');
 
 require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 
+const mongoose = require('mongoose');
 const env = require('../src/config/env');
 const { connectDB, disconnectDB } = require('../src/database/connection');
 const { hashPassword, normalizeEmail } = require('../src/utils');
@@ -25,6 +26,12 @@ const ParentProfile = require('../src/database/models/ParentProfile');
 const ChildProfile = require('../src/database/models/ChildProfile');
 const Student = require('../src/database/models/Student');
 const VendorProfile = require('../src/database/models/VendorProfile');
+const Product = require('../src/database/models/Product');
+const Order = require('../src/database/models/Order');
+const HeaderCategory = require('../src/database/models/HeaderCategory');
+const Category = require('../src/database/models/Category');
+const productService = require('../src/modules/marketplace/services/product.service');
+const taxonomyService = require('../src/modules/marketplace/services/taxonomy.service');
 
 const PASSWORD = '123456';
 
@@ -101,6 +108,8 @@ const SEED_VENDORS = [
     name: 'Seed Vendor One',
     storeName: 'Seed Store Alpha',
     storeSlug: 'seed-store-alpha',
+    // 10-digit ORD number — real orders use 13-digit timestamps, so no collision.
+    demoOrderNumber: 'ORD9000000001',
   },
   {
     refId: 'SEM-VEN-SEED2',
@@ -109,6 +118,7 @@ const SEED_VENDORS = [
     name: 'Seed Vendor Two',
     storeName: 'Seed Store Beta',
     storeSlug: 'seed-store-beta',
+    demoOrderNumber: 'ORD9000000002',
   },
 ];
 
@@ -400,10 +410,11 @@ async function ensureParentWithChild(school, seedParent) {
 async function ensureVendor(seedVendor) {
   const user = await ensurePasswordUser(seedVendor, 'vendor');
 
-  let profile = await VendorProfile.findOne({
-    userId: user._id,
-    'softDelete.isDeleted': { $ne: true },
-  });
+  // Match on userId regardless of soft-delete state: the unique userId index
+  // ignores soft-delete, so a soft-deleted profile still blocks a fresh create.
+  // includeDeleted bypasses the plugin's default filter so we can revive it —
+  // keeping the seed idempotent instead of throwing a dup-key error.
+  let profile = await VendorProfile.findOne({ userId: user._id }).setOptions({ includeDeleted: true });
 
   if (profile) {
     await VendorProfile.updateOne(
@@ -413,11 +424,15 @@ async function ensureVendor(seedVendor) {
           storeName: seedVendor.storeName,
           approvalStatus: 'approved',
           commissionPercent: 10,
+          'softDelete.isDeleted': false,
+          'softDelete.deletedAt': null,
         },
-      }
+      },
+      { includeDeleted: true }
     );
+    profile = await VendorProfile.findById(profile._id).setOptions({ includeDeleted: true });
     logResult('Vendor profile (existing)', { storeSlug: profile.storeSlug });
-    return user;
+    return { user, profile };
   }
 
   const slugTaken = await VendorProfile.findOne({
@@ -437,7 +452,125 @@ async function ensureVendor(seedVendor) {
     serviceRadiusKm: 15,
   });
   logResult('Vendor profile (created)', { storeSlug: profile.storeSlug });
-  return user;
+  return { user, profile };
+}
+
+// A vendor with no products and no orders makes every screen in the portal look
+// broken (empty products, empty orders, zero earnings). Seed a small catalog and
+// one incoming order per vendor so the manage/receive-order flow is visible and
+// the accept -> deliver -> settlement path can actually be exercised.
+const SEED_HEADER_NAME = 'School Essentials (Seed)';
+const SEED_CATEGORY_NAME = 'Stationery (Seed)';
+
+const SEED_PRODUCTS = [
+  { suffix: 'NB', name: 'A4 Ruled Notebook (200 pages)', pricePaise: 12000, stock: 120 },
+  { suffix: 'PEN', name: 'Blue Gel Pen (Pack of 10)', pricePaise: 8500, stock: 80 },
+  { suffix: 'GEO', name: 'Geometry Box Deluxe', pricePaise: 24900, stock: 40 },
+];
+
+async function ensureCatalogTaxonomy() {
+  let header = await HeaderCategory.findOne({
+    name: SEED_HEADER_NAME,
+    'softDelete.isDeleted': { $ne: true },
+  });
+  if (!header) {
+    header = await taxonomyService.createHeaderCategory({ name: SEED_HEADER_NAME });
+  }
+
+  let category = await Category.findOne({
+    name: SEED_CATEGORY_NAME,
+    headerId: header._id,
+    'softDelete.isDeleted': { $ne: true },
+  });
+  if (!category) {
+    category = await taxonomyService.createCategory({ headerId: header._id, name: SEED_CATEGORY_NAME });
+  }
+
+  return { headerId: header._id, categoryId: category._id };
+}
+
+async function ensureVendorProducts(seedVendor, profile, taxonomy) {
+  const products = [];
+  for (const spec of SEED_PRODUCTS) {
+    // Deterministic SKU keeps the seed idempotent — createProduct rejects a
+    // duplicate SKU, so skip any that already exist for a re-run.
+    const sku = `SEED-${seedVendor.refId}-${spec.suffix}`;
+    let product = await Product.findOne({ sku, 'softDelete.isDeleted': { $ne: true } });
+    if (!product) {
+      product = await productService.createProduct(profile._id, {
+        name: `${spec.name} — ${profile.storeName}`,
+        sku,
+        headerId: taxonomy.headerId,
+        categoryId: taxonomy.categoryId,
+        pricePaise: spec.pricePaise,
+        images: [{ attachmentId: new mongoose.Types.ObjectId() }],
+        approvalStatus: 'approved',
+        publishStatus: 'published',
+        stock: spec.stock,
+        lowStockThreshold: 10,
+      });
+    }
+    products.push(product);
+  }
+  logResult('Vendor products', { count: products.length });
+  return products;
+}
+
+async function ensureVendorOrder(seedVendor, profile, products, customerUserId) {
+  if (!customerUserId || !products.length) return;
+
+  const orderNumber = seedVendor.demoOrderNumber;
+  const existing = await Order.findOne({ orderNumber, 'softDelete.isDeleted': { $ne: true } });
+  if (existing) {
+    logResult('Vendor order (existing)', { orderNumber, status: existing.orderStatus });
+    return;
+  }
+
+  // Two line items from this vendor's catalog, left in the 'placed' state so the
+  // vendor sees a fresh incoming order to accept.
+  const items = products.slice(0, 2).map((product) => ({
+    productId: product._id,
+    vendorId: profile._id,
+    name: product.name,
+    sku: product.sku,
+    pricePaise: product.pricePaise,
+    mrpPaise: product.pricePaise,
+    quantity: 2,
+    taxPaise: 0,
+    lineTotalPaise: product.pricePaise * 2,
+    fulfilmentStatus: 'placed',
+  }));
+  const subtotalPaise = items.reduce((sum, item) => sum + item.lineTotalPaise, 0);
+
+  await Order.create({
+    orderNumber,
+    userId: customerUserId,
+    audience: 'parent',
+    items,
+    vendorIds: [profile._id],
+    subtotalPaise,
+    taxPaise: 0,
+    discountPaise: 0,
+    platformFeePaise: 0,
+    deliveryChargePaise: 0,
+    handlingChargePaise: 0,
+    totalPaise: subtotalPaise,
+    address: {
+      name: 'Aarav Parent',
+      phone: '9300000001',
+      line1: '12 Rajpath Lane',
+      city: 'Delhi',
+      state: 'Delhi',
+      pinCode: '110001',
+    },
+    deliveryType: 'home',
+    paymentMethod: 'cod',
+    paymentStatus: 'paid',
+    orderStatus: 'placed',
+    statusHistory: [{ status: 'placed', at: new Date(), note: 'Order placed (seed)' }],
+    placedAt: new Date(),
+  });
+  logResult('Vendor order (created)', { orderNumber, items: items.length });
 }
 
 async function seedSchoolBundle(bundle) {
@@ -463,8 +596,14 @@ async function seedTestUsers() {
   }
 
   console.log('\n--- Vendors ---');
+  // One customer (a seeded parent) receives the demo orders so the vendor has a
+  // real incoming order to accept. Falls back to no order if parents were skipped.
+  const demoCustomer = await findUserByRefId('SEM-P-DPS001');
+  const taxonomy = await ensureCatalogTaxonomy();
   for (const seedVendor of SEED_VENDORS) {
-    await ensureVendor(seedVendor);
+    const { profile } = await ensureVendor(seedVendor);
+    const products = await ensureVendorProducts(seedVendor, profile, taxonomy);
+    await ensureVendorOrder(seedVendor, profile, products, demoCustomer?._id);
   }
 
   console.log('\n========================================');

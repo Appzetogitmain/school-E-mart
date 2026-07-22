@@ -1,46 +1,93 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
-  DollarSign, Save, ShieldCheck, MapPin, AlertCircle, RefreshCw, CheckCircle, Navigation, Info
+  IndianRupee, Save, RefreshCw, CheckCircle,
+  Percent, Store, School as SchoolIcon, Loader2, AlertCircle,
 } from 'lucide-react';
-import { getMarketplaceSettings, updateMarketplaceSettings } from '../../../services/adminApi';
+import {
+  getBillingConfig, updateBillingConfig,
+} from '../../../services/adminApi';
+import { getCategoryTree, updateCategory } from '../../../services/catalogApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 
+// BillingConfig stores money in paise; the UI edits rupees.
+const paiseToRupees = (paise) => (Number(paise) || 0) / 100;
+const rupeesToPaise = (rupees) => Math.round((Number(rupees) || 0) * 100);
+const toNum = (value) => {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+};
+
 const BillingChargesManagement = () => {
-  const [platformFee, setPlatformFee] = useState(10);
+  // --- charges (rupees in state, converted to paise on save) ---
+  const [platformFee, setPlatformFee] = useState(0);
   const [freeDeliveryThreshold, setFreeDeliveryThreshold] = useState(0);
-  const [pricingMode, setPricingMode] = useState('fixed'); // 'fixed' or 'distance'
+  const [deliveryCharge, setDeliveryCharge] = useState(0);
 
-  // Fixed Delivery states
-  const [fixedDeliveryCharge, setFixedDeliveryCharge] = useState(12);
-
-  // Distance-based states
-  const [baseCharge, setBaseCharge] = useState(0);
-  const [baseDistance, setBaseDistance] = useState(0);
-  const [extraKmCharge, setExtraKmCharge] = useState(0);
-  const [riderCommission, setRiderCommission] = useState(0);
+  // --- per-category commission ---
+  const [categories, setCategories] = useState([]); // flattened: { id, name, header, adminPercent, schoolPercent }
+  const [savingCommissions, setSavingCommissions] = useState(false);
 
   const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [loadError, setLoadError] = useState('');
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    getMarketplaceSettings()
-      .then((settings) => {
-        if (settings?.commissionPercent != null) {
-          setPlatformFee(settings.commissionPercent);
-        }
-      })
-      .catch((err) => setLoadError(getErrorMessage(err, 'Unable to load billing settings')));
+  const flash = (message) => {
+    setToastMessage(message);
+    setShowToast(true);
+    setTimeout(() => setShowToast(false), 3500);
+  };
+
+  const loadAll = useCallback(async () => {
+    setLoading(true);
+    setLoadError('');
+    try {
+      const [config, tree] = await Promise.all([getBillingConfig(), getCategoryTree()]);
+      if (config) {
+        setPlatformFee(paiseToRupees(config.platformFeePaise));
+        setFreeDeliveryThreshold(paiseToRupees(config.freeDeliveryThresholdPaise));
+        setDeliveryCharge(paiseToRupees(config.fixedDeliveryChargePaise));
+      }
+      // Flatten header -> categories into an editable list.
+      const flat = [];
+      (tree || []).forEach((header) => {
+        (header.categories || []).forEach((category) => {
+          flat.push({
+            id: category._id,
+            name: category.name,
+            header: header.name,
+            adminPercent: toNum(category.commission?.adminPercent),
+            schoolPercent: toNum(category.commission?.schoolPercent),
+          });
+        });
+      });
+      setCategories(flat);
+    } catch (err) {
+      setLoadError(getErrorMessage(err, 'Unable to load billing settings'));
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  const handleSave = async (e) => {
+  useEffect(() => {
+    loadAll();
+  }, [loadAll]);
+
+  const handleSaveCharges = async (e) => {
     e.preventDefault();
     setIsSaving(true);
     setLoadError('');
     try {
-      await updateMarketplaceSettings({ commissionPercent: Number(platformFee) });
-      setShowToast(true);
-      setTimeout(() => setShowToast(false), 3500);
+      // Only the fields this simplified page controls. pricingMode stays 'fixed'
+      // so checkout always applies the flat delivery charge below.
+      await updateBillingConfig({
+        platformFeePaise: rupeesToPaise(platformFee),
+        freeDeliveryThresholdPaise: rupeesToPaise(freeDeliveryThreshold),
+        pricingMode: 'fixed',
+        fixedDeliveryChargePaise: rupeesToPaise(deliveryCharge),
+      });
+      flash('Delivery & platform charges saved.');
     } catch (err) {
       setLoadError(getErrorMessage(err, 'Unable to save billing settings'));
     } finally {
@@ -48,294 +95,230 @@ const BillingChargesManagement = () => {
     }
   };
 
+  const updateCategoryField = (id, field, value) => {
+    setCategories((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, [field]: value } : c))
+    );
+  };
+
+  const handleSaveCommissions = async () => {
+    setSavingCommissions(true);
+    setLoadError('');
+    try {
+      // Persist each category's split. Kept sequential so a single bad row
+      // surfaces its own error rather than a vague batch failure.
+      for (const category of categories) {
+        await updateCategory(category.id, {
+          commission: {
+            adminPercent: toNum(category.adminPercent),
+            schoolPercent: toNum(category.schoolPercent),
+          },
+        });
+      }
+      flash('Category commissions saved.');
+    } catch (err) {
+      setLoadError(getErrorMessage(err, 'Unable to save category commissions'));
+    } finally {
+      setSavingCommissions(false);
+    }
+  };
+
+  const inputRing = 'focus-within:ring-2 focus-within:ring-indigo-500/25';
+
   return (
     <div className="space-y-6 font-sans antialiased text-gray-800 relative">
 
-      {/* SUCCESS FLOATING TOAST NOTIFICATION */}
       {showToast && (
         <div className="fixed top-6 right-6 z-[9999] flex items-center gap-3 bg-[#0B1528] text-white px-5 py-4 rounded-2xl shadow-2xl border border-white/10 animate-slide-in select-none">
           <div className="bg-emerald-500 p-1.5 rounded-full text-white">
             <CheckCircle size={16} className="stroke-[3]" />
           </div>
           <div className="text-left">
-            <span className="block text-xs font-black uppercase tracking-wider text-emerald-400">Settings Saved!</span>
-            <span className="block text-[10px] text-gray-300 font-bold mt-0.5">Billing configurations have been deployed live to the user storefront.</span>
+            <span className="block text-xs font-black uppercase tracking-wider text-emerald-400">Saved!</span>
+            <span className="block text-[10px] text-gray-300 font-bold mt-0.5">{toastMessage}</span>
           </div>
         </div>
       )}
 
-      {/* HEADER SECTION (Matching screenshots) */}
-      <form onSubmit={handleSave} className="space-y-6 text-left">
-
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 select-none pb-2 border-b border-gray-200">
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-xl font-black text-[#0B1528] tracking-tight">Billing & Charges</h1>
-              <span className="bg-indigo-50 text-indigo-600 border border-indigo-100 text-[8px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full">
-                SYSTEM CONSTANTS
-              </span>
-            </div>
-            <p className="text-xs text-gray-400 font-bold mt-1.5">Manage delivery fees, platform charges, and thresholds.</p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 select-none pb-2 border-b border-gray-200">
+        <div>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-black text-[#0B1528] tracking-tight">Billing & Charges</h1>
+            <span className="bg-indigo-50 text-indigo-600 border border-indigo-100 text-[8px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full">
+              LIVE PRICING
+            </span>
           </div>
-
-          <button
-            type="submit"
-            disabled={isSaving}
-            className="flex items-center justify-center gap-2 bg-[#0B1528] hover:bg-[#15253F] text-white text-xs font-black uppercase tracking-wider py-2.5 px-6 rounded-xl transition-all shadow-xs disabled:opacity-70"
-          >
-            {isSaving ? (
-              <>
-                <RefreshCw size={14} className="animate-spin" />
-                Saving...
-              </>
-            ) : (
-              <>
-                <Save size={14} className="stroke-[2.5]" />
-                Save Changes
-              </>
-            )}
-          </button>
+          <p className="text-xs text-gray-400 font-bold mt-1.5">Control delivery fees, platform charges, and the per-category profit split.</p>
         </div>
+      </div>
 
-        {/* BLOCK 1: GENERAL CHARGES CARD (Matching Screenshot 1) */}
-        <div className="bg-white border border-gray-200 rounded-3xl p-6 shadow-xs space-y-6">
-          <div className="border-b border-gray-100 pb-3 flex items-center gap-2">
-            <DollarSign size={16} className="text-indigo-600 stroke-[2.5]" />
-            <h3 className="text-sm font-black text-[#0B1528] uppercase tracking-wider">General Charges</h3>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-
-            {/* Platform / Handling Fee */}
-            <div className="space-y-1.5">
-              <label className="block text-gray-500 uppercase tracking-wide text-[9px] font-black">
-                Platform/Handling Fee (₹)
-              </label>
-
-              <div className="relative rounded-xl overflow-hidden shadow-2xs border border-gray-200 focus-within:ring-2 focus-within:ring-indigo-500/25 transition-all">
-                <span className="absolute inset-y-0 left-0 pl-4 flex items-center text-gray-400 font-bold select-none text-xs">
-                  ₹
-                </span>
-                <input
-                  type="number"
-                  min="0"
-                  required
-                  value={platformFee}
-                  onChange={(e) => setPlatformFee(Number(e.target.value))}
-                  className="w-full bg-white pl-8 pr-4 py-2.5 focus:outline-none font-bold text-xs"
-                />
-              </div>
-              <span className="block text-[8px] text-gray-400 font-medium">Added to every order as handling charge.</span>
-            </div>
-
-            {/* Free Delivery Threshold */}
-            <div className="space-y-1.5">
-              <label className="block text-gray-500 uppercase tracking-wide text-[9px] font-black">
-                Free Delivery Threshold (₹)
-              </label>
-
-              <div className="relative rounded-xl overflow-hidden shadow-2xs border border-gray-200 focus-within:ring-2 focus-within:ring-indigo-500/25 transition-all">
-                <span className="absolute inset-y-0 left-0 pl-4 flex items-center text-gray-400 font-bold select-none text-xs">
-                  ₹
-                </span>
-                <input
-                  type="number"
-                  min="0"
-                  required
-                  value={freeDeliveryThreshold}
-                  onChange={(e) => setFreeDeliveryThreshold(Number(e.target.value))}
-                  className="w-full bg-white pl-8 pr-4 py-2.5 focus:outline-none font-bold text-xs"
-                />
-              </div>
-              <span className="block text-[8px] text-gray-400 font-medium">Orders above this amount will have free delivery.</span>
-            </div>
-
-          </div>
-
+      {loadError && (
+        <div className="px-4 py-3 bg-red-50 border border-red-100 rounded-xl text-xs font-bold text-red-600 flex items-center gap-2">
+          <AlertCircle size={14} />
+          {loadError}
         </div>
+      )}
 
-        {/* BLOCK 2: DELIVERY CONFIGURATION CARD (Matching Screenshots 1 & 2) */}
-        <div className="bg-white border border-gray-200 rounded-3xl p-6 shadow-xs space-y-6">
-
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-100 pb-4 select-none">
-            <div className="text-left">
-              <div className="flex items-center gap-2">
-                <Navigation size={16} className="text-indigo-600 stroke-[2.5]" />
-                <h3 className="text-sm font-black text-[#0B1528] uppercase tracking-wider">Delivery Configuration</h3>
-              </div>
-              <p className="text-[10px] text-gray-400 font-bold mt-1">Choose between fixed or distance-based pricing</p>
-            </div>
-
-            {/* Slidable Switch Toggle Selector */}
-            <div className="bg-gray-100 p-1 rounded-xl flex items-center border border-gray-200/50 self-start sm:self-auto">
+      {loading ? (
+        <div className="py-20 flex items-center justify-center text-gray-400">
+          <Loader2 size={22} className="animate-spin mr-2" />
+          <span className="text-sm font-bold">Loading billing settings…</span>
+        </div>
+      ) : (
+        <>
+          {/* ============ CHARGES ============ */}
+          <form onSubmit={handleSaveCharges} className="space-y-6 text-left">
+            <div className="flex justify-end">
               <button
-                type="button"
-                onClick={() => setPricingMode('fixed')}
-                className={`text-[10px] font-black uppercase tracking-wider py-1.5 px-4 rounded-lg transition-all ${pricingMode === 'fixed'
-                    ? 'bg-white text-gray-900 shadow-xs'
-                    : 'text-gray-400 hover:text-gray-600'
-                  }`}
+                type="submit"
+                disabled={isSaving}
+                className="flex items-center justify-center gap-2 bg-[#0B1528] hover:bg-[#15253F] text-white text-xs font-black uppercase tracking-wider py-2.5 px-6 rounded-xl transition-all shadow-xs disabled:opacity-70"
               >
-                Fixed Price
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setPricingMode('distance')}
-                className={`text-[10px] font-black uppercase tracking-wider py-1.5 px-4 rounded-lg transition-all ${pricingMode === 'distance'
-                    ? 'bg-white text-gray-900 shadow-xs'
-                    : 'text-gray-400 hover:text-gray-600'
-                  }`}
-              >
-                Distance Based
+                {isSaving ? (
+                  <><RefreshCw size={14} className="animate-spin" /> Saving...</>
+                ) : (
+                  <><Save size={14} className="stroke-[2.5]" /> Save Charges</>
+                )}
               </button>
             </div>
-          </div>
 
-          {/* FIXED PRICE LAYOUT SECTION (Screenshot 1) */}
-          {pricingMode === 'fixed' ? (
-            <div className="space-y-4 max-w-md animate-fade-in">
-              <div className="space-y-1.5">
-                <label className="block text-gray-500 uppercase tracking-wide text-[9px] font-black">
-                  Fixed Delivery Charge (₹)
-                </label>
+            {/* General charges */}
+            <div className="bg-white border border-gray-200 rounded-3xl p-6 shadow-xs space-y-6">
+              <div className="border-b border-gray-100 pb-3 flex items-center gap-2">
+                <IndianRupee size={16} className="text-indigo-600 stroke-[2.5]" />
+                <h3 className="text-sm font-black text-[#0B1528] uppercase tracking-wider">General Charges</h3>
+              </div>
 
-                <div className="relative rounded-xl overflow-hidden shadow-2xs border border-gray-200 focus-within:ring-2 focus-within:ring-indigo-500/25 transition-all">
-                  <span className="absolute inset-y-0 left-0 pl-4 flex items-center text-gray-400 font-bold select-none text-xs">
-                    ₹
-                  </span>
-                  <input
-                    type="number"
-                    min="0"
-                    required
-                    value={fixedDeliveryCharge}
-                    onChange={(e) => setFixedDeliveryCharge(Number(e.target.value))}
-                    className="w-full bg-white pl-8 pr-4 py-2.5 focus:outline-none font-bold text-xs"
-                  />
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="space-y-1.5">
+                  <label className="block text-gray-500 uppercase tracking-wide text-[9px] font-black">Platform / Handling Fee (₹)</label>
+                  <div className={`relative rounded-xl overflow-hidden shadow-2xs border border-gray-200 ${inputRing} transition-all`}>
+                    <span className="absolute inset-y-0 left-0 pl-4 flex items-center text-gray-400 font-bold select-none text-xs">₹</span>
+                    <input type="number" min="0" step="0.01" required value={platformFee}
+                      onChange={(e) => setPlatformFee(Number(e.target.value))}
+                      className="w-full bg-white pl-8 pr-4 py-2.5 focus:outline-none font-bold text-xs" />
+                  </div>
+                  <span className="block text-[8px] text-gray-400 font-medium">Added to every order as a platform fee.</span>
                 </div>
-                <span className="block text-[8px] text-gray-400 font-medium">Flat fee charged for all deliveries below threshold.</span>
+
+                <div className="space-y-1.5">
+                  <label className="block text-gray-500 uppercase tracking-wide text-[9px] font-black">Delivery Charge (₹)</label>
+                  <div className={`relative rounded-xl overflow-hidden shadow-2xs border border-gray-200 ${inputRing} transition-all`}>
+                    <span className="absolute inset-y-0 left-0 pl-4 flex items-center text-gray-400 font-bold select-none text-xs">₹</span>
+                    <input type="number" min="0" step="0.01" required value={deliveryCharge}
+                      onChange={(e) => setDeliveryCharge(Number(e.target.value))}
+                      className="w-full bg-white pl-8 pr-4 py-2.5 focus:outline-none font-bold text-xs" />
+                  </div>
+                  <span className="block text-[8px] text-gray-400 font-medium">Flat fee charged unless the order clears the free-delivery threshold.</span>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="block text-gray-500 uppercase tracking-wide text-[9px] font-black">Free Delivery Threshold (₹)</label>
+                  <div className={`relative rounded-xl overflow-hidden shadow-2xs border border-gray-200 ${inputRing} transition-all`}>
+                    <span className="absolute inset-y-0 left-0 pl-4 flex items-center text-gray-400 font-bold select-none text-xs">₹</span>
+                    <input type="number" min="0" step="0.01" required value={freeDeliveryThreshold}
+                      onChange={(e) => setFreeDeliveryThreshold(Number(e.target.value))}
+                      className="w-full bg-white pl-8 pr-4 py-2.5 focus:outline-none font-bold text-xs" />
+                  </div>
+                  <span className="block text-[8px] text-gray-400 font-medium">Orders at or above this subtotal ship free (0 = never).</span>
+                </div>
               </div>
             </div>
-          ) : (
 
-            // DISTANCE BASED LAYOUT SECTION (Screenshot 2)
-            <div className="space-y-6 animate-fade-in">
+          </form>
 
-              {/* Alert Info Banner */}
-              <div className="bg-orange-50/50 border border-orange-100 rounded-2xl p-4 flex items-start gap-3 select-none">
-                <Info size={16} className="text-orange-500 mt-0.5 flex-shrink-0 stroke-[2.5]" />
-                <p className="text-[10px] text-orange-800 font-bold leading-relaxed">
-                  Note: Distance calculation requires Google Maps API Key. Without a key, it may fallback to straight line distance.
+          {/* ============ CATEGORY COMMISSION ============ */}
+          <div className="bg-white border border-gray-200 rounded-3xl p-6 shadow-xs space-y-5 text-left">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-100 pb-4 select-none">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Percent size={16} className="text-indigo-600 stroke-[2.5]" />
+                  <h3 className="text-sm font-black text-[#0B1528] uppercase tracking-wider">Category Commission & Profit Split</h3>
+                </div>
+                <p className="text-[10px] text-gray-400 font-bold mt-1">
+                  Per category: the platform keeps Admin %, the school earns School %, and the vendor is paid the rest.
                 </p>
               </div>
-
-              {/* Four-Column grid of settings */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-
-                {/* Column 1 Item 1: Base Charge */}
-                <div className="space-y-1.5">
-                  <label className="block text-gray-500 uppercase tracking-wide text-[9px] font-black">
-                    Base Charge (₹)
-                  </label>
-
-                  <div className="relative rounded-xl overflow-hidden shadow-2xs border border-gray-200 focus-within:ring-2 focus-within:ring-indigo-500/25 transition-all">
-                    <span className="absolute inset-y-0 left-0 pl-4 flex items-center text-gray-400 font-bold select-none text-xs">
-                      ₹
-                    </span>
-                    <input
-                      type="number"
-                      min="0"
-                      required
-                      value={baseCharge}
-                      onChange={(e) => setBaseCharge(Number(e.target.value))}
-                      className="w-full bg-white pl-8 pr-4 py-2.5 focus:outline-none font-bold text-xs"
-                    />
-                  </div>
-                  <span className="block text-[8px] text-gray-400 font-medium">Min charge for first X kms.</span>
-                </div>
-
-                {/* Column 2 Item 1: Base Distance */}
-                <div className="space-y-1.5">
-                  <label className="block text-gray-500 uppercase tracking-wide text-[9px] font-black">
-                    Base Distance (km)
-                  </label>
-
-                  <div className="relative rounded-xl overflow-hidden shadow-2xs border border-gray-200 focus-within:ring-2 focus-within:ring-indigo-500/25 transition-all">
-                    <input
-                      type="number"
-                      min="0"
-                      required
-                      value={baseDistance}
-                      onChange={(e) => setBaseDistance(Number(e.target.value))}
-                      className="w-full bg-white pl-4 pr-12 py-2.5 focus:outline-none font-bold text-xs"
-                    />
-                    <span className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 font-bold select-none text-xs">
-                      km
-                    </span>
-                  </div>
-                  <span className="block text-[8px] text-gray-400 font-medium">Distance covered in base charge.</span>
-                </div>
-
-                {/* Column 1 Item 2: Extra per km Charge */}
-                <div className="space-y-1.5">
-                  <label className="block text-gray-500 uppercase tracking-wide text-[9px] font-black">
-                    Extra per km Charge (₹)
-                  </label>
-
-                  <div className="relative rounded-xl overflow-hidden shadow-2xs border border-gray-200 focus-within:ring-2 focus-within:ring-indigo-500/25 transition-all">
-                    <span className="absolute inset-y-0 left-0 pl-4 flex items-center text-gray-400 font-bold select-none text-xs">
-                      ₹
-                    </span>
-                    <input
-                      type="number"
-                      min="0"
-                      required
-                      value={extraKmCharge}
-                      onChange={(e) => setExtraKmCharge(Number(e.target.value))}
-                      className="w-full bg-white pl-8 pr-4 py-2.5 focus:outline-none font-bold text-xs"
-                    />
-                  </div>
-                  <span className="block text-[8px] text-gray-400 font-medium">Charged for every km after base distance.</span>
-                </div>
-
-                {/* Column 2 Item 2: Delivery Boy Commission */}
-                <div className="space-y-1.5">
-                  <label className="block text-gray-500 uppercase tracking-wide text-[9px] font-black">
-                    Delivery Boy Commission (₹/km)
-                  </label>
-
-                  <div className="relative rounded-xl overflow-hidden shadow-2xs border border-gray-200 focus-within:ring-2 focus-within:ring-indigo-500/25 transition-all">
-                    <span className="absolute inset-y-0 left-0 pl-4 flex items-center text-gray-400 font-bold select-none text-xs">
-                      ₹
-                    </span>
-                    <input
-                      type="number"
-                      min="0"
-                      required
-                      value={riderCommission}
-                      onChange={(e) => setRiderCommission(Number(e.target.value))}
-                      className="w-full bg-white pl-8 pr-4 py-2.5 focus:outline-none font-bold text-xs"
-                    />
-                  </div>
-                  <span className="block text-[8px] text-gray-400 font-medium">Amount paid to delivery partner per km.</span>
-                </div>
-
-              </div>
-
+              <button type="button" onClick={handleSaveCommissions} disabled={savingCommissions}
+                className="flex items-center justify-center gap-2 bg-[#0B1528] hover:bg-[#15253F] text-white text-xs font-black uppercase tracking-wider py-2.5 px-6 rounded-xl transition-all shadow-xs disabled:opacity-70 self-start sm:self-auto">
+                {savingCommissions ? (
+                  <><RefreshCw size={14} className="animate-spin" /> Saving...</>
+                ) : (
+                  <><Save size={14} className="stroke-[2.5]" /> Save Commissions</>
+                )}
+              </button>
             </div>
-          )}
 
-        </div>
+            {categories.length === 0 ? (
+              <div className="py-10 text-center text-xs font-black text-gray-400">
+                No categories yet. Create categories under Category Management first.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse text-left min-w-[560px]">
+                  <thead>
+                    <tr className="border-b border-gray-100 text-[9px] font-black text-gray-400 uppercase tracking-widest bg-gray-50/50">
+                      <th className="px-4 py-3">Category</th>
+                      <th className="px-4 py-3 w-32">
+                        <span className="flex items-center gap-1"><IndianRupee size={11} /> Admin %</span>
+                      </th>
+                      <th className="px-4 py-3 w-32">
+                        <span className="flex items-center gap-1"><SchoolIcon size={11} /> School %</span>
+                      </th>
+                      <th className="px-4 py-3 w-32">
+                        <span className="flex items-center gap-1"><Store size={11} /> Vendor gets</span>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50 text-xs">
+                    {categories.map((category) => {
+                      const admin = toNum(category.adminPercent);
+                      const school = toNum(category.schoolPercent);
+                      const vendor = 100 - admin - school;
+                      const invalid = vendor < 0;
+                      return (
+                        <tr key={category.id} className="hover:bg-gray-50/40">
+                          <td className="px-4 py-3">
+                            <span className="font-black text-gray-900 block">{category.name}</span>
+                            <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wide">{category.header}</span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className={`relative rounded-lg overflow-hidden border border-gray-200 ${inputRing}`}>
+                              <input type="number" min="0" max="100" step="0.5" value={category.adminPercent}
+                                onChange={(e) => updateCategoryField(category.id, 'adminPercent', Number(e.target.value))}
+                                className="w-full bg-white pl-3 pr-7 py-2 focus:outline-none font-bold text-xs" />
+                              <span className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-gray-400 font-bold select-none text-[10px]">%</span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className={`relative rounded-lg overflow-hidden border border-gray-200 ${inputRing}`}>
+                              <input type="number" min="0" max="100" step="0.5" value={category.schoolPercent}
+                                onChange={(e) => updateCategoryField(category.id, 'schoolPercent', Number(e.target.value))}
+                                className="w-full bg-white pl-3 pr-7 py-2 focus:outline-none font-bold text-xs" />
+                              <span className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-gray-400 font-bold select-none text-[10px]">%</span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className={`text-xs font-black ${invalid ? 'text-red-600' : 'text-emerald-600'}`}>
+                              {invalid ? 'Over 100%' : `${vendor}%`}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </>
+      )}
 
-      </form>
-
-      {/* FOOTER COPYRIGHT BAR */}
       <div className="pt-8 pb-4 text-center border-t border-gray-200 select-none">
         <p className="text-[10px] font-bold text-gray-400">
           Copyright © 2026. Developed By <span className="text-[#0B1528] font-black">School E-Mart</span>
         </p>
       </div>
-
     </div>
   );
 };

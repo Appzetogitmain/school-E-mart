@@ -33,6 +33,7 @@ const ReelsManagement = () => {
   const [productMrp, setProductMrp] = useState('');
   const [productUrl, setProductUrl] = useState('');
   const [isActive, setIsActive] = useState(true);
+  const [category, setCategory] = useState('All');
 
   // File Upload states (handles both raw files and local previews)
   const [videoFile, setVideoFile] = useState(null);
@@ -178,6 +179,7 @@ const ReelsManagement = () => {
         videoId,
         thumbnailId,
         storeName,
+        category,
         productTitle,
         productPrice,
         productMrp,
@@ -211,6 +213,7 @@ const ReelsManagement = () => {
     setReelTitle(reel.title);
     setReelDescription(reel.description);
     setStoreName(reel.storeName);
+    setCategory(reel.category || 'All');
     setProductTitle(reel.productTitle);
     setProductPrice(reel.productPrice.toString());
     setProductMrp(reel.productMrp.toString());
@@ -241,6 +244,7 @@ const ReelsManagement = () => {
     setReelTitle('');
     setReelDescription('');
     setStoreName('School E-Mart Official');
+    setCategory('All');
     setProductTitle('');
     setProductPrice('');
     setProductMrp('');
@@ -370,6 +374,20 @@ const ReelsManagement = () => {
               >
                 {stores.map((s, idx) => (
                   <option key={idx} value={s}>{s}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Reel Category */}
+            <div className="space-y-1.5">
+              <label className="block text-gray-400 uppercase tracking-wide text-[9px] font-black select-none">Category *</label>
+              <select
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-500/25 font-bold cursor-pointer"
+              >
+                {['All', 'Kits', 'Uniforms', 'Stationery', 'Activities'].map((cat, idx) => (
+                  <option key={idx} value={cat}>{cat}</option>
                 ))}
               </select>
             </div>
@@ -623,13 +641,16 @@ const ReelsManagement = () => {
                   </div>
 
                   {/* Status tag */}
-                  <div className="absolute top-3 left-3">
+                  <div className="absolute top-3 left-3 flex gap-1.5">
                     <span className={`px-2.5 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider border ${
                       r.status === 'Active' 
                         ? 'bg-emerald-500/90 text-white border-transparent' 
                         : 'bg-yellow-500/90 text-white border-transparent'
                     }`}>
                       {r.status}
+                    </span>
+                    <span className="px-2.5 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider border bg-indigo-500/90 text-white border-transparent">
+                      {r.category}
                     </span>
                   </div>
 

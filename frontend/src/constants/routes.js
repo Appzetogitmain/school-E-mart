@@ -39,13 +39,14 @@ export const ROUTES = {
     WALLET: '/vendor/wallet',
   },
   
-  // Admin Panel
+  // Admin Panel — these are aliases of the Super Admin console below, which is
+  // where the pages actually live. /admin/* redirects there; point links at the
+  // real paths so they resolve in one hop instead of bouncing through a redirect.
   ADMIN: {
-    ROOT: '/admin',
-    USERS: '/admin/users',
-    CATEGORIES: '/admin/categories',
-    ORDERS: '/admin/orders',
-    REPORTS: '/admin/reports',
+    ROOT: '/superadmin',
+    USERS: '/superadmin/users',
+    CATEGORIES: '/superadmin/category',
+    ORDERS: '/superadmin/orders',
   },
   
   // Super Admin Console

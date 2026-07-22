@@ -304,8 +304,25 @@ const studentIdQuerySchema = Joi.object({
   studentId: objectId.optional(),
 });
 
+// School finance: bank details for payouts and a withdrawal request.
+const schoolBankSchema = Joi.object({
+  accountName: Joi.string().trim().max(120).allow('').optional(),
+  bankName: Joi.string().trim().max(120).allow('').optional(),
+  branch: Joi.string().trim().max(120).allow('').optional(),
+  accountNumber: Joi.string().trim().pattern(/^\d{8,20}$/).optional()
+    .messages({ 'string.pattern.base': 'Account number must be 8-20 digits' }),
+  ifsc: Joi.string().trim().uppercase().pattern(/^[A-Z]{4}0[A-Z0-9]{6}$/).allow('').optional()
+    .messages({ 'string.pattern.base': 'IFSC must be 4 letters, a 0, then 6 characters' }),
+}).min(1);
+
+const schoolPayoutSchema = Joi.object({
+  amountPaise: Joi.number().integer().min(100).required(),
+});
+
 module.exports = {
   paginationQuery: Joi.object(paginationQuery),
+  schoolBankSchema,
+  schoolPayoutSchema,
   schoolIdParam,
   classGradeParam,
   sectionParam,

@@ -3,6 +3,8 @@ const Order = require('../../../database/models/Order');
 const ledgerRepository = require('../repositories/ledger.repository');
 const payoutRepository = require('../repositories/payout.repository');
 const VendorLedger = require('../../../database/models/VendorLedger');
+const SchoolLedger = require('../../../database/models/SchoolLedger');
+const PlatformLedger = require('../../../database/models/PlatformLedger');
 const PayoutRequest = require('../../../database/models/PayoutRequest');
 const { BadRequestError, NotFoundError } = require('../../../common/errors');
 
@@ -19,6 +21,66 @@ const settlementService = {
     return Number(vendor?.commissionPercent) || 10;
   },
 
+  /**
+   * Splits a vendor's slice of an order three ways.
+   *
+   * Kit line items carry a commission snapshot (adminPercent/schoolPercent) taken
+   * at order time, and the school that authored the kit — so the platform keeps
+   * admin%, the school earns school%, and the vendor is paid the remainder.
+   *
+   * Ordinary product items have no snapshot, so they fall back to the vendor's
+   * flat commission rate with no school share — exactly the prior behaviour.
+   */
+  async computeSettlementSplit(vendorItems, vendorId, grossPaise) {
+    const hasSnapshot = vendorItems.some(
+      (item) => item.commission && item.commission.adminPercent != null
+    );
+
+    if (hasSnapshot) {
+      let adminPaise = 0;
+      let schoolPaise = 0;
+      const schoolMap = new Map();
+
+      for (const item of vendorItems) {
+        const adminPct = Number(item.commission?.adminPercent) || 0;
+        const schoolPct = Number(item.commission?.schoolPercent) || 0;
+        const line = item.lineTotalPaise;
+        const itemAdmin = Math.round((line * adminPct) / 100);
+        const itemSchool = item.schoolId ? Math.round((line * schoolPct) / 100) : 0;
+        adminPaise += itemAdmin;
+        schoolPaise += itemSchool;
+        if (itemSchool > 0) {
+          const key = String(item.schoolId);
+          schoolMap.set(key, (schoolMap.get(key) || 0) + itemSchool);
+        }
+      }
+
+      return {
+        adminPaise,
+        schoolPaise,
+        vendorEarningPaise: grossPaise - adminPaise - schoolPaise,
+        schoolBreakdown: [...schoolMap].map(([schoolId, amountPaise]) => ({ schoolId, amountPaise })),
+      };
+    }
+
+    const rate = await this.getVendorCommissionRate(vendorId);
+    const { commissionPaise, vendorEarningPaise } = this.calculateCommission(grossPaise, rate);
+    return { adminPaise: commissionPaise, schoolPaise: 0, vendorEarningPaise, schoolBreakdown: [] };
+  },
+
+  async creditSchoolLedger(schoolId, amountPaise, orderId, orderNumber) {
+    const latest = await SchoolLedger.findOne({ schoolId }).sort({ 'audit.createdAt': -1 }).lean();
+    const balancePaise = (latest?.balancePaise || 0) + amountPaise;
+    return SchoolLedger.create({
+      schoolId,
+      transactionType: 'kit_commission_credit',
+      amountPaise,
+      balancePaise,
+      reference: { kind: 'Order', id: orderId },
+      description: `Kit commission on order ${orderNumber}`,
+    });
+  },
+
   async recordOrderSettlement(vendorId, orderId, actorUserId = null) {
     const order = await Order.findById(orderId).lean();
     if (!order || order.orderStatus !== 'delivered') return null;
@@ -31,32 +93,49 @@ const settlementService = {
     });
     if (existing) return existing;
 
-    const commissionRate = await this.getVendorCommissionRate(vendorId);
     const vendorItems = order.items.filter((item) => String(item.vendorId) === String(vendorId));
     const grossPaise = vendorItems.reduce((sum, item) => sum + item.lineTotalPaise, 0);
-    const { commissionPaise, vendorEarningPaise } = this.calculateCommission(grossPaise, commissionRate);
+    const split = await this.computeSettlementSplit(vendorItems, vendorId, grossPaise);
 
     const latest = await ledgerRepository.findLatestBalance(vendorId);
     const currentBalance = latest?.balancePaise || 0;
-    const creditBalance = currentBalance + vendorEarningPaise;
+    const creditBalance = currentBalance + split.vendorEarningPaise;
 
     const credit = await VendorLedger.create({
       vendorId,
       transactionType: 'order_credit',
-      amountPaise: vendorEarningPaise,
+      amountPaise: split.vendorEarningPaise,
       balancePaise: creditBalance,
       reference: { kind: 'Order', id: orderId },
       description: `Order ${order.orderNumber} earnings`,
     });
 
-    if (commissionPaise > 0) {
+    const totalCommissionPaise = split.adminPaise + split.schoolPaise;
+    if (totalCommissionPaise > 0) {
       await VendorLedger.create({
         vendorId,
         transactionType: 'commission_deduction',
-        amountPaise: -commissionPaise,
+        amountPaise: -totalCommissionPaise,
         balancePaise: creditBalance,
         reference: { kind: 'Order', id: orderId },
-        description: `Commission ${commissionRate}% on order ${order.orderNumber}`,
+        description: `Commission on order ${order.orderNumber}`,
+      });
+    }
+
+    // Credit each school its share, and the platform its commission.
+    for (const entry of split.schoolBreakdown) {
+      if (entry.amountPaise > 0) {
+        await this.creditSchoolLedger(entry.schoolId, entry.amountPaise, orderId, order.orderNumber);
+      }
+    }
+
+    if (split.adminPaise > 0) {
+      await PlatformLedger.create({
+        transactionType: 'commission_credit',
+        amountPaise: split.adminPaise,
+        reference: { kind: 'Order', id: orderId },
+        source: { vendorId, schoolId: split.schoolBreakdown[0]?.schoolId || null },
+        description: `Platform commission on order ${order.orderNumber}`,
       });
     }
 

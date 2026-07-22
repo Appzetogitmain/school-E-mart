@@ -11,6 +11,7 @@ const timetableService = require('../services/timetable.service');
 const noticeService = require('../services/notice.service');
 const diaryService = require('../services/diary.service');
 const vendorDirectoryService = require('../services/vendorDirectory.service');
+const schoolFinanceService = require('../services/schoolFinance.service');
 const rfqService = require('../../rfq/services/rfq.service');
 const parentService = require('../services/parent.service');
 const attachmentService = require('../../admin/services/attachment.service');
@@ -375,6 +376,37 @@ const schoolController = {
   listVendors: asyncHandler(async (req, res) => {
     const { data, pagination } = await vendorDirectoryService.listApprovedVendors(req.query);
     return paginated(res, { vendors: data }, pagination, 'Vendors fetched successfully', req);
+  }),
+
+  // --- School finance (kit-commission earnings + withdrawals) ---
+  getFinanceSummary: asyncHandler(async (req, res) => {
+    const summary = await schoolFinanceService.getEarningsSummary(req.schoolId);
+    return success(res, { summary }, 'School earnings fetched', undefined, req);
+  }),
+
+  listFinanceTransactions: asyncHandler(async (req, res) => {
+    const { data, pagination } = await schoolFinanceService.listTransactions(req.schoolId, req.query);
+    return paginated(res, { transactions: data }, pagination, 'School transactions fetched', req);
+  }),
+
+  getSchoolBank: asyncHandler(async (req, res) => {
+    const bank = await schoolFinanceService.getBankDetails(req.schoolId);
+    return success(res, { bank }, 'Bank details fetched', undefined, req);
+  }),
+
+  updateSchoolBank: asyncHandler(async (req, res) => {
+    const bank = await schoolFinanceService.updateBankDetails(req.schoolId, req.body);
+    return success(res, { bank }, 'Bank details updated', undefined, req);
+  }),
+
+  listSchoolPayouts: asyncHandler(async (req, res) => {
+    const { data, pagination } = await schoolFinanceService.listPayoutRequests(req.schoolId, req.query);
+    return paginated(res, { payouts: data }, pagination, 'Payout requests fetched', req);
+  }),
+
+  createSchoolPayout: asyncHandler(async (req, res) => {
+    const payout = await schoolFinanceService.createPayoutRequest(req.schoolId, req.body.amountPaise);
+    return created(res, { payout }, 'Payout request submitted', req);
   }),
 
   createRfq: asyncHandler(async (req, res) => {

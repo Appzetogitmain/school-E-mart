@@ -14,16 +14,19 @@ import {
   addVendorDocument,
 } from '../../services/vendorApi';
 import { getErrorMessage } from '../../utils/apiHelpers';
+import { hasRealLocation } from '../../utils/vendorLocation';
 
 // Signup only collects name/store/email/phone/password, so the API fills the rest
 // with these placeholders. Treat them as "not filled in yet" rather than real data.
 const PLACEHOLDER_TEXT = 'Pending';
 const PLACEHOLDER_PIN = '000000';
-const DEFAULT_COORDS = [77.209, 28.6139];
 
 const isBlank = (v) => !v || String(v).trim() === '' || v === PLACEHOLDER_TEXT;
+
+// Shared with the admin locations map, so "needs a location" here and "not shown
+// on the map" there can never disagree about what counts as a real coordinate.
 const isDefaultCoords = (coords = []) =>
-  coords.length !== 2 || (coords[0] === DEFAULT_COORDS[0] && coords[1] === DEFAULT_COORDS[1]);
+  coords.length !== 2 || !hasRealLocation(coords[0], coords[1]);
 
 const KYC_TYPES = [
   { value: 'pan', label: 'PAN Card' },

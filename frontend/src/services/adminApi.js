@@ -94,6 +94,11 @@ export const getSchool = async (schoolId) => {
   return unwrapData(response)?.school;
 };
 
+export const createSchool = async (payload) => {
+  const response = await apiClient.post('/admin/schools', payload);
+  return unwrapData(response)?.school;
+};
+
 export const approveSchool = async (schoolId, payload = {}) => {
   const response = await apiClient.post(`/admin/schools/${schoolId}/approve`, payload);
   return unwrapData(response)?.school;
@@ -198,14 +203,27 @@ export const listCmsSections = async (params = {}) => {
   return extractPaginated(response, 'sections');
 };
 
+// The settings endpoints return the section under `section`, not `settings`.
 export const getMarketplaceSettings = async () => {
   const response = await apiClient.get('/admin/settings/marketplace');
-  return unwrapData(response)?.settings;
+  return unwrapData(response)?.section;
 };
 
 export const updateMarketplaceSettings = async (payload) => {
   const response = await apiClient.put('/admin/settings/marketplace', payload);
-  return unwrapData(response)?.settings;
+  return unwrapData(response)?.section;
+};
+
+// Billing & charges: platform fee, delivery charges, free-delivery threshold.
+// Persisted in BillingConfig and read by checkout at order time.
+export const getBillingConfig = async () => {
+  const response = await apiClient.get('/admin/settings/billing');
+  return unwrapData(response)?.section;
+};
+
+export const updateBillingConfig = async (payload) => {
+  const response = await apiClient.put('/admin/settings/billing', payload);
+  return unwrapData(response)?.section;
 };
 
 export const listPlatformCourses = async (params = {}) => {

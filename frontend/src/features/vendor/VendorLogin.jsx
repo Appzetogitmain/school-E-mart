@@ -1,6 +1,9 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Mail, Lock, ArrowRight, ShoppingCart, Info, User, Phone, Building, MapPin } from 'lucide-react';
+import {
+  Mail, Lock, ArrowRight, ShoppingCart, Info, User, Phone, Building, MapPin,
+  Navigation, LocateFixed, Loader2, AlertTriangle,
+} from 'lucide-react';
 import useAuthStore from '../../store/useAuthStore';
 import * as authApi from '../../services/authApi';
 import { getErrorMessage } from '../../utils/apiHelpers';
@@ -23,8 +26,45 @@ const VendorLogin = () => {
   const [phone, setPhone] = useState('');
   const [location, setLocation] = useState('');
 
+  // Live GPS coordinates captured from the browser at sign-up. The backend stores
+  // these as the vendor's map location so admin's "Manage Locations" can plot the
+  // real store rather than the Delhi placeholder every location-less vendor gets.
+  const [coords, setCoords] = useState(null);
+  // idle | locating | success | denied | unavailable
+  const [geoStatus, setGeoStatus] = useState('idle');
+
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+
+  const captureLocation = useCallback(() => {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) {
+      setGeoStatus('unavailable');
+      return;
+    }
+    setGeoStatus('locating');
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setCoords({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+        });
+        setGeoStatus('success');
+      },
+      (geoError) => {
+        setGeoStatus(geoError.code === geoError.PERMISSION_DENIED ? 'denied' : 'unavailable');
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  }, []);
+
+  // Ask for location as soon as the vendor opens sign-up, so it's ready by the
+  // time they finish typing. Only auto-prompt once (from idle); a denial must not
+  // re-trigger the browser prompt on every render.
+  useEffect(() => {
+    if (isSignUp && geoStatus === 'idle') {
+      captureLocation();
+    }
+  }, [isSignUp, geoStatus, captureLocation]);
 
   const handleAuthSubmit = async (e) => {
     e.preventDefault();
@@ -47,6 +87,10 @@ const VendorLogin = () => {
           // Same address shape the admin and profile screens use. The rest of the
           // address is completed later on the vendor profile page.
           address: { line1: location.trim() },
+          // Live GPS travels alongside the address as latitude/longitude; the
+          // backend converts to GeoJSON. Omitted when the vendor blocked access,
+          // so the profile keeps its placeholder until they set it manually.
+          ...(coords ? { latitude: coords.latitude, longitude: coords.longitude } : {}),
         });
 
         const authData = await authApi.vendorLogin(email.trim(), password.trim());
@@ -169,6 +213,41 @@ const VendorLogin = () => {
                     className="w-full pl-12 pr-4 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-[#5B3FD6]/10 focus:border-[#5B3FD6] transition-all font-medium placeholder-gray-400"
                   />
                 </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest ml-1">Live Store Location (GPS)</label>
+                <button
+                  type="button"
+                  onClick={captureLocation}
+                  disabled={geoStatus === 'locating'}
+                  className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl text-sm font-bold transition-all border text-left disabled:cursor-wait ${
+                    geoStatus === 'success'
+                      ? 'bg-emerald-50 border-emerald-100 text-emerald-700'
+                      : geoStatus === 'denied' || geoStatus === 'unavailable'
+                        ? 'bg-amber-50 border-amber-100 text-amber-700'
+                        : 'bg-gray-50 border-gray-100 text-gray-500'
+                  }`}
+                >
+                  {geoStatus === 'locating' && <Loader2 size={18} className="animate-spin shrink-0" />}
+                  {geoStatus === 'success' && <LocateFixed size={18} className="shrink-0" />}
+                  {(geoStatus === 'denied' || geoStatus === 'unavailable') && <AlertTriangle size={18} className="shrink-0" />}
+                  {(geoStatus === 'idle') && <Navigation size={18} className="shrink-0" />}
+                  <span className="flex-1 leading-tight">
+                    {geoStatus === 'locating' && 'Detecting your live location…'}
+                    {geoStatus === 'success' && (
+                      <>
+                        Live location captured
+                        <span className="block text-[10px] font-medium text-emerald-600/80 mt-0.5">
+                          {coords.latitude.toFixed(5)}, {coords.longitude.toFixed(5)} · tap to refresh
+                        </span>
+                      </>
+                    )}
+                    {geoStatus === 'denied' && 'Location access blocked — tap to enable & retry'}
+                    {geoStatus === 'unavailable' && 'Could not get location — tap to retry'}
+                    {geoStatus === 'idle' && 'Tap to capture your live store location'}
+                  </span>
+                </button>
               </div>
             </>
           )}
