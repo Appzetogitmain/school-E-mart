@@ -37,6 +37,17 @@ const parentOtpVerifySchema = Joi.object({
   .or('phone', 'mobile')
   .messages({ 'object.missing': 'Phone number is required' });
 
+// Guest checkout: same as parent verify plus an optional display name captured
+// at checkout for the newly-created unlinked customer.
+const customerOtpVerifySchema = Joi.object({
+  phone: schemas.indianMobile,
+  mobile: schemas.indianMobile,
+  otp: schemas.otp4.required(),
+  name: Joi.string().trim().max(80).optional().allow('', null),
+})
+  .or('phone', 'mobile')
+  .messages({ 'object.missing': 'Phone number is required' });
+
 const parentWebLoginSchema = Joi.object({
   mobile: schemas.indianMobile.required(),
   otp: schemas.otp4.required(),
@@ -133,6 +144,7 @@ module.exports = {
   superAdminLoginSchema: roleLoginSchema('admin'),
   parentOtpRequestSchema,
   parentOtpVerifySchema,
+  customerOtpVerifySchema,
   parentWebLoginSchema,
   parentWebRegisterOtpSchema,
   parentWebRegisterVerifySchema,

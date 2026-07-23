@@ -11,6 +11,18 @@ export const verifyParentOtp = async (phone, otp) => {
   return unwrapData(response);
 };
 
+// Guest checkout: OTP to a shopper with no account. Verify creates an unlinked
+// customer (no school, no child) and returns an authenticated session.
+export const requestCustomerOtp = async (phone) => {
+  const response = await apiClient.post('/auth/customer/otp/request', { phone });
+  return unwrapData(response);
+};
+
+export const verifyCustomerOtp = async (phone, otp, name) => {
+  const response = await apiClient.post('/auth/customer/otp/verify', { phone, otp, name });
+  return unwrapData(response);
+};
+
 export const requestParentRegisterOtp = async (phone) => {
   const response = await apiClient.post('/auth/parent/web/register/otp/request', { phone });
   return unwrapData(response);

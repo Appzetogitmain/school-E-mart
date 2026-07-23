@@ -85,7 +85,8 @@ const SuperAdminLayout = () => {
       label: 'Product',
       icon: Box,
       items: [
-        { label: 'Product List', path: '/superadmin/product-list' }
+        { label: 'Product List', path: '/superadmin/product-list' },
+        { label: 'Master Kit Products', path: '/superadmin/kit-products' }
       ]
     },
     {

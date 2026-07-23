@@ -82,6 +82,9 @@ const createProductSchema = Joi.object({
   headerId: objectId.required(),
   categoryId: objectId.required(),
   subcategoryId: objectId.optional(),
+  // Who the vendor is selling this to: 'users' (retail, shown in the User app)
+  // or 'schools' (bulk, shown in the School module).
+  audience: Joi.string().valid('users', 'schools').default('users'),
   gradeTags: Joi.array().items(Joi.string().trim()).optional(),
   pricePaise: Joi.number().integer().min(0).required(),
   originalPricePaise: Joi.number().integer().min(0).optional(),

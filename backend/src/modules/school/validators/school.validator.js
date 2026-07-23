@@ -28,6 +28,9 @@ const createSchoolSchema = Joi.object({
     pinCode: Joi.string().trim().optional().allow('', null),
   }).optional().allow(null),
   partnerStatus: Joi.string().valid('prospect', 'active', 'suspended').default('prospect'),
+  // NOTE: commission is deliberately NOT settable here. Only the master admin
+  // sets a school's commission (PATCH /admin/schools/:schoolId/commission), so a
+  // school admin can never change their own rates.
   academicYearCurrent: Joi.string().trim().optional().allow('', null),
   gradesOffered: Joi.array().items(Joi.string().trim()).optional(),
   sectionsConfig: Joi.array()
@@ -85,6 +88,7 @@ const updateTeacherSchema = Joi.object({
       })
     )
     .optional(),
+  showInPhonebook: Joi.boolean().optional(),
   user: Joi.object({
     name: Joi.string().trim().optional(),
     phone: schemas.indianMobile.optional(),

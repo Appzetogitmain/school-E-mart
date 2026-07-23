@@ -41,7 +41,15 @@ const issueAuthenticatedSession = async (user, requestMeta = {}, auditAction = '
     const Address = require('../../../database/models/Address');
 
     const parentProfile = await ParentProfile.findOne({ userId: user._id, 'softDelete.isDeleted': { $ne: true } }).lean();
-    const child = await ChildProfile.findOne({ parentUserId: user._id, 'softDelete.isDeleted': { $ne: true } }).lean();
+    // Respect the parent's last-selected (active) child so login, /auth/me and
+    // the profile switcher all agree on which student leads the UI.
+    const childrenList = await ChildProfile.find({ parentUserId: user._id, 'softDelete.isDeleted': { $ne: true } })
+      .sort({ 'audit.createdAt': 1 })
+      .lean();
+    const child =
+      childrenList.find(
+        (c) => parentProfile?.activeChildId && String(c._id) === String(parentProfile.activeChildId)
+      ) || childrenList[0] || null;
 
     let defaultAddress = null;
     if (parentProfile?.defaultAddressId) {
@@ -56,6 +64,7 @@ const issueAuthenticatedSession = async (user, requestMeta = {}, auditAction = '
         schoolId: child.schoolId ? child.schoolId.toString() : 'explore-schools',
         schoolName: school ? school.name : 'Explore Schools',
         schoolRefNo: child.schoolRefNo || (school ? school.schoolRefNo : null),
+        rollNo: child.rollNo || null,
         studentId: child.studentId ? child.studentId.toString() : null,
         photo: child.avatarUrl || null,
         avatarUrl: child.avatarUrl || null,

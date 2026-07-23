@@ -180,6 +180,12 @@ export const getMonthlyAttendanceSummary = async (schoolId, params) => {
   return unwrapData(response)?.summary;
 };
 
+export const getAttendanceHistory = async (schoolId, params = {}) => {
+  const response = await apiClient.get(schoolPath(schoolId, '/attendance/history'), { params });
+  const data = unwrapData(response);
+  return { data: data?.records || [], pagination: data?.pagination || null };
+};
+
 export const createNotice = async (schoolId, payload) => {
   const response = await apiClient.post(schoolPath(schoolId, '/notices'), payload);
   return unwrapData(response)?.notice;
@@ -241,12 +247,54 @@ export const listPhonebook = async (schoolId, params = {}) => {
   return unwrapData(response)?.entries || [];
 };
 
+// Parent-facing: relevant teachers (by child class/section) + emergency numbers
+export const listPhonebookContacts = async (schoolId, studentId) => {
+  const response = await apiClient.get(schoolPath(schoolId, '/phonebook/contacts'), {
+    params: studentId ? { studentId } : {},
+  });
+  const data = unwrapData(response) || {};
+  return {
+    teachers: data.teachers || [],
+    emergency: data.emergency || [],
+    general: data.general || [],
+  };
+};
+
 export const createPhonebookEntry = async (schoolId, payload) => {
   const response = await apiClient.post(schoolPath(schoolId, '/phonebook'), payload);
   return unwrapData(response)?.entry;
 };
 
+export const updatePhonebookEntry = async (schoolId, entryId, payload) => {
+  const response = await apiClient.patch(schoolPath(schoolId, `/phonebook/${entryId}`), payload);
+  return unwrapData(response)?.entry;
+};
+
+export const deletePhonebookEntry = async (schoolId, entryId) => {
+  await apiClient.delete(schoolPath(schoolId, `/phonebook/${entryId}`));
+};
+
 // Kits
+export const listKitCategories = async (schoolId) => {
+  const response = await apiClient.get(schoolPath(schoolId, '/kit-categories'));
+  return unwrapData(response) || { defaults: [], custom: [], all: [] };
+};
+
+export const createKitCategory = async (schoolId, name) => {
+  const response = await apiClient.post(schoolPath(schoolId, '/kit-categories'), { name });
+  return unwrapData(response)?.category;
+};
+
+export const deleteKitCategory = async (schoolId, categoryId) => {
+  const response = await apiClient.delete(schoolPath(schoolId, `/kit-categories/${categoryId}`));
+  return unwrapData(response);
+};
+
+export const listMasterKitProductsForSchool = async (params = {}) => {
+  const response = await apiClient.get('/admin/kit-products', { params });
+  return extractPaginated(response, 'products');
+};
+
 export const createKit = async (schoolId, payload) => {
   const response = await apiClient.post(schoolPath(schoolId, '/kits'), payload);
   return unwrapData(response)?.kit;

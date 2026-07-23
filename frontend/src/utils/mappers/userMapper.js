@@ -47,15 +47,29 @@ export const buildChildInfoFromUser = (user, existing = {}) => {
   const profile = normalized?.profile || {};
   const childProfile = user?.childProfile || normalized?.childProfile || {};
 
+  const role =
+    normalized?.role === 'school'
+      ? 'school'
+      : normalized?.role === 'teacher'
+        ? 'teacher'
+        : existing.role || 'parent';
+
+  // A linked parent shows the STUDENT name; an unlinked/guest customer (no
+  // child) shows their own name. Never let a LINKED parent fall back to the
+  // parent's own user.name (that was the "parent name shown instead of student"
+  // bug) — /auth/me now always includes childProfile for linked parents.
+  const hasChild = Boolean(childProfile && childProfile.name);
+  const displayName =
+    role === 'parent'
+      ? hasChild
+        ? childProfile.name
+        : normalized?.name || existing.name || 'Guest'
+      : childProfile.name || normalized?.name || existing.name || 'Guest';
+
   return {
     ...existing,
-    name: childProfile.name || normalized?.name || existing.name || 'Guest',
-    role:
-      normalized?.role === 'school'
-        ? 'school'
-        : normalized?.role === 'teacher'
-          ? 'teacher'
-          : existing.role || 'parent',
+    name: displayName,
+    role,
     phone: normalized?.phone || existing.phone || '',
     email: normalized?.email || existing.email || '',
     refId: normalized?.refId || existing.refId,
@@ -63,6 +77,7 @@ export const buildChildInfoFromUser = (user, existing = {}) => {
     grade: childProfile.grade || existing.grade || profile.grade || 'Select Grade',
     schoolId: childProfile.schoolId || normalized?.tenantSchoolId || profile.schoolId || existing.schoolId,
     schoolRefNo: childProfile.schoolRefNo || existing.schoolRefNo || null,
+    rollNo: childProfile.rollNo || existing.rollNo || null,
     studentId: childProfile.studentId || existing.studentId || null,
     altPhone: profile.altPhone || existing.altPhone || '',
     address: profile.address || existing.address || '',

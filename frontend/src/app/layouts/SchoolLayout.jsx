@@ -11,14 +11,15 @@ const SchoolLayout = () => {
 
   return (
     <div className="max-w-md mx-auto h-[100dvh] bg-gray-50 shadow-2xl relative overflow-hidden flex flex-col font-outfit">
-      {/* Dynamic Content Area */}
-      <div className={`flex-1 overflow-y-auto ${(!isAuthPage && !isProductDetailPage) ? 'pb-20' : ''}`}>
+      {/* Dynamic Content Area — bounded above the in-flow nav below, so pages
+          never need to reserve space and content can't hide behind the nav. */}
+      <div className="flex-1 overflow-y-auto">
         <Outlet />
       </div>
 
-      {/* Persistent Institutional Bottom Navigation */}
+      {/* Persistent Institutional Bottom Navigation - in-flow flex child (not fixed) */}
       {!isAuthPage && !isProductDetailPage && (
-        <nav className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white/80 backdrop-blur-xl border-t border-gray-100 px-6 py-4 z-50">
+        <nav className="shrink-0 bg-white/80 backdrop-blur-xl border-t border-gray-100 px-6 py-4 pb-[calc(1rem+env(safe-area-inset-bottom))] z-40">
           <div className="flex items-center justify-between">
             <NavItem to="/school/admin" icon={<Home size={22} />} label="Home" />
             <NavItem to="/school/grade" icon={<GraduationCap size={26} />} label="Grade" />

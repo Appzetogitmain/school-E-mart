@@ -5,8 +5,9 @@ import {
 } from 'lucide-react';
 import {
   getBillingConfig, updateBillingConfig,
+  getMarketplaceSettings, updateMarketplaceSettings,
+  listSchools, updateSchoolCommission,
 } from '../../../services/adminApi';
-import { getCategoryTree, updateCategory } from '../../../services/catalogApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 
 // BillingConfig stores money in paise; the UI edits rupees.
@@ -23,9 +24,15 @@ const BillingChargesManagement = () => {
   const [freeDeliveryThreshold, setFreeDeliveryThreshold] = useState(0);
   const [deliveryCharge, setDeliveryCharge] = useState(0);
 
-  // --- per-category commission ---
-  const [categories, setCategories] = useState([]); // flattened: { id, name, header, adminPercent, schoolPercent }
-  const [savingCommissions, setSavingCommissions] = useState(false);
+  // --- platform commission rates (marketplace settings) ---
+  const [marketplace, setMarketplace] = useState({}); // full section, preserved on save
+  const [platformRetailPercent, setPlatformRetailPercent] = useState(0);
+  const [platformKitPercent, setPlatformKitPercent] = useState(0);
+  const [savingRates, setSavingRates] = useState(false);
+
+  // --- per-school commission ---
+  const [schools, setSchools] = useState([]); // { id, name, kitPercent, retailPercent }
+  const [savingSchoolId, setSavingSchoolId] = useState(null);
 
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
@@ -43,26 +50,29 @@ const BillingChargesManagement = () => {
     setLoading(true);
     setLoadError('');
     try {
-      const [config, tree] = await Promise.all([getBillingConfig(), getCategoryTree()]);
+      const [config, mk, schoolsRes] = await Promise.all([
+        getBillingConfig(),
+        getMarketplaceSettings(),
+        listSchools({ limit: 100, status: 'all' }).catch(() => ({ data: [] })),
+      ]);
       if (config) {
         setPlatformFee(paiseToRupees(config.platformFeePaise));
         setFreeDeliveryThreshold(paiseToRupees(config.freeDeliveryThresholdPaise));
         setDeliveryCharge(paiseToRupees(config.fixedDeliveryChargePaise));
       }
-      // Flatten header -> categories into an editable list.
-      const flat = [];
-      (tree || []).forEach((header) => {
-        (header.categories || []).forEach((category) => {
-          flat.push({
-            id: category._id,
-            name: category.name,
-            header: header.name,
-            adminPercent: toNum(category.commission?.adminPercent),
-            schoolPercent: toNum(category.commission?.schoolPercent),
-          });
-        });
-      });
-      setCategories(flat);
+      if (mk) {
+        setMarketplace(mk);
+        setPlatformRetailPercent(toNum(mk.platformRetailPercent ?? mk.commissionPercent ?? 10));
+        setPlatformKitPercent(toNum(mk.platformKitPercent ?? 5));
+      }
+      setSchools(
+        (schoolsRes.data || []).map((s) => ({
+          id: s._id?.toString?.() || s.id,
+          name: s.name,
+          kitPercent: toNum(s.commission?.kitPercent),
+          retailPercent: toNum(s.commission?.retailPercent),
+        }))
+      );
     } catch (err) {
       setLoadError(getErrorMessage(err, 'Unable to load billing settings'));
     } finally {
@@ -95,33 +105,47 @@ const BillingChargesManagement = () => {
     }
   };
 
-  const updateCategoryField = (id, field, value) => {
-    setCategories((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, [field]: value } : c))
-    );
-  };
-
-  const handleSaveCommissions = async () => {
-    setSavingCommissions(true);
+  const handleSaveRates = async () => {
+    setSavingRates(true);
     setLoadError('');
     try {
-      // Persist each category's split. Kept sequential so a single bad row
-      // surfaces its own error rather than a vague batch failure.
-      for (const category of categories) {
-        await updateCategory(category.id, {
-          commission: {
-            adminPercent: toNum(category.adminPercent),
-            schoolPercent: toNum(category.schoolPercent),
-          },
-        });
-      }
-      flash('Category commissions saved.');
+      // The settings section is replaced wholesale on save, so send the full
+      // marketplace object with only the two rates overridden.
+      await updateMarketplaceSettings({
+        ...marketplace,
+        platformRetailPercent: toNum(platformRetailPercent),
+        platformKitPercent: toNum(platformKitPercent),
+      });
+      flash('Platform commission rates saved.');
     } catch (err) {
-      setLoadError(getErrorMessage(err, 'Unable to save category commissions'));
+      setLoadError(getErrorMessage(err, 'Unable to save commission rates'));
     } finally {
-      setSavingCommissions(false);
+      setSavingRates(false);
     }
   };
+
+  const updateSchoolField = (id, field, value) => {
+    setSchools((prev) => prev.map((s) => (s.id === id ? { ...s, [field]: value } : s)));
+  };
+
+  const handleSaveSchoolCommission = async (school) => {
+    setSavingSchoolId(school.id);
+    setLoadError('');
+    try {
+      await updateSchoolCommission(school.id, {
+        kitPercent: toNum(school.kitPercent),
+        retailPercent: toNum(school.retailPercent),
+      });
+      flash(`Commission saved for ${school.name}.`);
+    } catch (err) {
+      setLoadError(getErrorMessage(err, 'Unable to save school commission'));
+    } finally {
+      setSavingSchoolId(null);
+    }
+  };
+
+  const [selectedSchoolId, setSelectedSchoolId] = useState('');
+  const selectedSchoolRow = schools.find((s) => s.id === selectedSchoolId) || null;
 
   const inputRing = 'focus-within:ring-2 focus-within:ring-indigo-500/25';
 
@@ -148,7 +172,7 @@ const BillingChargesManagement = () => {
               LIVE PRICING
             </span>
           </div>
-          <p className="text-xs text-gray-400 font-bold mt-1.5">Control delivery fees, platform charges, and the per-category profit split.</p>
+          <p className="text-xs text-gray-400 font-bold mt-1.5">Control delivery fees, platform charges, and the platform commission rates.</p>
         </div>
       </div>
 
@@ -227,88 +251,128 @@ const BillingChargesManagement = () => {
 
           </form>
 
-          {/* ============ CATEGORY COMMISSION ============ */}
+          {/* ============ PLATFORM COMMISSION RATES ============ */}
           <div className="bg-white border border-gray-200 rounded-3xl p-6 shadow-xs space-y-5 text-left">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-100 pb-4 select-none">
               <div>
                 <div className="flex items-center gap-2">
                   <Percent size={16} className="text-indigo-600 stroke-[2.5]" />
-                  <h3 className="text-sm font-black text-[#0B1528] uppercase tracking-wider">Category Commission & Profit Split</h3>
+                  <h3 className="text-sm font-black text-[#0B1528] uppercase tracking-wider">Platform Commission Rates</h3>
                 </div>
                 <p className="text-[10px] text-gray-400 font-bold mt-1">
-                  Per category: the platform keeps Admin %, the school earns School %, and the vendor is paid the rest.
+                  The platform's cut. Schools set their own % on top (kits &amp; linked-user retail); the vendor is paid the rest.
                 </p>
               </div>
-              <button type="button" onClick={handleSaveCommissions} disabled={savingCommissions}
+              <button type="button" onClick={handleSaveRates} disabled={savingRates}
                 className="flex items-center justify-center gap-2 bg-[#0B1528] hover:bg-[#15253F] text-white text-xs font-black uppercase tracking-wider py-2.5 px-6 rounded-xl transition-all shadow-xs disabled:opacity-70 self-start sm:self-auto">
-                {savingCommissions ? (
+                {savingRates ? (
                   <><RefreshCw size={14} className="animate-spin" /> Saving...</>
                 ) : (
-                  <><Save size={14} className="stroke-[2.5]" /> Save Commissions</>
+                  <><Save size={14} className="stroke-[2.5]" /> Save Rates</>
                 )}
               </button>
             </div>
 
-            {categories.length === 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-1.5">
+                <label className="flex items-center gap-1.5 text-gray-500 uppercase tracking-wide text-[9px] font-black">
+                  <Store size={11} /> Platform Retail Commission %
+                </label>
+                <div className={`relative rounded-xl overflow-hidden border border-gray-200 ${inputRing} transition-all`}>
+                  <input type="number" min="0" max="100" step="0.5" value={platformRetailPercent}
+                    onChange={(e) => setPlatformRetailPercent(Number(e.target.value))}
+                    className="w-full bg-white pl-4 pr-8 py-2.5 focus:outline-none font-bold text-xs" />
+                  <span className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 font-bold select-none text-xs">%</span>
+                </div>
+                <span className="block text-[8px] text-gray-400 font-medium">Taken on every retail product sale (and bulk school purchases).</span>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="flex items-center gap-1.5 text-gray-500 uppercase tracking-wide text-[9px] font-black">
+                  <SchoolIcon size={11} /> Platform Kit Commission %
+                </label>
+                <div className={`relative rounded-xl overflow-hidden border border-gray-200 ${inputRing} transition-all`}>
+                  <input type="number" min="0" max="100" step="0.5" value={platformKitPercent}
+                    onChange={(e) => setPlatformKitPercent(Number(e.target.value))}
+                    className="w-full bg-white pl-4 pr-8 py-2.5 focus:outline-none font-bold text-xs" />
+                  <span className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 font-bold select-none text-xs">%</span>
+                </div>
+                <span className="block text-[8px] text-gray-400 font-medium">Taken on every kit sale. The kit's school earns its own % on top.</span>
+              </div>
+            </div>
+          </div>
+
+          {/* ============ PER-SCHOOL COMMISSION ============ */}
+          <div className="bg-white border border-gray-200 rounded-3xl p-6 shadow-xs space-y-5 text-left">
+            <div>
+              <div className="flex items-center gap-2">
+                <SchoolIcon size={16} className="text-indigo-600 stroke-[2.5]" />
+                <h3 className="text-sm font-black text-[#0B1528] uppercase tracking-wider">Per-School Commission</h3>
+              </div>
+              <p className="text-[10px] text-gray-400 font-bold mt-1">
+                Select a school and set what it earns — Kit % on its kits, Retail % when its linked users buy retail. Only you set this.
+              </p>
+            </div>
+
+            {schools.length === 0 ? (
               <div className="py-10 text-center text-xs font-black text-gray-400">
-                No categories yet. Create categories under Category Management first.
+                No schools yet. Add schools under School Management first.
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full border-collapse text-left min-w-[560px]">
-                  <thead>
-                    <tr className="border-b border-gray-100 text-[9px] font-black text-gray-400 uppercase tracking-widest bg-gray-50/50">
-                      <th className="px-4 py-3">Category</th>
-                      <th className="px-4 py-3 w-32">
-                        <span className="flex items-center gap-1"><IndianRupee size={11} /> Admin %</span>
-                      </th>
-                      <th className="px-4 py-3 w-32">
-                        <span className="flex items-center gap-1"><SchoolIcon size={11} /> School %</span>
-                      </th>
-                      <th className="px-4 py-3 w-32">
-                        <span className="flex items-center gap-1"><Store size={11} /> Vendor gets</span>
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-50 text-xs">
-                    {categories.map((category) => {
-                      const admin = toNum(category.adminPercent);
-                      const school = toNum(category.schoolPercent);
-                      const vendor = 100 - admin - school;
-                      const invalid = vendor < 0;
-                      return (
-                        <tr key={category.id} className="hover:bg-gray-50/40">
-                          <td className="px-4 py-3">
-                            <span className="font-black text-gray-900 block">{category.name}</span>
-                            <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wide">{category.header}</span>
-                          </td>
-                          <td className="px-4 py-3">
-                            <div className={`relative rounded-lg overflow-hidden border border-gray-200 ${inputRing}`}>
-                              <input type="number" min="0" max="100" step="0.5" value={category.adminPercent}
-                                onChange={(e) => updateCategoryField(category.id, 'adminPercent', Number(e.target.value))}
-                                className="w-full bg-white pl-3 pr-7 py-2 focus:outline-none font-bold text-xs" />
-                              <span className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-gray-400 font-bold select-none text-[10px]">%</span>
-                            </div>
-                          </td>
-                          <td className="px-4 py-3">
-                            <div className={`relative rounded-lg overflow-hidden border border-gray-200 ${inputRing}`}>
-                              <input type="number" min="0" max="100" step="0.5" value={category.schoolPercent}
-                                onChange={(e) => updateCategoryField(category.id, 'schoolPercent', Number(e.target.value))}
-                                className="w-full bg-white pl-3 pr-7 py-2 focus:outline-none font-bold text-xs" />
-                              <span className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-gray-400 font-bold select-none text-[10px]">%</span>
-                            </div>
-                          </td>
-                          <td className="px-4 py-3">
-                            <span className={`text-xs font-black ${invalid ? 'text-red-600' : 'text-emerald-600'}`}>
-                              {invalid ? 'Over 100%' : `${vendor}%`}
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+              <>
+                {/* School selector */}
+                <div className="space-y-1.5">
+                  <label className="block text-gray-500 uppercase tracking-wide text-[9px] font-black">Select School</label>
+                  <div className={`relative rounded-xl overflow-hidden border border-gray-200 ${inputRing}`}>
+                    <select
+                      value={selectedSchoolId}
+                      onChange={(e) => setSelectedSchoolId(e.target.value)}
+                      className="w-full bg-white pl-4 pr-8 py-2.5 focus:outline-none font-bold text-xs appearance-none cursor-pointer"
+                    >
+                      <option value="">Choose a school…</option>
+                      {schools.map((s) => (
+                        <option key={s.id} value={s.id}>{s.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Selected school's commission editor */}
+                {selectedSchoolRow && (
+                  <div className="border border-indigo-100 bg-indigo-50/40 rounded-2xl p-5 space-y-4">
+                    <div className="flex items-center gap-2">
+                      <SchoolIcon size={14} className="text-indigo-600" />
+                      <span className="text-xs font-black text-[#0B1528]">{selectedSchoolRow.name}</span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <label className="flex items-center gap-1.5 text-gray-500 uppercase tracking-wide text-[9px] font-black"><Store size={11} /> Kit Commission %</label>
+                        <div className={`relative rounded-xl overflow-hidden border border-gray-200 bg-white ${inputRing}`}>
+                          <input type="number" min="0" max="100" step="0.5" value={selectedSchoolRow.kitPercent}
+                            onChange={(e) => updateSchoolField(selectedSchoolRow.id, 'kitPercent', Number(e.target.value))}
+                            className="w-full pl-4 pr-8 py-2.5 focus:outline-none font-bold text-xs" />
+                          <span className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 font-bold select-none text-xs">%</span>
+                        </div>
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="flex items-center gap-1.5 text-gray-500 uppercase tracking-wide text-[9px] font-black"><Percent size={11} /> Retail Commission %</label>
+                        <div className={`relative rounded-xl overflow-hidden border border-gray-200 bg-white ${inputRing}`}>
+                          <input type="number" min="0" max="100" step="0.5" value={selectedSchoolRow.retailPercent}
+                            onChange={(e) => updateSchoolField(selectedSchoolRow.id, 'retailPercent', Number(e.target.value))}
+                            className="w-full pl-4 pr-8 py-2.5 focus:outline-none font-bold text-xs" />
+                          <span className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 font-bold select-none text-xs">%</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex justify-end">
+                      <button type="button" onClick={() => handleSaveSchoolCommission(selectedSchoolRow)} disabled={savingSchoolId === selectedSchoolRow.id}
+                        className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-[#0B1528] hover:bg-[#15253F] text-white text-xs font-black uppercase tracking-wider disabled:opacity-60">
+                        {savingSchoolId === selectedSchoolRow.id ? (<><RefreshCw size={14} className="animate-spin" /> Saving…</>) : (<><Save size={14} /> Save Commission</>)}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </>

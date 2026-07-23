@@ -5,8 +5,17 @@ const softDeletePlugin = require('../plugins/softDelete.plugin');
 const phonebookEntrySchema = new mongoose.Schema({
   schoolId: { type: mongoose.Schema.Types.ObjectId, ref: 'School', required: true },
   name: { type: String, required: true },
-  designation: { type: String, required: true },
+  // Optional label/role (e.g. "Ambulance", "Front Office"). Emergency numbers
+  // only need a name + phone, so this is not required.
+  designation: { type: String },
   department: { type: String },
+  // Groups the entry in the phonebook UI. 'emergency' surfaces in its own
+  // section on the parent app; other values are shown as general contacts.
+  category: {
+    type: String,
+    enum: ['general', 'emergency', 'transport', 'medical', 'other'],
+    default: 'general'
+  },
   email: { type: String },
   phone: { type: String, required: true },
   availabilityHours: { type: String },

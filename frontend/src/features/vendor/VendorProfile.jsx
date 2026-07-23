@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   ShieldCheck, Building, MapPin, Landmark, FileText, Check,
-  AlertTriangle, Loader2, Upload, Trash2, Percent,
+  AlertTriangle, Loader2, Upload, Trash2,
 } from 'lucide-react';
 import useAuthStore from '../../store/useAuthStore';
 import {
@@ -392,14 +392,6 @@ const VendorProfile = () => {
               <div>
                 <label className={labelCls}>Delivery Radius (km)</label>
                 <input type="number" step="0.1" min="0" max="500" className={inputCls} value={business.serviceRadiusKm} onChange={(e) => setBusiness({ ...business, serviceRadiusKm: e.target.value })} />
-              </div>
-              <div>
-                <label className={labelCls}>Commission</label>
-                <div className="relative">
-                  <input type="text" disabled value={Number(profile.commissionPercent?.$numberDecimal ?? profile.commissionPercent ?? 0).toFixed(2)} className={`${inputCls} bg-gray-50 text-gray-400 cursor-not-allowed`} />
-                  <Percent size={12} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-300" />
-                </div>
-                <span className="text-[10px] text-gray-400 font-semibold mt-1 block">Set by the marketplace admin.</span>
               </div>
             </div>
             <div className="flex justify-end pt-2 border-t border-gray-100"><SaveButton section="business" savingSection={savingSection} savedSection={savedSection} /></div>

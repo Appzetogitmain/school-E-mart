@@ -12,6 +12,14 @@ const productSchema = new mongoose.Schema({
   headerId: { type: mongoose.Schema.Types.ObjectId, ref: 'HeaderCategory', required: true },
   categoryId: { type: mongoose.Schema.Types.ObjectId, ref: 'Category', required: true },
   subcategoryId: { type: mongoose.Schema.Types.ObjectId, ref: 'Subcategory' },
+  // Who this product is sold to. 'users' = retail (shown in the User app),
+  // 'schools' = bulk (shown in the School module). A vendor may list both kinds.
+  audience: {
+    type: String,
+    enum: ['users', 'schools'],
+    required: true,
+    default: 'users'
+  },
   gradeTags: [{ type: String }],
   pricePaise: { type: Number, required: true, min: 0 },
   originalPricePaise: { type: Number, min: 0 },
@@ -54,6 +62,8 @@ productSchema.index({ sku: 1 }, { unique: true });
 productSchema.index({ vendorId: 1, 'audit.createdAt': -1 });
 productSchema.index({ headerId: 1, categoryId: 1, subcategoryId: 1, approvalStatus: 1, publishStatus: 1 });
 productSchema.index({ gradeTags: 1, publishStatus: 1, salesCount: -1 });
+// Storefront listings filter by audience (User app vs School module)
+productSchema.index({ audience: 1, publishStatus: 1, approvalStatus: 1 });
 productSchema.index({ approvalStatus: 1, 'audit.createdAt': -1 });
 
 // Partial index for low stock

@@ -13,13 +13,28 @@ const buildParentDiaryFilter = async (schoolId, userId, studentId) => {
   }
 
   const student = resolved.student;
+  const rawGrade = String(student.classGrade || '').trim();
+  const normalizedClassGrade = rawGrade.replace(/^(class|grade|std)\s+/i, '').trim();
+
+  const gradeVariants = [
+    rawGrade,
+    normalizedClassGrade,
+    `Class ${normalizedClassGrade}`,
+    `Grade ${normalizedClassGrade}`,
+    `Std ${normalizedClassGrade}`
+  ].filter(Boolean);
+
+  const sectionFilter = student.section
+    ? { $or: [{ section: { $exists: false } }, { section: null }, { section: '' }, { section: new RegExp(`^${student.section}$`, 'i') }] }
+    : {};
+
   return {
     schoolId,
     $or: [
       { studentId: student._id },
       {
-        classGrade: student.classGrade,
-        section: student.section,
+        classGrade: { $in: gradeVariants },
+        ...sectionFilter,
         $or: [{ studentId: null }, { studentId: { $exists: false } }],
       },
     ],
@@ -57,8 +72,14 @@ const diaryService = {
     if (req.auth.role === ROLES.TEACHER) {
       filter.teacherId = req.auth.userId;
     }
-    if (query.classGrade) filter.classGrade = query.classGrade;
-    if (query.section) filter.section = query.section;
+    if (query.classGrade) {
+      const raw = String(query.classGrade).trim();
+      const norm = raw.replace(/^(class|grade|std)\s+/i, '').trim();
+      filter.classGrade = { $in: [raw, norm, `Class ${norm}`, `Grade ${norm}`] };
+    }
+    if (query.section) {
+      filter.section = new RegExp(`^${query.section.trim()}$`, 'i');
+    }
     if (query.studentId) filter.studentId = query.studentId;
     return diaryRepository.paginateDiary(filter, query);
   },

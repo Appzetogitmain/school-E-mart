@@ -12,6 +12,11 @@ const usersController = {
     const profile = await usersService.updateProfile(req.auth.userId, req.body);
     return success(res, profile, 'Profile updated successfully', undefined, req);
   }),
+
+  setActiveChild: asyncHandler(async (req, res) => {
+    const profile = await usersService.setActiveChild(req.auth.userId, req.body.childProfileId);
+    return success(res, profile, 'Active child updated', undefined, req);
+  }),
 };
 
 module.exports = usersController;

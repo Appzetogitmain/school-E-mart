@@ -16,7 +16,13 @@ const platformSettingsSchema = new mongoose.Schema(
       language: { type: String, default: 'en-IN' },
     },
     marketplace: {
+      // Legacy single rate — kept for backward compatibility. New flows use the
+      // two explicit platform rates below.
       commissionPercent: { type: Number, default: 10 },
+      // Platform's cut on retail product sales (and bulk school purchases).
+      platformRetailPercent: { type: Number, default: 10 },
+      // Platform's cut on kit sales (the school earns its own kit % on top).
+      platformKitPercent: { type: Number, default: 5 },
       vendorAutoApproval: { type: Boolean, default: false },
       productApprovalRequired: { type: Boolean, default: true },
     },

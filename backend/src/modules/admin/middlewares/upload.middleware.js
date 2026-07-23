@@ -47,19 +47,19 @@ const documentFilter = (_req, file, cb) => {
 
 const uploadImage = multer({
   storage,
-  limits: { fileSize: 5 * 1024 * 1024 },
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB
   fileFilter: imageFilter,
 }).single('file');
 
 const uploadMedia = multer({
   storage,
-  limits: { fileSize: 50 * 1024 * 1024 },
+  limits: { fileSize: 500 * 1024 * 1024 }, // 500MB for video reels & media
   fileFilter: mediaFilter,
 }).single('file');
 
 const uploadDocument = multer({
   storage,
-  limits: { fileSize: 5 * 1024 * 1024 },
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB
   fileFilter: documentFilter,
 }).single('file');
 

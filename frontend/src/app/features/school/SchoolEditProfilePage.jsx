@@ -173,24 +173,6 @@ const SchoolEditProfilePage = () => {
     }
   };
 
-  const InputField = ({ label, icon: Icon, field, type = "text", placeholder }) => (
-    <div className="space-y-1.5">
-      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">{label}</label>
-      <div className={`relative flex items-center bg-white rounded-2xl border-2 transition-all duration-300 ${errors[field] ? 'border-red-100 bg-red-50/30' : 'border-gray-50 focus-within:border-primary/20'}`}>
-        <div className="pl-4 text-gray-400">
-          <Icon size={18} />
-        </div>
-        <input
-          type={type}
-          value={formData[field]}
-          onChange={(e) => handleInputChange(field, e.target.value)}
-          placeholder={placeholder}
-          className="w-full py-4 px-3 bg-transparent text-sm font-bold text-deep-purple outline-none"
-        />
-      </div>
-    </div>
-  );
-
   return (
     <div className="min-h-screen bg-[#F8F7FF] pb-32 font-outfit">
       {showSuccess && (
@@ -243,22 +225,22 @@ const SchoolEditProfilePage = () => {
 
         <div className="space-y-5">
           <SectionTitle title="School Admin Details" />
-          <InputField label="Contact Person" icon={User} field="fullName" placeholder="Enter name" />
-          <InputField label="School Email" icon={Mail} field="email" type="email" placeholder="admin@school.com" />
-          <InputField label="Direct Phone" icon={Phone} field="phone" placeholder="+91 XXXXX XXXXX" />
-          <InputField label="Alternate Phone" icon={Phone} field="altPhone" placeholder="+91 XXXXX XXXXX" />
+          <InputField label="Contact Person" icon={User} value={formData.fullName} onChange={(v) => handleInputChange('fullName', v)} error={errors.fullName} placeholder="Enter name" />
+          <InputField label="School Email" icon={Mail} type="email" value={formData.email} onChange={(v) => handleInputChange('email', v)} error={errors.email} placeholder="admin@school.com" />
+          <InputField label="Direct Phone" icon={Phone} value={formData.phone} onChange={(v) => handleInputChange('phone', v)} error={errors.phone} placeholder="+91 XXXXX XXXXX" />
+          <InputField label="Alternate Phone" icon={Phone} value={formData.altPhone} onChange={(v) => handleInputChange('altPhone', v)} placeholder="+91 XXXXX XXXXX" />
         </div>
 
         <div className="space-y-5 pb-10">
           <SectionTitle title="School Address" />
-          <InputField label="School Campus Address" icon={Home} field="address" placeholder="Building, Block, Area" />
+          <InputField label="School Campus Address" icon={Home} value={formData.address} onChange={(v) => handleInputChange('address', v)} placeholder="Building, Block, Area" />
           <div className="grid grid-cols-2 gap-4">
-            <InputField label="Pin Code" icon={MapPin} field="pinCode" placeholder="XXXXXX" />
-            <InputField label="City" icon={Globe} field="city" placeholder="City" />
+            <InputField label="Pin Code" icon={MapPin} value={formData.pinCode} onChange={(v) => handleInputChange('pinCode', v)} placeholder="XXXXXX" />
+            <InputField label="City" icon={Globe} value={formData.city} onChange={(v) => handleInputChange('city', v)} placeholder="City" />
           </div>
           <div className="grid grid-cols-2 gap-4">
-            <InputField label="State" icon={Globe} field="state" placeholder="State" />
-            <InputField label="Country" icon={Globe} field="country" placeholder="Country" />
+            <InputField label="State" icon={Globe} value={formData.state} onChange={(v) => handleInputChange('state', v)} placeholder="State" />
+            <InputField label="Country" icon={Globe} value={formData.country} onChange={(v) => handleInputChange('country', v)} placeholder="Country" />
           </div>
         </div>
         </>
@@ -273,6 +255,27 @@ const SchoolEditProfilePage = () => {
     </div>
   );
 };
+
+// Module scope (not inside the component) so its identity stays stable across
+// renders — otherwise each <input> remounts on every keystroke and loses focus.
+const InputField = ({ label, icon: Icon, value, onChange, error, type = 'text', placeholder }) => (
+  <div className="space-y-1.5">
+    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">{label}</label>
+    <div className={`relative flex items-center bg-white rounded-2xl border-2 transition-all duration-300 ${error ? 'border-red-100 bg-red-50/30' : 'border-gray-50 focus-within:border-primary/20'}`}>
+      <div className={`pl-4 text-gray-400 ${error ? 'text-red-400' : ''}`}>
+        <Icon size={18} />
+      </div>
+      <input
+        type={type}
+        value={value}
+        onChange={(e) => onChange?.(e.target.value)}
+        placeholder={placeholder}
+        className="w-full py-4 px-3 bg-transparent text-sm font-bold text-deep-purple outline-none"
+      />
+    </div>
+    {error && <p className="text-[9px] font-bold text-red-500 ml-1">{error}</p>}
+  </div>
+);
 
 const SectionTitle = ({ title }) => (
   <div className="flex items-center gap-2">

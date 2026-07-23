@@ -45,7 +45,7 @@ const SchoolNotificationsPage = () => {
               message: notice.body || notice.content || notice.summary || '',
               type: 'school',
               isRead: Boolean(notice.isRead || notice.readAt),
-              createdAt: notice.publishedAt || notice.createdAt,
+              createdAt: notice.publishDate || notice.audit?.createdAt || notice.publishedAt || notice.createdAt,
               actionLink: '/school/admin',
             }))
           );

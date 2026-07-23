@@ -1,22 +1,67 @@
 import React from 'react';
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { 
-  Home, 
-  BookOpen, 
-  CalendarCheck, 
-  User, 
+import {
+  Home,
+  BookOpen,
+  CalendarCheck,
+  User,
   GraduationCap,
   ShoppingCart,
-  ChevronRight
+  ChevronRight,
+  Store,
+  Package
 } from 'lucide-react';
 import { useCart } from '../context/CartContext';
+import useAuthStore from '../../store/useAuthStore';
+import { getMyProfile } from '../../services/parentApi';
+import { syncChildInfoToStorage } from '../../utils/mappers/userMapper';
+import { isSchoolLinked, readChildInfoRaw } from '../../utils/schoolLinked';
 
 const AppLayout = () => {
   const { totalQuantity } = useCart();
   const location = useLocation();
   const navigate = useNavigate();
   const scrollContainerRef = React.useRef(null);
-  
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+
+  // On app load, rebuild childInfo from the server so the header/greeting show
+  // the current student (not a stale parent name a prior /auth/me may have
+  // written). /users/me always includes the active childProfile.
+  React.useEffect(() => {
+    if (!isAuthenticated) return undefined;
+    let cancelled = false;
+    getMyProfile()
+      .then((data) => {
+        if (cancelled || !data) return;
+        // childProfile is null for unlinked customers — sync anyway so their
+        // name/address flow through and school features stay hidden.
+        syncChildInfoToStorage({
+          ...data.user,
+          role: 'parent',
+          childProfile: data.childProfile,
+          profile: data.profile,
+        });
+        window.dispatchEvent(new Event('storage'));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated]);
+
+  // Track link status so unlinked shoppers get a pure e-commerce bottom nav.
+  const [childInfo, setChildInfo] = React.useState(() => readChildInfoRaw());
+  React.useEffect(() => {
+    const handler = () => setChildInfo(readChildInfoRaw());
+    window.addEventListener('storage', handler);
+    return () => window.removeEventListener('storage', handler);
+  }, []);
+  React.useEffect(() => {
+    setChildInfo(readChildInfoRaw());
+  }, [isAuthenticated, location.pathname]);
+  const showEcommerceNav = isAuthenticated && !isSchoolLinked(childInfo);
+
+
   // Exclude bottom nav on login, signup, storefront product detail pages, and reels page
   const isAuthPage = location.pathname.includes('/user/login') || location.pathname.includes('/user/signup');
   const isProductDetailPage = location.pathname.includes('/user/product/') || location.pathname.includes('/user/reels');
@@ -40,10 +85,12 @@ const AppLayout = () => {
 
   return (
     <div className="max-w-md mx-auto h-[100dvh] bg-gray-50 shadow-2xl relative overflow-hidden flex flex-col font-outfit w-full">
-      {/* Dynamic Content Area */}
-      <div 
+      {/* Dynamic Content Area — the bottom nav below is an in-flow flex child,
+          so this scroll region is physically bounded above it. Pages never need
+          to reserve space for the nav and content can't hide behind it. */}
+      <div
         ref={scrollContainerRef}
-        className={`flex-1 overflow-y-auto overflow-x-hidden w-full ${(!isAuthPage && !isProductDetailPage) ? 'pb-24' : ''}`}
+        className="flex-1 overflow-y-auto overflow-x-hidden w-full"
       >
         <Outlet />
       </div>
@@ -79,59 +126,29 @@ const AppLayout = () => {
         </div>
       )}
 
-      {/* Persistent Bottom Navigation - Styled exactly like the mockup! */}
+      {/* Persistent Bottom Navigation - in-flow flex child (not fixed) so it
+          always reserves its own space and never overlaps page content. */}
       {!isAuthPage && !isProductDetailPage && (
-        <nav className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white border-t border-gray-100/60 px-4 py-2.5 z-50 shadow-[0_-4px_16px_rgba(0,0,0,0.02)]">
+        <nav className="shrink-0 bg-white border-t border-gray-100/60 px-4 py-2.5 pb-[calc(0.625rem+env(safe-area-inset-bottom))] z-40 shadow-[0_-4px_16px_rgba(0,0,0,0.02)]">
           <div className="flex items-center justify-between gap-1">
-            
-            {/* 1. Home Tab */}
-            <BottomNavItem 
-              to="/user/home" 
-              active={getTabStyle('/user/home')}
-              icon={<Home size={19} />} 
-              label="Home"
-              activeColor="text-[#6A47DE]"
-              inactiveColor="text-[#6A47DE]"
-            />
-
-            {/* 2. Diary Tab */}
-            <BottomNavItem 
-              to="/user/diary" 
-              active={getTabStyle('/user/diary')}
-              icon={<BookOpen size={19} />} 
-              label="Diary"
-              activeColor="text-[#1A73E8]"
-              inactiveColor="text-[#1A73E8]"
-            />
-
-            {/* 3. Attendance Tab */}
-            <BottomNavItem 
-              to="/user/attendance" 
-              active={getTabStyle('/user/attendance')}
-              icon={<CalendarCheck size={19} />} 
-              label="Attendance"
-              activeColor="text-[#34A853]"
-              inactiveColor="text-[#34A853]"
-            />
-
-            {/* 4. Learning Tab */}
-            <BottomNavItem 
-              to="/user/learning-hub" 
-              active={getTabStyle('/user/learning-hub')}
-              icon={<GraduationCap size={19} />} 
-              label="Learning"
-              inactiveColor="text-[#E04F5F]"
-            />
-
-            {/* 5. Profile Tab */}
-            <BottomNavItem 
-              to="/user/profile" 
-              active={getTabStyle('/user/profile')}
-              icon={<User size={19} />} 
-              label="Profile"
-              inactiveColor="text-[#9B51E0]"
-            />
-
+            {showEcommerceNav ? (
+              /* Unlinked shopper — pure e-commerce tabs, no school features */
+              <>
+                <BottomNavItem to="/user/home" active={getTabStyle('/user/home')} icon={<Home size={19} />} label="Home" inactiveColor="text-[#6A47DE]" />
+                <BottomNavItem to="/user/categories" active={getTabStyle('/user/categories')} icon={<Store size={19} />} label="Shop" inactiveColor="text-[#1A73E8]" />
+                <BottomNavItem to="/user/cart" active={getTabStyle('/user/cart')} icon={<ShoppingCart size={19} />} label="Cart" inactiveColor="text-[#34A853]" />
+                <BottomNavItem to="/user/orders" active={getTabStyle('/user/orders')} icon={<Package size={19} />} label="Orders" inactiveColor="text-[#E04F5F]" />
+                <BottomNavItem to="/user/profile" active={getTabStyle('/user/profile')} icon={<User size={19} />} label="Profile" inactiveColor="text-[#9B51E0]" />
+              </>
+            ) : (
+              <>
+                <BottomNavItem to="/user/home" active={getTabStyle('/user/home')} icon={<Home size={19} />} label="Home" activeColor="text-[#6A47DE]" inactiveColor="text-[#6A47DE]" />
+                <BottomNavItem to="/user/diary" active={getTabStyle('/user/diary')} icon={<BookOpen size={19} />} label="Diary" activeColor="text-[#1A73E8]" inactiveColor="text-[#1A73E8]" />
+                <BottomNavItem to="/user/attendance" active={getTabStyle('/user/attendance')} icon={<CalendarCheck size={19} />} label="Attendance" activeColor="text-[#34A853]" inactiveColor="text-[#34A853]" />
+                <BottomNavItem to="/user/learning-hub" active={getTabStyle('/user/learning-hub')} icon={<GraduationCap size={19} />} label="Learning" inactiveColor="text-[#E04F5F]" />
+                <BottomNavItem to="/user/profile" active={getTabStyle('/user/profile')} icon={<User size={19} />} label="Profile" inactiveColor="text-[#9B51E0]" />
+              </>
+            )}
           </div>
         </nav>
       )}

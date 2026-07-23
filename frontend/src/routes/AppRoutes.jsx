@@ -94,6 +94,7 @@ const SchoolWallet = React.lazy(() => import('../app/features/school/SchoolWalle
 const SchoolChangePasswordPage = React.lazy(() => import('../app/features/school/SchoolChangePasswordPage'));
 const SchoolAddClass = React.lazy(() => import('../app/features/school/SchoolAddClass'));
 const SchoolTeacherAssignments = React.lazy(() => import('../app/features/school/SchoolTeacherAssignments'));
+const SchoolPhonebookPage = React.lazy(() => import('../app/features/school/SchoolPhonebookPage'));
 
 
 // Teacher App Components
@@ -143,6 +144,7 @@ const LMSManagement = React.lazy(() => import('../app/features/superadmin/LMSMan
 const PromoHomeBanners = React.lazy(() => import('../app/features/superadmin/PromoHomeBanners'));
 const BillingChargesManagement = React.lazy(() => import('../app/features/superadmin/BillingChargesManagement'));
 const AdminProfileManagement = React.lazy(() => import('../app/features/superadmin/AdminProfileManagement'));
+const KitProductsManagement = React.lazy(() => import('../app/features/superadmin/KitProductsManagement'));
 
 
 
@@ -236,6 +238,7 @@ const AppRoutes = () => {
           <Route path="promo-home-banners" element={<PromoHomeBanners />} />
           <Route path="setting-billing-charges" element={<BillingChargesManagement />} />
           <Route path="profile" element={<AdminProfileManagement />} />
+          <Route path="kit-products" element={<KitProductsManagement />} />
         </Route>
         </Route>
         <Route element={<ProtectedRoute />}>
@@ -290,11 +293,14 @@ const AppRoutes = () => {
           <Route path="terms" element={<ParentTermsAndConditions />} />
           <Route path="privacy" element={<ParentPrivacyPolicy />} />
 
-          {/* Protected — account, checkout and student-linked features (parent login required) */}
+          {/* Guest-accessible: a shopper can reach checkout without an account and
+              onboard (phone + address + OTP) via the guest gate on the page. */}
+          <Route path="checkout" element={<CheckoutPage />} />
+          <Route path="order-success" element={<OrderSuccessPage />} />
+
+          {/* Protected — account and student-linked features (parent login required) */}
           <Route element={<RoleRoute allowedRoles={[ROLES.PARENT]} redirectTo="/user/login" />}>
             <Route path="my-school" element={<MySchoolPage />} />
-            <Route path="checkout" element={<CheckoutPage />} />
-            <Route path="order-success" element={<OrderSuccessPage />} />
             <Route path="track-order/:orderId" element={<OrderTrackingPage />} />
             <Route path="orders" element={<OrderHistoryPage />} />
             <Route path="edit-profile" element={<EditProfilePage />} />
@@ -323,6 +329,7 @@ const AppRoutes = () => {
             <Route path="admin" element={<SchoolHome />} />
             <Route path="add-class" element={<SchoolAddClass />} />
             <Route path="teacher-assignments" element={<SchoolTeacherAssignments />} />
+            <Route path="phonebook" element={<SchoolPhonebookPage />} />
             <Route path="send-notice" element={<SchoolSendNotice />} />
             <Route path="create-event" element={<SchoolCreateEvent />} />
             <Route path="events" element={<SchoolEventsPage />} />

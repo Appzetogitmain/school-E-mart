@@ -1,10 +1,19 @@
 const crypto = require('crypto');
 const Kit = require('../../../database/models/Kit');
-const Product = require('../../../database/models/Product');
+const SchoolKitCategory = require('../../../database/models/SchoolKitCategory');
 const { NotFoundError, BadRequestError } = require('../../../common/errors');
 const { executePaginatedQuery } = require('../../../repositories');
 
 const notDeleted = { 'softDelete.isDeleted': { $ne: true } };
+
+const DEFAULT_CATEGORIES = [
+  'Textbooks & Notebooks',
+  'School Uniforms',
+  'Stationary Packs',
+  'Winter Kit',
+  'Initial Kit',
+  'Project Kit',
+];
 
 const slugify = (value) =>
   String(value || '')
@@ -16,44 +25,54 @@ const slugify = (value) =>
 
 const uniqueSuffix = () => crypto.randomBytes(3).toString('hex');
 
-/** Sum current product prices so the kit price stays honest even if omitted. */
-const computeItemTotals = async (items = []) => {
-  const productIds = items.map((i) => i.productId);
-  const products = await Product.find({ _id: { $in: productIds } })
-    .select('pricePaise originalPricePaise name')
-    .lean();
-  const map = new Map(products.map((p) => [String(p._id), p]));
-
-  let pricePaise = 0;
-  let mrpPaise = 0;
-  items.forEach((item) => {
-    const product = map.get(String(item.productId));
-    if (!product) {
-      throw new BadRequestError('One or more kit products no longer exist');
-    }
-    const selling = product.pricePaise || 0;
-    const mrp = product.originalPricePaise || selling;
-    pricePaise += selling * item.qty;
-    mrpPaise += mrp * item.qty;
-  });
-  return { pricePaise, mrpPaise };
-};
-
 const kitsService = {
+  // Category management
+  async listCategories(schoolId) {
+    const custom = await SchoolKitCategory.find({ schoolId, ...notDeleted })
+      .select('name')
+      .lean();
+    const customNames = custom.map((c) => c.name);
+    return {
+      defaults: DEFAULT_CATEGORIES,
+      custom: custom,
+      all: [...DEFAULT_CATEGORIES, ...customNames],
+    };
+  },
+
+  async createCategory(schoolId, name) {
+    const trimmed = String(name || '').trim();
+    if (!trimmed) throw new BadRequestError('Category name is required');
+    const existing = await SchoolKitCategory.findOne({ schoolId, name: trimmed, ...notDeleted });
+    if (existing) return existing;
+    return SchoolKitCategory.create({ schoolId, name: trimmed });
+  },
+
+  async deleteCategory(schoolId, categoryId) {
+    const cat = await SchoolKitCategory.findOneAndUpdate(
+      { _id: categoryId, schoolId, ...notDeleted },
+      { $set: { 'softDelete.isDeleted': true, 'softDelete.deletedAt': new Date() } },
+      { new: true }
+    );
+    if (!cat) throw new NotFoundError('Category not found');
+    return true;
+  },
+
+  // Kit CRUD
   async createKit(schoolId, payload) {
     if (!payload.items?.length) {
-      throw new BadRequestError('A kit needs at least one product');
+      throw new BadRequestError('A kit needs at least one product item');
     }
 
-    // A live kit takes real orders, so it must have a vendor to fulfil them.
-    const goingLive = payload.status === 'active' || payload.availableOnline;
+    const goingLive = payload.status === 'active' || payload.flags?.availableOnline;
     if (goingLive && !payload.vendorId) {
       throw new BadRequestError('Select a fulfilling vendor before publishing the kit', null, 'KIT_VENDOR_REQUIRED');
     }
 
-    const totals = await computeItemTotals(payload.items);
     const base = slugify(payload.name) || 'kit';
     const suffix = uniqueSuffix();
+
+    const pricePaise = Number(payload.pricePaise) || 0;
+    const mrpPaise = Number(payload.mrpPaise) || pricePaise;
 
     const kit = await Kit.create({
       schoolId,
@@ -63,16 +82,16 @@ const kitsService = {
       classGrade: payload.classGrade,
       category: payload.category,
       description: payload.description,
-      imageId: payload.imageId,
+      imageId: payload.imageId || null,
+      imageUrl: payload.imageUrl || '',
       items: payload.items,
-      addOns: payload.addOns || [],
-      pricePaise: payload.pricePaise ?? totals.pricePaise,
-      mrpPaise: payload.mrpPaise ?? totals.mrpPaise,
+      pricePaise,
+      mrpPaise,
       sku: `KIT-${suffix.toUpperCase()}-${Date.now().toString(36).toUpperCase()}`,
       status: payload.status === 'active' ? 'active' : 'draft',
       flags: {
-        showOnApp: Boolean(payload.showOnApp),
-        availableOnline: Boolean(payload.availableOnline),
+        showOnApp: payload.showOnApp !== undefined ? Boolean(payload.showOnApp) : true,
+        availableOnline: payload.availableOnline !== undefined ? Boolean(payload.availableOnline) : true,
         allowPreorders: Boolean(payload.allowPreorders),
       },
     });
@@ -84,12 +103,14 @@ const kitsService = {
     if (query.status) filter.status = query.status;
     if (query.classGrade) filter.classGrade = query.classGrade;
     if (query.category) filter.category = query.category;
-    if (query.search) filter.name = { $regex: query.search, $options: 'i' };
+    if (query.search) filter.name = { $regex: query.search.trim(), $options: 'i' };
+    
     const result = await executePaginatedQuery(Kit, filter, query, { defaultSort: '-audit.createdAt' });
     if (result.data && result.data.length) {
       result.data = await Kit.populate(result.data, [
-        { path: 'items.productId', select: 'name images pricePaise originalPricePaise publishStatus' },
-        { path: 'addOns.productId', select: 'name images pricePaise originalPricePaise publishStatus' }
+        { path: 'vendorId', select: 'storeName businessName name phone email' },
+        { path: 'imageId', select: 'storageKey mime sizeBytes' },
+        { path: 'items.masterProductId', select: 'name category subcategory imageUrl productType' }
       ]);
     }
     return result;
@@ -97,8 +118,9 @@ const kitsService = {
 
   async getKit(schoolId, kitId) {
     const kit = await Kit.findOne({ _id: kitId, schoolId, ...notDeleted })
-      .populate({ path: 'items.productId', select: 'name images pricePaise originalPricePaise publishStatus' })
-      .populate({ path: 'addOns.productId', select: 'name images pricePaise originalPricePaise publishStatus' })
+      .populate({ path: 'vendorId', select: 'storeName businessName name phone email' })
+      .populate({ path: 'imageId', select: 'storageKey mime sizeBytes' })
+      .populate({ path: 'items.masterProductId', select: 'name category subcategory imageUrl productType' })
       .lean();
     if (!kit) throw new NotFoundError('Kit not found', 'KIT_NOT_FOUND');
     return kit;
@@ -109,13 +131,6 @@ const kitsService = {
     delete update.slug;
     delete update.sku;
 
-    if (payload.items) {
-      const totals = await computeItemTotals(payload.items);
-      if (payload.pricePaise == null) update.pricePaise = totals.pricePaise;
-      if (payload.mrpPaise == null) update.mrpPaise = totals.mrpPaise;
-    }
-
-    // Block publishing a kit that still has no vendor to fulfil it.
     const goingLive = payload.status === 'active' || payload.flags?.availableOnline;
     if (goingLive) {
       const current = await Kit.findOne({ _id: kitId, schoolId, ...notDeleted }).select('vendorId').lean();
@@ -124,6 +139,9 @@ const kitsService = {
         throw new BadRequestError('Select a fulfilling vendor before publishing the kit', null, 'KIT_VENDOR_REQUIRED');
       }
     }
+
+    if (payload.pricePaise !== undefined) update.pricePaise = Number(payload.pricePaise) || 0;
+    if (payload.mrpPaise !== undefined) update.mrpPaise = Number(payload.mrpPaise) || update.pricePaise || 0;
 
     const kit = await Kit.findOneAndUpdate(
       { _id: kitId, schoolId, ...notDeleted },

@@ -31,6 +31,10 @@ const teacherProfileSchema = new mongoose.Schema({
     isClassTeacher: { type: Boolean, default: false }
   }],
   avatarUrl: { type: String },
+  // Controls whether this teacher's contact appears in the parent phonebook.
+  // Parents only ever see teachers assigned to their child's class/section;
+  // this lets the school additionally hide an individual teacher.
+  showInPhonebook: { type: Boolean, default: true },
   approvalStatus: {
     type: String,
     enum: ['pending', 'approved', 'rejected'],

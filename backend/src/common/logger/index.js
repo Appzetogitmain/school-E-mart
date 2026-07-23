@@ -18,6 +18,11 @@ const buildConsoleFormat = () =>
     timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
     errors({ stack: true }),
     printf(({ timestamp: ts, level, message, stack, ...meta }) => {
+      if (meta.method && meta.path && meta.statusCode !== undefined) {
+        const duration = meta.durationMs !== undefined ? ` - ${meta.durationMs}ms` : '';
+        return `[${ts}] ${level}: ${meta.method} ${meta.path} ${meta.statusCode}${duration}`;
+      }
+
       const metaKeys = Object.keys(meta).filter((key) => key !== 'service');
       const metaStr = metaKeys.length ? ` ${JSON.stringify(meta)}` : '';
       const stackStr = stack ? `\n${stack}` : '';

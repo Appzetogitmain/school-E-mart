@@ -17,6 +17,7 @@ const paginationQuery = Joi.object({
   classGrade: Joi.string().trim().optional(),
   category: Joi.string().trim().optional(),
   department: Joi.string().trim().optional(),
+  includeInactive: Joi.boolean().optional(),
   from: Joi.date().iso().optional(),
   to: Joi.date().iso().optional(),
 });
@@ -53,10 +54,13 @@ const updateEventSchema = Joi.object({
   status: Joi.string().valid('upcoming', 'ongoing', 'completed', 'cancelled').optional(),
 }).min(1);
 
+const phonebookCategories = ['general', 'emergency', 'transport', 'medical', 'other'];
+
 const phonebookEntrySchema = Joi.object({
   name: Joi.string().trim().min(2).max(100).required(),
-  designation: Joi.string().trim().max(100).required(),
+  designation: Joi.string().trim().max(100).optional().allow('', null),
   department: Joi.string().trim().max(100).optional().allow('', null),
+  category: Joi.string().valid(...phonebookCategories).optional(),
   email: Joi.string().email().optional().allow('', null),
   phone: Joi.string().trim().max(20).required(),
   availabilityHours: Joi.string().trim().max(100).optional().allow('', null),
@@ -65,9 +69,13 @@ const phonebookEntrySchema = Joi.object({
 });
 
 const updatePhonebookSchema = phonebookEntrySchema.fork(
-  ['name', 'designation', 'phone'],
+  ['name', 'phone'],
   (schema) => schema.optional()
 ).min(1);
+
+const parentContactsQuery = Joi.object({
+  studentId: objectId.optional(),
+});
 
 const kitItemSchema = Joi.object({
   productId: objectId.required(),
@@ -123,6 +131,7 @@ module.exports = {
   updateEventSchema,
   phonebookEntrySchema,
   updatePhonebookSchema,
+  parentContactsQuery,
   createKitSchema,
   updateKitSchema,
 };

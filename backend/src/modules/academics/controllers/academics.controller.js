@@ -37,6 +37,14 @@ const academicsController = {
     return success(res, { entries }, 'Phonebook fetched', undefined, req);
   }),
 
+  // Parent-facing: relevant teachers (by child's class/section) + emergency numbers
+  getPhonebookContacts: asyncHandler(async (req, res) => {
+    const contacts = await phonebookService.getParentContacts(req.params.schoolId, {
+      studentId: req.query.studentId,
+    });
+    return success(res, contacts, 'Phonebook contacts fetched', undefined, req);
+  }),
+
   createPhonebookEntry: asyncHandler(async (req, res) => {
     const entry = await phonebookService.createEntry(req.params.schoolId, req.body);
     return created(res, { entry }, 'Phonebook entry created', req);
@@ -53,6 +61,21 @@ const academicsController = {
   }),
 
   // Kits
+  listKitCategories: asyncHandler(async (req, res) => {
+    const categories = await kitsService.listCategories(req.params.schoolId);
+    return success(res, categories, 'Kit categories fetched', undefined, req);
+  }),
+
+  createKitCategory: asyncHandler(async (req, res) => {
+    const category = await kitsService.createCategory(req.params.schoolId, req.body.name);
+    return created(res, { category }, 'Kit category created', req);
+  }),
+
+  deleteKitCategory: asyncHandler(async (req, res) => {
+    await kitsService.deleteCategory(req.params.schoolId, req.params.categoryId);
+    return success(res, null, 'Kit category deleted', undefined, req);
+  }),
+
   createKit: asyncHandler(async (req, res) => {
     const kit = await kitsService.createKit(req.params.schoolId, req.body);
     return created(res, { kit }, 'Kit created', req);

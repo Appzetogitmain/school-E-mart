@@ -3,6 +3,7 @@ const Order = require('../../../database/models/Order');
 const OrderShipment = require('../../../database/models/OrderShipment');
 const orderRepository = require('../repositories/order.repository');
 const checkoutService = require('./checkout.service');
+const commissionService = require('./commission.service');
 const inventoryService = require('./inventory.service');
 const paymentService = require('./payment.service');
 const cartService = require('../../marketplace/services/cart.service');
@@ -43,6 +44,13 @@ const orderService = {
     const paymentMethod = payload.paymentMethod || 'cod';
     const vendorIds = [...new Set(summary.items.map((item) => item.vendorId))];
 
+    // Snapshot the commission split onto each line so payouts are fixed at order
+    // time and never re-priced by a later rate change.
+    const commissionSplits = await commissionService.resolveItemsCommission(summary.items, {
+      userId,
+      audience,
+    });
+
     // Wallet application: clamp the requested amount to the wallet balance and the
     // order total; the gateway / COD collects only the remaining payable amount.
     const walletBalance = await walletService.getBalance(userId);
@@ -67,7 +75,7 @@ const orderService = {
             orderNumber,
             userId,
             audience,
-            items: summary.items.map((item) => ({
+            items: summary.items.map((item, idx) => ({
               productId: item.productId,
               vendorId: item.vendorId,
               name: item.name,
@@ -81,6 +89,14 @@ const orderService = {
               taxRatePercent: item.taxRatePercent,
               taxPaise: item.taxPaise,
               lineTotalPaise: item.lineTotalPaise,
+              // Commission snapshot (see commission.service). schoolId is the
+              // school that earns the school share on this line, if any.
+              kitId: item.kitId || undefined,
+              schoolId: commissionSplits[idx]?.schoolId || undefined,
+              commission: {
+                adminPercent: commissionSplits[idx]?.adminPercent ?? 0,
+                schoolPercent: commissionSplits[idx]?.schoolPercent ?? 0,
+              },
               fulfilmentStatus: 'placed',
             })),
             vendorIds,

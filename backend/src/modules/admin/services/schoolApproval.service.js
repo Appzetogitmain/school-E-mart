@@ -129,6 +129,25 @@ const schoolApprovalService = {
     return decorated;
   },
 
+  // Master-admin-only. Schools cannot set their own commission — only this
+  // superadmin path writes School.commission.
+  async setCommission(schoolId, { kitPercent, retailPercent }, actor = {}) {
+    const existing = await schoolService.getSchool(schoolId);
+    if (!existing) throw new NotFoundError('School not found', 'SCHOOL_NOT_FOUND');
+    const school = await schoolService.updateSchool(schoolId, {
+      commission: { kitPercent, retailPercent },
+    });
+    await auditRepository.log({
+      actorUserId: actor.userId,
+      actorRole: actor.role,
+      action: 'school.commission.updated',
+      entityType: 'School',
+      entityId: schoolId,
+      after: { commission: { kitPercent, retailPercent } },
+    });
+    return school;
+  },
+
   /**
    * Admin-entered schools are created already approved — the admin doing the
    * entering is the reviewer, so routing them through 'prospect' would mean

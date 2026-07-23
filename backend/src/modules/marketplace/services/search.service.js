@@ -19,6 +19,13 @@ const buildProductFilter = (query = {}, { publicOnly = true, vendorId = null } =
     if (query.publishStatus) filter.publishStatus = query.publishStatus;
   }
   if (vendorId) filter.vendorId = vendorId;
+  // Storefront audience: User app passes 'users', School module passes 'schools'.
+  // Legacy products predate the field, so 'users' also matches missing audience.
+  if (query.audience === 'schools') {
+    filter.audience = 'schools';
+  } else if (query.audience === 'users') {
+    filter.audience = { $ne: 'schools' };
+  }
   if (query.headerId) filter.headerId = query.headerId;
   if (query.categoryId) filter.categoryId = query.categoryId;
   if (query.subcategoryId) filter.subcategoryId = query.subcategoryId;

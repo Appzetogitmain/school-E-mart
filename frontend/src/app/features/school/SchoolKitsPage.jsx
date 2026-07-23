@@ -14,27 +14,32 @@ const mapKit = (k) => {
   const imageUrl = k.imageId?.storageKey || k.imageUrl || k.image?.url;
   const avatar = imageUrl ? imageUrl : `https://ui-avatars.com/api/?background=3b2d7d&color=fff&bold=true&name=${encodeURIComponent(k.name || 'Kit')}`;
   const itemsList = (k.items || []).map((item) => {
-    const prod = item.productId || {};
     return {
-      name: prod.name || 'Bulk Component',
+      name: item.name || item.masterProductId?.name || 'Item',
       qty: item.qty || 1,
+      attributes: item.attributes || {},
+      productType: item.masterProductId?.productType || 'general',
     };
   });
+  const vendorName = k.vendorId?.storeName || k.vendorId?.businessName || k.vendorId?.name || 'Assigned Vendor';
   return {
     id: k._id,
     name: k.name,
     desc: k.description || '',
-    category: k.category || 'Others',
+    category: k.category || 'General',
     tag: k.category || 'Kit',
     classes: k.classGrade || 'All classes',
     itemsCount: (k.items || []).length,
     itemsList,
     price: ((k.pricePaise || 0) / 100).toFixed(0),
+    mrp: k.mrpPaise ? ((k.mrpPaise || 0) / 100).toFixed(0) : null,
+    vendorName,
     status: k.status === 'active' ? 'Active' : 'Draft',
     updatedDate: k.audit?.updatedAt
       ? new Date(k.audit.updatedAt).toLocaleDateString('en-GB')
       : '—',
     avatar,
+    raw: k,
   };
 };
 

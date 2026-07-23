@@ -158,10 +158,10 @@ const ReelsManagement = () => {
         videoId = await uploadFile(videoFile, 'reel_video', true);
       }
       if (coverFile) {
-        thumbnailId = await uploadFile(coverFile, 'reel_thumb');
+        thumbnailId = await uploadFile(coverFile, 'reel_thumb', true);
       }
       if (productFile) {
-        productImageId = await uploadFile(productFile, 'reel_thumb');
+        productImageId = await uploadFile(productFile, 'reel_thumb', true);
       }
 
       if (!videoId) {

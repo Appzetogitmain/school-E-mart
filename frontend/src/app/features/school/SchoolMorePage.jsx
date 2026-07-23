@@ -146,6 +146,14 @@ const SchoolMorePage = () => {
           bg: 'bg-indigo-50',
           path: '/school/parents',
           protected: true
+        },
+        {
+          title: 'Phonebook',
+          desc: 'Manage teacher & emergency numbers shown to parents',
+          icon: <Phone className="text-rose-500 stroke-[2.5]" size={18} />,
+          bg: 'bg-rose-50',
+          path: '/school/phonebook',
+          protected: true
         }
       ]
     },

@@ -192,6 +192,10 @@ const generalSettingsSchema = Joi.object({
 
 const marketplaceSettingsSchema = Joi.object({
   commissionPercent: Joi.number().min(0).max(100).optional(),
+  // Platform's cut on retail product sales (and bulk school purchases).
+  platformRetailPercent: Joi.number().min(0).max(100).optional(),
+  // Platform's cut on kit sales (the school earns its own kit % on top).
+  platformKitPercent: Joi.number().min(0).max(100).optional(),
   vendorAutoApproval: Joi.boolean().optional(),
   productApprovalRequired: Joi.boolean().optional(),
 });
@@ -345,12 +349,20 @@ const updateVendorSchema = Joi.object({
   bank: vendorFields.bankSchema.optional(),
 }).min(1);
 
+// Master-admin-only: a school's commission rates. kitPercent applies to the
+// school's kits; retailPercent to retail buys by its linked users.
+const schoolCommissionSchema = Joi.object({
+  kitPercent: Joi.number().min(0).max(100).required(),
+  retailPercent: Joi.number().min(0).max(100).required(),
+});
+
 module.exports = {
   paginationQuery,
   analyticsQuery,
   createVendorSchema,
   updateVendorSchema,
   createSchoolSchema,
+  schoolCommissionSchema,
   userIdParam,
   vendorIdParam,
   schoolIdParam,

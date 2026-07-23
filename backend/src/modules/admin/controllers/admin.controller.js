@@ -239,6 +239,15 @@ const adminController = {
     return success(res, { school }, 'School fetched', undefined, req);
   }),
 
+  setSchoolCommission: asyncHandler(async (req, res) => {
+    const school = await schoolApprovalService.setCommission(
+      req.params.schoolId,
+      { kitPercent: req.body.kitPercent, retailPercent: req.body.retailPercent },
+      actorFrom(req)
+    );
+    return success(res, { school }, 'School commission updated', undefined, req);
+  }),
+
   createSchool: asyncHandler(async (req, res) => {
     const school = await schoolApprovalService.createSchool(req.body, actorFrom(req));
     return created(res, { school }, 'School created', req);
@@ -623,6 +632,31 @@ const adminController = {
   updateAdminProfile: asyncHandler(async (req, res) => {
     const profile = await adminProfileService.updateProfile(req.auth.userId, req.body);
     return success(res, { profile }, 'Profile updated', undefined, req);
+  }),
+
+  // Master Kit Products
+  listMasterKitProducts: asyncHandler(async (req, res) => {
+    const masterKitProductService = require('../services/masterKitProduct.service');
+    const { data, pagination } = await masterKitProductService.listProducts(req.query);
+    return paginated(res, { products: data }, pagination, 'Master kit products fetched', req);
+  }),
+
+  createMasterKitProduct: asyncHandler(async (req, res) => {
+    const masterKitProductService = require('../services/masterKitProduct.service');
+    const product = await masterKitProductService.createProduct(req.body);
+    return created(res, { product }, 'Master kit product created', req);
+  }),
+
+  updateMasterKitProduct: asyncHandler(async (req, res) => {
+    const masterKitProductService = require('../services/masterKitProduct.service');
+    const product = await masterKitProductService.updateProduct(req.params.productId, req.body);
+    return success(res, { product }, 'Master kit product updated', undefined, req);
+  }),
+
+  deleteMasterKitProduct: asyncHandler(async (req, res) => {
+    const masterKitProductService = require('../services/masterKitProduct.service');
+    await masterKitProductService.deleteProduct(req.params.productId);
+    return success(res, null, 'Master kit product deleted', undefined, req);
   }),
 };
 

@@ -139,7 +139,9 @@ const noticeService = {
   },
 
   async getNotice(req, schoolId, noticeId) {
-    const notice = await noticeRepository.findOne({ _id: noticeId, schoolId });
+    const notice = await noticeRepository.findOne({ _id: noticeId, schoolId }, null, {
+      populate: { path: 'attachments', select: 'storageKey mime sizeBytes purpose' },
+    });
     if (!notice) throw new NotFoundError('Notice not found', 'NOTICE_NOT_FOUND');
 
     if (req.auth.role === ROLES.PARENT) {

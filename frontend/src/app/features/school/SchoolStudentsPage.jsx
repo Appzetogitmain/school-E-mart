@@ -1,12 +1,12 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Search, Filter, ChevronDown, X,
   MoreVertical, RefreshCw, GraduationCap, Users, User,
   Calendar, CheckCircle, AlertCircle, Sparkles, Upload,
-  Download, Award, Shield, MapPin, Phone, Mail, Loader2, UserPlus
+  Download, Award, Shield, MapPin, Phone, Mail, Loader2, UserPlus, Edit2
 } from 'lucide-react';
-import { listStudents, registerStudent, listClasses, updateStudentStatus } from '../../../services/schoolApi';
+import { listStudents, registerStudent, updateStudent, listClasses, updateStudentStatus, getAttendanceHistory } from '../../../services/schoolApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 import { mapStudentForList, formatClassLabel, calculateAge } from '../../../utils/mappers/schoolStudentMapper';
 import { useSchoolId } from '../../../utils/schoolContext';
@@ -48,6 +48,19 @@ const SchoolStudentsPage = () => {
   const [addSubmitting, setAddSubmitting] = useState(false);
   const [addError, setAddError] = useState('');
   const [addSuccess, setAddSuccess] = useState(false);
+
+  // Edit Student Modal state & handlers
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingStudent, setEditingStudent] = useState(null);
+  const [editForm, setEditForm] = useState(emptyForm);
+  const [editErrors, setEditErrors] = useState({});
+  const [editSubmitting, setEditSubmitting] = useState(false);
+  const [editError, setEditError] = useState('');
+  const [editSuccess, setEditSuccess] = useState(false);
+
+  // Detailed Attendance state for selected student
+  const [studentAttendanceLogs, setStudentAttendanceLogs] = useState([]);
+  const [attendanceLoading, setAttendanceLoading] = useState(false);
 
   const loadStudents = useCallback(async () => {
     if (!schoolId) {
@@ -108,6 +121,159 @@ const SchoolStudentsPage = () => {
       setStatusError(getErrorMessage(err, 'Unable to update the status'));
     } finally {
       setStatusSaving(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!schoolId || !selectedStudent?.mongoId) {
+      setStudentAttendanceLogs([]);
+      return;
+    }
+    let cancelled = false;
+    setAttendanceLoading(true);
+    (async () => {
+      try {
+        const { data } = await getAttendanceHistory(schoolId, {
+          studentId: selectedStudent.mongoId,
+          limit: 150,
+        });
+        if (!cancelled) setStudentAttendanceLogs(data || []);
+      } catch {
+        if (!cancelled) setStudentAttendanceLogs([]);
+      } finally {
+        if (!cancelled) setAttendanceLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [schoolId, selectedStudent?.mongoId]);
+
+  const attendanceStats = useMemo(() => {
+    if (!studentAttendanceLogs.length) {
+      return {
+        overallPercentage: 0,
+        presentCount: 0,
+        absentCount: 0,
+        lateCount: 0,
+        leaveCount: 0,
+        totalDays: 0,
+        presentPercent: 0,
+        absentPercent: 0,
+        latePercent: 0,
+        leavePercent: 0,
+      };
+    }
+    let present = 0;
+    let absent = 0;
+    let late = 0;
+    let leave = 0;
+    studentAttendanceLogs.forEach((rec) => {
+      const st = rec?.attendance?.status;
+      if (st === 'present') present += 1;
+      else if (st === 'absent') absent += 1;
+      else if (st === 'half_day' || st === 'late') late += 1;
+      else if (st === 'leave') leave += 1;
+    });
+    const total = present + absent + late + leave;
+    const overall = total > 0 ? Math.round(((present + late * 0.5) / total) * 100) : 0;
+    return {
+      overallPercentage: overall,
+      presentCount: present,
+      absentCount: absent,
+      lateCount: late,
+      leaveCount: leave,
+      totalDays: total,
+      presentPercent: total > 0 ? Math.round((present / total) * 100) : 0,
+      absentPercent: total > 0 ? Math.round((absent / total) * 100) : 0,
+      latePercent: total > 0 ? Math.round((late / total) * 100) : 0,
+      leavePercent: total > 0 ? Math.round((leave / total) * 100) : 0,
+    };
+  }, [studentAttendanceLogs]);
+
+  const openEditModal = (student) => {
+    const raw = student.raw || {};
+    setEditingStudent(student);
+    setEditForm({
+      name: raw.name || student.name || '',
+      classGrade: raw.classGrade || student.classGrade || '',
+      section: raw.section || student.section || '',
+      rollNo: raw.rollNo || (student.rollNo !== '—' ? student.rollNo : ''),
+      gender: raw.gender || (student.gender === 'Boy' ? 'male' : student.gender === 'Girl' ? 'female' : ''),
+      dob: raw.dob ? new Date(raw.dob).toISOString().split('T')[0] : '',
+      motherName: raw.motherName || (student.motherName !== '—' ? student.motherName : ''),
+      address: raw.address || (student.address !== '—' ? student.address : ''),
+      admissionDate: raw.admissionDate ? new Date(raw.admissionDate).toISOString().split('T')[0] : '',
+      previousSchool: raw.previousSchool || (student.previousSchool !== '—' ? student.previousSchool : ''),
+      parentName: student.parent !== '—' ? student.parent : '',
+      parentPhone: student.parentPhone !== '—' ? student.parentPhone : '',
+      parentEmail: student.parentEmail !== '—' ? student.parentEmail : '',
+      admissionNo: raw.admissionNo || '',
+    });
+    setEditErrors({});
+    setEditError('');
+    setEditSuccess(false);
+    setShowEditModal(true);
+  };
+
+  const handleEditFormChange = (field, value) => {
+    const val = field === 'parentPhone' ? value.replace(/\D/g, '').slice(0, 10) : value;
+    setEditForm((prev) => ({ ...prev, [field]: val }));
+    if (editErrors[field]) setEditErrors((prev) => ({ ...prev, [field]: '' }));
+  };
+
+  const handleEditSubmit = async (e) => {
+    e.preventDefault();
+    if (!editingStudent?.mongoId || !schoolId) return;
+
+    const errs = {};
+    if (!editForm.name.trim()) errs.name = 'Student name is required';
+    if (!editForm.classGrade.trim()) errs.classGrade = 'Class/Grade is required';
+    if (!editForm.section.trim()) errs.section = 'Section is required';
+    if (Object.keys(errs).length > 0) {
+      setEditErrors(errs);
+      return;
+    }
+
+    setEditSubmitting(true);
+    setEditError('');
+
+    try {
+      const payload = {
+        name: editForm.name.trim(),
+        classGrade: editForm.classGrade.trim(),
+        section: editForm.section.trim(),
+        rollNo: editForm.rollNo.trim() || undefined,
+        admissionNo: editForm.admissionNo.trim() || undefined,
+        gender: editForm.gender || undefined,
+        dob: editForm.dob ? new Date(editForm.dob).toISOString() : undefined,
+        motherName: editForm.motherName.trim() || undefined,
+        address: editForm.address.trim() || undefined,
+        admissionDate: editForm.admissionDate ? new Date(editForm.admissionDate).toISOString() : undefined,
+        previousSchool: editForm.previousSchool.trim() || undefined,
+      };
+
+      if (editForm.parentPhone && editForm.parentPhone.length === 10) {
+        payload.parentPhone = editForm.parentPhone;
+        if (editForm.parentName.trim()) payload.parentName = editForm.parentName.trim();
+        if (editForm.parentEmail.trim()) payload.parentEmail = editForm.parentEmail.trim();
+      }
+
+      const updatedRaw = await updateStudent(schoolId, editingStudent.mongoId, payload);
+      const mapped = mapStudentForList(updatedRaw);
+
+      setSelectedStudent(mapped);
+      await loadStudents();
+
+      setEditSuccess(true);
+      setTimeout(() => {
+        setEditSuccess(false);
+        setShowEditModal(false);
+      }, 1500);
+    } catch (err) {
+      setEditError(getErrorMessage(err, 'Failed to update student profile'));
+    } finally {
+      setEditSubmitting(false);
     }
   };
 
@@ -518,20 +684,116 @@ const SchoolStudentsPage = () => {
                 </div>
               </div>
 
-              {/* Attendance & Fees Performance Strip */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-emerald-50/50 border border-emerald-100 p-4 rounded-2xl shadow-sm text-center">
-                  <span className="text-[9px] text-emerald-600 font-black uppercase tracking-wider block">Attendance</span>
-                  <span className="text-lg font-black text-emerald-700 block mt-1">{selectedStudent.attendance}</span>
+              {/* Detailed Attendance Section (Circular Donut Graph) */}
+              <div className="bg-[#FAFAFC] border border-gray-150 p-4.5 rounded-3xl shadow-sm space-y-3.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-gray-500 font-black uppercase tracking-wider block">
+                    📊 Attendance Overview
+                  </span>
+                  {attendanceStats.totalDays > 0 && (
+                    <span className="text-[10px] bg-purple-50 text-[#3b2d7d] font-black px-2.5 py-0.5 rounded-full border border-purple-100">
+                      {attendanceStats.totalDays} Days Recorded
+                    </span>
+                  )}
                 </div>
-                <div className={`p-4 rounded-2xl border shadow-sm text-center ${
-                  selectedStudent.fees === 'Paid'
-                    ? 'bg-blue-50/50 border-blue-100 text-blue-700'
-                    : 'bg-amber-50/50 border-amber-100 text-amber-700'
-                }`}>
-                  <span className="text-[9px] font-black uppercase tracking-wider block">Fee Status</span>
-                  <span className="text-lg font-black block mt-1">{selectedStudent.fees}</span>
-                </div>
+
+                {attendanceLoading ? (
+                  <div className="py-6 flex items-center justify-center gap-2 text-xs font-bold text-gray-400">
+                    <Loader2 size={16} className="animate-spin text-[#3b2d7d]" />
+                    <span>Loading Attendance Breakdown...</span>
+                  </div>
+                ) : attendanceStats.totalDays === 0 ? (
+                  <div className="py-4 text-center bg-white rounded-2xl border border-dashed border-gray-200">
+                    <span className="text-xs font-bold text-gray-500 block">No Attendance Records Logged Yet</span>
+                    <span className="text-[10px] text-gray-400 block mt-0.5">Logs will automatically accumulate as attendance is marked.</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-5 pt-0.5">
+                    {/* SVG Circular Donut Progress Ring */}
+                    <div className="relative w-24 h-24 flex items-center justify-center shrink-0">
+                      <svg className="w-full h-full transform -rotate-90">
+                        <circle
+                          cx="48"
+                          cy="48"
+                          r="38"
+                          stroke="#E5E7EB"
+                          strokeWidth="8"
+                          fill="transparent"
+                        />
+                        <circle
+                          cx="48"
+                          cy="48"
+                          r="38"
+                          stroke="url(#studentProfileAttendanceGradient)"
+                          strokeWidth="8"
+                          fill="transparent"
+                          strokeDasharray="239"
+                          strokeDashoffset={239 - (239 * attendanceStats.overallPercentage) / 100}
+                          strokeLinecap="round"
+                          className="transition-all duration-700 ease-out"
+                        />
+                        <defs>
+                          <linearGradient id="studentProfileAttendanceGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stopColor="#34A853" />
+                            <stop offset="50%" stopColor="#F2994A" />
+                            <stop offset="100%" stopColor="#7F56D9" />
+                          </linearGradient>
+                        </defs>
+                      </svg>
+                      <div className="absolute flex flex-col items-center justify-center text-center">
+                        <span className="text-sm font-black text-gray-800 leading-none">
+                          {attendanceStats.overallPercentage}%
+                        </span>
+                        <span className="text-[7.5px] font-black text-gray-400 mt-0.5 uppercase tracking-tight">
+                          Overall
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Stats Legend Grid */}
+                    <div className="flex-1 grid grid-cols-2 gap-2 text-xs">
+                      <div className="bg-emerald-50/80 border border-emerald-100 p-2 rounded-xl">
+                        <div className="flex items-center gap-1.5 text-[#34A853] font-black text-[9.5px] uppercase">
+                          <span className="w-2 h-2 rounded-full bg-[#34A853] shrink-0" />
+                          Present
+                        </div>
+                        <span className="text-xs font-black text-emerald-900 block mt-0.5">
+                          {attendanceStats.presentCount} <span className="text-[9px] text-emerald-600 font-bold">({attendanceStats.presentPercent}%)</span>
+                        </span>
+                      </div>
+
+                      <div className="bg-red-50/80 border border-red-100 p-2 rounded-xl">
+                        <div className="flex items-center gap-1.5 text-[#D93025] font-black text-[9.5px] uppercase">
+                          <span className="w-2 h-2 rounded-full bg-[#D93025] shrink-0" />
+                          Absent
+                        </div>
+                        <span className="text-xs font-black text-red-900 block mt-0.5">
+                          {attendanceStats.absentCount} <span className="text-[9px] text-red-600 font-bold">({attendanceStats.absentPercent}%)</span>
+                        </span>
+                      </div>
+
+                      <div className="bg-amber-50/80 border border-amber-100 p-2 rounded-xl">
+                        <div className="flex items-center gap-1.5 text-[#F2994A] font-black text-[9.5px] uppercase">
+                          <span className="w-2 h-2 rounded-full bg-[#F2994A] shrink-0" />
+                          Late/Half
+                        </div>
+                        <span className="text-xs font-black text-amber-900 block mt-0.5">
+                          {attendanceStats.lateCount} <span className="text-[9px] text-amber-600 font-bold">({attendanceStats.latePercent}%)</span>
+                        </span>
+                      </div>
+
+                      <div className="bg-purple-50/80 border border-purple-100 p-2 rounded-xl">
+                        <div className="flex items-center gap-1.5 text-[#7F56D9] font-black text-[9.5px] uppercase">
+                          <span className="w-2 h-2 rounded-full bg-[#7F56D9] shrink-0" />
+                          Leave
+                        </div>
+                        <span className="text-xs font-black text-purple-900 block mt-0.5">
+                          {attendanceStats.leaveCount} <span className="text-[9px] text-purple-600 font-bold">({attendanceStats.leavePercent}%)</span>
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Bio Grid */}
@@ -627,15 +889,300 @@ const SchoolStudentsPage = () => {
             </div>
 
             {/* Footer */}
-            <div className="bg-gray-50 border-t border-gray-200 p-5 flex items-center justify-end shrink-0">
+            <div className="bg-gray-50 border-t border-gray-200 p-5 flex items-center justify-between gap-3 shrink-0">
+              <button
+                type="button"
+                onClick={() => openEditModal(selectedStudent)}
+                className="px-5 py-3 bg-amber-500 hover:bg-amber-600 active:scale-95 text-white font-black rounded-2xl text-xs uppercase tracking-wider transition-all shadow-md flex items-center gap-1.5"
+              >
+                <Edit2 size={14} className="stroke-[2.5]" />
+                Edit Profile
+              </button>
               <button 
                 onClick={() => setSelectedStudent(null)}
-                className="w-full sm:w-auto px-6 py-3.5 bg-[#3b2d7d] hover:bg-[#5942bc] text-white font-black rounded-2xl text-xs uppercase tracking-wider transition-all active:scale-95 shadow-md flex items-center justify-center gap-1.5"
+                className="px-6 py-3 bg-[#3b2d7d] hover:bg-[#5942bc] text-white font-black rounded-2xl text-xs uppercase tracking-wider transition-all active:scale-95 shadow-md flex items-center justify-center gap-1.5"
               >
                 Close Profile
               </button>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* Edit Student Modal */}
+      {showEditModal && (
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm transition-all duration-300 animate-in fade-in">
+          <div className="w-full max-w-xl bg-white rounded-[2.2rem] shadow-2xl border border-gray-150 overflow-hidden animate-in zoom-in duration-300 relative flex flex-col max-h-[92vh]">
+
+            {/* Modal Header */}
+            <div className="bg-gradient-to-r from-[#3b2d7d] to-[#5942bc] text-white px-6 py-5 relative flex items-center justify-between shrink-0">
+              <div>
+                <h3 className="text-sm font-black tracking-wider uppercase">Edit Student Profile</h3>
+                <span className="text-[10px] text-purple-200 font-bold block mt-0.5">
+                  Update student information & synchronization
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => !editSubmitting && setShowEditModal(false)}
+                className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 active:scale-90 transition-all text-white border border-white/10"
+              >
+                <X size={16} className="stroke-[3]" />
+              </button>
+            </div>
+
+            {/* Modal Form Body */}
+            <form onSubmit={handleEditSubmit} className="p-6 overflow-y-auto space-y-4 text-xs scrollbar-none">
+
+              {editSuccess && (
+                <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-2xl text-emerald-800 text-xs font-bold flex items-center gap-2">
+                  <CheckCircle size={16} className="text-emerald-600 shrink-0" />
+                  <span>Student profile updated successfully!</span>
+                </div>
+              )}
+
+              {editError && (
+                <div className="p-3.5 bg-red-50 border border-red-200 rounded-2xl text-red-700 text-xs font-bold flex items-center gap-2">
+                  <AlertCircle size={16} className="text-red-500 shrink-0" />
+                  <span>{editError}</span>
+                </div>
+              )}
+
+              {/* Student Personal Details */}
+              <div className="bg-gray-50/60 p-4 rounded-2xl border border-gray-150 space-y-3">
+                <span className="text-[10px] font-black text-[#3b2d7d] uppercase tracking-wider block">
+                  1. Student Particulars
+                </span>
+                
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-700 mb-1">
+                    Student Full Name <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={editForm.name}
+                    onChange={(e) => handleEditFormChange('name', e.target.value)}
+                    placeholder="e.g. Rahul Sharma"
+                    className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl font-bold text-gray-800 focus:outline-none focus:border-[#3b2d7d]"
+                  />
+                  {editErrors.name && <p className="text-[10px] text-red-500 font-bold mt-1">{editErrors.name}</p>}
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-gray-700 mb-1">
+                      Class / Grade <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={editForm.classGrade}
+                      onChange={(e) => {
+                        handleEditFormChange('classGrade', e.target.value);
+                        handleEditFormChange('section', '');
+                      }}
+                      className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl font-bold text-gray-800 focus:outline-none focus:border-[#3b2d7d]"
+                    >
+                      <option value="">Select Class</option>
+                      {classesList.map((c) => (
+                        <option key={c._id || c.classGrade} value={c.classGrade}>
+                          {formatClassLabel(c.classGrade)}
+                        </option>
+                      ))}
+                    </select>
+                    {editErrors.classGrade && <p className="text-[10px] text-red-500 font-bold mt-1">{editErrors.classGrade}</p>}
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-gray-700 mb-1">
+                      Section <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={editForm.section}
+                      onChange={(e) => handleEditFormChange('section', e.target.value)}
+                      className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl font-bold text-gray-800 focus:outline-none focus:border-[#3b2d7d]"
+                    >
+                      <option value="">Select Section</option>
+                      {(classesList.find((c) => c.classGrade === editForm.classGrade)?.sections || allSections).map((s) => (
+                        <option key={s} value={s}>Section {s}</option>
+                      ))}
+                    </select>
+                    {editErrors.section && <p className="text-[10px] text-red-500 font-bold mt-1">{editErrors.section}</p>}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-gray-700 mb-1">Roll Number</label>
+                    <input
+                      type="text"
+                      value={editForm.rollNo}
+                      onChange={(e) => handleEditFormChange('rollNo', e.target.value)}
+                      placeholder="e.g. 12"
+                      className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl font-bold text-gray-800 focus:outline-none focus:border-[#3b2d7d]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-gray-700 mb-1">Admission Number</label>
+                    <input
+                      type="text"
+                      value={editForm.admissionNo}
+                      onChange={(e) => handleEditFormChange('admissionNo', e.target.value)}
+                      placeholder="e.g. ADM-2026-001"
+                      className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl font-bold text-gray-800 focus:outline-none focus:border-[#3b2d7d]"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-gray-700 mb-1">Date of Birth</label>
+                    <input
+                      type="date"
+                      value={editForm.dob}
+                      onChange={(e) => handleEditFormChange('dob', e.target.value)}
+                      className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl font-bold text-gray-800 focus:outline-none focus:border-[#3b2d7d]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-gray-700 mb-1">Gender</label>
+                    <select
+                      value={editForm.gender}
+                      onChange={(e) => handleEditFormChange('gender', e.target.value)}
+                      className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl font-bold text-gray-800 focus:outline-none focus:border-[#3b2d7d]"
+                    >
+                      <option value="">Select Gender</option>
+                      <option value="male">Boy</option>
+                      <option value="female">Girl</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-700 mb-1">Address</label>
+                  <input
+                    type="text"
+                    value={editForm.address}
+                    onChange={(e) => handleEditFormChange('address', e.target.value)}
+                    placeholder="Residential address"
+                    className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl font-bold text-gray-800 focus:outline-none focus:border-[#3b2d7d]"
+                  />
+                </div>
+              </div>
+
+              {/* Admission & Additional Details */}
+              <div className="bg-gray-50/60 p-4 rounded-2xl border border-gray-150 space-y-3">
+                <span className="text-[10px] font-black text-[#3b2d7d] uppercase tracking-wider block">
+                  2. Admission & Family
+                </span>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-gray-700 mb-1">Admission Date</label>
+                    <input
+                      type="date"
+                      value={editForm.admissionDate}
+                      onChange={(e) => handleEditFormChange('admissionDate', e.target.value)}
+                      className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl font-bold text-gray-800 focus:outline-none focus:border-[#3b2d7d]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-gray-700 mb-1">Previous School</label>
+                    <input
+                      type="text"
+                      value={editForm.previousSchool}
+                      onChange={(e) => handleEditFormChange('previousSchool', e.target.value)}
+                      placeholder="Previous school name"
+                      className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl font-bold text-gray-800 focus:outline-none focus:border-[#3b2d7d]"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-700 mb-1">Mother's Name</label>
+                  <input
+                    type="text"
+                    value={editForm.motherName}
+                    onChange={(e) => handleEditFormChange('motherName', e.target.value)}
+                    placeholder="Mother's full name"
+                    className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl font-bold text-gray-800 focus:outline-none focus:border-[#3b2d7d]"
+                  />
+                </div>
+              </div>
+
+              {/* Parent & Login Details */}
+              <div className="bg-gray-50/60 p-4 rounded-2xl border border-gray-150 space-y-3">
+                <span className="text-[10px] font-black text-[#3b2d7d] uppercase tracking-wider block">
+                  3. Parent / Guardian Account
+                </span>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-700 mb-1">Father / Guardian Name</label>
+                  <input
+                    type="text"
+                    value={editForm.parentName}
+                    onChange={(e) => handleEditFormChange('parentName', e.target.value)}
+                    placeholder="Father/Guardian name"
+                    className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl font-bold text-gray-800 focus:outline-none focus:border-[#3b2d7d]"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-gray-700 mb-1">Parent Mobile (Login ID)</label>
+                    <input
+                      type="text"
+                      value={editForm.parentPhone}
+                      onChange={(e) => handleEditFormChange('parentPhone', e.target.value)}
+                      placeholder="10 digit mobile"
+                      maxLength={10}
+                      className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl font-bold text-gray-800 focus:outline-none focus:border-[#3b2d7d]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-gray-700 mb-1">Parent Email</label>
+                    <input
+                      type="email"
+                      value={editForm.parentEmail}
+                      onChange={(e) => handleEditFormChange('parentEmail', e.target.value)}
+                      placeholder="Email address"
+                      className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl font-bold text-gray-800 focus:outline-none focus:border-[#3b2d7d]"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Submit Buttons */}
+              <div className="pt-2 flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowEditModal(false)}
+                  disabled={editSubmitting}
+                  className="px-5 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-xl text-xs transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={editSubmitting}
+                  className="px-6 py-2.5 bg-[#3b2d7d] hover:bg-[#5942bc] text-white font-black rounded-xl text-xs uppercase tracking-wider transition-all shadow-md flex items-center gap-1.5 disabled:opacity-60"
+                >
+                  {editSubmitting ? (
+                    <>
+                      <Loader2 size={14} className="animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    'Save Changes'
+                  )}
+                </button>
+              </div>
+
+            </form>
           </div>
         </div>
       )}

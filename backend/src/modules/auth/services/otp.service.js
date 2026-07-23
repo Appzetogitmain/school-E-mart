@@ -243,6 +243,69 @@ const otpService = {
       { issueSession: true }
     );
   },
+
+  /**
+   * Guest/unlinked customer login. Verifies the OTP and, if no account exists
+   * for the phone yet, creates an unlinked customer — a parent-role user with
+   * NO school and NO child. They browse and buy as pure e-commerce; the
+   * commission engine gives them no school share. Used by the guest checkout.
+   */
+  async verifyCustomerOtp({ phone, otp, name }, requestMeta = {}) {
+    const normalizedPhone = normalizePhone(phone);
+
+    // Consume/verify the OTP first (no session yet).
+    await this.verifyOtp(
+      { phone: normalizedPhone, otp, purpose: 'signup_parent' },
+      requestMeta,
+      { issueSession: false }
+    );
+
+    const User = require('../../../database/models/User');
+    const ParentProfile = require('../../../database/models/ParentProfile');
+    const { generateUserRefId } = require('../../school/utils/refId');
+
+    // A phone owned by a non-parent (teacher/vendor/admin) can't become a customer.
+    const anyUser = await User.findOne({
+      phone: normalizedPhone,
+      'softDelete.isDeleted': { $ne: true },
+    });
+    if (anyUser && anyUser.role !== ROLES.PARENT) {
+      throw new UnauthorizedError(
+        'This phone number belongs to another account',
+        'PHONE_NOT_CUSTOMER'
+      );
+    }
+
+    let user = anyUser;
+    if (!user) {
+      user = await User.create({
+        refId: generateUserRefId('C'),
+        role: ROLES.PARENT,
+        status: 'active',
+        name: (name && name.trim()) || 'Customer',
+        phone: normalizedPhone,
+        phoneVerifiedAt: new Date(),
+        tenantSchoolId: null, // unlinked — no school
+      });
+
+      const generateReferralCode = async () => {
+        for (let i = 0; i < 50; i += 1) {
+          const code = `EMART${Math.floor(1000 + Math.random() * 9000)}`;
+          // eslint-disable-next-line no-await-in-loop
+          if (!(await ParentProfile.findOne({ referralCode: code }))) return code;
+        }
+        return `EMART${Date.now().toString().slice(-8)}`;
+      };
+      await ParentProfile.create({ userId: user._id, referralCode: await generateReferralCode() });
+    } else if (name && name.trim() && (!user.name || user.name === 'Customer')) {
+      // Backfill a name for a returning bare customer.
+      user.name = name.trim();
+      await user.save();
+    }
+
+    await userRepository.markPhoneVerified(user._id);
+    return issueAuthenticatedSession(user, requestMeta, 'auth.login.otp.success');
+  },
 };
 
 module.exports = otpService;

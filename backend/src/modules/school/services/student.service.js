@@ -323,6 +323,24 @@ const studentService = {
 
       await studentRepository.updateById(studentId, { $set: updateFields }, {}, { session });
 
+      // Synchronize changes to any linked ChildProfile records so parents & parent app
+      // immediately see updated student name, grade, roll number, etc.
+      const ChildProfile = require('../../../database/models/ChildProfile');
+      const childSync = {};
+      if (updateFields.name !== undefined) childSync.name = updateFields.name;
+      if (updateFields.classGrade !== undefined) childSync.grade = updateFields.classGrade;
+      if (updateFields.rollNo !== undefined) childSync.rollNo = updateFields.rollNo;
+      if (updateFields.dob !== undefined) childSync.dob = updateFields.dob;
+      if (updateFields.gender !== undefined) childSync.gender = updateFields.gender;
+      if (updateFields.bloodGroup !== undefined) childSync.bloodGroup = updateFields.bloodGroup;
+
+      if (Object.keys(childSync).length > 0) {
+        await ChildProfile.updateMany(
+          { studentId: student._id, 'softDelete.isDeleted': { $ne: true } },
+          { $set: childSync }
+        ).session(session);
+      }
+
       if (payload.parentPhone) {
         linkResult = await linkParentByPhone(schoolId, student, payload, session);
       }

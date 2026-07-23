@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  ArrowLeft, Camera, User, Mail, Phone, 
-  MapPin, Home, Globe, Navigation, 
-  ShieldCheck, Check, AlertCircle, ImageIcon
+import {
+  ArrowLeft, Camera, User, Mail, Phone,
+  MapPin, Home, Globe, Navigation,
+  ShieldCheck, Check, AlertCircle, ImageIcon,
+  Hash, GraduationCap, School
 } from 'lucide-react';
 import { updateMyProfile } from '../../../services/parentApi';
 import useAuthStore from '../../../store/useAuthStore';
@@ -17,7 +18,11 @@ const EditProfilePage = () => {
   const refreshUser = useAuthStore((state) => state.refreshUser);
 
   const [formData, setFormData] = useState({
-    fullName: "",
+    studentName: "",
+    parentName: "",
+    rollNo: "",
+    grade: "",
+    schoolName: "",
     email: "",
     phone: "",
     altPhone: "",
@@ -36,7 +41,12 @@ const EditProfilePage = () => {
         const user = await refreshUser();
         if (cancelled) return;
         setFormData({
-          fullName: user.childProfile?.name || user.name || "",
+          studentName: user.childProfile?.name || "",
+          // Strip any legacy " Parent" suffix so the real parent name shows
+          parentName: (user.name || "").replace(/\s+Parent$/i, ""),
+          rollNo: user.childProfile?.rollNo || "",
+          grade: user.childProfile?.grade || "",
+          schoolName: user.childProfile?.schoolName || "",
           email: user.email || "",
           phone: user.phone || "",
           altPhone: user.profile?.altPhone || "",
@@ -125,7 +135,8 @@ const EditProfilePage = () => {
 
   const validate = () => {
     const newErrors = {};
-    if (!formData.fullName.trim()) newErrors.fullName = "Student Name is required";
+    if (!formData.studentName.trim()) newErrors.studentName = "Student Name is required";
+    if (!formData.parentName.trim()) newErrors.parentName = "Parent Name is required";
     if (!formData.phone.trim()) newErrors.phone = "Phone is required";
     if (formData.email && !formData.email.includes('@')) newErrors.email = "Valid email is required";
     setErrors(newErrors);
@@ -134,11 +145,12 @@ const EditProfilePage = () => {
 
   const handleSave = async () => {
     if (!validate()) return;
-    
+
     setLoading(true);
     try {
       await updateMyProfile({
-        name: formData.fullName,
+        studentName: formData.studentName,
+        parentName: formData.parentName,
         email: formData.email,
         phone: formData.phone,
         altPhone: formData.altPhone,
@@ -165,34 +177,6 @@ const EditProfilePage = () => {
       setLoading(false);
     }
   };
-
-  const InputField = ({ label, icon: Icon, field, type = "text", placeholder, readOnly = false }) => (
-    <div className="space-y-1.5">
-      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">{label}</label>
-      <div className={`
-        relative flex items-center bg-white rounded-2xl border-2 transition-all duration-300
-        ${errors[field] ? 'border-red-100 bg-red-50/30' : 'border-gray-50 focus-within:border-primary/20 focus-within:shadow-lg focus-within:shadow-primary/5'}
-      `}>
-        <div className={`pl-4 text-gray-400 ${errors[field] ? 'text-red-400' : ''}`}>
-          <Icon size={18} />
-        </div>
-        <input
-          type={type}
-          value={formData[field]}
-          onChange={(e) => handleInputChange(field, e.target.value)}
-          placeholder={placeholder}
-          readOnly={readOnly}
-          className="w-full py-4 px-3 bg-transparent text-sm font-bold text-deep-purple outline-none placeholder:text-gray-300"
-        />
-        {errors[field] && (
-          <div className="pr-4 text-red-500">
-            <AlertCircle size={18} />
-          </div>
-        )}
-      </div>
-      {errors[field] && <p className="text-[9px] font-bold text-red-500 ml-1">{errors[field]}</p>}
-    </div>
-  );
 
   return (
     <div className="min-h-screen bg-[#F8F7FF] pb-32 font-outfit relative">
@@ -253,44 +237,71 @@ const EditProfilePage = () => {
             </button>
           </div>
           <div className="text-center">
-            <h2 className="text-lg font-black text-deep-purple">{formData.fullName || "New Student"}</h2>
+            <h2 className="text-lg font-black text-deep-purple">{formData.studentName || "New Student"}</h2>
             <p className="text-[10px] text-gray-400 font-bold uppercase tracking-[0.2em]">Parent Portal Account</p>
           </div>
         </div>
 
-        {/* Personal Details */}
+        {/* Student Information — official school records managed by school administration */}
         <div className="space-y-5">
-          <SectionTitle title="Personal Details" />
-          <InputField label="Student Name" icon={User} field="fullName" placeholder="Enter student name" />
-          <InputField label="Email Address" icon={Mail} field="email" type="email" placeholder="email@example.com" />
-          <div className="grid grid-cols-1 gap-5">
-            <InputField label="Phone Number" icon={Phone} field="phone" placeholder="+91 XXXXX XXXXX" />
-            <InputField label="Alternate Phone" icon={Phone} field="altPhone" placeholder="Optional" />
+          <SectionTitle title="Student Information" />
+          <InputField
+            label="Student Name"
+            icon={User}
+            value={formData.studentName}
+            placeholder="Student Name"
+            readOnly
+          />
+          <div className="grid grid-cols-2 gap-4">
+            <InputField label="Roll Number" icon={Hash} value={formData.rollNo} placeholder="—" readOnly />
+            <InputField label="Class" icon={GraduationCap} value={formData.grade} placeholder="—" readOnly />
           </div>
+          {formData.schoolName && (
+            <InputField label="School" icon={School} value={formData.schoolName} readOnly />
+          )}
+          <div className="p-3 bg-amber-50/80 border border-amber-100 rounded-2xl flex items-start gap-2 text-amber-800 text-[10px] font-bold">
+            <AlertCircle size={14} className="text-amber-600 shrink-0 mt-0.5" />
+            <span>
+              🔒 Student name, class, roll number, and school are official academic records. Only your School Administration can modify these details.
+            </span>
+          </div>
+        </div>
+
+        {/* Parent Information — parent contact & account details */}
+        <div className="space-y-5">
+          <SectionTitle title="Parent Information" />
+          <InputField label="Parent Name" icon={User} value={formData.parentName} onChange={(v) => handleInputChange('parentName', v)} error={errors.parentName} placeholder="Enter parent name" />
+          <InputField label="Login Phone Number" icon={Phone} value={formData.phone} placeholder="+91 XXXXX XXXXX" readOnly />
+          <p className="text-[9px] font-bold text-gray-400 ml-1 -mt-3 flex items-center gap-1">
+            <AlertCircle size={11} className="text-gray-300" />
+            Login mobile number is registered with your school and cannot be changed here.
+          </p>
+          <InputField label="Email Address" icon={Mail} type="email" value={formData.email} onChange={(v) => handleInputChange('email', v)} error={errors.email} placeholder="email@example.com" />
+          <InputField label="Alternate Phone" icon={Phone} value={formData.altPhone} onChange={(v) => handleInputChange('altPhone', v)} placeholder="Optional" />
         </div>
 
         {/* Address Section */}
         <div className="space-y-5 pb-10">
           <div className="flex items-center justify-between">
             <SectionTitle title="Address Details" />
-            <button 
+            <button
               onClick={handleAutoFill}
               className="flex items-center gap-1.5 text-[10px] font-black text-primary uppercase tracking-tight active:scale-95 transition-all"
             >
               <Navigation size={12} fill="currentColor" /> Tap to Auto-fill
             </button>
           </div>
-          
-          <InputField label="House No. & Street" icon={Home} field="address" placeholder="Flat, Floor, Street" />
-          
+
+          <InputField label="House No. & Street" icon={Home} value={formData.address} onChange={(v) => handleInputChange('address', v)} placeholder="Flat, Floor, Street" />
+
           <div className="grid grid-cols-2 gap-4">
-            <InputField label="Pin Code" icon={MapPin} field="pinCode" placeholder="XXXXXX" />
-            <InputField label="City" icon={Globe} field="city" placeholder="Indore" />
+            <InputField label="Pin Code" icon={MapPin} value={formData.pinCode} onChange={(v) => handleInputChange('pinCode', v)} placeholder="XXXXXX" />
+            <InputField label="City" icon={Globe} value={formData.city} onChange={(v) => handleInputChange('city', v)} placeholder="Indore" />
           </div>
-          
+
           <div className="grid grid-cols-2 gap-4">
-            <InputField label="State" icon={MapPin} field="state" placeholder="Madhya Pradesh" />
-            <InputField label="Country" icon={Globe} field="country" placeholder="India" />
+            <InputField label="State" icon={MapPin} value={formData.state} onChange={(v) => handleInputChange('state', v)} placeholder="Madhya Pradesh" />
+            <InputField label="Country" icon={Globe} value={formData.country} onChange={(v) => handleInputChange('country', v)} placeholder="India" />
           </div>
         </div>
       </div>
@@ -319,6 +330,44 @@ const EditProfilePage = () => {
     </div>
   );
 };
+
+// Defined at module scope (not inside the component) so its identity is stable
+// across renders — otherwise React remounts each <input> on every keystroke and
+// the field loses focus after one character.
+const InputField = ({ label, icon: Icon, value, onChange, error, type = 'text', placeholder, readOnly = false }) => (
+  <div className="space-y-1.5">
+    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">{label}</label>
+    <div
+      className={`relative flex items-center rounded-2xl border-2 transition-all duration-300 ${
+        error
+          ? 'border-red-100 bg-red-50/30'
+          : readOnly
+            ? 'border-gray-100 bg-gray-50'
+            : 'bg-white border-gray-50 focus-within:border-primary/20 focus-within:shadow-lg focus-within:shadow-primary/5'
+      }`}
+    >
+      <div className={`pl-4 text-gray-400 ${error ? 'text-red-400' : ''}`}>
+        <Icon size={18} />
+      </div>
+      <input
+        type={type}
+        value={value}
+        onChange={(e) => onChange?.(e.target.value)}
+        placeholder={placeholder}
+        readOnly={readOnly}
+        className={`w-full py-4 px-3 bg-transparent text-sm font-bold outline-none placeholder:text-gray-300 ${
+          readOnly ? 'text-gray-500' : 'text-deep-purple'
+        }`}
+      />
+      {error && (
+        <div className="pr-4 text-red-500">
+          <AlertCircle size={18} />
+        </div>
+      )}
+    </div>
+    {error && <p className="text-[9px] font-bold text-red-500 ml-1">{error}</p>}
+  </div>
+);
 
 const SectionTitle = ({ title }) => (
   <div className="flex items-center gap-2">

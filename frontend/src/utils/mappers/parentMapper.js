@@ -244,7 +244,7 @@ export const mapDiaryEntryForParent = (entry) => {
     date,
     timestamp: formatTimeText(createdAt),
     type: 'message',
-    sender: 'Class Teacher',
+    sender: entry?.teacherId?.name ? `Teacher ${entry.teacherId.name}` : 'Class Teacher',
     hasAttachment: (entry?.attachments?.length || 0) > 0,
     badgeText: entry?.isReadByParent ? 'Read' : 'New',
     badgeColor: entry?.isReadByParent
@@ -261,7 +261,8 @@ export const mapDiaryEntryForParent = (entry) => {
 
 export const mapAudienceToNoticePayload = (audience) => {
   if (audience === 'teachers') return 'teachers';
-  if (audience === 'specific') return 'specific_classes';
-  if (audience === 'students') return 'parents';
+  if (audience === 'staff') return 'staff';
+  if (audience === 'specific' || audience === 'specific_classes') return 'specific_classes';
+  if (audience === 'students' || audience === 'all') return 'all';
   return 'parents';
 };

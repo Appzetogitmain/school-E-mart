@@ -70,6 +70,8 @@ const checkoutService = {
         taxPaise,
         lineTotalPaise: lineSubtotal + taxPaise,
         availableStock: stock,
+        // Drives the commission split: 'users' = retail, 'schools' = bulk.
+        productAudience: product.audience || 'users',
       });
     }
     return lineItems;

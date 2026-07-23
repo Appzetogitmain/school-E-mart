@@ -8,13 +8,14 @@ const errorHandler = (err, req, res, _next) => {
     return fail(res, err.message, err.statusCode, err.code, err.errors, req);
   }
 
-  // body-parser failures. Without these they fall through to the catch-all below and are
-  // reported as a 500, which tells a parent uploading an oversized homework file that the
-  // server broke rather than that their file is too big.
-  if (err.type === 'entity.too.large') {
+  // Multer / body-parser upload size failures
+  if (err.type === 'entity.too.large' || err.name === 'MulterError' || err.code === 'LIMIT_FILE_SIZE') {
+    const message = err.code === 'LIMIT_FILE_SIZE' || err.type === 'entity.too.large'
+      ? 'The uploaded file is too large. Maximum size for video reels is 500MB.'
+      : (err.message || 'File upload failed');
     return fail(
       res,
-      'The uploaded content is too large',
+      message,
       httpStatus.PAYLOAD_TOO_LARGE,
       responseCodes.PAYLOAD_TOO_LARGE,
       null,

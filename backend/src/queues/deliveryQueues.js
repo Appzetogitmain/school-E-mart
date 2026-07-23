@@ -9,6 +9,8 @@ try {
   Bull = null;
 }
 
+let warnedInMemory = false;
+
 const createQueue = (name, defaultJobOptions) => {
   if (Bull && config.integrations.redis.enabled) {
     return new Bull(name, {
@@ -16,7 +18,10 @@ const createQueue = (name, defaultJobOptions) => {
       defaultJobOptions,
     });
   }
-  logger.warn('Delivery queue running in in-memory mode', { queue: name });
+  if (!warnedInMemory) {
+    logger.warn('Delivery queues running in in-memory mode');
+    warnedInMemory = true;
+  }
   return new InMemoryQueue(name, { defaultJobOptions });
 };
 

@@ -99,6 +99,12 @@ export const createSchool = async (payload) => {
   return unwrapData(response)?.school;
 };
 
+// Master-admin-only: set a school's commission rates (kit % + retail %).
+export const updateSchoolCommission = async (schoolId, payload) => {
+  const response = await apiClient.patch(`/admin/schools/${schoolId}/commission`, payload);
+  return unwrapData(response)?.school;
+};
+
 export const approveSchool = async (schoolId, payload = {}) => {
   const response = await apiClient.post(`/admin/schools/${schoolId}/approve`, payload);
   return unwrapData(response)?.school;
@@ -195,6 +201,26 @@ export const updateReel = async (reelId, payload) => {
 
 export const deleteReel = async (reelId) => {
   const response = await apiClient.delete(`/admin/reels/${reelId}`);
+  return unwrapData(response);
+};
+
+export const listMasterKitProducts = async (params = {}) => {
+  const response = await apiClient.get('/admin/kit-products', { params });
+  return extractPaginated(response, 'products');
+};
+
+export const createMasterKitProduct = async (payload) => {
+  const response = await apiClient.post('/admin/kit-products', payload);
+  return unwrapData(response)?.product;
+};
+
+export const updateMasterKitProduct = async (productId, payload) => {
+  const response = await apiClient.patch(`/admin/kit-products/${productId}`, payload);
+  return unwrapData(response)?.product;
+};
+
+export const deleteMasterKitProduct = async (productId) => {
+  const response = await apiClient.delete(`/admin/kit-products/${productId}`);
   return unwrapData(response);
 };
 

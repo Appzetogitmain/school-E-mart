@@ -58,3 +58,10 @@ export const updateMyProfile = async (payload) => {
   const response = await apiClient.patch('/users/me', payload);
   return response.data?.data;
 };
+
+// Switch the active linked child. Returns the fresh profile (childProfile +
+// children) so the caller can re-sync childInfo for the whole app.
+export const setActiveChild = async (childProfileId) => {
+  const response = await apiClient.post('/users/me/active-child', { childProfileId });
+  return response.data?.data;
+};

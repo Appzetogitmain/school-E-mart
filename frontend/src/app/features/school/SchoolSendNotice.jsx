@@ -1,13 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Clock, History, Megaphone, 
   Bold, Italic, Underline, List, ListOrdered, 
   AlignLeft, AlignRight, Link2, Image as ImageIcon,
   Users, GraduationCap, Grid, Upload, FileText, 
-  X, Info, Send, Save, Check, Loader2
+  X, Info, Send, Save, Check, Loader2, Paperclip
 } from 'lucide-react';
-import { createNotice, listClasses } from '../../../services/schoolApi';
+import { createNotice, listClasses, uploadSchoolFile } from '../../../services/schoolApi';
 import { mapAudienceToNoticePayload } from '../../../utils/mappers/parentMapper';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 import { useSchoolId } from '../../../utils/schoolContext';
@@ -19,6 +19,7 @@ const SchoolSendNotice = () => {
   const [content, setContent] = useState('');
   const [audience, setAudience] = useState('parents');
   const [attachments, setAttachments] = useState([]);
+  const [uploadingFile, setUploadingFile] = useState(false);
   const [schedule, setSchedule] = useState('now');
   const [isSuccess, setIsSuccess] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -46,17 +47,33 @@ const SchoolSendNotice = () => {
     setAttachments(attachments.filter(item => item.id !== id));
   };
 
-  const handleFileUpload = (e) => {
+  const handleFileUpload = async (e) => {
     const file = e.target.files[0];
-    if (file) {
-      setAttachments([
-        ...attachments,
-        {
-          id: Date.now(),
-          name: file.name,
-          size: `${Math.round(file.size / 1024)} KB`
-        }
-      ]);
+    if (!file) return;
+    if (!schoolId) {
+      setError('School context is missing.');
+      return;
+    }
+
+    setUploadingFile(true);
+    setError('');
+    try {
+      const uploaded = await uploadSchoolFile(schoolId, file, 'notice_attachment');
+      const attachmentId = uploaded?._id || uploaded?.id;
+      if (attachmentId) {
+        setAttachments(prev => [
+          ...prev,
+          {
+            id: attachmentId,
+            name: file.name,
+            size: `${Math.round(file.size / 1024)} KB`
+          }
+        ]);
+      }
+    } catch (err) {
+      setError(getErrorMessage(err, 'Failed to upload attachment file'));
+    } finally {
+      setUploadingFile(false);
     }
   };
 
@@ -83,6 +100,7 @@ const SchoolSendNotice = () => {
         targetAudience: mapAudienceToNoticePayload(audience),
         status: schedule === 'now' ? 'published' : 'draft',
         publishDate: schedule === 'now' ? new Date().toISOString() : undefined,
+        attachments: attachments.map(a => a.id),
         targetClasses:
           audience === 'specific' && selectedClass
             ? [{ classGrade: selectedClass, sections: [] }]
@@ -290,11 +308,76 @@ const SchoolSendNotice = () => {
           )}
         </div>
 
-        {/* Step 3: Schedule */}
+        {/* Step 3: Attachments */}
         <div className="bg-white border border-gray-200/80 rounded-[2.2rem] p-5 shadow-sm space-y-4">
           <div className="flex items-center gap-3">
             <div className="w-7 h-7 rounded-full bg-primary text-white text-[11px] font-black flex items-center justify-center shadow-sm">
               3
+            </div>
+            <h3 className="text-xs font-black text-deep-purple uppercase tracking-wider">
+              Attachments <span className="text-[10px] text-gray-400 font-bold normal-case ml-1">(Optional)</span>
+            </h3>
+          </div>
+          <p className="text-[10px] text-gray-400 font-bold -mt-2">
+            Attach relevant PDF, Image, or document files to this notice
+          </p>
+
+          <div className="space-y-3 pt-1">
+            <label className="border-2 border-dashed border-gray-200 hover:border-primary/40 rounded-2xl p-4 flex flex-col items-center justify-center gap-2 cursor-pointer transition-colors bg-gray-50/50">
+              <input 
+                type="file" 
+                onChange={handleFileUpload} 
+                className="hidden" 
+                disabled={uploadingFile}
+              />
+              {uploadingFile ? (
+                <div className="flex items-center gap-2 text-primary text-xs font-bold">
+                  <Loader2 size={16} className="animate-spin" />
+                  <span>Uploading file...</span>
+                </div>
+              ) : (
+                <>
+                  <div className="w-9 h-9 rounded-full bg-purple-50 flex items-center justify-center text-primary">
+                    <Upload size={16} />
+                  </div>
+                  <div className="text-center">
+                    <span className="text-xs font-black text-deep-purple block">Click to upload document</span>
+                    <span className="text-[9.5px] text-gray-400 font-bold">PDF, PNG, JPG up to 10MB</span>
+                  </div>
+                </>
+              )}
+            </label>
+
+            {attachments.length > 0 && (
+              <div className="space-y-2 pt-1">
+                {attachments.map((item) => (
+                  <div key={item.id} className="flex items-center justify-between p-3 bg-gray-50 border border-gray-150 rounded-xl text-xs">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <Paperclip size={14} className="text-primary shrink-0" />
+                      <div className="min-w-0">
+                        <p className="font-bold text-deep-purple truncate text-[11px]">{item.name}</p>
+                        <p className="text-[9px] text-gray-400 font-semibold">{item.size}</p>
+                      </div>
+                    </div>
+                    <button 
+                      type="button" 
+                      onClick={() => handleRemoveAttachment(item.id)}
+                      className="text-gray-400 hover:text-red-500 p-1"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Step 4: Schedule */}
+        <div className="bg-white border border-gray-200/80 rounded-[2.2rem] p-5 shadow-sm space-y-4">
+          <div className="flex items-center gap-3">
+            <div className="w-7 h-7 rounded-full bg-primary text-white text-[11px] font-black flex items-center justify-center shadow-sm">
+              4
             </div>
             <h3 className="text-xs font-black text-deep-purple uppercase tracking-wider">
               Schedule <span className="text-[10px] text-gray-400 font-bold normal-case ml-1">(Optional)</span>

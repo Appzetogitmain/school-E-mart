@@ -38,29 +38,52 @@ const usersService = {
 
     let profile = null;
     let childProfile = null;
+    let children = [];
 
     if (user.role === 'parent') {
       const parentProfile = await ParentProfile.findOne({ userId, 'softDelete.isDeleted': { $ne: true } }).lean();
-      const child = await ChildProfile.findOne({ parentUserId: userId, 'softDelete.isDeleted': { $ne: true } }).lean();
+      // All linked children (a parent may have more than one), oldest first so
+      // the list order is stable. The active child leads the student-first UI.
+      const allChildren = await ChildProfile.find({ parentUserId: userId, 'softDelete.isDeleted': { $ne: true } })
+        .sort({ 'audit.createdAt': 1 })
+        .lean();
 
       let defaultAddress = null;
       if (parentProfile?.defaultAddressId) {
         defaultAddress = await Address.findById(parentProfile.defaultAddressId).lean();
       }
 
-      if (child) {
-        const school = child.schoolId ? await School.findById(child.schoolId).lean() : null;
-        childProfile = {
-          name: child.name,
-          grade: child.grade,
-          schoolId: child.schoolId ? child.schoolId.toString() : 'explore-schools',
+      // Batch the school lookups so many children don't fan out to many queries
+      const schoolIds = [...new Set(allChildren.map((c) => c.schoolId).filter(Boolean).map(String))];
+      const schools = schoolIds.length
+        ? await School.find({ _id: { $in: schoolIds } }).select('name schoolRefNo').lean()
+        : [];
+      const schoolById = new Map(schools.map((s) => [String(s._id), s]));
+
+      const mapChild = (c) => {
+        const school = c.schoolId ? schoolById.get(String(c.schoolId)) : null;
+        return {
+          childProfileId: c._id.toString(),
+          name: c.name,
+          grade: c.grade,
+          schoolId: c.schoolId ? c.schoolId.toString() : 'explore-schools',
           schoolName: school ? school.name : 'Explore Schools',
-          schoolRefNo: child.schoolRefNo || (school ? school.schoolRefNo : null),
-          studentId: child.studentId ? child.studentId.toString() : null,
-          photo: child.avatarUrl || null,
-          avatarUrl: child.avatarUrl || null,
+          schoolRefNo: c.schoolRefNo || (school ? school.schoolRefNo : null),
+          rollNo: c.rollNo || null,
+          studentId: c.studentId ? c.studentId.toString() : null,
+          photo: c.avatarUrl || null,
+          avatarUrl: c.avatarUrl || null,
         };
-      }
+      };
+
+      children = allChildren.map(mapChild);
+
+      // Active child = the one the parent last selected, else the first linked
+      const activeChild =
+        allChildren.find(
+          (c) => parentProfile?.activeChildId && String(c._id) === String(parentProfile.activeChildId)
+        ) || allChildren[0];
+      if (activeChild) childProfile = mapChild(activeChild);
 
       if (parentProfile) {
         profile = {
@@ -100,6 +123,7 @@ const usersService = {
       },
       profile,
       childProfile,
+      children,
     };
   },
 
@@ -169,11 +193,30 @@ const usersService = {
 
     if (user.role === 'parent') {
       const parentProfile = await ParentProfile.findOne({ userId, 'softDelete.isDeleted': { $ne: true } });
-      const child = await ChildProfile.findOne({ parentUserId: userId, 'softDelete.isDeleted': { $ne: true } });
+      // Edit the ACTIVE child (the one the parent is acting on behalf of), not
+      // just the first one, so multi-child parents update the right student.
+      const children = await ChildProfile.find({ parentUserId: userId, 'softDelete.isDeleted': { $ne: true } })
+        .sort({ 'audit.createdAt': 1 });
+      const child =
+        children.find(
+          (c) => parentProfile?.activeChildId && String(c._id) === String(parentProfile.activeChildId)
+        ) || children[0] || null;
 
-      if (payload.name) {
-        user.name = `${payload.name} Parent`;
-        if (child) {
+      // Official student names and login phone numbers for enrolled school students are academic records
+      // managed exclusively by the School Administration. Parents cannot alter official student names or login numbers.
+      const isEnrolledSchoolStudent = Boolean(child?.studentId || child?.schoolId);
+
+      if (payload.studentName !== undefined && child) {
+        if (!isEnrolledSchoolStudent) {
+          child.name = payload.studentName;
+          await child.save();
+        }
+      }
+
+      if (payload.parentName !== undefined) {
+        user.name = payload.parentName;
+      } else if (payload.name && payload.studentName === undefined && payload.parentName === undefined) {
+        if (child && !isEnrolledSchoolStudent) {
           child.name = payload.name;
           await child.save();
         }
@@ -239,7 +282,27 @@ const usersService = {
 
     await user.save();
     return this.getProfile(userId);
-  }
+  },
+
+  // Switch which linked child is "active" for a parent. Everything the parent
+  // does on behalf of a student (attendance, homework, diary, phonebook) follows
+  // the active child, so this persists the choice across sessions.
+  async setActiveChild(userId, childProfileId) {
+    const parentProfile = await ParentProfile.findOne({ userId, 'softDelete.isDeleted': { $ne: true } });
+    if (!parentProfile) throw new NotFoundError('Parent profile not found');
+
+    const child = await ChildProfile.findOne({
+      _id: childProfileId,
+      parentUserId: userId,
+      'softDelete.isDeleted': { $ne: true },
+    }).lean();
+    if (!child) throw new NotFoundError('Child not found for this parent', 'CHILD_NOT_FOUND');
+
+    parentProfile.activeChildId = child._id;
+    await parentProfile.save();
+
+    return this.getProfile(userId);
+  },
 };
 
 module.exports = usersService;

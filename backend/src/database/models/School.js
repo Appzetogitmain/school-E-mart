@@ -38,6 +38,14 @@ const schoolSchema = new mongoose.Schema({
       match: /^[A-Z]{4}0[A-Z0-9]{6}$/
     }
   },
+  // Commission the school earns, set by the school admin. kitPercent applies to
+  // the school's own kits; retailPercent is earned when a user linked to this
+  // school buys a retail marketplace product. The platform's own cut is set
+  // separately by the superadmin (PlatformSettings). Vendor gets the remainder.
+  commission: {
+    kitPercent: { type: Number, min: 0, max: 100, default: 0 },
+    retailPercent: { type: Number, min: 0, max: 100, default: 0 }
+  },
   academicYearCurrent: { type: String },
   gradesOffered: [{ type: String }],
   sectionsConfig: [{

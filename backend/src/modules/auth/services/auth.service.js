@@ -106,8 +106,56 @@ const authService = {
     if (!user) {
       throw new UnauthorizedError(messages.AUTH.UNAUTHORIZED);
     }
-    return user;
+
+    // /auth/me is called on every app load and token refresh, and the client
+    // rebuilds childInfo (header, greetings, etc.) from it. Without childProfile
+    // here the student name gets overwritten with the parent's name on refresh,
+    // so attach the active child exactly like login does.
+    const obj = typeof user.toObject === 'function' ? user.toObject() : { ...user };
+    if (obj.role === 'parent') {
+      obj.childProfile = await buildActiveChildDto(userId);
+    }
+    return obj;
   },
 };
+
+// Builds the active-child DTO for a parent (mirrors sessionIssue.service and
+// users.service). Active child = ParentProfile.activeChildId, else the first.
+async function buildActiveChildDto(userId) {
+  const ParentProfile = require('../../../database/models/ParentProfile');
+  const ChildProfile = require('../../../database/models/ChildProfile');
+  const School = require('../../../database/models/School');
+
+  const parentProfile = await ParentProfile.findOne({
+    userId,
+    'softDelete.isDeleted': { $ne: true },
+  }).lean();
+
+  const children = await ChildProfile.find({
+    parentUserId: userId,
+    'softDelete.isDeleted': { $ne: true },
+  })
+    .sort({ 'audit.createdAt': 1 })
+    .lean();
+  if (!children.length) return null;
+
+  const child =
+    children.find(
+      (c) => parentProfile?.activeChildId && String(c._id) === String(parentProfile.activeChildId)
+    ) || children[0];
+
+  const school = child.schoolId ? await School.findById(child.schoolId).lean() : null;
+  return {
+    name: child.name,
+    grade: child.grade,
+    schoolId: child.schoolId ? child.schoolId.toString() : 'explore-schools',
+    schoolName: school ? school.name : 'Explore Schools',
+    schoolRefNo: child.schoolRefNo || (school ? school.schoolRefNo : null),
+    rollNo: child.rollNo || null,
+    studentId: child.studentId ? child.studentId.toString() : null,
+    photo: child.avatarUrl || null,
+    avatarUrl: child.avatarUrl || null,
+  };
+}
 
 module.exports = authService;

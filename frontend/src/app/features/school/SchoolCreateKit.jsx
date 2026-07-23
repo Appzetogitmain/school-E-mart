@@ -1,860 +1,1029 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
-  ArrowLeft, HelpCircle, Package, Layers,
-  Trash2, Plus, Info, Check, ChevronRight, ChevronUp,
-  Upload, Sparkles, TrendingUp
+  ArrowLeft, Package, Layers, Trash2, Plus, Info, Check, ChevronRight,
+  Upload, Sparkles, TrendingUp, X, Loader2, AlertCircle, ShoppingBag, Store, Tag,
+  Search, Filter, Sliders, DollarSign, Image as LucideImage, Minus, HelpCircle
 } from 'lucide-react';
-import { createKit, updateKit, getKit, listClasses, listVendors, uploadSchoolFile } from '../../../services/schoolApi';
-import { listProducts } from '../../../services/catalogApi';
+import { 
+  createKit, updateKit, getKit, listClasses, listVendors, 
+  uploadSchoolFile, listKitCategories, createKitCategory, 
+  deleteKitCategory, listMasterKitProductsForSchool 
+} from '../../../services/schoolApi';
 import { useSchoolId } from '../../../utils/schoolContext';
 import { getErrorMessage } from '../../../utils/apiHelpers';
+
+const DEFAULT_CATEGORIES = [
+  'Textbooks & Notebooks',
+  'School Uniforms',
+  'Stationary Packs',
+  'Winter Kit',
+  'Initial Kit',
+  'Project Kit',
+];
+
+const STANDARD_UNIFORM_SIZES = ['24', '26', '28', '30', '32', '34', '36', '38', '40', 'S', 'M', 'L', 'XL', 'XXL'];
 
 const SchoolCreateKit = () => {
   const navigate = useNavigate();
   const schoolId = useSchoolId();
-  // Same form serves both create and edit; ?kitId= switches it to edit.
   const [searchParams] = useSearchParams();
   const kitId = searchParams.get('kitId');
   const isEditing = Boolean(kitId);
-  const [loadingKit, setLoadingKit] = useState(false);
 
-  // Basic Info States
-  const [kitName, setKitName] = useState('');
-  const [classGrade, setClassGrade] = useState('');
-  const [category, setCategory] = useState('');
-  // The single vendor that will fulfil this kit's orders. Required before a kit
-  // can go live.
-  const [vendorId, setVendorId] = useState('');
-  const [vendorsList, setVendorsList] = useState([]);
-  const [description, setDescription] = useState('');
-  const [includes, setIncludes] = useState('');
-  const [imageFile, setImageFile] = useState(null);
-  const [isSuccess, setIsSuccess] = useState(false);
+  const [loadingKit, setLoadingKit] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [isSuccess, setIsSuccess] = useState(false);
 
-  // Catalog products available to add to the kit
-  const [catalogProducts, setCatalogProducts] = useState([]);
-  const [classesList, setClassesList] = useState([]);
-  const [selectedProductToAdd, setSelectedProductToAdd] = useState('');
+  // Form Basic Info
+  const [kitName, setKitName] = useState('');
+  const [classGrade, setClassGrade] = useState('');
+  const [category, setCategory] = useState(DEFAULT_CATEGORIES[0]);
+  const [vendorId, setVendorId] = useState('');
+  const [description, setDescription] = useState('');
+  const [imageFile, setImageFile] = useState(null);
+  const [imagePreview, setImagePreview] = useState('');
+  const [existingImageId, setExistingImageId] = useState(null);
 
-  // Default added items list in Step 2
-  const [items, setItems] = useState([]);
-
-  // Pricing & Stock States
+  // Pricing
   const [sellingPrice, setSellingPrice] = useState('');
   const [mrp, setMrp] = useState('');
-  const [quantity, setQuantity] = useState('');
-  const [sku, setSku] = useState('');
   const [kitStatus, setKitStatus] = useState('active');
-  const [showOnApp, setShowOnApp] = useState(true);
-  const [availableOnline, setAvailableOnline] = useState(true);
-  const [allowPreorders, setAllowPreorders] = useState(true);
 
-  // Expandable Accordions States
-  const [step3Open, setStep3Open] = useState(true);
+  // Categories & Vendors & Classes lists
+  const [categoriesData, setCategoriesData] = useState({ defaults: DEFAULT_CATEGORIES, custom: [], all: DEFAULT_CATEGORIES });
+  const [vendorsList, setVendorsList] = useState([]);
+  const [classesList, setClassesList] = useState([]);
+  const [masterProducts, setMasterProducts] = useState([]);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const { data } = await listProducts({ limit: 100 });
-        if (!cancelled) setCatalogProducts(data || []);
-      } catch {
-        if (!cancelled) setCatalogProducts([]);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  // Category Modal
+  const [showAddCatModal, setShowAddCatModal] = useState(false);
+  const [newCatName, setNewCatName] = useState('');
+  const [creatingCat, setCreatingCat] = useState(false);
 
-  useEffect(() => {
+  // Master Product Picker Modal
+  const [showProductPicker, setShowProductPicker] = useState(false);
+  const [productSearch, setProductSearch] = useState('');
+  const [selectedCatFilter, setSelectedCatFilter] = useState('All');
+
+  // Kit Items List
+  const [items, setItems] = useState([]);
+
+  // Load Dependencies
+  const loadInitialData = useCallback(async () => {
     if (!schoolId) return;
-    (async () => {
-      try {
-        const list = await listClasses(schoolId);
-        setClassesList(list || []);
-      } catch (err) {
-        console.error('Failed to load classes:', err);
+    try {
+      const [clsList, vList, catRes, mpRes] = await Promise.all([
+        listClasses(schoolId).catch(() => []),
+        listVendors(schoolId, { limit: 100 }).catch(() => ({ data: [] })),
+        listKitCategories(schoolId).catch(() => ({ defaults: DEFAULT_CATEGORIES, custom: [], all: DEFAULT_CATEGORIES })),
+        listMasterKitProductsForSchool({ limit: 300 }).catch(() => ({ data: [] })),
+      ]);
+
+      setClassesList(clsList || []);
+      setVendorsList(vList?.data || []);
+      setCategoriesData(catRes || { defaults: DEFAULT_CATEGORIES, custom: [], all: DEFAULT_CATEGORIES });
+      setMasterProducts(mpRes?.data || []);
+
+      if (vList?.data?.length && !vendorId) {
+        setVendorId(vList.data[0]._id || vList.data[0].id);
       }
-    })();
+    } catch (err) {
+      console.error('Failed to load kit form dependencies:', err);
+    }
   }, [schoolId]);
 
   useEffect(() => {
-    if (!schoolId) return;
-    (async () => {
-      try {
-        const { data } = await listVendors(schoolId, { limit: 100 });
-        setVendorsList(data || []);
-      } catch (err) {
-        console.error('Failed to load vendors:', err);
-        setVendorsList([]);
-      }
-    })();
-  }, [schoolId]);
+    loadInitialData();
+  }, [loadInitialData]);
 
+  // Load Existing Kit for Edit Mode
   useEffect(() => {
-    if (!schoolId || !kitId) return undefined;
-    let cancelled = false;
-
+    if (!schoolId || !kitId) return;
+    setLoadingKit(true);
     (async () => {
-      setLoadingKit(true);
-      setError('');
       try {
         const kit = await getKit(schoolId, kitId);
-        if (cancelled || !kit) return;
-
-        setKitName(kit.name || '');
-        setClassGrade(kit.classGrade || '');
-        setCategory(kit.category || '');
-        setVendorId(kit.vendorId ? String(kit.vendorId) : '');
-        // create() joins description and includes with a blank line; split it back apart
-        const [desc = '', inc = ''] = String(kit.description || '').split('\n\n');
-        setDescription(desc);
-        setIncludes(inc);
-        setSellingPrice(kit.pricePaise ? String(Math.round(kit.pricePaise / 100)) : '');
-        setMrp(kit.mrpPaise ? String(Math.round(kit.mrpPaise / 100)) : '');
-        setKitStatus(kit.status || 'active');
-        if (typeof kit.showOnApp === 'boolean') setShowOnApp(kit.showOnApp);
-        if (typeof kit.availableOnline === 'boolean') setAvailableOnline(kit.availableOnline);
-        if (typeof kit.allowPreorders === 'boolean') setAllowPreorders(kit.allowPreorders);
-
-        setItems(
-          (kit.items || []).map((item) => {
-            // productId arrives populated on read but is a plain id on write
-            const product = item.productId && typeof item.productId === 'object' ? item.productId : null;
-            const id = product?._id || item.productId;
-            return {
-              id,
-              productId: id,
-              name: product?.name || 'Product',
-              detail: product?.brand || 'Catalog product',
-              pricePaise: product?.pricePaise || 0,
-              qty: item.qty || 1,
-              unit: 'Pcs',
-            };
-          })
-        );
+        if (kit) {
+          setKitName(kit.name || '');
+          setClassGrade(kit.classGrade || '');
+          setCategory(kit.category || DEFAULT_CATEGORIES[0]);
+          setVendorId(kit.vendorId?._id || kit.vendorId?.id || kit.vendorId || '');
+          setDescription(kit.description || '');
+          setSellingPrice(kit.pricePaise ? (kit.pricePaise / 100).toString() : '');
+          setMrp(kit.mrpPaise ? (kit.mrpPaise / 100).toString() : '');
+          setKitStatus(kit.status || 'active');
+          if (kit.imageId?.storageKey || kit.imageUrl) {
+            setImagePreview(kit.imageId?.storageKey || kit.imageUrl);
+            setExistingImageId(kit.imageId?._id || kit.imageId);
+          }
+          if (Array.isArray(kit.items)) {
+            setItems(kit.items.map((it, idx) => ({
+              id: it._id || `item_${idx}`,
+              masterProductId: it.masterProductId?._id || it.masterProductId || null,
+              name: it.name || it.masterProductId?.name || 'Product',
+              category: it.category || it.masterProductId?.category || 'General',
+              subcategory: it.subcategory || it.masterProductId?.subcategory || '',
+              productType: it.masterProductId?.productType || 'general',
+              imageUrl: it.imageUrl || it.masterProductId?.imageUrl || '',
+              qty: it.qty || 1,
+              attributes: {
+                color: it.attributes?.color || '',
+                sizes: it.attributes?.sizes || [],
+                gender: it.attributes?.gender || 'Unisex',
+                publisher: it.attributes?.publisher || '',
+                subject: it.attributes?.subject || '',
+                packDetails: it.attributes?.packDetails || '',
+              }
+            })));
+          }
+        }
       } catch (err) {
-        if (!cancelled) setError(getErrorMessage(err, 'Unable to load this kit'));
+        setError(getErrorMessage(err, 'Failed to load kit details'));
       } finally {
-        if (!cancelled) setLoadingKit(false);
+        setLoadingKit(false);
       }
     })();
-
-    return () => { cancelled = true; };
   }, [schoolId, kitId]);
 
-  const costPrice = items.reduce(
-    (sum, item) => sum + item.qty * ((item.pricePaise || 0) / 100),
-    0
-  );
-  const parsedSelling = parseInt(sellingPrice) || 0;
-  const profit = parsedSelling > 0 ? parsedSelling - costPrice : 0;
-
-  const handleBack = () => {
-    navigate('/school/admin');
-  };
-
-  const handleRemoveItem = (id) => {
-    setItems(items.filter(item => item.id !== id));
-  };
-
-  const handleAddItem = () => {
-    if (!selectedProductToAdd) {
-      setError('Please select a product from the list.');
-      return;
-    }
-    const available = catalogProducts.find(
-      (p) => String(p._id || p.id) === String(selectedProductToAdd)
-    );
-    if (!available) {
-      setError('Selected product is invalid or not found.');
-      return;
-    }
-    if (items.some((item) => String(item.productId) === String(available._id || available.id))) {
-      setError('This product is already added to this kit.');
-      return;
-    }
-    setError('');
-    setItems([
-      ...items,
-      {
-        id: available._id || available.id,
-        productId: available._id || available.id,
-        name: available.name || available.title || 'Product',
-        detail: available.brand || 'Catalog product',
-        pricePaise: available.pricePaise || 0,
-        qty: 1,
-        unit: 'Pcs',
-      },
-    ]);
-    setSelectedProductToAdd('');
-  };
-
-  const handleImageUpload = (e) => {
-    const file = e.target.files[0];
+  // Image Handler
+  const handleImageChange = (e) => {
+    const file = e.target.files?.[0];
     if (file) {
       setImageFile(file);
+      setImagePreview(URL.createObjectURL(file));
     }
   };
 
-  const handleCreateKit = async (overrideStatus) => {
-    setError('');
+  // Add Custom Category Handler
+  const handleCreateCategory = async () => {
+    if (!newCatName.trim()) return;
+    setCreatingCat(true);
+    try {
+      await createKitCategory(schoolId, newCatName.trim());
+      setNewCatName('');
+      setShowAddCatModal(false);
+      const updatedCats = await listKitCategories(schoolId);
+      setCategoriesData(updatedCats);
+      setCategory(newCatName.trim());
+    } catch (err) {
+      alert(getErrorMessage(err, 'Failed to add custom category'));
+    } finally {
+      setCreatingCat(false);
+    }
+  };
+
+  // Delete Custom Category Handler
+  const handleDeleteCategory = async (catObj) => {
+    if (!window.confirm(`Delete custom category "${catObj.name}"?`)) return;
+    try {
+      await deleteKitCategory(schoolId, catObj._id || catObj.id);
+      const updatedCats = await listKitCategories(schoolId);
+      setCategoriesData(updatedCats);
+      if (category === catObj.name) {
+        setCategory(DEFAULT_CATEGORIES[0]);
+      }
+    } catch (err) {
+      alert(getErrorMessage(err, 'Failed to delete category'));
+    }
+  };
+
+  // Add Master Product to Kit
+  const handleAddMasterProduct = (mp) => {
+    const newItem = {
+      id: `item_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      masterProductId: mp._id || mp.id,
+      name: mp.name,
+      category: mp.category,
+      subcategory: mp.subcategory || '',
+      productType: mp.productType || 'general',
+      imageUrl: mp.imageUrl || '',
+      qty: 1,
+      attributes: {
+        color: '',
+        sizes: [],
+        gender: 'Unisex',
+        publisher: '',
+        subject: '',
+        packDetails: '',
+      }
+    };
+    setItems((prev) => [...prev, newItem]);
+    setShowProductPicker(false);
+  };
+
+  // Item helpers
+  const updateItem = (index, field, value) => {
+    setItems((prev) => {
+      const copy = [...prev];
+      copy[index] = { ...copy[index], [field]: value };
+      return copy;
+    });
+  };
+
+  const updateItemAttribute = (index, attrName, value) => {
+    setItems((prev) => {
+      const copy = [...prev];
+      copy[index] = {
+        ...copy[index],
+        attributes: {
+          ...copy[index].attributes,
+          [attrName]: value,
+        }
+      };
+      return copy;
+    });
+  };
+
+  const toggleSizeForUniform = (index, size) => {
+    setItems((prev) => {
+      const copy = [...prev];
+      const currentSizes = copy[index].attributes?.sizes || [];
+      const updated = currentSizes.includes(size)
+        ? currentSizes.filter((s) => s !== size)
+        : [...currentSizes, size];
+      copy[index] = {
+        ...copy[index],
+        attributes: {
+          ...copy[index].attributes,
+          sizes: updated,
+        }
+      };
+      return copy;
+    });
+  };
+
+  const removeItem = (index) => {
+    setItems((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  // Form Submit
+  const handleSubmit = async (e) => {
+    if (e) e.preventDefault();
     if (!kitName.trim()) {
-      setError('Kit name is required.');
+      setError('Please enter a Kit Name.');
       return;
     }
-    if (!items.length) {
-      setError('Add at least one product to the kit.');
+    if (!vendorId) {
+      setError('Please select an assigned vendor for kit fulfillment.');
       return;
     }
-    if (!schoolId) {
-      setError('School context is missing. Please log in again.');
+    if (!sellingPrice || isNaN(Number(sellingPrice)) || Number(sellingPrice) < 0) {
+      setError('Please enter a valid Selling Price.');
+      return;
+    }
+    if (items.length === 0) {
+      setError('Please add at least one product item to the kit.');
       return;
     }
 
     setSaving(true);
+    setError('');
+
     try {
-      let imageId = undefined;
+      let uploadedImageId = existingImageId;
       if (imageFile) {
         const attachment = await uploadSchoolFile(schoolId, imageFile, 'kit_image');
-        imageId = attachment?._id || attachment?.id;
+        if (attachment?._id || attachment?.id) {
+          uploadedImageId = attachment._id || attachment.id;
+        }
       }
 
-      const finalStatus = overrideStatus === 'active' || overrideStatus === 'draft' ? overrideStatus : kitStatus;
+      const spPaise = Math.round(parseFloat(sellingPrice) * 100);
+      const mrpPaiseVal = mrp ? Math.round(parseFloat(mrp) * 100) : spPaise;
 
       const payload = {
         name: kitName.trim(),
-        vendorId: vendorId || undefined,
         classGrade: classGrade || undefined,
-        category: category || undefined,
-        description: [description.trim(), includes.trim()].filter(Boolean).join('\n\n') || undefined,
-        // Left undefined when no new file was picked, so editing does not clear the existing image
-        imageId,
-        items: items.map((item) => ({ productId: item.productId, qty: item.qty })),
-        pricePaise: parsedSelling > 0 ? Math.round(parsedSelling * 100) : undefined,
-        mrpPaise: parseInt(mrp) > 0 ? Math.round(parseInt(mrp) * 100) : undefined,
-        status: finalStatus,
-        showOnApp,
-        availableOnline,
-        allowPreorders,
+        category: category || DEFAULT_CATEGORIES[0],
+        vendorId,
+        description: description.trim() || undefined,
+        imageId: uploadedImageId || undefined,
+        imageUrl: imagePreview && !imageFile ? imagePreview : undefined,
+        pricePaise: spPaise,
+        mrpPaise: mrpPaiseVal,
+        status: kitStatus,
+        items: items.map((it) => ({
+          masterProductId: it.masterProductId || undefined,
+          name: it.name,
+          category: it.category,
+          subcategory: it.subcategory,
+          imageUrl: it.imageUrl,
+          qty: Number(it.qty) || 1,
+          attributes: it.attributes,
+        })),
       };
 
-      if (isEditing) await updateKit(schoolId, kitId, payload);
-      else await createKit(schoolId, payload);
+      if (isEditing) {
+        await updateKit(schoolId, kitId, payload);
+      } else {
+        await createKit(schoolId, payload);
+      }
 
       setIsSuccess(true);
       setTimeout(() => {
-        setIsSuccess(false);
         navigate('/school/kits');
-      }, 2000);
+      }, 1500);
+
     } catch (err) {
-      setError(getErrorMessage(err, isEditing ? 'Unable to update kit' : 'Unable to create kit'));
+      setError(getErrorMessage(err, 'Failed to save kit'));
+    } finally {
+      setSaving(false);
     }
   };
 
+  const filteredMasterProducts = masterProducts.filter((mp) => {
+    const matchesCat = selectedCatFilter === 'All' || mp.category === selectedCatFilter;
+    const matchesSearch = !productSearch || mp.name.toLowerCase().includes(productSearch.toLowerCase());
+    return matchesCat && matchesSearch;
+  });
+
+  const discountPercent = mrp && sellingPrice && Number(mrp) > Number(sellingPrice)
+    ? Math.round(((Number(mrp) - Number(sellingPrice)) / Number(mrp)) * 100)
+    : 0;
+
   return (
-    <div className="flex flex-col min-h-screen bg-gray-50/50 pb-48 font-outfit relative">
-      {/* Top Banner Success Notification */}
-      {isSuccess && (
-        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[200] w-[90%] max-w-md animate-in fade-in zoom-in slide-in-from-top-2 duration-300">
-          <div className="bg-emerald-500 text-white px-5 py-4 rounded-3xl shadow-xl flex items-center gap-3.5 border border-emerald-400/20">
-            <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
-              <Check size={18} className="text-white" />
-            </div>
+    <div className="min-h-screen bg-gray-50/50 pb-32 font-outfit text-gray-800">
+      
+      {/* Top Sticky Bar */}
+      <div className="bg-white border-b border-gray-200/80 px-6 py-4 shadow-xs sticky top-0 z-30 backdrop-blur-md bg-white/90">
+        <div className="max-w-3xl mx-auto flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => navigate('/school/kits')}
+              className="p-2.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 transition-all active:scale-95 shrink-0"
+              title="Back to Kits"
+            >
+              <ArrowLeft size={18} />
+            </button>
             <div>
-              <span className="text-xs font-black block leading-none">
-                {isEditing ? 'Kit Updated Successfully!' : 'Kit Created Successfully!'}
-              </span>
-              <span className="text-[10px] text-emerald-100 font-bold block mt-1">
-                {isEditing ? 'Changes are live for parents.' : 'Ready for parent procurement.'}
-              </span>
+              <h1 className="text-lg font-black text-gray-900 tracking-tight leading-none">
+                {isEditing ? 'Edit School Kit' : 'Create New Kit'}
+              </h1>
+              <p className="text-xs text-gray-400 font-medium mt-1">Single-column structured kit creation form</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => navigate('/school/kits')}
+              className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs rounded-xl transition-all"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={saving}
+              className="px-6 py-2.5 bg-[#3b2d7d] hover:bg-[#4a3a99] text-white font-black text-xs rounded-xl uppercase tracking-wider flex items-center gap-2 shadow-md shadow-purple-900/10 active:scale-95 disabled:opacity-60 transition-all"
+            >
+              {saving ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} className="stroke-[3]" />}
+              <span>{isEditing ? 'Save Changes' : 'Publish Kit'}</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Single Column Container */}
+      <div className="max-w-3xl mx-auto py-10 px-4 sm:px-6 space-y-10">
+
+        {/* Global Notifications */}
+        {error && (
+          <div className="p-4 bg-red-50 border border-red-200/80 rounded-2xl text-xs font-bold text-red-600 flex items-center gap-2.5 shadow-xs animate-in fade-in">
+            <AlertCircle size={18} className="shrink-0 text-red-500" />
+            <span>{error}</span>
+          </div>
+        )}
+
+        {isSuccess && (
+          <div className="p-4 bg-emerald-50 border border-emerald-200/80 rounded-2xl text-xs font-bold text-emerald-700 flex items-center gap-2.5 shadow-xs animate-in fade-in">
+            <Check size={18} className="shrink-0 text-emerald-600" />
+            <span>Kit saved successfully! Redirecting to kit list...</span>
+          </div>
+        )}
+
+        {loadingKit ? (
+          <div className="py-24 text-center text-gray-400 font-bold flex flex-col items-center gap-3">
+            <Loader2 size={32} className="animate-spin text-[#3b2d7d]" />
+            <span className="text-xs uppercase tracking-wider font-black">Loading Kit Information...</span>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-10">
+            
+            {/* SECTION 1: BASIC INFORMATION */}
+            <section className="bg-white border border-gray-200/80 rounded-3xl p-6 sm:p-8 shadow-xs space-y-6">
+              <div className="border-b border-gray-150 pb-4">
+                <h2 className="text-base font-black text-gray-900 tracking-tight uppercase">1. Basic Information</h2>
+                <p className="text-xs text-gray-400 font-medium mt-0.5">Specify the kit title, target class, and category</p>
+              </div>
+
+              <div className="space-y-6">
+                
+                {/* Field 1: Kit Name */}
+                <div className="w-full">
+                  <label className="block text-xs font-black uppercase tracking-wider text-gray-700 mb-2">
+                    Kit Name / Title <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={kitName}
+                    onChange={(e) => setKitName(e.target.value)}
+                    placeholder="e.g. Class 1 Annual Academic Kit (2026-27)"
+                    className="w-full px-4 py-3.5 bg-gray-50/70 border border-gray-200 rounded-2xl text-sm font-bold text-gray-900 focus:outline-none focus:border-[#3b2d7d] focus:bg-white transition-all shadow-xs"
+                  />
+                </div>
+
+                {/* Field 2: Target Class */}
+                <div className="w-full">
+                  <label className="block text-xs font-black uppercase tracking-wider text-gray-700 mb-2">
+                    Target Class / Grade
+                  </label>
+                  <select
+                    value={classGrade}
+                    onChange={(e) => setClassGrade(e.target.value)}
+                    className="w-full px-4 py-3.5 bg-gray-50/70 border border-gray-200 rounded-2xl text-sm font-bold text-gray-900 focus:outline-none focus:border-[#3b2d7d] focus:bg-white transition-all shadow-xs"
+                  >
+                    <option value="">Select Target Class / Grade</option>
+                    {classesList.map((c) => {
+                      const gradeName = typeof c === 'string' ? c : c.name || c.classGrade;
+                      return (
+                        <option key={gradeName} value={gradeName}>
+                          {gradeName}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+
+                {/* Field 3: Category */}
+                <div className="w-full">
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-xs font-black uppercase tracking-wider text-gray-700">
+                      Kit Category <span className="text-red-500">*</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setShowAddCatModal(true)}
+                      className="text-xs font-bold text-[#3b2d7d] hover:underline flex items-center gap-1"
+                    >
+                      <Plus size={13} className="stroke-[3]" /> Add Custom Category
+                    </button>
+                  </div>
+                  <select
+                    value={category}
+                    onChange={(e) => setCategory(e.target.value)}
+                    className="w-full px-4 py-3.5 bg-gray-50/70 border border-gray-200 rounded-2xl text-sm font-bold text-gray-900 focus:outline-none focus:border-[#3b2d7d] focus:bg-white transition-all shadow-xs"
+                  >
+                    {categoriesData.all.map((cat) => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                  </select>
+
+                  {/* Category Pills List */}
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    {categoriesData.defaults.map((cat) => (
+                      <button
+                        key={cat}
+                        type="button"
+                        onClick={() => setCategory(cat)}
+                        className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all border ${
+                          category === cat
+                            ? 'bg-[#3b2d7d] text-white border-[#3b2d7d] shadow-sm'
+                            : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
+                        }`}
+                      >
+                        {cat}
+                      </button>
+                    ))}
+
+                    {categoriesData.custom.map((catObj) => (
+                      <div
+                        key={catObj._id || catObj.id}
+                        className={`inline-flex items-center rounded-xl border text-xs font-bold transition-all ${
+                          category === catObj.name
+                            ? 'bg-[#3b2d7d] text-white border-[#3b2d7d] shadow-sm'
+                            : 'bg-purple-50 text-purple-900 border-purple-200'
+                        }`}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => setCategory(catObj.name)}
+                          className="px-3.5 py-2"
+                        >
+                          {catObj.name}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteCategory(catObj)}
+                          className="pr-2.5 text-red-400 hover:text-red-600"
+                          title="Delete Category"
+                        >
+                          <X size={13} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+              </div>
+            </section>
+
+            {/* SECTION 2: VENDOR & FULFILLMENT */}
+            <section className="bg-white border border-gray-200/80 rounded-3xl p-6 sm:p-8 shadow-xs space-y-6">
+              <div className="border-b border-gray-150 pb-4">
+                <h2 className="text-base font-black text-gray-900 tracking-tight uppercase">2. Order Fulfillment Vendor</h2>
+                <p className="text-xs text-gray-400 font-medium mt-0.5">Select vendor to directly handle order fulfillment</p>
+              </div>
+
+              {/* Field 4: Vendor Dropdown */}
+              <div className="w-full space-y-2">
+                <label className="block text-xs font-black uppercase tracking-wider text-gray-700">
+                  Assigned Vendor <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={vendorId}
+                  onChange={(e) => setVendorId(e.target.value)}
+                  className="w-full px-4 py-3.5 bg-gray-50/70 border border-gray-200 rounded-2xl text-sm font-bold text-gray-900 focus:outline-none focus:border-[#3b2d7d] focus:bg-white transition-all shadow-xs"
+                >
+                  <option value="">Select Vendor to fulfill kit orders</option>
+                  {vendorsList.map((v) => (
+                    <option key={v._id || v.id} value={v._id || v.id}>
+                      {v.storeName || v.businessName || v.name} — {v.phone || v.email}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-purple-900/70 font-medium">
+                  🔒 Direct Routing: Orders placed for this kit are assigned directly to this vendor for fulfillment.
+                </p>
+              </div>
+            </section>
+
+            {/* SECTION 3: COVER IMAGE & OVERVIEW */}
+            <section className="bg-white border border-gray-200/80 rounded-3xl p-6 sm:p-8 shadow-xs space-y-6">
+              <div className="border-b border-gray-150 pb-4">
+                <h2 className="text-base font-black text-gray-900 tracking-tight uppercase">3. Cover Image & Overview</h2>
+                <p className="text-xs text-gray-400 font-medium mt-0.5">Kit cover image and instructions for parents</p>
+              </div>
+
+              <div className="space-y-6">
+                
+                {/* Field 5: Cover Image */}
+                <div className="w-full">
+                  <label className="block text-xs font-black uppercase tracking-wider text-gray-700 mb-2">Main Cover Image</label>
+                  <div className="border-2 border-dashed border-gray-200 bg-gray-50/50 rounded-2xl p-6 text-center hover:border-[#3b2d7d] transition-colors">
+                    {imagePreview ? (
+                      <div className="relative max-w-xs mx-auto h-40 rounded-xl overflow-hidden group shadow-sm bg-white border border-gray-200">
+                        <img src={imagePreview} alt="Kit Cover" className="w-full h-full object-contain p-2" />
+                        <label className="absolute inset-0 bg-black/60 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 cursor-pointer transition-opacity text-xs font-bold">
+                          Click to Change Image
+                          <input type="file" accept="image/*" onChange={handleImageChange} className="hidden" />
+                        </label>
+                      </div>
+                    ) : (
+                      <label className="cursor-pointer flex flex-col items-center justify-center py-4 text-gray-400 hover:text-[#3b2d7d] transition-colors">
+                        <Upload size={28} className="mb-2 text-gray-400" />
+                        <span className="text-sm font-bold text-gray-800">Upload Kit Main Image</span>
+                        <span className="text-xs text-gray-400 mt-0.5">JPEG / PNG up to 10MB</span>
+                        <input type="file" accept="image/*" onChange={handleImageChange} className="hidden" />
+                      </label>
+                    )}
+                  </div>
+                </div>
+
+                {/* Field 6: Kit Overview */}
+                <div className="w-full">
+                  <label className="block text-xs font-black uppercase tracking-wider text-gray-700 mb-2">Kit Overview & Instructions</label>
+                  <textarea
+                    rows={4}
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder="Provide details about what is included in this kit, instructions for parents, etc..."
+                    className="w-full px-4 py-3.5 bg-gray-50/70 border border-gray-200 rounded-2xl text-sm font-bold text-gray-900 focus:outline-none focus:border-[#3b2d7d] focus:bg-white transition-all shadow-xs"
+                  />
+                </div>
+
+              </div>
+            </section>
+
+            {/* SECTION 4: PRICING & VISIBILITY */}
+            <section className="bg-white border border-gray-200/80 rounded-3xl p-6 sm:p-8 shadow-xs space-y-6">
+              <div className="border-b border-gray-150 pb-4">
+                <h2 className="text-base font-black text-gray-900 tracking-tight uppercase">4. Pricing & App Status</h2>
+                <p className="text-xs text-gray-400 font-medium mt-0.5">Selling price, MRP, and mobile app visibility</p>
+              </div>
+
+              <div className="space-y-6">
+                
+                {/* Field 7: Selling Price */}
+                <div className="w-full">
+                  <label className="block text-xs font-black uppercase tracking-wider text-gray-700 mb-2">
+                    Selling Price (₹) <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-sm">₹</span>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={sellingPrice}
+                      onChange={(e) => setSellingPrice(e.target.value)}
+                      placeholder="1999"
+                      className="w-full pl-9 pr-4 py-3.5 bg-gray-50/70 border border-gray-200 rounded-2xl text-sm font-black text-gray-900 focus:outline-none focus:border-[#3b2d7d] focus:bg-white transition-all shadow-xs"
+                    />
+                  </div>
+                  <span className="text-xs text-gray-400 mt-1 block">Actual price parent pays.</span>
+                </div>
+
+                {/* Field 8: MRP Price */}
+                <div className="w-full">
+                  <label className="block text-xs font-black uppercase tracking-wider text-gray-700 mb-2">
+                    MRP Price (₹) <span className="text-gray-400 font-normal">(Optional)</span>
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-sm">₹</span>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={mrp}
+                      onChange={(e) => setMrp(e.target.value)}
+                      placeholder="2499"
+                      className="w-full pl-9 pr-4 py-3.5 bg-gray-50/70 border border-gray-200 rounded-2xl text-sm font-bold text-gray-900 focus:outline-none focus:border-[#3b2d7d] focus:bg-white transition-all shadow-xs"
+                    />
+                  </div>
+                  {discountPercent > 0 && (
+                    <span className="text-xs font-black text-emerald-600 mt-1 block">
+                      Shows {discountPercent}% OFF discount badge on app
+                    </span>
+                  )}
+                </div>
+
+                {/* Field 9: Status */}
+                <div className="w-full">
+                  <label className="block text-xs font-black uppercase tracking-wider text-gray-700 mb-2">Publish Status</label>
+                  <select
+                    value={kitStatus}
+                    onChange={(e) => setKitStatus(e.target.value)}
+                    className="w-full px-4 py-3.5 bg-gray-50/70 border border-gray-200 rounded-2xl text-sm font-bold text-gray-900 focus:outline-none focus:border-[#3b2d7d] focus:bg-white transition-all shadow-xs"
+                  >
+                    <option value="active">Active (Visible on Mobile App)</option>
+                    <option value="draft">Draft (Saved for later)</option>
+                  </select>
+                </div>
+
+              </div>
+            </section>
+
+            {/* SECTION 5: PRODUCTS INCLUDED IN THIS KIT */}
+            <section className="bg-white border border-gray-200/80 rounded-3xl p-6 sm:p-8 shadow-xs space-y-6">
+              <div className="border-b border-gray-150 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h2 className="text-base font-black text-gray-900 tracking-tight uppercase">
+                    5. Included Products ({items.length} items)
+                  </h2>
+                  <p className="text-xs text-gray-400 font-medium mt-0.5">Select products from Master Catalogue & set custom item attributes</p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setShowProductPicker(true)}
+                  className="px-5 py-3 bg-[#3b2d7d] hover:bg-[#4a3a99] text-white font-black text-xs rounded-xl transition-all flex items-center justify-center gap-2 uppercase tracking-wider shadow-sm active:scale-95"
+                >
+                  <Plus size={15} className="stroke-[3]" /> Add Product from Catalogue
+                </button>
+              </div>
+
+              {items.length === 0 ? (
+                <div className="py-14 text-center border-2 border-dashed border-gray-200 rounded-3xl p-8 bg-gray-50/50 space-y-4">
+                  <Package size={44} className="text-gray-300 mx-auto" />
+                  <div>
+                    <h3 className="text-sm font-black text-gray-800">No products added to this kit yet</h3>
+                    <p className="text-xs text-gray-400 max-w-sm mx-auto mt-1">
+                      Click "Add Product from Catalogue" to select textbooks, uniform sets, or stationary items.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowProductPicker(true)}
+                    className="px-6 py-3 bg-white border border-gray-300 hover:border-[#3b2d7d] text-[#3b2d7d] font-bold text-xs rounded-xl transition-all shadow-xs inline-flex items-center gap-2"
+                  >
+                    <Plus size={15} /> Browse Master Catalogue
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-5">
+                  {items.map((item, index) => (
+                    <div
+                      key={item.id || index}
+                      className="p-6 bg-gray-50/80 border border-gray-200 rounded-2xl space-y-5 hover:border-purple-300 transition-all shadow-xs"
+                    >
+                      {/* Product Item Header */}
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div className="flex items-center gap-4">
+                          {item.imageUrl ? (
+                            <img src={item.imageUrl} alt={item.name} className="w-14 h-14 rounded-xl object-contain bg-white border border-gray-200 p-1.5 shrink-0 shadow-xs" />
+                          ) : (
+                            <div className="w-14 h-14 rounded-xl bg-purple-100 text-[#3b2d7d] flex items-center justify-center font-black text-sm shrink-0">
+                              {item.name.slice(0, 2).toUpperCase()}
+                            </div>
+                          )}
+                          <div>
+                            <span className="text-[10px] font-black text-purple-700 uppercase tracking-wider block">
+                              {item.category} {item.subcategory ? `• ${item.subcategory}` : ''} ({item.productType})
+                            </span>
+                            <h4 className="text-sm font-black text-gray-900">{item.name}</h4>
+                          </div>
+                        </div>
+
+                        {/* Quantity Stepper & Delete */}
+                        <div className="flex items-center justify-between sm:justify-end gap-4 pt-3 sm:pt-0 border-t sm:border-t-0 border-gray-200">
+                          <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl p-1 shadow-xs">
+                            <button
+                              type="button"
+                              onClick={() => updateItem(index, 'qty', Math.max(1, item.qty - 1))}
+                              className="w-8 h-8 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 flex items-center justify-center font-bold"
+                            >
+                              <Minus size={13} />
+                            </button>
+                            <span className="w-8 text-center text-xs font-black text-gray-900">{item.qty}</span>
+                            <button
+                              type="button"
+                              onClick={() => updateItem(index, 'qty', item.qty + 1)}
+                              className="w-8 h-8 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 flex items-center justify-center font-bold"
+                            >
+                              <Plus size={13} />
+                            </button>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => removeItem(index)}
+                            className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
+                            title="Remove Product"
+                          >
+                            <Trash2 size={18} />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Dynamic Attributes (Single Column Stack) */}
+                      <div className="pt-4 border-t border-gray-200/80 space-y-4">
+                        
+                        {/* Uniform / Winter Wear Controls */}
+                        {(item.productType === 'uniform' || item.productType === 'winter') && (
+                          <div className="space-y-4 bg-white p-5 rounded-2xl border border-gray-200/80 shadow-xs">
+                            <div className="w-full">
+                              <label className="block text-xs font-bold text-gray-700 mb-1.5">Uniform Color</label>
+                              <input
+                                type="text"
+                                value={item.attributes?.color || ''}
+                                onChange={(e) => updateItemAttribute(index, 'color', e.target.value)}
+                                placeholder="e.g. Navy Blue / White"
+                                className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 focus:outline-none focus:border-[#3b2d7d]"
+                              />
+                            </div>
+
+                            <div className="w-full">
+                              <label className="block text-xs font-bold text-gray-700 mb-1.5">Gender</label>
+                              <div className="flex gap-2">
+                                {['Unisex', 'Boy', 'Girl'].map((g) => (
+                                  <button
+                                    key={g}
+                                    type="button"
+                                    onClick={() => updateItemAttribute(index, 'gender', g)}
+                                    className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all border ${
+                                      (item.attributes?.gender || 'Unisex') === g
+                                        ? 'bg-[#3b2d7d] text-white border-[#3b2d7d]'
+                                        : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
+                                    }`}
+                                  >
+                                    {g}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+
+                            <div className="w-full">
+                              <label className="block text-xs font-bold text-gray-700 mb-2">Available Sizes</label>
+                              <div className="flex flex-wrap gap-2">
+                                {STANDARD_UNIFORM_SIZES.map((sz) => {
+                                  const isSelected = (item.attributes?.sizes || []).includes(sz);
+                                  return (
+                                    <button
+                                      key={sz}
+                                      type="button"
+                                      onClick={() => toggleSizeForUniform(index, sz)}
+                                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border ${
+                                        isSelected
+                                          ? 'bg-[#3b2d7d] text-white border-[#3b2d7d] shadow-xs'
+                                          : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
+                                      }`}
+                                    >
+                                      {sz}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Textbook / Notebook Controls */}
+                        {(item.productType === 'textbook' || item.productType === 'notebook') && (
+                          <div className="space-y-4 bg-white p-5 rounded-2xl border border-gray-200/80 shadow-xs">
+                            <div className="w-full">
+                              <label className="block text-xs font-bold text-gray-700 mb-1.5">Subject</label>
+                              <input
+                                type="text"
+                                value={item.attributes?.subject || ''}
+                                onChange={(e) => updateItemAttribute(index, 'subject', e.target.value)}
+                                placeholder="e.g. Mathematics / English"
+                                className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 focus:outline-none focus:border-[#3b2d7d]"
+                              />
+                            </div>
+
+                            <div className="w-full">
+                              <label className="block text-xs font-bold text-gray-700 mb-1.5">Publisher / Board</label>
+                              <input
+                                type="text"
+                                value={item.attributes?.publisher || ''}
+                                onChange={(e) => updateItemAttribute(index, 'publisher', e.target.value)}
+                                placeholder="e.g. NCERT / CBSE"
+                                className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 focus:outline-none focus:border-[#3b2d7d]"
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        {/* General / Stationary Specification */}
+                        {item.productType !== 'uniform' && item.productType !== 'winter' && item.productType !== 'textbook' && item.productType !== 'notebook' && (
+                          <div className="bg-white p-4 rounded-2xl border border-gray-200/80 shadow-xs">
+                            <label className="block text-xs font-bold text-gray-700 mb-1.5">Specification / Pack Details</label>
+                            <input
+                              type="text"
+                              value={item.attributes?.packDetails || ''}
+                              onChange={(e) => updateItemAttribute(index, 'packDetails', e.target.value)}
+                              placeholder="e.g. Pack of 5 pencils + eraser + sharpener"
+                              className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 focus:outline-none focus:border-[#3b2d7d]"
+                            />
+                          </div>
+                        )}
+
+                      </div>
+
+                    </div>
+                  ))}
+
+                  {/* Add Product Button at Bottom of List */}
+                  <button
+                    type="button"
+                    onClick={() => setShowProductPicker(true)}
+                    className="w-full py-4 border-2 border-dashed border-gray-300 hover:border-[#3b2d7d] bg-white rounded-2xl text-[#3b2d7d] font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-xs hover:shadow-sm"
+                  >
+                    <Plus size={16} className="stroke-[3]" /> Add Another Product to Kit
+                  </button>
+                </div>
+              )}
+
+            </section>
+
+            {/* Bottom Actions */}
+            <div className="pt-6 border-t border-gray-200 flex items-center justify-end gap-4">
+              <button
+                type="button"
+                onClick={() => navigate('/school/kits')}
+                className="px-6 py-3.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs rounded-xl transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={saving}
+                className="px-8 py-4 bg-[#3b2d7d] hover:bg-[#4a3a99] text-white font-black text-sm rounded-xl uppercase tracking-wider flex items-center gap-2 shadow-lg shadow-purple-900/20 active:scale-95 disabled:opacity-60 transition-all"
+              >
+                {saving ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} className="stroke-[3]" />}
+                <span>{isEditing ? 'Save Changes' : 'Publish Kit'}</span>
+              </button>
+            </div>
+
+          </form>
+        )}
+
+      </div>
+
+      {/* Add Custom Category Modal */}
+      {showAddCatModal && (
+        <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+          <div className="w-full max-w-sm bg-white rounded-3xl p-6 shadow-2xl space-y-4">
+            <h3 className="text-sm font-black text-gray-900 uppercase">Add Custom Kit Category</h3>
+            <input
+              type="text"
+              value={newCatName}
+              onChange={(e) => setNewCatName(e.target.value)}
+              placeholder="e.g. Sports Equipment Kit"
+              className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-2xl text-xs font-bold text-gray-900 focus:outline-none focus:border-[#3b2d7d]"
+            />
+            <div className="flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowAddCatModal(false)}
+                className="px-4 py-2 bg-gray-100 text-gray-700 font-bold text-xs rounded-xl"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleCreateCategory}
+                disabled={creatingCat}
+                className="px-5 py-2 bg-[#3b2d7d] text-white font-black text-xs rounded-xl uppercase tracking-wider"
+              >
+                Add Category
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Styled Top Banner Header Area */}
-      <div className="bg-[#3b2d7d] text-white px-6 py-6 sticky top-0 z-50 rounded-b-[2rem] shadow-lg">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <button 
-              type="button"
-              onClick={handleBack}
-              className="w-11 h-11 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 active:scale-95 transition-all text-white"
-            >
-              <ArrowLeft size={22} />
-            </button>
-            <div>
-              <h1 className="text-xl font-black leading-tight">{isEditing ? 'Edit Kit' : 'Create New Kit'}</h1>
-              <span className="text-[12px] text-purple-200 font-bold block mt-1">
-                {isEditing ? (loadingKit ? 'Loading kit…' : 'Update this student kit') : 'Create a student kit'}
-              </span>
-            </div>
-          </div>
-          <button type="button" className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-white/10 text-white/95">
-            <HelpCircle size={22} />
-          </button>
-        </div>
-
-        {/* Stepper Progress Bar Strip */}
-        <div className="flex items-center justify-between mt-7 px-2">
-          <div className="flex flex-col items-center gap-1.5">
-            <div className="w-8 h-8 rounded-full bg-white text-primary flex items-center justify-center shadow-md">
-              <Package size={16} />
-            </div>
-            <span className="text-[10px] font-black text-white uppercase tracking-wider">Basic Info</span>
-          </div>
-
-          <div className="h-0.5 flex-1 bg-white/20 mx-3 -mt-5" />
-
-          <div className="flex flex-col items-center gap-1.5">
-            <div className="w-8 h-8 rounded-full bg-white text-primary flex items-center justify-center shadow-md">
-              <span className="text-[12px] font-black">2</span>
-            </div>
-            <span className="text-[10px] font-black text-white uppercase tracking-wider">Add Items</span>
-          </div>
-
-          <div className="h-0.5 flex-1 bg-white/20 mx-3 -mt-5" />
-
-          <div className="flex flex-col items-center gap-1.5">
-            <div className="w-8 h-8 rounded-full bg-white text-primary flex items-center justify-center shadow-md">
-              <span className="text-[12px] font-black">₹</span>
-            </div>
-            <span className="text-[10px] font-black text-white uppercase tracking-wider">Pricing & Stock</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Form Content Area */}
-      <div className="px-6 py-6 space-y-6">
-        
-        {/* Step 1: Basic Information */}
-        <div className="bg-white border border-gray-200/80 rounded-[2.2rem] p-6 shadow-sm space-y-5">
-          <div className="flex items-center gap-3.5">
-            <div className="w-8 h-8 rounded-full bg-primary text-white text-[12px] font-black flex items-center justify-center shadow-md">
-              1
-            </div>
-            <h3 className="text-sm font-black text-deep-purple uppercase tracking-wider">
-              Basic Information
-            </h3>
-          </div>
-
-          {/* Kit Name */}
-          <div className="space-y-2">
-            <div className="flex justify-between items-center">
-              <label className="text-[12px] font-black text-gray-500 uppercase tracking-wider">
-                Kit Name <span className="text-red-500">*</span>
-              </label>
-              <span className="text-[11px] text-gray-400 font-bold">
-                {kitName.length}/100
-              </span>
-            </div>
-            <input 
-              type="text"
-              value={kitName}
-              onChange={(e) => setKitName(e.target.value.slice(0, 100))}
-              placeholder="Enter kit name"
-              className="w-full px-4.5 py-3.5 bg-white border border-gray-200 rounded-2xl text-sm font-bold text-deep-purple focus:outline-none focus:border-primary/50 transition-colors placeholder:text-gray-300 leading-relaxed"
-            />
-          </div>
-
-          {/* Select Class/Grade */}
-          <div className="space-y-2">
-            <label className="text-[12px] font-black text-gray-500 uppercase tracking-wider">
-              Select Class / Grade <span className="text-red-500">*</span>
-            </label>
-            <select 
-              value={classGrade}
-              onChange={(e) => setClassGrade(e.target.value)}
-              className="w-full px-4.5 py-3.5 bg-white border border-gray-200 rounded-2xl text-sm font-bold text-deep-purple focus:outline-none focus:border-primary/50 transition-colors appearance-none cursor-pointer leading-relaxed"
-            >
-              <option value="">Select class or grade</option>
-              {classesList.map(c => (
-                <option key={c.classGrade} value={c.classGrade}>{c.classGrade}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Kit Category */}
-          <div className="space-y-2">
-            <label className="text-[12px] font-black text-gray-500 uppercase tracking-wider">
-              Kit Category <span className="text-red-500">*</span>
-            </label>
-            <div className="relative">
-              <Package size={18} className="absolute left-4.5 top-1/2 -translate-y-1/2 text-gray-450" />
-              <select 
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                className="w-full pl-12 pr-4.5 py-3.5 bg-white border border-gray-200 rounded-2xl text-sm font-bold text-deep-purple focus:outline-none focus:border-primary/50 transition-colors appearance-none cursor-pointer leading-relaxed"
-              >
-                <option value="">Select category</option>
-                <option value="books">Textbooks & Notebooks</option>
-                <option value="uniforms">School Uniforms</option>
-                <option value="stationery">Stationery Packs</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Fulfilling Vendor */}
-          <div className="space-y-2">
-            <label className="text-[12px] font-black text-gray-500 uppercase tracking-wider">
-              Fulfilling Vendor <span className="text-red-500">*</span>
-            </label>
-            <select
-              value={vendorId}
-              onChange={(e) => setVendorId(e.target.value)}
-              className="w-full px-4.5 py-3.5 bg-white border border-gray-200 rounded-2xl text-sm font-bold text-deep-purple focus:outline-none focus:border-primary/50 transition-colors appearance-none cursor-pointer leading-relaxed"
-            >
-              <option value="">Select the vendor who will supply this kit</option>
-              {vendorsList.map((v) => (
-                <option key={v._id || v.id} value={v._id || v.id}>
-                  {v.storeName || v.name || 'Vendor'}
-                </option>
-              ))}
-            </select>
-            <p className="text-[11px] font-semibold text-gray-400">
-              Every order for this kit is routed to this vendor to fulfil.
-            </p>
-          </div>
-
-          {/* Kit Description */}
-          <div className="space-y-2">
-            <div className="flex justify-between items-center">
-              <label className="text-[12px] font-black text-gray-500 uppercase tracking-wider">Kit Description</label>
-              <span className="text-[11px] text-gray-400 font-bold">
-                {description.length}/300
-              </span>
-            </div>
-            <textarea 
-              value={description}
-              onChange={(e) => setDescription(e.target.value.slice(0, 300))}
-              placeholder="Enter kit description..."
-              rows={3}
-              className="w-full px-4.5 py-4 bg-white border border-gray-200 rounded-2xl text-sm font-bold text-deep-purple focus:outline-none focus:border-primary/50 transition-colors placeholder:text-gray-300 resize-none leading-relaxed"
-            />
-          </div>
-
-          {/* Kit Image & Kit Includes Block */}
-          <div className="grid grid-cols-2 gap-4 pt-1.5">
-            <div className="space-y-2">
-              <label className="text-[12px] font-black text-gray-500 uppercase tracking-wider">
-                Kit Image <span className="text-red-500">*</span>
-              </label>
-              <div className="border border-dashed border-gray-250 rounded-2xl p-4 flex flex-col items-center justify-center text-center relative bg-gray-50/20 h-32 overflow-hidden">
-                <input 
-                  type="file" 
-                  onChange={handleImageUpload}
-                  className="absolute inset-0 opacity-0 cursor-pointer z-10" 
-                />
-                {imageFile ? (
-                  <>
-                    <img 
-                      src={URL.createObjectURL(imageFile)} 
-                      alt="Kit Preview" 
-                      className="absolute inset-0 w-full h-full object-cover" 
-                    />
-                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity z-20">
-                      <span className="text-white text-[10px] font-black uppercase tracking-wider">Change Image</span>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <Upload size={18} className="text-primary mb-2" />
-                    <span className="text-[11px] font-black text-deep-purple block leading-tight truncate w-full px-2">
-                      Upload image
-                    </span>
-                    <span className="text-[9px] text-gray-400 font-bold block mt-1">JPG, PNG (Max 2MB)</span>
-                  </>
-                )}
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-[12px] font-black text-gray-500 uppercase tracking-wider">Kit Includes</label>
-              <textarea 
-                value={includes}
-                onChange={(e) => setIncludes(e.target.value)}
-                placeholder="e.g., Books, Notebooks, Stationery"
-                className="w-full px-4.5 py-3.5 bg-white border border-gray-200 rounded-2xl text-sm font-bold text-deep-purple focus:outline-none focus:border-primary/50 transition-colors placeholder:text-gray-300 resize-none h-32 leading-relaxed"
-              />
-              <span className="text-[9px] text-gray-400 font-bold block mt-1">Enter key highlights of this kit</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Step 2: Add Items to Kit */}
-        <div className="bg-white border border-gray-200/80 rounded-[2.2rem] p-6 shadow-sm space-y-5">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3.5">
-              <div className="w-8 h-8 rounded-full bg-primary text-white text-[12px] font-black flex items-center justify-center shadow-md">
-                2
-              </div>
-              <h3 className="text-sm font-black text-deep-purple uppercase tracking-wider">
-                Add Items to Kit
-              </h3>
-            </div>
+      {/* Master Product Picker Modal */}
+      {showProductPicker && (
+        <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-sm animate-in fade-in">
+          <div className="w-full max-w-4xl bg-white rounded-3xl shadow-2xl border border-gray-150 overflow-hidden flex flex-col max-h-[85vh]">
             
-            <div className="flex items-center gap-2">
-              <select
-                value={selectedProductToAdd}
-                onChange={(e) => setSelectedProductToAdd(e.target.value)}
-                className="px-3 py-2 border border-gray-250 rounded-xl text-xs font-bold text-deep-purple focus:outline-none focus:border-primary/50 max-w-[160px] bg-white cursor-pointer"
+            <div className="bg-[#3b2d7d] text-white px-6 py-4 flex items-center justify-between shrink-0">
+              <h3 className="text-sm font-black uppercase tracking-wider">Select Product from Master Catalogue</h3>
+              <button
+                onClick={() => setShowProductPicker(false)}
+                className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 text-white transition-all"
               >
-                <option value="">Select a product</option>
-                {catalogProducts.map(p => (
-                  <option key={p._id || p.id} value={p._id || p.id}>
-                    {p.name || p.title || 'Product'}
-                  </option>
-                ))}
-              </select>
-              <button 
-                type="button"
-                onClick={handleAddItem}
-                className="px-3.5 py-2.5 bg-[#3b2d7d] text-white hover:bg-[#2b2061] rounded-xl text-xs font-black flex items-center gap-1 active:scale-95 transition-all shadow-sm shrink-0"
-              >
-                <Plus size={14} /> Add Item
+                <X size={16} />
               </button>
             </div>
-          </div>
 
-          {/* List of active added items */}
-          <div className="space-y-3">
-            {items.map((item) => (
-              <div key={item.id} className="p-4 bg-gray-50 border border-gray-150 rounded-2xl flex items-center justify-between gap-4 hover:bg-gray-100/40 transition-colors">
-                <div className="flex items-center gap-3.5 min-w-0">
-                  <div className="w-11 h-11 rounded-xl bg-purple-50 flex items-center justify-center text-primary shrink-0 font-bold text-sm shadow-inner">
-                    📝
-                  </div>
-                  <div className="min-w-0">
-                    <span className="text-xs font-black text-deep-purple block truncate leading-tight">
-                      {item.name}
-                    </span>
-                    <span className="text-[10px] text-gray-400 font-bold block mt-1">
-                      {item.detail} • ₹{((item.pricePaise || 0) / 100).toFixed(2)} / unit
-                    </span>
-                  </div>
+            <div className="p-4 bg-gray-50 border-b border-gray-150 flex flex-col sm:flex-row items-center gap-3 shrink-0">
+              <div className="relative w-full sm:w-72">
+                <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  value={productSearch}
+                  onChange={(e) => setProductSearch(e.target.value)}
+                  placeholder="Search master products..."
+                  className="w-full pl-9 pr-3.5 py-2.5 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-900 focus:outline-none focus:border-[#3b2d7d]"
+                />
+              </div>
+
+              <select
+                value={selectedCatFilter}
+                onChange={(e) => setSelectedCatFilter(e.target.value)}
+                className="w-full sm:w-56 px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-900 focus:outline-none focus:border-[#3b2d7d]"
+              >
+                <option value="All">All Categories</option>
+                {DEFAULT_CATEGORIES.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="p-6 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 scrollbar-none">
+              {filteredMasterProducts.length === 0 ? (
+                <div className="col-span-full py-16 text-center text-gray-400 font-bold text-xs">
+                  No master products found matching your search.
                 </div>
-
-                <div className="flex items-center gap-4 shrink-0">
-                  {/* Quantity Control Buttons */}
-                  <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl p-1">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setItems(items.map(it => it.id === item.id ? { ...it, qty: Math.max(1, it.qty - 1) } : it));
-                      }}
-                      className="w-6 h-6 rounded-lg bg-gray-50 flex items-center justify-center text-xs font-black text-gray-500 hover:bg-gray-100 active:scale-90 transition-transform"
-                    >
-                      -
-                    </button>
-                    <span className="text-xs font-black text-deep-purple w-6 text-center">{item.qty}</span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setItems(items.map(it => it.id === item.id ? { ...it, qty: it.qty + 1 } : it));
-                      }}
-                      className="w-6 h-6 rounded-lg bg-gray-50 flex items-center justify-center text-xs font-black text-gray-500 hover:bg-gray-100 active:scale-90 transition-transform"
-                    >
-                      +
-                    </button>
-                  </div>
-
-                  <div className="text-right shrink-0 min-w-[50px]">
-                    <span className="text-xs font-black text-deep-purple block leading-none">
-                      ₹{(((item.pricePaise || 0) * item.qty) / 100).toFixed(0)}
-                    </span>
-                    <span className="text-[9px] text-gray-400 font-bold block mt-1">
-                      Subtotal
-                    </span>
-                  </div>
-                  
-                  <button 
-                    type="button"
-                    onClick={() => handleRemoveItem(item.id)}
-                    className="w-9 h-9 rounded-full hover:bg-red-50 flex items-center justify-center text-gray-400 hover:text-red-550 transition-colors"
+              ) : (
+                filteredMasterProducts.map((mp) => (
+                  <div
+                    key={mp._id || mp.id}
+                    className="bg-white border border-gray-200/80 rounded-2xl p-3.5 shadow-xs hover:border-[#3b2d7d] transition-all flex flex-col justify-between group"
                   >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Information footer warning banner */}
-          <div className="bg-purple-50/40 rounded-2xl p-4 flex items-start gap-3">
-            <Info size={16} className="text-primary mt-0.5 shrink-0" />
-            <p className="text-[10.5px] text-gray-450 font-semibold leading-relaxed">
-              You can add up to 50 items in a kit.
-            </p>
-          </div>
-        </div>
-
-        {/* Step 3: Expandable Pricing & Stock */}
-        <div className="bg-white border border-gray-200/80 rounded-[2.2rem] shadow-sm overflow-hidden transition-all">
-          <div 
-            onClick={() => setStep3Open(!step3Open)}
-            className="p-6 flex items-center justify-between cursor-pointer hover:bg-gray-50/30 transition-all select-none border-b border-gray-150/40"
-          >
-            <div className="flex items-center gap-3.5">
-              <div className="w-8 h-8 rounded-full bg-primary text-white text-[12px] font-black flex items-center justify-center shadow-md">
-                3
-              </div>
-              <div>
-                <span className="text-sm font-black text-deep-purple block leading-none">Pricing & Stock</span>
-                <span className="text-[10px] text-gray-400 font-bold block mt-1.5">Set price, stock and availability</span>
-              </div>
-            </div>
-            {step3Open ? <ChevronUp size={20} className="text-gray-400" /> : <ChevronRight size={20} className="text-gray-400" />}
-          </div>
-
-          {step3Open && (
-            <div className="p-6 space-y-5 animate-in fade-in slide-in-from-top-2 duration-300">
-              {/* Selling Price & MRP */}
-              <div className="grid grid-cols-2 gap-4.5">
-                <div className="space-y-2">
-                  <label className="text-[12px] font-black text-gray-500 uppercase tracking-wider block">
-                    Selling Price <span className="text-red-500">*</span>
-                  </label>
-                  <div className="relative flex items-center">
-                    <span className="absolute left-4 text-xs font-black text-gray-400">₹</span>
-                    <input 
-                      type="number"
-                      placeholder="0"
-                      value={sellingPrice}
-                      onChange={(e) => setSellingPrice(e.target.value)}
-                      className="w-full pl-8 pr-4 py-3.5 bg-white border border-gray-200 rounded-2xl text-sm font-bold text-deep-purple focus:outline-none focus:border-primary/50 transition-colors leading-relaxed placeholder:text-gray-300"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-[12px] font-black text-gray-500 uppercase tracking-wider flex items-center justify-between">
-                    <span>MRP</span>
-                    <Info size={12} className="text-gray-400" />
-                  </label>
-                  <div className="relative flex items-center">
-                    <span className="absolute left-4 text-xs font-black text-gray-400">₹</span>
-                    <input 
-                      type="number"
-                      placeholder="0"
-                      value={mrp}
-                      onChange={(e) => setMrp(e.target.value)}
-                      className="w-full pl-8 pr-4 py-3.5 bg-white border border-gray-200 rounded-2xl text-sm font-bold text-deep-purple focus:outline-none focus:border-primary/50 transition-colors leading-relaxed placeholder:text-gray-300"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Available Quantity & SKU */}
-              <div className="grid grid-cols-2 gap-4.5">
-                <div className="space-y-2">
-                  <label className="text-[12px] font-black text-gray-500 uppercase tracking-wider block">
-                    Available Stock <span className="text-red-500">*</span>
-                  </label>
-                  <div className="relative flex items-center">
-                    <input 
-                      type="number"
-                      placeholder="0"
-                      value={quantity}
-                      onChange={(e) => setQuantity(e.target.value)}
-                      className="w-full pl-4 pr-14 py-3.5 bg-white border border-gray-200 rounded-2xl text-sm font-bold text-deep-purple focus:outline-none focus:border-primary/50 transition-colors leading-relaxed placeholder:text-gray-300"
-                    />
-                    <span className="absolute right-3 px-2 py-0.5 bg-purple-50 text-[9.5px] font-black text-primary rounded-lg border border-purple-100 leading-none">
-                      Kits
-                    </span>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-[12px] font-black text-gray-500 uppercase tracking-wider block">
-                    SKU <span className="text-gray-400 font-bold text-[9px] lowercase">(optional)</span>
-                  </label>
-                  <input 
-                    type="text"
-                    placeholder="e.g. CLASS5-KIT-01"
-                    value={sku}
-                    onChange={(e) => setSku(e.target.value)}
-                    className="w-full px-4.5 py-3.5 bg-white border border-gray-200 rounded-2xl text-sm font-bold text-deep-purple focus:outline-none focus:border-primary/50 transition-colors leading-relaxed placeholder:text-gray-300"
-                  />
-                </div>
-              </div>
-
-              {/* Kit Status & Display Settings */}
-              <div className="space-y-6 pt-3">
-                {/* Kit Status Segmented Control */}
-                <div className="space-y-2.5">
-                  <label className="text-[12px] font-black text-gray-500 uppercase tracking-wider block">
-                    Kit Status
-                  </label>
-                  <div className="bg-gray-100/80 p-1.5 rounded-2xl flex gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => setKitStatus('active')}
-                      className={`flex-1 py-3 text-xs font-black rounded-xl transition-all duration-200 flex items-center justify-center gap-2 ${
-                        kitStatus === 'active'
-                          ? 'bg-white text-primary shadow-sm scale-[1.01]'
-                          : 'text-gray-450 hover:text-gray-600'
-                      }`}
-                    >
-                      <span className={`w-2.5 h-2.5 rounded-full transition-all duration-200 ${kitStatus === 'active' ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)] animate-pulse' : 'bg-gray-300'}`}></span>
-                      Active
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setKitStatus('draft')}
-                      className={`flex-1 py-3 text-xs font-black rounded-xl transition-all duration-200 flex items-center justify-center gap-2 ${
-                        kitStatus === 'draft'
-                          ? 'bg-white text-gray-700 shadow-sm scale-[1.01]'
-                          : 'text-gray-455 hover:text-gray-600'
-                      }`}
-                    >
-                      <span className={`w-2.5 h-2.5 rounded-full transition-all duration-200 ${kitStatus === 'draft' ? 'bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]' : 'bg-gray-300'}`}></span>
-                      Draft
-                    </button>
-                  </div>
-                  <p className="text-[11px] text-gray-450 font-bold px-1 flex items-start gap-1.5 leading-relaxed bg-gray-50/50 p-3 rounded-xl border border-gray-100/80">
-                    <Info size={13} className="text-gray-400 mt-0.5 shrink-0" />
-                    <span>
-                      {kitStatus === 'active'
-                        ? 'Active kits are visible to parents on the store and open for ordering immediately.'
-                        : 'Draft kits are hidden from parents and saved for later adjustments.'}
-                    </span>
-                  </p>
-                </div>
-
-                {/* Display & Availability Toggles */}
-                <div className="space-y-2.5">
-                  <label className="text-[12px] font-black text-gray-500 uppercase tracking-wider block">
-                    Display & Availability
-                  </label>
-                  <div className="bg-white border border-gray-150 rounded-[2rem] divide-y divide-gray-100 overflow-hidden shadow-sm">
-                    {/* Toggle 1 */}
-                    <div 
-                      onClick={() => setShowOnApp(!showOnApp)}
-                      className="p-4 flex items-center justify-between gap-4 cursor-pointer hover:bg-gray-50/20 active:bg-gray-50/40 transition-colors"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-2xl bg-purple-50 text-primary flex items-center justify-center shrink-0">
-                          <Layers size={18} />
-                        </div>
-                        <div>
-                          <span className="text-xs font-black text-deep-purple block leading-none">Show on Parent App</span>
-                          <span className="text-[10px] text-gray-400 font-bold block mt-1.5 leading-none">Visible to parents in the store</span>
-                        </div>
-                      </div>
-                      <div className="relative shrink-0 w-11 h-6">
-                        <div className={`w-11 h-6 rounded-full transition-colors duration-200 ${showOnApp ? 'bg-primary' : 'bg-gray-250'}`} />
-                        <div className={`w-4.5 h-4.5 rounded-full bg-white absolute top-[3px] transition-all duration-200 shadow-sm ${showOnApp ? 'left-[23px]' : 'left-[3px]'}`} />
-                      </div>
-                    </div>
-
-                    {/* Toggle 2 */}
-                    <div 
-                      onClick={() => setAvailableOnline(!availableOnline)}
-                      className="p-4 flex items-center justify-between gap-4 cursor-pointer hover:bg-gray-50/20 active:bg-gray-50/40 transition-colors"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-500 flex items-center justify-center shrink-0">
-                          <Package size={18} />
-                        </div>
-                        <div>
-                          <span className="text-xs font-black text-deep-purple block leading-none">Available for Online Ordering</span>
-                          <span className="text-[10px] text-gray-400 font-bold block mt-1.5 leading-none">Parents can order this kit online</span>
-                        </div>
-                      </div>
-                      <div className="relative shrink-0 w-11 h-6">
-                        <div className={`w-11 h-6 rounded-full transition-colors duration-200 ${availableOnline ? 'bg-primary' : 'bg-gray-250'}`} />
-                        <div className={`w-4.5 h-4.5 rounded-full bg-white absolute top-[3px] transition-all duration-200 shadow-sm ${availableOnline ? 'left-[23px]' : 'left-[3px]'}`} />
-                      </div>
-                    </div>
-
-                    {/* Toggle 3 */}
-                    <div 
-                      onClick={() => setAllowPreorders(!allowPreorders)}
-                      className="p-4 flex items-center justify-between gap-4 cursor-pointer hover:bg-gray-50/20 active:bg-gray-50/40 transition-colors"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-2xl bg-amber-50 text-amber-500 flex items-center justify-center shrink-0">
-                          <Sparkles size={18} />
-                        </div>
-                        <div>
-                          <span className="text-xs font-black text-deep-purple block leading-none">Allow Pre-orders</span>
-                          <span className="text-[10px] text-gray-400 font-bold block mt-1.5 leading-none">Parents can place pre-orders</span>
-                        </div>
-                      </div>
-                      <div className="relative shrink-0 w-11 h-6">
-                        <div className={`w-11 h-6 rounded-full transition-colors duration-200 ${allowPreorders ? 'bg-primary' : 'bg-gray-250'}`} />
-                        <div className={`w-4.5 h-4.5 rounded-full bg-white absolute top-[3px] transition-all duration-200 shadow-sm ${allowPreorders ? 'left-[23px]' : 'left-[3px]'}`} />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Dynamic Profit Calculator Box Card */}
-                <div className="bg-[#f4fbf7] border border-[#e2f5eb] rounded-3xl p-5 flex items-center justify-between gap-4 mt-5 shadow-inner">
-                  <div className="flex items-center gap-3.5">
-                    <div className="w-10 h-10 rounded-2xl bg-[#e2f5eb] text-emerald-500 flex items-center justify-center shrink-0">
-                      <TrendingUp size={18} />
-                    </div>
                     <div>
-                      <span className="text-[10px] text-gray-450 font-black block leading-normal uppercase tracking-wider">Cost Price</span>
-                      <span className="text-[15px] font-black text-deep-purple block mt-1 leading-normal">₹{costPrice}</span>
+                      <div className="w-full h-24 bg-gray-50 rounded-xl overflow-hidden p-1.5 flex items-center justify-center mb-2">
+                        {mp.imageUrl ? (
+                          <img src={mp.imageUrl} alt={mp.name} className="w-full h-full object-contain group-hover:scale-105 transition-transform" />
+                        ) : (
+                          <Package size={28} className="text-gray-300" />
+                        )}
+                      </div>
+                      <span className="text-[9px] font-black text-purple-700 uppercase tracking-wider block">
+                        {mp.category}
+                      </span>
+                      <h4 className="text-xs font-black text-gray-900 line-clamp-2 leading-snug">{mp.name}</h4>
                     </div>
+
+                    <button
+                      type="button"
+                      onClick={() => handleAddMasterProduct(mp)}
+                      className="mt-3 w-full py-2 bg-purple-50 hover:bg-[#3b2d7d] text-[#3b2d7d] hover:text-white font-black text-[10px] uppercase rounded-xl transition-all active:scale-95"
+                    >
+                      + Add to Kit
+                    </button>
                   </div>
-
-                  <div className="h-9 w-px bg-emerald-100/80" />
-
-                  <div>
-                    <span className="text-[10px] text-gray-450 font-black block leading-normal uppercase tracking-wider">Selling Price</span>
-                    <span className="text-[15px] font-black text-deep-purple block mt-1 leading-normal">₹{parsedSelling}</span>
-                  </div>
-
-                  <div className="h-9 w-px bg-emerald-100/80" />
-
-                  <div className="text-right">
-                    <span className="text-[10px] text-gray-455 font-black block leading-normal uppercase tracking-wider">Profit per Kit</span>
-                    <span className={`text-[15px] font-black block mt-1 leading-normal ${profit >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
-                      {profit >= 0 ? `+₹${profit}` : `-₹${Math.abs(profit)}`}
-                    </span>
-                  </div>
-                </div>
-              </div>
+                ))
+              )}
             </div>
-          )}
-        </div>
-      </div>
 
-      {/* Sticky Bottom Actions Footer Bar */}
-      <div className="fixed bottom-[72px] left-0 right-0 bg-white/90 backdrop-blur-md p-5 flex flex-col gap-3.5 z-50 max-w-md mx-auto shadow-[0_-10px_30px_-5px_rgba(0,0,0,0.06)]">
-        {error && (
-          <div className="bg-red-50 border border-red-100 text-red-600 text-[11px] font-bold px-4 py-2.5 rounded-2xl">
-            {error}
           </div>
-        )}
-        <div className="flex gap-3">
-          <button
-            type="button"
-            onClick={() => handleCreateKit('draft')}
-            disabled={saving}
-            className="flex-1 py-4 border-2 border-gray-300 text-gray-750 rounded-2xl text-xs font-black flex items-center justify-center gap-2 active:scale-95 transition-all hover:bg-gray-50 disabled:opacity-60 uppercase tracking-wider"
-          >
-            Save Draft
-          </button>
-          <button
-            type="button"
-            onClick={() => handleCreateKit('active')}
-            disabled={saving || loadingKit}
-            className="flex-1 py-4 bg-[#3b2d7d] text-white rounded-2xl text-xs font-black shadow-lg shadow-purple-100 flex items-center justify-center gap-2 active:scale-95 transition-all hover:bg-[#2b2061] disabled:opacity-60 uppercase tracking-wider"
-          >
-            <Sparkles size={14} />
-            {saving ? 'Saving…' : isEditing ? 'Save Changes' : 'Create Kit'}
-          </button>
         </div>
-      </div>
+      )}
+
     </div>
   );
 };

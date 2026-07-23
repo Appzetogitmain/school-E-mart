@@ -22,14 +22,15 @@ const TeacherLayout = () => {
 
   return (
     <div className="max-w-md mx-auto h-[100dvh] bg-gray-50 shadow-2xl relative overflow-hidden flex flex-col font-outfit">
-      {/* Dynamic Content Area */}
-      <div className={`flex-1 overflow-y-auto ${(!isAuthPage && !isDetailsPage) ? 'pb-24' : ''}`}>
+      {/* Dynamic Content Area — bounded above the in-flow nav below, so pages
+          never need to reserve space and content can't hide behind the nav. */}
+      <div className="flex-1 overflow-y-auto">
         <Outlet />
       </div>
 
-      {/* Persistent Teacher Bottom Navigation - Textless, colorful premium icons */}
+      {/* Persistent Teacher Bottom Navigation - in-flow flex child (not fixed) */}
       {!isAuthPage && !isDetailsPage && (
-        <nav className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white/95 backdrop-blur-xl border-t border-gray-100/60 px-5 py-3 z-50 shadow-[0_-8px_20px_rgba(0,0,0,0.03)] rounded-t-[1.8rem]">
+        <nav className="shrink-0 bg-white/95 backdrop-blur-xl border-t border-gray-100/60 px-5 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] z-40 shadow-[0_-8px_20px_rgba(0,0,0,0.03)] rounded-t-[1.8rem]">
           <div className="flex items-center justify-between">
             <BottomNavItem 
               to="/school/teacher/dashboard" 

@@ -80,6 +80,23 @@ router.post(
   authController.registerParent
 );
 
+// Guest checkout: OTP to a shopper who has no account yet. Uses the signup
+// purpose so the OTP is sent even when no user exists; verify creates an
+// unlinked customer (no school, no child) and logs them in.
+router.post(
+  '/customer/otp/request',
+  otpLimiter,
+  validateBody(authValidators.parentOtpRequestSchema),
+  authController.requestParentOtp('signup_parent')
+);
+
+router.post(
+  '/customer/otp/verify',
+  otpLimiter,
+  validateBody(authValidators.customerOtpVerifySchema),
+  authController.verifyCustomerOtp
+);
+
 router.get(
   '/parent/school-lookup',
   authLimiter,

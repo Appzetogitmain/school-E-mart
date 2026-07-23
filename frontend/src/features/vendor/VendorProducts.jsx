@@ -7,7 +7,11 @@ import {
   Bold, Italic, List, AlignLeft, Folder, Image, FileText, CheckCircle2,
   UploadCloud, Loader2
 } from 'lucide-react';
-import { deleteVendorProduct, listVendorProducts, setVendorProductPublishStatus } from '../../services/vendorApi';
+import {
+  deleteVendorProduct, listVendorProducts, setVendorProductPublishStatus,
+  createVendorProduct, uploadVendorDocument,
+} from '../../services/vendorApi';
+import { getCategoryTree } from '../../services/catalogApi';
 import { getErrorMessage } from '../../utils/apiHelpers';
 import { mapVendorProductForList } from '../../utils/mappers/vendorProductMapper';
 
@@ -29,14 +33,22 @@ const VendorProducts = () => {
   const [newDescription, setNewDescription] = useState('');
   const [newBrand, setNewBrand] = useState('');
   const [newCode, setNewCode] = useState('');
-  const [newHeader, setNewHeader] = useState('');
-  const [newCategory, setNewCategory] = useState('Apparel');
-  const [newSubcategory, setNewSubcategory] = useState('Boys Uniform');
   const [newVariant, setNewVariant] = useState('');
   const [newStock, setNewStock] = useState('35');
   const [newPrice, setNewPrice] = useState('499');
   const [newStatus, setNewStatus] = useState('PUBLISHED');
+  const [newAudience, setNewAudience] = useState('users'); // 'users' (retail) | 'schools' (bulk)
   const [newAdded, setNewAdded] = useState(false);
+
+  // Real catalog taxonomy + image so the product actually persists.
+  const [catTree, setCatTree] = useState([]); // [{ _id, name, categories: [{_id, name, subcategories}] }]
+  const [newHeaderId, setNewHeaderId] = useState('');
+  const [newCategoryId, setNewCategoryId] = useState('');
+  const [newSubcategoryId, setNewSubcategoryId] = useState('');
+  const [imageAttachmentId, setImageAttachmentId] = useState('');
+  const [imagePreview, setImagePreview] = useState('');
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [publishing, setPublishing] = useState(false);
 
   const loadProducts = useCallback(async () => {
     setLoading(true);
@@ -56,9 +68,89 @@ const VendorProducts = () => {
     loadProducts();
   }, [loadProducts]);
 
-  const handlePublish = (e) => {
-    e.preventDefault();
-    setError('Product creation requires catalog category IDs and uploaded images. Use the admin catalog flow or contact support.');
+  // Load the catalog tree for the Header/Category selectors.
+  useEffect(() => {
+    getCategoryTree()
+      .then((tree) => setCatTree(tree || []))
+      .catch(() => setCatTree([]));
+  }, []);
+
+  const selectedHeader = useMemo(
+    () => catTree.find((h) => h._id === newHeaderId) || null,
+    [catTree, newHeaderId]
+  );
+  const selectedCategoryObj = useMemo(
+    () => (selectedHeader?.categories || []).find((c) => c._id === newCategoryId) || null,
+    [selectedHeader, newCategoryId]
+  );
+
+  const resetProductForm = () => {
+    setNewName(''); setNewDescription(''); setNewBrand(''); setNewCode('');
+    setNewVariant(''); setNewStock('35'); setNewPrice('499'); setNewStatus('PUBLISHED');
+    setNewAudience('users'); setNewHeaderId(''); setNewCategoryId(''); setNewSubcategoryId('');
+    setImageAttachmentId(''); setImagePreview('');
+  };
+
+  const handleImageUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      setError('Image must be under 5MB');
+      return;
+    }
+    setError('');
+    setUploadingImage(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const attachment = await uploadVendorDocument(formData);
+      setImageAttachmentId(attachment?._id || attachment?.id || '');
+      setImagePreview(URL.createObjectURL(file));
+    } catch (err) {
+      setError(getErrorMessage(err, 'Image upload failed'));
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  const handlePublish = async (e) => {
+    e?.preventDefault?.();
+    setError('');
+    if (!newName.trim()) { setActiveFormTab('General Info'); return setError('Product title is required'); }
+    if (!newHeaderId) { setActiveFormTab('Groups'); return setError('Select a header group'); }
+    if (!newCategoryId) { setActiveFormTab('Groups'); return setError('Select a category'); }
+    const pricePaise = Math.round(Number(newPrice) * 100);
+    if (!pricePaise || pricePaise < 0) { setActiveFormTab('Item Variants'); return setError('Enter a valid price'); }
+    if (!imageAttachmentId) { setActiveFormTab('Photos'); return setError('Upload at least one product image'); }
+
+    setPublishing(true);
+    try {
+      await createVendorProduct({
+        name: newName.trim(),
+        sku: newCode.trim() || `SKU-${Date.now().toString(36).toUpperCase()}`,
+        brand: newBrand.trim() || undefined,
+        description: newDescription.trim() || undefined,
+        headerId: newHeaderId,
+        categoryId: newCategoryId,
+        subcategoryId: newSubcategoryId || undefined,
+        audience: newAudience,
+        pricePaise,
+        stock: Number(newStock) || 0,
+        images: [{ attachmentId: imageAttachmentId }],
+        publishStatus: newStatus === 'PUBLISHED' ? 'published' : 'draft',
+      });
+      setNewAdded(true);
+      resetProductForm();
+      setTimeout(() => {
+        setNewAdded(false);
+        setShowAddPage(false);
+        loadProducts();
+      }, 1500);
+    } catch (err) {
+      setError(getErrorMessage(err, 'Unable to create product'));
+    } finally {
+      setPublishing(false);
+    }
   };
 
   const handleDeleteProduct = async (productId) => {
@@ -444,14 +536,22 @@ const VendorProducts = () => {
               >
                 Cancel
               </button>
-              <button 
+              <button
                 onClick={handlePublish}
-                className="px-5 py-2.5 bg-[#0E0E2C] hover:bg-[#1a1a45] text-white font-extrabold text-xs rounded-xl transition-all shadow-md shadow-gray-900/10 cursor-pointer"
+                disabled={publishing}
+                className="px-5 py-2.5 bg-[#0E0E2C] hover:bg-[#1a1a45] text-white font-extrabold text-xs rounded-xl transition-all shadow-md shadow-gray-900/10 cursor-pointer disabled:opacity-60 flex items-center gap-2"
               >
-                Save & Publish
+                {publishing && <Loader2 size={14} className="animate-spin" />}
+                Save &amp; Publish
               </button>
             </div>
           </div>
+
+          {error && (
+            <div className="px-4 py-3 bg-red-50 border border-red-100 rounded-xl text-xs font-bold text-red-600 flex items-center gap-2">
+              <AlertCircle size={14} /> {error}
+            </div>
+          )}
 
           {/* Form Content layout */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6 items-start">
@@ -500,6 +600,35 @@ const VendorProducts = () => {
                   </select>
                   <ChevronDown size={14} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                 </div>
+              </div>
+
+              {/* Audience — who this product is sold to */}
+              <div className="bg-white border border-gray-100 rounded-2xl p-4.5 space-y-2.5 shadow-sm">
+                <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block">Sell To</span>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { key: 'users', label: 'Users', hint: 'Retail' },
+                    { key: 'schools', label: 'Schools', hint: 'Bulk' },
+                  ].map((opt) => {
+                    const active = newAudience === opt.key;
+                    return (
+                      <button
+                        key={opt.key}
+                        type="button"
+                        onClick={() => setNewAudience(opt.key)}
+                        className={`rounded-xl px-3 py-2.5 text-left border transition-all ${
+                          active ? 'bg-[#0E0E2C] border-[#0E0E2C] text-white' : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300'
+                        }`}
+                      >
+                        <span className="block text-[11px] font-black">{opt.label}</span>
+                        <span className={`block text-[8px] font-bold uppercase tracking-wide ${active ? 'text-white/60' : 'text-gray-400'}`}>{opt.hint}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <span className="block text-[8px] text-gray-400 font-medium">
+                  Users → shown in the parent app. Schools → shown in the school module.
+                </span>
               </div>
 
             </div>
@@ -634,47 +763,51 @@ const VendorProducts = () => {
                     <h3 className="font-extrabold text-sm text-gray-900 border-b border-gray-50 pb-2">Category & Catalog Groups</h3>
                     
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      
+
                       {/* Header Group */}
                       <div className="space-y-2">
                         <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider block">Header Group</label>
-                        <input 
-                          type="text"
-                          value={newHeader}
-                          onChange={(e) => setNewHeader(e.target.value)}
-                          placeholder="e.g. White Shirts"
-                          className="w-full px-4 py-3 bg-gray-50/50 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2"
-                        />
+                        <select
+                          value={newHeaderId}
+                          onChange={(e) => { setNewHeaderId(e.target.value); setNewCategoryId(''); setNewSubcategoryId(''); }}
+                          className="w-full px-4 py-3 bg-gray-50/50 border border-gray-200 rounded-xl text-xs font-bold text-gray-700"
+                        >
+                          <option value="">Select header…</option>
+                          {catTree.map((h) => (
+                            <option key={h._id} value={h._id}>{h.name}</option>
+                          ))}
+                        </select>
                       </div>
 
                       {/* Category select */}
                       <div className="space-y-2">
                         <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider block">Category</label>
                         <select
-                          value={newCategory}
-                          onChange={(e) => setNewCategory(e.target.value)}
-                          className="w-full px-4 py-3 bg-gray-50/50 border border-gray-200 rounded-xl text-xs font-bold text-gray-700"
+                          value={newCategoryId}
+                          onChange={(e) => { setNewCategoryId(e.target.value); setNewSubcategoryId(''); }}
+                          disabled={!selectedHeader}
+                          className="w-full px-4 py-3 bg-gray-50/50 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 disabled:opacity-50"
                         >
-                          <option value="Apparel">Apparel</option>
-                          <option value="Footwear">Footwear</option>
-                          <option value="Accessories">Accessories</option>
+                          <option value="">{selectedHeader ? 'Select category…' : 'Pick a header first'}</option>
+                          {(selectedHeader?.categories || []).map((c) => (
+                            <option key={c._id} value={c._id}>{c.name}</option>
+                          ))}
                         </select>
                       </div>
 
-                      {/* Subcategory select */}
+                      {/* Subcategory select (optional) */}
                       <div className="space-y-2">
-                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider block">Subcategory</label>
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider block">Subcategory <span className="text-gray-300 normal-case">(optional)</span></label>
                         <select
-                          value={newSubcategory}
-                          onChange={(e) => setNewSubcategory(e.target.value)}
-                          className="w-full px-4 py-3 bg-gray-50/50 border border-gray-200 rounded-xl text-xs font-bold text-gray-700"
+                          value={newSubcategoryId}
+                          onChange={(e) => setNewSubcategoryId(e.target.value)}
+                          disabled={!selectedCategoryObj}
+                          className="w-full px-4 py-3 bg-gray-50/50 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 disabled:opacity-50"
                         >
-                          <option value="Boys Uniform">Boys Uniform</option>
-                          <option value="Girls Uniform">Girls Uniform</option>
-                          <option value="Uniform Shoes">Uniform Shoes</option>
-                          <option value="Bags">Bags</option>
-                          <option value="Sports Wear">Sports Wear</option>
-                          <option value="Winter Wear">Winter Wear</option>
+                          <option value="">{selectedCategoryObj ? 'None' : 'Pick a category first'}</option>
+                          {(selectedCategoryObj?.subcategories || []).map((s) => (
+                            <option key={s._id} value={s._id}>{s.name}</option>
+                          ))}
                         </select>
                       </div>
 
@@ -686,20 +819,34 @@ const VendorProducts = () => {
                 {activeFormTab === 'Photos' && (
                   <div className="space-y-6">
                     <h3 className="font-extrabold text-sm text-gray-900 border-b border-gray-50 pb-2">Product Images</h3>
-                    
-                    {/* Mock Dropzone */}
-                    <div className="border-2 border-dashed border-purple-200 hover:border-[#5B3FD6]/30 bg-purple-50/10 rounded-2xl p-12 text-center transition-all cursor-pointer">
-                      <div className="flex flex-col items-center justify-center space-y-3">
-                        <div className="w-12 h-12 rounded-xl bg-purple-50 text-[#5B3FD6] flex items-center justify-center border border-purple-100">
-                          <UploadCloud size={24} />
+
+                    {imagePreview ? (
+                      <div className="flex items-center gap-4">
+                        <div className="w-28 h-28 rounded-2xl border border-gray-200 overflow-hidden bg-gray-50 shrink-0">
+                          <img src={imagePreview} alt="Product" className="w-full h-full object-cover" />
                         </div>
-                        <div>
-                          <p className="text-xs font-black text-gray-900">Drag & Drop images or browse</p>
-                          <p className="text-[10px] font-bold text-gray-400 mt-1">PNG, JPG formats supported up to 5MB.</p>
+                        <div className="space-y-2">
+                          <p className="text-xs font-black text-emerald-600 flex items-center gap-1"><CheckCircle2 size={14} /> Image uploaded</p>
+                          <label className="inline-block text-[11px] font-black text-[#5B3FD6] cursor-pointer">
+                            Replace image
+                            <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
+                          </label>
                         </div>
                       </div>
-                    </div>
-
+                    ) : (
+                      <label className="block border-2 border-dashed border-purple-200 hover:border-[#5B3FD6]/30 bg-purple-50/10 rounded-2xl p-12 text-center transition-all cursor-pointer">
+                        <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
+                        <div className="flex flex-col items-center justify-center space-y-3">
+                          <div className="w-12 h-12 rounded-xl bg-purple-50 text-[#5B3FD6] flex items-center justify-center border border-purple-100">
+                            {uploadingImage ? <Loader2 size={24} className="animate-spin" /> : <UploadCloud size={24} />}
+                          </div>
+                          <div>
+                            <p className="text-xs font-black text-gray-900">{uploadingImage ? 'Uploading…' : 'Browse to upload'}</p>
+                            <p className="text-[10px] font-bold text-gray-400 mt-1">PNG, JPG formats supported up to 5MB.</p>
+                          </div>
+                        </div>
+                      </label>
+                    )}
                   </div>
                 )}
 

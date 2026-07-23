@@ -8,5 +8,11 @@ const router = express.Router();
 
 router.get('/me', ...protectedRoute(), usersController.me);
 router.patch('/me', ...protectedRoute(), validateBody(validators.updateProfileSchema), usersController.update);
+router.post(
+  '/me/active-child',
+  ...protectedRoute(),
+  validateBody(validators.setActiveChildSchema),
+  usersController.setActiveChild
+);
 
 module.exports = router;

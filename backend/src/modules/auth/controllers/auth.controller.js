@@ -107,6 +107,20 @@ const authController = {
     return sendAuthResponse(res, req, result, messages.AUTH.OTP_VERIFIED);
   }),
 
+  // Guest checkout: verifies the OTP and creates an unlinked customer account
+  // (parent role, no school, no child) if one doesn't exist yet, then logs in.
+  verifyCustomerOtp: asyncHandler(async (req, res) => {
+    const result = await otpService.verifyCustomerOtp(
+      {
+        phone: req.body.phone || req.body.mobile,
+        otp: req.body.otp,
+        name: req.body.name,
+      },
+      getRequestMeta(req)
+    );
+    return sendAuthResponse(res, req, result, messages.AUTH.OTP_VERIFIED);
+  }),
+
   parentWebLogin: asyncHandler(async (req, res) => {
     const result = await otpService.loginParentWithOtp(
       { phone: req.body.mobile, otp: req.body.otp, purpose: 'login_parent' },

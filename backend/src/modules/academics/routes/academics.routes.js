@@ -61,6 +61,16 @@ router.delete(
 );
 
 // Phonebook
+// Parent-facing directory (relevant teachers + emergency numbers). Declared
+// before the generic list route so "contacts" is not treated as an entryId.
+router.get(
+  '/:schoolId/phonebook/contacts',
+  ...schoolRead,
+  resolveSchool(),
+  validateParams(validators.schoolIdParam),
+  validateQuery(validators.parentContactsQuery),
+  academicsController.getPhonebookContacts
+);
 router.get(
   '/:schoolId/phonebook',
   ...schoolRead,
@@ -94,12 +104,32 @@ router.delete(
 );
 
 // Kits
+router.get(
+  '/:schoolId/kit-categories',
+  ...schoolRead,
+  resolveSchool(),
+  validateParams(validators.schoolIdParam),
+  academicsController.listKitCategories
+);
+router.post(
+  '/:schoolId/kit-categories',
+  ...schoolManage,
+  resolveSchool(),
+  validateParams(validators.schoolIdParam),
+  academicsController.createKitCategory
+);
+router.delete(
+  '/:schoolId/kit-categories/:categoryId',
+  ...schoolManage,
+  resolveSchool(),
+  academicsController.deleteKitCategory
+);
+
 router.post(
   '/:schoolId/kits',
   ...schoolManage,
   resolveSchool(),
   validateParams(validators.schoolIdParam),
-  validateBody(validators.createKitSchema),
   academicsController.createKit
 );
 router.get(

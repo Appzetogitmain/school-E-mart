@@ -14,6 +14,8 @@ import { ENV } from '../../../config/env';
 import useAuthStore from '../../../store/useAuthStore';
 import { useCheckoutSummary } from '../../../hooks/useCheckoutSummary';
 import { mapOrderForDetail } from '../../../utils/mappers/orderMapper';
+import GuestCheckoutGate from './GuestCheckoutGate';
+import { isSchoolLinked } from '../../../utils/schoolLinked';
 
 const CheckoutPage = () => {
   const navigate = useNavigate();
@@ -33,26 +35,29 @@ const CheckoutPage = () => {
       .then((w) => setWalletBalancePaise(w?.balancePaise || 0))
       .catch(() => setWalletBalancePaise(0));
   }, [isAuthenticated]);
-  const [childInfo] = useState(() => {
+  const readChildInfo = () => {
     const saved = localStorage.getItem('childInfo');
-    return saved ? JSON.parse(saved) : {
-      name: 'Guest',
-      school: 'Explore Schools',
-      grade: 'Select Grade',
-    };
+    return saved ? JSON.parse(saved) : { name: 'Guest', school: 'Explore Schools', grade: 'Select Grade' };
+  };
+  const toAddress = (parsed = {}) => ({
+    name: parsed.name || 'Guest',
+    phone: parsed.phone || '',
+    address: parsed.address || 'Please update your delivery address in profile',
+    city: parsed.city || 'Indore',
+    pinCode: parsed.pinCode || '452018',
   });
 
-  const [address] = useState(() => {
-    const saved = localStorage.getItem('childInfo');
-    const parsed = saved ? JSON.parse(saved) : {};
-    return {
-      name: parsed.name || 'Guest',
-      phone: parsed.phone || '',
-      address: parsed.address || 'Please update your delivery address in profile',
-      city: parsed.city || 'Indore',
-      pinCode: parsed.pinCode || '452018',
-    };
-  });
+  const [childInfo, setChildInfo] = useState(readChildInfo);
+  const [address, setAddress] = useState(() => toAddress(readChildInfo()));
+
+  // A guest becomes authenticated after the checkout gate; re-read the freshly
+  // saved profile/address so the order uses it.
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const info = readChildInfo();
+    setChildInfo(info);
+    setAddress(toAddress(info));
+  }, [isAuthenticated]);
 
   const addressSource = useMemo(
     () => ({
@@ -102,7 +107,7 @@ const CheckoutPage = () => {
 
   const handlePlaceOrder = async () => {
     if (!isAuthenticated) {
-      navigate('/user/login');
+      // The guest gate overlay handles onboarding; nothing to do here.
       return;
     }
 
@@ -284,8 +289,8 @@ const CheckoutPage = () => {
             <h2 className="font-bold text-deep-purple text-sm uppercase tracking-widest">Delivery Type</h2>
           </div>
           
-          <div className="grid grid-cols-2 gap-3">
-            <button 
+          <div className={`grid gap-3 ${isSchoolLinked(childInfo) ? 'grid-cols-2' : 'grid-cols-1'}`}>
+            <button
               onClick={() => setDeliveryType('home')}
               className={`p-4 rounded-2xl border-2 transition-all flex flex-col items-center gap-2 ${deliveryType === 'home' ? 'border-primary bg-primary/5' : 'border-gray-50 bg-gray-50/50 grayscale'}`}
             >
@@ -294,14 +299,17 @@ const CheckoutPage = () => {
               <span className="text-[9px] font-bold text-gray-400 uppercase">Within 24 Hours</span>
             </button>
 
-            <button 
-              onClick={() => setDeliveryType('school')}
-              className={`p-4 rounded-2xl border-2 transition-all flex flex-col items-center gap-2 ${deliveryType === 'school' ? 'border-primary bg-primary/5' : 'border-gray-50 bg-gray-50/50 grayscale'}`}
-            >
-              <Building2 size={24} className={deliveryType === 'school' ? 'text-primary' : 'text-gray-400'} />
-              <span className="text-xs font-black text-deep-purple">School Pick-up</span>
-              <span className="text-[9px] font-bold text-gray-400 uppercase truncate w-full text-center">{childInfo.school}</span>
-            </button>
+            {/* School pick-up only for school-linked shoppers */}
+            {isSchoolLinked(childInfo) && (
+              <button
+                onClick={() => setDeliveryType('school')}
+                className={`p-4 rounded-2xl border-2 transition-all flex flex-col items-center gap-2 ${deliveryType === 'school' ? 'border-primary bg-primary/5' : 'border-gray-50 bg-gray-50/50 grayscale'}`}
+              >
+                <Building2 size={24} className={deliveryType === 'school' ? 'text-primary' : 'text-gray-400'} />
+                <span className="text-xs font-black text-deep-purple">School Pick-up</span>
+                <span className="text-[9px] font-bold text-gray-400 uppercase truncate w-full text-center">{childInfo.school}</span>
+              </button>
+            )}
           </div>
           
           {!deliveryType && <p className="mt-4 text-xs text-primary font-medium">Please select a delivery type to proceed</p>}
@@ -476,6 +484,19 @@ const CheckoutPage = () => {
           </button>
         </div>
       </div>
+
+      {/* Guests must verify their number (creating an unlinked account) before
+          they can place the order. */}
+      {!isAuthenticated && (
+        <GuestCheckoutGate
+          onDone={() => {
+            const info = readChildInfo();
+            setChildInfo(info);
+            setAddress(toAddress(info));
+          }}
+          onCancel={() => navigate(-1)}
+        />
+      )}
     </div>
   );
 };

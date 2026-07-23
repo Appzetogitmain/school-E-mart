@@ -1,5 +1,10 @@
 import apiClient from './apiClient';
 import { unwrapData } from '../utils/apiHelpers';
+import { getMarketplaceAudience } from '../utils/marketplaceAudience';
+
+// The School module shows 'schools' (bulk) products; the User app shows 'users'
+// (retail). Callers can override by passing `audience` explicitly.
+const storefrontAudience = () => (getMarketplaceAudience() === 'school' ? 'schools' : 'users');
 
 const extractPaginated = (response) => {
   const { data, pagination } = response.data;
@@ -43,17 +48,20 @@ const withSearchQuery = (params = {}) => {
 };
 
 export const listProducts = async (params = {}) => {
-  const response = await apiClient.get('/catalog/products', { params: withSearchQuery(params) });
+  const query = { audience: storefrontAudience(), ...withSearchQuery(params) };
+  const response = await apiClient.get('/catalog/products', { params: query });
   return extractPaginated(response);
 };
 
 export const listFeaturedProducts = async (params = {}) => {
-  const response = await apiClient.get('/catalog/products/featured', { params });
+  const query = { audience: storefrontAudience(), ...params };
+  const response = await apiClient.get('/catalog/products/featured', { params: query });
   return extractPaginated(response);
 };
 
 export const listOfferProducts = async (params = {}) => {
-  const response = await apiClient.get('/catalog/products/offers', { params });
+  const query = { audience: storefrontAudience(), ...params };
+  const response = await apiClient.get('/catalog/products/offers', { params: query });
   return extractPaginated(response);
 };
 
