@@ -9,13 +9,11 @@ const { ROLES } = require('../../../constants/roles');
 const router = express.Router();
 
 const orderRead = protectedRoute({
-  roles: [ROLES.PARENT, ROLES.SCHOOL_ADMIN, ROLES.SUPER_ADMIN],
-  permissions: [PERMISSIONS.ORDERS_READ],
+  roles: [ROLES.PARENT, ROLES.USER, ROLES.SCHOOL_ADMIN, ROLES.SUPER_ADMIN, ROLES.TEACHER, ROLES.VENDOR],
 });
 
 const customerWrite = protectedRoute({
-  roles: [ROLES.PARENT, ROLES.SCHOOL_ADMIN],
-  permissions: [PERMISSIONS.ORDERS_WRITE],
+  roles: [ROLES.PARENT, ROLES.USER, ROLES.SCHOOL_ADMIN, ROLES.TEACHER],
 });
 
 const adminOrders = protectedRoute({

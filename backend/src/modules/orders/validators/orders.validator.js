@@ -20,36 +20,40 @@ const paginationQuery = Joi.object({
 });
 
 const audienceQuery = Joi.object({
-  audience: Joi.string().valid('parent', 'school').default('parent'),
-});
+  audience: Joi.string().valid('parent', 'school').optional().default('parent'),
+}).unknown(true);
 
 const addressSchema = Joi.object({
-  line1: Joi.string().trim().max(200).required(),
-  line2: Joi.string().trim().max(200).optional(),
-  city: Joi.string().trim().max(80).required(),
-  state: Joi.string().trim().max(80).optional(),
-  country: Joi.string().trim().max(80).default('India'),
-  pinCode: Joi.string().trim().pattern(/^\d{6}$/).required(),
-});
+  name: Joi.string().trim().optional(),
+  phone: Joi.string().trim().optional(),
+  line1: Joi.string().trim().max(500).optional().allow('', null),
+  line2: Joi.string().trim().max(500).optional().allow('', null),
+  address: Joi.string().trim().max(500).optional().allow('', null),
+  city: Joi.string().trim().max(80).optional().allow('', null),
+  state: Joi.string().trim().max(80).optional().allow('', null),
+  country: Joi.string().trim().max(80).optional().allow('', null),
+  pinCode: Joi.string().trim().optional().allow('', null),
+  pincode: Joi.string().trim().optional().allow('', null),
+  addressType: Joi.string().trim().optional(),
+}).unknown(true);
 
 const checkoutSummarySchema = Joi.object({
   audience: Joi.string().valid('parent', 'school').optional(),
   deliveryType: Joi.string().valid('home', 'school').default('home'),
   paymentMethod: Joi.string().valid('online', 'cod').default('cod'),
   address: addressSchema.optional(),
-  schoolIdForPickup: objectId.optional(),
+  schoolIdForPickup: Joi.any().optional(),
   gstin: Joi.string().trim().optional(),
   deliveryChargePaise: Joi.number().integer().min(0).optional(),
   platformFeePaise: Joi.number().integer().min(0).optional(),
   handlingChargePaise: Joi.number().integer().min(0).optional(),
-});
+  walletAmountPaise: Joi.number().integer().min(0).optional(),
+}).unknown(true);
 
 const createOrderSchema = checkoutSummarySchema.keys({
-  address: addressSchema.required(),
-  // Amount to draw from the customer's wallet. Clamped server-side to the actual
-  // balance and order total, so an over-large value is safe.
+  address: addressSchema.optional(),
   walletAmountPaise: Joi.number().integer().min(0).optional(),
-});
+}).unknown(true);
 
 const orderIdParam = Joi.object({ orderId: objectId.required() });
 const orderNumberParam = Joi.object({ orderNumber: Joi.string().trim().required() });

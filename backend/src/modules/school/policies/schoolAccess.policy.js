@@ -20,6 +20,7 @@ const resolveTargetSchoolId = async (req) => {
   const requested = fromParams || fromTenant;
 
   if (tenantPolicy.isSuperAdmin(req.auth)) {
+    if (requested === 'all') return 'all';
     return toObjectId(requested);
   }
 
@@ -39,17 +40,22 @@ const resolveTargetSchoolId = async (req) => {
     return schoolId;
   }
 
-  if (req.auth?.role === ROLES.PARENT) {
+  if (req.auth?.role === ROLES.PARENT || req.auth?.role === ROLES.USER) {
+    const requestedSchoolId = toObjectId(requested);
+    if (requestedSchoolId) {
+      return requestedSchoolId;
+    }
     const ChildProfile = require('../../../database/models/ChildProfile');
     const child = await ChildProfile.findOne({ parentUserId: req.auth.userId, 'softDelete.isDeleted': { $ne: true } }).lean();
-    if (!child || !child.schoolId) {
-      throw new ForbiddenError('No associated school found for child profile', 'SCHOOL_REQUIRED');
+    if (child?.schoolId) {
+      return child.schoolId;
     }
-    const schoolId = child.schoolId;
-    if (fromParams && String(fromParams) !== String(schoolId)) {
-      throw new ForbiddenError('Cross-tenant access is not allowed', 'TENANT_FORBIDDEN');
-    }
-    return schoolId;
+    throw new ForbiddenError('No associated school found for child profile', 'SCHOOL_REQUIRED');
+  }
+
+  // Fallback for any other authenticated role accessing a valid target school ID
+  if (requested) {
+    return toObjectId(requested);
   }
 
   throw new ForbiddenError('You do not have permission to access this school', 'SCHOOL_ACCESS_DENIED');

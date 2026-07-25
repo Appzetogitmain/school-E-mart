@@ -4,7 +4,8 @@ import {
   ChevronLeft, ShoppingBag,
   CreditCard, Wallet, ChevronRight,
   Heart, Plus, Minus, Info, CheckCircle2,
-  Building2, Truck, BadgePercent, Loader2
+  Building2, Truck, BadgePercent, Loader2,
+  MapPin, Pencil, X, ShieldCheck, Package
 } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
 import { createOrder, confirmPayment } from '../../../services/ordersApi';
@@ -22,12 +23,15 @@ const CheckoutPage = () => {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const { cartItems, updateQuantity, refreshCart } = useCart();
 
-  const [deliveryType, setDeliveryType] = useState('home');
-  const [paymentMethod, setPaymentMethod] = useState('online');
+  const [deliveryType, setDeliveryType] = useState('school'); // 'school' | 'home'
+  const [paymentMethod, setPaymentMethod] = useState('online'); // 'online' | 'cod'
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [orderError, setOrderError] = useState('');
   const [walletBalancePaise, setWalletBalancePaise] = useState(0);
   const [applyWallet, setApplyWallet] = useState(false);
+
+  // Address Modal State
+  const [showAddressModal, setShowAddressModal] = useState(false);
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -35,23 +39,52 @@ const CheckoutPage = () => {
       .then((w) => setWalletBalancePaise(w?.balancePaise || 0))
       .catch(() => setWalletBalancePaise(0));
   }, [isAuthenticated]);
+
   const readChildInfo = () => {
     const saved = localStorage.getItem('childInfo');
     return saved ? JSON.parse(saved) : { name: 'Guest', school: 'Explore Schools', grade: 'Select Grade' };
   };
+
   const toAddress = (parsed = {}) => ({
     name: parsed.name || 'Guest',
     phone: parsed.phone || '',
     address: parsed.address || 'Please update your delivery address in profile',
     city: parsed.city || 'Indore',
+    state: parsed.state || 'Madhya Pradesh',
     pinCode: parsed.pinCode || '452018',
+    addressType: parsed.addressType || 'home',
   });
 
   const [childInfo, setChildInfo] = useState(readChildInfo);
   const [address, setAddress] = useState(() => toAddress(readChildInfo()));
 
-  // A guest becomes authenticated after the checkout gate; re-read the freshly
-  // saved profile/address so the order uses it.
+  // Address Modal Form State
+  const [editAddressForm, setEditAddressForm] = useState(address);
+
+  const openAddressModal = () => {
+    setEditAddressForm({ ...address });
+    setShowAddressModal(true);
+  };
+
+  const handleSaveAddress = (e) => {
+    e.preventDefault();
+    setAddress(editAddressForm);
+    setShowAddressModal(false);
+
+    // Save updated address to localStorage
+    const currentChild = readChildInfo();
+    const updated = {
+      ...currentChild,
+      name: editAddressForm.name,
+      phone: editAddressForm.phone,
+      address: editAddressForm.address,
+      city: editAddressForm.city,
+      state: editAddressForm.state,
+      pinCode: editAddressForm.pinCode,
+    };
+    localStorage.setItem('childInfo', JSON.stringify(updated));
+  };
+
   useEffect(() => {
     if (!isAuthenticated) return;
     const info = readChildInfo();
@@ -61,11 +94,16 @@ const CheckoutPage = () => {
 
   const addressSource = useMemo(
     () => ({
+      name: address.name,
+      phone: address.phone,
+      line1: address.address,
       address: address.address,
       city: address.city,
+      state: address.state,
       pinCode: address.pinCode,
+      addressType: deliveryType === 'school' ? 'school' : 'home',
     }),
-    [address.address, address.city, address.pinCode]
+    [address, deliveryType]
   );
 
   const schoolIdForPickup =
@@ -81,10 +119,17 @@ const CheckoutPage = () => {
       enabled: isAuthenticated && cartItems.length > 0,
     });
 
+  // Block COD automatically when school address delivery is selected
+  useEffect(() => {
+    if (deliveryType === 'school' && paymentMethod === 'cod') {
+      setPaymentMethod('online');
+    }
+  }, [deliveryType, paymentMethod]);
+
   const parsePrice = (item) => {
-    if (item.pricePaise) return item.pricePaise / 100;
-    if (typeof item.price === 'number') return item.price;
-    if (typeof item.price === 'string') {
+    if (item?.pricePaise) return item.pricePaise / 100;
+    if (typeof item?.price === 'number' && item.price > 0) return item.price;
+    if (typeof item?.price === 'string') {
       return parseFloat(item.price.replace(/[^\d.]/g, '')) || 0;
     }
     return 0;
@@ -96,27 +141,44 @@ const CheckoutPage = () => {
   );
   const subtotal = totals.subtotal || fallbackSubtotal;
   const handlingCharge = totals.handlingCharge || 0;
-  const deliveryCharge = totals.deliveryCharge ?? (deliveryType === 'home' ? 0 : 0);
-  const grandTotal = totals.grandTotal || subtotal + handlingCharge + deliveryCharge;
+  const platformFee = totals.platformFee || 0;
 
-  // Wallet can cover up to the whole order; the gateway/COD collects the rest.
+  // Delivery charge: 0 (FREE) for School Address delivery; Admin-defined fee for Home delivery
+  const deliveryCharge = deliveryType === 'school' ? 0 : (totals.deliveryCharge ?? 0);
+  const grandTotal = totals.grandTotal || subtotal + handlingCharge + platformFee + deliveryCharge;
+
+  // Wallet deduction calculation
   const grandTotalPaise = Math.round(grandTotal * 100);
   const walletAmountPaise =
     applyWallet && walletBalancePaise > 0 ? Math.min(walletBalancePaise, grandTotalPaise) : 0;
   const payableAfterWallet = (grandTotalPaise - walletAmountPaise) / 100;
 
   const handlePlaceOrder = async () => {
-    if (!isAuthenticated) {
-      // The guest gate overlay handles onboarding; nothing to do here.
-      return;
-    }
+    if (!isAuthenticated) return;
 
     setOrderError('');
     setIsPlacingOrder(true);
 
     try {
+      const payloadData = {
+        ...buildPayload(),
+        deliveryType,
+        schoolIdForPickup: deliveryType === 'school' ? childInfo.schoolId || undefined : undefined,
+        address: {
+          name: address.name,
+          phone: address.phone,
+          line1: deliveryType === 'school' ? (childInfo.school || 'School Address') : address.address,
+          address: deliveryType === 'school' ? (childInfo.school || 'School Address') : address.address,
+          city: address.city || 'Indore',
+          state: address.state || 'Madhya Pradesh',
+          pinCode: address.pinCode || '452018',
+          addressType: deliveryType,
+        },
+        walletAmountPaise,
+      };
+
       const { order, checkout } = await createOrder(
-        { ...buildPayload(), walletAmountPaise },
+        payloadData,
         { audience: 'parent' }
       );
 
@@ -170,333 +232,461 @@ const CheckoutPage = () => {
   if (cartItems.length === 0) {
     return (
       <div className="min-h-screen bg-white flex flex-col items-center justify-center p-6 text-center font-outfit">
-        <div className="w-24 h-24 bg-primary/10 rounded-full flex items-center justify-center text-primary mb-6">
+        <div className="w-24 h-24 bg-[#3b2d7d]/10 rounded-full flex items-center justify-center text-[#3b2d7d] mb-6">
           <ShoppingBag size={48} />
         </div>
-        <h2 className="text-xl font-bold text-deep-purple mb-2">Your cart is empty</h2>
-        <p className="text-gray-400 text-sm mb-8">Add some items to your cart to proceed with checkout</p>
-        <button 
+        <h2 className="text-xl font-bold text-gray-900 mb-2">Your cart is empty</h2>
+        <p className="text-gray-400 text-sm mb-8">Add items to your cart to proceed with checkout</p>
+        <button
           onClick={() => navigate('/user/home')}
-          className="px-8 py-3 bg-primary text-white font-bold rounded-2xl shadow-lg shadow-primary/20"
+          className="px-8 py-3 bg-[#3b2d7d] text-white font-bold rounded-2xl shadow-lg shadow-purple-950/10"
         >
-          Explore Shop
+          Explore Store
         </button>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50/50 flex flex-col font-outfit pb-32">
+    <div className="min-h-screen bg-gray-50/50 flex flex-col font-outfit pb-32 text-gray-800">
       {/* Header */}
-      <div className="bg-white px-6 pt-6 pb-4 flex items-center justify-center relative border-b border-gray-100 sticky top-0 z-50">
-        <button 
+      <div className="bg-white px-6 py-4 flex items-center justify-between border-b border-gray-200/80 sticky top-0 z-50 shadow-xs">
+        <button
           onClick={() => navigate(-1)}
-          className="absolute left-6 w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 active:scale-90 transition-all"
+          className="p-2.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 transition-all active:scale-95 shrink-0"
         >
           <ChevronLeft size={20} />
         </button>
-        <h1 className="text-xl font-black text-deep-purple">Checkout</h1>
+        <h1 className="text-base font-black text-gray-900 uppercase tracking-wider">Order Checkout</h1>
+        <div className="w-9" />
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 pt-4 space-y-4">
-        {/* Order for someone else */}
-        <div className="bg-white rounded-2xl p-4 flex items-center justify-between shadow-sm border border-gray-100">
-          <span className="text-sm font-medium text-gray-500">Ordering for someone else?</span>
-          <button className="text-sm font-bold text-primary">Add details</button>
-        </div>
-
-        {/* Delivery Address Section */}
-        <div className="bg-white rounded-3xl overflow-hidden shadow-sm border border-gray-100 relative">
-          {/* Subtle Tribal Pattern Overlay */}
-          <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'url("https://www.transparenttextures.com/patterns/tribal.png")' }}></div>
-          
-          <div className="p-4 border-b border-gray-50 bg-white/80 backdrop-blur-sm">
-            <h2 className="font-bold text-deep-purple mb-1">Delivery Address</h2>
-            <p className="text-[11px] text-gray-400 font-medium uppercase tracking-wider">Select or edit your saved address</p>
+      <div className="flex-1 max-w-2xl mx-auto w-full px-4 pt-5 space-y-5">
+        
+        {/* Error Notification */}
+        {orderError && (
+          <div className="p-4 bg-red-50 border border-red-200 rounded-2xl text-xs font-bold text-red-600 flex items-center gap-2.5 shadow-xs">
+            <Info size={16} className="text-red-500 shrink-0" />
+            <span>{orderError}</span>
           </div>
-          
-          <div className="p-4 space-y-4">
-            <div className="p-4 rounded-2xl border-2 border-primary/20 bg-primary/5 relative">
-              <div className="absolute top-4 left-4 w-5 h-5 rounded-full bg-primary flex items-center justify-center">
-                <CheckCircle2 size={12} className="text-white" />
-              </div>
-              <div className="pl-8">
-                <div className="flex justify-between items-start mb-1">
-                  <h3 className="font-bold text-deep-purple">{address.name}</h3>
-                  <button className="text-xs font-bold text-primary uppercase tracking-widest">Edit</button>
+        )}
+
+        {/* STEP 1: DELIVERY ADDRESS OPTION TOGGLE (School Address vs Home Address) */}
+        <div className="bg-white rounded-3xl p-5 border border-gray-200/90 shadow-xs space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Building2 size={18} className="text-[#3b2d7d]" />
+              <h2 className="text-xs font-black text-gray-900 uppercase tracking-wider">1. Choose Delivery Destination</h2>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {/* School Address Delivery Option (FREE) */}
+            <button
+              type="button"
+              onClick={() => setDeliveryType('school')}
+              className={`p-4 rounded-2xl border-2 transition-all text-left relative flex flex-col justify-between ${
+                deliveryType === 'school'
+                  ? 'border-[#3b2d7d] bg-purple-50/40 shadow-xs'
+                  : 'border-gray-200 bg-white hover:border-gray-300'
+              }`}
+            >
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="w-9 h-9 rounded-xl bg-purple-100 text-[#3b2d7d] flex items-center justify-center font-bold">
+                    <Building2 size={18} />
+                  </div>
+                  <span className="px-2.5 py-0.5 bg-emerald-500 text-white rounded-full text-[9px] font-black uppercase tracking-wider">
+                    FREE (₹0)
+                  </span>
                 </div>
-                <p className="text-xs font-bold text-gray-400 mb-1">{address.phone}</p>
-                <p className="text-[11px] text-gray-500 leading-relaxed font-medium">
+                <h3 className="text-xs font-black text-gray-900 leading-tight">School Address</h3>
+                <p className="text-[10px] font-extrabold text-purple-700 mt-0.5 truncate">
+                  {childInfo.school || 'School Campus Pickup'}
+                </p>
+                <p className="text-[10px] text-gray-400 font-medium mt-1 leading-normal">
+                  Delivered directly to school campus with ZERO shipping charges.
+                </p>
+              </div>
+              {deliveryType === 'school' && (
+                <div className="mt-3 flex items-center gap-1 text-[10px] font-black text-emerald-600">
+                  <CheckCircle2 size={12} />
+                  <span>Selected (Free Delivery)</span>
+                </div>
+              )}
+            </button>
+
+            {/* Home Address Delivery Option */}
+            <button
+              type="button"
+              onClick={() => setDeliveryType('home')}
+              className={`p-4 rounded-2xl border-2 transition-all text-left relative flex flex-col justify-between ${
+                deliveryType === 'home'
+                  ? 'border-[#3b2d7d] bg-purple-50/40 shadow-xs'
+                  : 'border-gray-200 bg-white hover:border-gray-300'
+              }`}
+            >
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="w-9 h-9 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold">
+                    <Truck size={18} />
+                  </div>
+                  <span className="px-2.5 py-0.5 bg-amber-50 text-amber-800 border border-amber-200 rounded-full text-[9px] font-black uppercase tracking-wider">
+                    {deliveryCharge > 0 ? `+ ₹${deliveryCharge}` : 'Delivery Charge'}
+                  </span>
+                </div>
+                <h3 className="text-xs font-black text-gray-900 leading-tight">Home Address</h3>
+                <p className="text-[10px] font-extrabold text-gray-700 mt-0.5 truncate">
+                  {address.name} — {address.city}
+                </p>
+                <p className="text-[10px] text-gray-400 font-medium mt-1 leading-normal line-clamp-2">
                   {address.address}
+                </p>
+              </div>
+              {deliveryType === 'home' && (
+                <div className="mt-3 flex items-center gap-1 text-[10px] font-black text-[#3b2d7d]">
+                  <CheckCircle2 size={12} />
+                  <span>Selected (Home Delivery)</span>
+                </div>
+              )}
+            </button>
+          </div>
+
+          {/* Detailed Selected Address Preview Box */}
+          <div className="p-4 rounded-2xl bg-gray-50 border border-gray-200 flex items-start justify-between gap-3">
+            <div className="flex items-start gap-3 min-w-0">
+              <MapPin size={18} className="text-[#3b2d7d] shrink-0 mt-0.5" />
+              <div className="min-w-0">
+                <span className="text-[10px] font-black text-purple-700 uppercase tracking-wider block">
+                  {deliveryType === 'school' ? 'School Shipping Address' : 'Home Shipping Address'}
+                </span>
+                <h4 className="text-xs font-black text-gray-900 mt-0.5">{address.name} ({address.phone})</h4>
+                <p className="text-[11px] font-bold text-gray-500 mt-0.5 leading-snug">
+                  {deliveryType === 'school' ? `${childInfo.school} • ${address.city}, ${address.pinCode}` : `${address.address}, ${address.city}, ${address.state} - ${address.pinCode}`}
                 </p>
               </div>
             </div>
 
-
-          </div>
-        </div>
-
-        {/* Shipment Summary */}
-        <div className="bg-white rounded-3xl p-4 shadow-sm border border-gray-100">
-          <p className="text-[11px] text-gray-400 font-bold uppercase tracking-widest mb-4">Shipment of {cartItems.length} item{cartItems.length > 1 ? 's' : ''}</p>
-          
-          <div className="space-y-6">
-            {cartItems.map((item) => (
-              <div key={item.id} className="flex gap-4">
-                <div className="w-20 h-20 rounded-2xl bg-gray-50 flex items-center justify-center overflow-hidden border border-gray-100">
-                  <img src={item.image} alt={item.name} className="w-full h-full object-contain p-2" />
-                </div>
-                <div className="flex-1 flex flex-col justify-between py-0.5">
-                  <div className="min-w-0">
-                    <h3 className="text-sm font-bold text-deep-purple truncate">{item.name}</h3>
-                    <p className="text-[11px] text-gray-400 font-medium">{item.quantity} × {item.weight || 'Standard'}</p>
-                  </div>
-                  
-                  <div className="flex items-center justify-between">
-                    <button className="text-[11px] font-bold text-primary flex items-center gap-1">
-                      <Heart size={12} /> Move to wishlist
-                    </button>
-                    
-                    <div className="flex items-center gap-3">
-                      <div className="flex items-center bg-gray-50 rounded-full border border-gray-100 px-1 py-1">
-                        <button 
-                          onClick={() => updateQuantity(item.id, -1)}
-                          className="w-6 h-6 rounded-full bg-white shadow-sm flex items-center justify-center text-gray-400"
-                        >
-                          <Minus size={12} />
-                        </button>
-                        <span className="w-8 text-center text-xs font-bold text-deep-purple">{item.quantity}</span>
-                        <button 
-                          onClick={() => updateQuantity(item.id, 1)}
-                          className="w-6 h-6 rounded-full bg-white shadow-sm flex items-center justify-center text-primary"
-                        >
-                          <Plus size={12} />
-                        </button>
-                      </div>
-                      <span className="text-sm font-black text-black">₹{(parsePrice(item.price) * item.quantity).toLocaleString()}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Delivery Type Selection */}
-        <div className="bg-white rounded-3xl p-4 shadow-sm border border-gray-100">
-          <div className="flex items-center gap-2 mb-4">
-            <Truck size={18} className="text-primary" />
-            <h2 className="font-bold text-deep-purple text-sm uppercase tracking-widest">Delivery Type</h2>
-          </div>
-          
-          <div className={`grid gap-3 ${isSchoolLinked(childInfo) ? 'grid-cols-2' : 'grid-cols-1'}`}>
-            <button
-              onClick={() => setDeliveryType('home')}
-              className={`p-4 rounded-2xl border-2 transition-all flex flex-col items-center gap-2 ${deliveryType === 'home' ? 'border-primary bg-primary/5' : 'border-gray-50 bg-gray-50/50 grayscale'}`}
-            >
-              <Truck size={24} className={deliveryType === 'home' ? 'text-primary' : 'text-gray-400'} />
-              <span className="text-xs font-black text-deep-purple">Home Delivery</span>
-              <span className="text-[9px] font-bold text-gray-400 uppercase">Within 24 Hours</span>
-            </button>
-
-            {/* School pick-up only for school-linked shoppers */}
-            {isSchoolLinked(childInfo) && (
+            {deliveryType === 'home' && (
               <button
-                onClick={() => setDeliveryType('school')}
-                className={`p-4 rounded-2xl border-2 transition-all flex flex-col items-center gap-2 ${deliveryType === 'school' ? 'border-primary bg-primary/5' : 'border-gray-50 bg-gray-50/50 grayscale'}`}
+                type="button"
+                onClick={openAddressModal}
+                className="px-3 py-1.5 bg-white border border-gray-200 hover:border-[#3b2d7d] text-[#3b2d7d] font-black text-[10px] uppercase rounded-xl transition-all shrink-0 flex items-center gap-1"
               >
-                <Building2 size={24} className={deliveryType === 'school' ? 'text-primary' : 'text-gray-400'} />
-                <span className="text-xs font-black text-deep-purple">School Pick-up</span>
-                <span className="text-[9px] font-bold text-gray-400 uppercase truncate w-full text-center">{childInfo.school}</span>
+                <Pencil size={11} /> Edit Address
               </button>
             )}
           </div>
-          
-          {!deliveryType && <p className="mt-4 text-xs text-primary font-medium">Please select a delivery type to proceed</p>}
         </div>
 
-        {/* Wallet balance */}
+        {/* STEP 2: CART ITEMS SUMMARY */}
+        <div className="bg-white rounded-3xl p-5 border border-gray-200/90 shadow-xs space-y-4">
+          <div className="flex items-center justify-between border-b border-gray-150 pb-3">
+            <h2 className="text-xs font-black text-gray-900 uppercase tracking-wider">
+              2. Items Summary ({cartItems.length})
+            </h2>
+            <span className="text-[10px] font-bold text-gray-400">Review products in your order</span>
+          </div>
+
+          <div className="divide-y divide-gray-100">
+            {cartItems.map((item) => {
+              const itemPrice = parsePrice(item);
+              const priceToDisplay = itemPrice > 0 ? itemPrice * item.quantity : subtotal;
+              return (
+                <div key={item.id} className="py-3 flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-14 h-14 rounded-xl bg-gray-50 border border-gray-150 p-1 shrink-0 overflow-hidden flex items-center justify-center">
+                      {item.image ? (
+                        <img src={item.image} alt={item.name} className="w-full h-full object-contain" />
+                      ) : (
+                        <Package size={22} className="text-purple-300" />
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <h4 className="text-xs font-black text-gray-900 leading-snug truncate">{item.name}</h4>
+                      <span className="text-[10px] font-bold text-gray-400 block mt-0.5">Quantity: {item.quantity}</span>
+                    </div>
+                  </div>
+
+                  <div className="text-right shrink-0">
+                    <span className="text-xs font-black text-[#3b2d7d]">
+                      ₹{priceToDisplay.toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* STEP 3: WALLET OPTION */}
         {walletBalancePaise > 0 && (
-          <div className="bg-white rounded-3xl p-5 shadow-sm border border-gray-100">
+          <div className="bg-white rounded-3xl p-5 border border-gray-200/90 shadow-xs">
             <button
               type="button"
               onClick={() => setApplyWallet((v) => !v)}
-              className={`w-full flex items-center gap-4 p-4 rounded-2xl border-2 transition-all text-left ${
-                applyWallet ? 'border-primary bg-primary/5' : 'border-gray-100 bg-gray-50/40'
+              className={`w-full flex items-center gap-3.5 p-3.5 rounded-2xl border-2 transition-all text-left ${
+                applyWallet ? 'border-[#3b2d7d] bg-purple-50/40' : 'border-gray-200 bg-gray-50/50'
               }`}
             >
-              <div className={`w-11 h-11 rounded-2xl flex items-center justify-center ${applyWallet ? 'bg-primary text-white' : 'bg-gray-100 text-gray-400'}`}>
-                <Wallet size={20} />
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${applyWallet ? 'bg-[#3b2d7d] text-white' : 'bg-gray-200 text-gray-500'}`}>
+                <Wallet size={18} />
               </div>
-              <div className="flex-1">
-                <span className="block text-sm font-black text-deep-purple">Use Wallet Balance</span>
-                <span className="block text-[11px] font-bold text-gray-400 mt-0.5">
+              <div className="flex-1 min-w-0">
+                <span className="block text-xs font-black text-gray-900">Apply Wallet Balance</span>
+                <span className="block text-[10px] font-bold text-gray-400 mt-0.5">
                   Available: ₹{(walletBalancePaise / 100).toFixed(2)}
                   {applyWallet && walletAmountPaise > 0 && (
-                    <span className="text-emerald-600"> · Applying ₹{(walletAmountPaise / 100).toFixed(2)}</span>
+                    <span className="text-emerald-600 font-extrabold"> · Deducting ₹{(walletAmountPaise / 100).toFixed(2)}</span>
                   )}
                 </span>
               </div>
-              <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${applyWallet ? 'border-primary bg-primary' : 'border-gray-300'}`}>
-                {applyWallet && <CheckCircle2 size={14} className="text-white" />}
+              <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${applyWallet ? 'border-[#3b2d7d] bg-[#3b2d7d]' : 'border-gray-300'}`}>
+                {applyWallet && <CheckCircle2 size={12} className="text-white" />}
               </div>
             </button>
-            {applyWallet && (
-              <p className="text-[11px] font-bold text-gray-400 mt-3 text-center">
-                Remaining ₹{payableAfterWallet.toFixed(2)} to pay by {paymentMethod === 'cod' ? 'cash' : 'online payment'}.
-              </p>
-            )}
           </div>
         )}
 
-        {/* Payment Method */}
-        <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-2">
-              <CreditCard size={18} className="text-primary" />
-              <h2 className="font-bold text-deep-purple text-sm uppercase tracking-widest">Payment Method</h2>
-            </div>
-            <button className="text-[11px] font-bold text-primary flex items-center gap-1 uppercase tracking-widest">
-              See all coupons <ChevronRight size={14} />
-            </button>
+        {/* STEP 4: PAYMENT METHOD SELECTOR */}
+        <div className="bg-white rounded-3xl p-5 border border-gray-200/90 shadow-xs space-y-4">
+          <div className="flex items-center gap-2 border-b border-gray-150 pb-3">
+            <CreditCard size={18} className="text-[#3b2d7d]" />
+            <h2 className="text-xs font-black text-gray-900 uppercase tracking-wider">3. Select Payment Method</h2>
           </div>
-          
+
           <div className="grid grid-cols-2 gap-3">
-            <button 
+            {/* Razorpay Online */}
+            <button
+              type="button"
               onClick={() => setPaymentMethod('online')}
-              className={`p-5 rounded-3xl border-2 transition-all relative ${paymentMethod === 'online' ? 'border-primary bg-white shadow-xl shadow-primary/5' : 'border-gray-50 bg-gray-50/30'}`}
+              className={`p-4 rounded-2xl border-2 transition-all relative flex flex-col items-center gap-2 text-center ${
+                paymentMethod === 'online'
+                  ? 'border-[#3b2d7d] bg-purple-50/40 shadow-xs'
+                  : 'border-gray-200 bg-white hover:border-gray-300'
+              }`}
             >
-              <div className="flex flex-col items-center gap-3">
-                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-colors ${paymentMethod === 'online' ? 'bg-primary/10 text-primary' : 'bg-gray-100 text-gray-400'}`}>
-                  <CreditCard size={24} />
-                </div>
-                <span className="text-[11px] font-black text-deep-purple uppercase tracking-widest">UPI / ONLINE</span>
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${paymentMethod === 'online' ? 'bg-[#3b2d7d] text-white' : 'bg-gray-100 text-gray-400'}`}>
+                <CreditCard size={20} />
+              </div>
+              <div>
+                <span className="text-xs font-black text-gray-900 block leading-tight">Pay Online (Razorpay)</span>
+                <span className="text-[9px] font-bold text-gray-400 mt-0.5 block">UPI / Cards / NetBanking</span>
               </div>
               {paymentMethod === 'online' && (
-                <div className="absolute -top-2 -right-2 w-6 h-6 bg-primary rounded-full flex items-center justify-center shadow-lg border-4 border-white">
-                  <CheckCircle2 size={12} className="text-white" />
+                <div className="absolute top-2 right-2 w-4 h-4 bg-[#3b2d7d] rounded-full flex items-center justify-center">
+                  <CheckCircle2 size={10} className="text-white" />
                 </div>
               )}
-              <p className="text-[9px] text-gray-400 text-center font-medium mt-1">Pay via App / Card</p>
             </button>
 
-            <button 
+            {/* Cash on Delivery (Disabled for School Address Delivery) */}
+            <button
+              type="button"
+              disabled={deliveryType === 'school'}
               onClick={() => setPaymentMethod('cod')}
-              className={`p-5 rounded-3xl border-2 transition-all relative ${paymentMethod === 'cod' ? 'border-primary bg-white shadow-xl shadow-primary/5' : 'border-gray-50 bg-gray-50/30'}`}
+              className={`p-4 rounded-2xl border-2 transition-all relative flex flex-col items-center gap-2 text-center ${
+                deliveryType === 'school'
+                  ? 'border-gray-200 bg-gray-100/80 opacity-50 cursor-not-allowed'
+                  : paymentMethod === 'cod'
+                    ? 'border-[#3b2d7d] bg-purple-50/40 shadow-xs'
+                    : 'border-gray-200 bg-white hover:border-gray-300'
+              }`}
             >
-              <div className="flex flex-col items-center gap-3">
-                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-colors ${paymentMethod === 'cod' ? 'bg-primary/10 text-primary' : 'bg-gray-100 text-gray-400'}`}>
-                  <Wallet size={24} />
-                </div>
-                <span className="text-[11px] font-black text-deep-purple uppercase tracking-widest">CASH ON DELIVERY</span>
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${paymentMethod === 'cod' ? 'bg-[#3b2d7d] text-white' : 'bg-gray-100 text-gray-400'}`}>
+                <Wallet size={20} />
+              </div>
+              <div>
+                <span className="text-xs font-black text-gray-900 block leading-tight">Cash on Delivery</span>
+                <span className="text-[9px] font-bold text-gray-400 mt-0.5 block">
+                  {deliveryType === 'school' ? 'Disabled for school delivery' : 'Pay upon receipt'}
+                </span>
               </div>
               {paymentMethod === 'cod' && (
-                <div className="absolute -top-2 -right-2 w-6 h-6 bg-primary rounded-full flex items-center justify-center shadow-lg border-4 border-white">
-                  <CheckCircle2 size={12} className="text-white" />
+                <div className="absolute top-2 right-2 w-4 h-4 bg-[#3b2d7d] rounded-full flex items-center justify-center">
+                  <CheckCircle2 size={10} className="text-white" />
                 </div>
               )}
-              <p className="text-[9px] text-gray-400 text-center font-medium mt-1">Pay at your doorstep</p>
             </button>
           </div>
         </div>
 
-        {/* Bill Details */}
-        <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
-          <div className="flex items-center gap-2 mb-6">
-            <Info size={16} className="text-primary" />
-            <h2 className="font-bold text-deep-purple text-sm uppercase tracking-widest">Bill Details</h2>
-          </div>
-          
-          <div className="space-y-3">
-            <div className="flex justify-between items-center text-sm">
-              <div className="flex items-center gap-2">
-                <span className="text-gray-400 font-medium">Items total</span>
-              </div>
-              <span className="font-bold text-deep-purple">₹{subtotal.toLocaleString()}</span>
+        {/* STEP 5: BILL SUMMARY */}
+        <div className="bg-white rounded-3xl p-5 border border-gray-200/90 shadow-xs space-y-3">
+          <h2 className="text-xs font-black text-gray-900 uppercase tracking-wider border-b border-gray-150 pb-3">
+            4. Bill Breakdown
+          </h2>
+
+          <div className="space-y-2 text-xs font-bold text-gray-600">
+            <div className="flex justify-between items-center">
+              <span>Items Total</span>
+              <span className="font-black text-gray-900">₹{subtotal.toLocaleString()}</span>
             </div>
-            <div className="flex justify-between items-center text-sm">
-              <div className="flex items-center gap-2">
-                <ShoppingBag size={14} className="text-gray-400" />
-                <span className="text-gray-400 font-medium">Handling charge</span>
+
+            {platformFee > 0 && (
+              <div className="flex justify-between items-center text-gray-700">
+                <span>Platform Fee</span>
+                <span className="font-black text-gray-900">₹{platformFee}</span>
               </div>
-              <span className="font-bold text-deep-purple">₹{handlingCharge}</span>
+            )}
+
+            <div className="flex justify-between items-center">
+              <span>Handling Fee</span>
+              <span className="font-black text-gray-900">₹{handlingCharge}</span>
             </div>
-            <div className="flex justify-between items-center text-sm">
-              <div className="flex items-center gap-2">
-                <Truck size={14} className="text-gray-400" />
-                <span className="text-gray-400 font-medium">Delivery charge</span>
-              </div>
-              <span className={`font-bold ${deliveryType === 'home' ? 'text-deep-purple' : 'text-green-500'}`}>
-                {deliveryType === 'home' ? `₹${deliveryCharge}` : 'FREE'}
+
+            <div className="flex justify-between items-center">
+              <span>Delivery Fee</span>
+              <span className={`font-black ${deliveryType === 'school' ? 'text-emerald-600' : 'text-gray-900'}`}>
+                {deliveryType === 'school' ? 'FREE (₹0)' : `₹${deliveryCharge}`}
               </span>
             </div>
 
-            <button className="w-full py-4 mt-2 border-y border-gray-50 flex items-center justify-between group">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center text-blue-500">
-                  <BadgePercent size={16} />
-                </div>
-                <div className="text-left">
-                  <p className="text-xs font-bold text-deep-purple">Add GSTIN</p>
-                  <p className="text-[10px] text-gray-400 font-medium">Claim GST input credit up to 18%</p>
-                </div>
+            {applyWallet && walletAmountPaise > 0 && (
+              <div className="flex justify-between items-center text-emerald-600">
+                <span>Wallet Discount</span>
+                <span className="font-black">- ₹{(walletAmountPaise / 100).toFixed(2)}</span>
               </div>
-              <ChevronRight size={18} className="text-gray-300 group-active:translate-x-1 transition-all" />
-            </button>
+            )}
 
-            <div className="pt-3 border-t border-gray-50 flex justify-between items-center">
-              <span className="text-base font-bold text-deep-purple">Grand total</span>
-              <span className="text-lg font-black text-black">₹{grandTotal.toLocaleString()}</span>
+            <div className="pt-3 border-t border-gray-200 flex justify-between items-center text-sm font-black text-gray-900">
+              <span>Total Amount</span>
+              <span className="text-base font-black text-[#3b2d7d]">₹{payableAfterWallet.toFixed(2)}</span>
             </div>
           </div>
         </div>
 
-        {/* Footer Links */}
-        <div className="py-6 px-4 space-y-4 text-center">
-          <p className="text-xs font-bold text-gray-300 uppercase tracking-widest cursor-pointer hover:text-primary">Cancellation Policy</p>
-          <div className="flex items-center justify-center gap-2 text-sm text-gray-400 font-medium">
-            Made with <Heart size={14} className="text-red-500 fill-current" /> by <span className="font-bold text-deep-purple">School E-mart</span>
-          </div>
-        </div>
       </div>
 
-      {/* Sticky Bottom Bar */}
-      <div className="fixed bottom-0 left-0 right-0 p-6 bg-white border-t border-gray-100 z-[60] flex flex-col gap-3 shadow-[0_-8px_30px_rgb(0,0,0,0.04)]">
-        {orderError && (
-          <p className="text-sm text-red-500 font-medium text-center">{orderError}</p>
-        )}
-        {summaryError && (
-          <p className="text-sm text-amber-600 font-medium text-center">{summaryError}</p>
-        )}
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex flex-col">
-            <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Total to pay</span>
-            <span className="text-xl font-black text-black leading-none">
-              {summaryLoading ? '...' : `₹${grandTotal.toLocaleString()}`}
-            </span>
+      {/* Sticky Bottom Action Bar */}
+      <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/95 backdrop-blur-xl border-t border-gray-200 z-[90] shadow-lg">
+        <div className="max-w-md mx-auto flex items-center justify-between gap-4">
+          <div>
+            <span className="text-[9px] font-black text-gray-400 uppercase tracking-wider block">Total Payable</span>
+            <span className="text-xl font-black text-[#3b2d7d]">₹{payableAfterWallet.toFixed(2)}</span>
           </div>
-          <button 
+
+          <button
+            type="button"
             onClick={handlePlaceOrder}
-            disabled={isPlacingOrder || summaryLoading || !isAuthenticated}
-            className="flex-1 max-w-[200px] h-14 bg-primary text-white font-black text-base rounded-2xl shadow-xl shadow-primary/25 active:scale-[0.98] transition-all flex items-center justify-center uppercase tracking-widest disabled:opacity-60 disabled:cursor-not-allowed"
+            disabled={isPlacingOrder || summaryLoading}
+            className="px-6 py-3.5 bg-[#3b2d7d] hover:bg-[#2c2060] text-white font-black text-xs uppercase tracking-wider rounded-2xl shadow-lg shadow-purple-950/15 flex items-center gap-2 transition-all active:scale-95 disabled:opacity-60"
           >
-            {isPlacingOrder ? <Loader2 size={22} className="animate-spin" /> : 'Place Order'}
+            {isPlacingOrder ? (
+              <>
+                <Loader2 size={16} className="animate-spin" />
+                <span>Processing...</span>
+              </>
+            ) : (
+              <>
+                <ShieldCheck size={16} />
+                <span>{paymentMethod === 'online' ? 'Pay Online' : 'Place COD Order'}</span>
+              </>
+            )}
           </button>
         </div>
       </div>
 
-      {/* Guests must verify their number (creating an unlinked account) before
-          they can place the order. */}
-      {!isAuthenticated && (
-        <GuestCheckoutGate
-          onDone={() => {
-            const info = readChildInfo();
-            setChildInfo(info);
-            setAddress(toAddress(info));
-          }}
-          onCancel={() => navigate(-1)}
-        />
+      {/* EDIT ADDRESS MODAL */}
+      {showAddressModal && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-gray-150 space-y-5 animate-in zoom-in-95">
+            <div className="flex items-center justify-between border-b border-gray-150 pb-3">
+              <h3 className="text-sm font-black text-gray-900 uppercase tracking-wider">Update Delivery Address</h3>
+              <button
+                type="button"
+                onClick={() => setShowAddressModal(false)}
+                className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-500 flex items-center justify-center"
+              >
+                <X size={15} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveAddress} className="space-y-4 text-xs font-bold">
+              <div>
+                <label className="block text-gray-700 mb-1">Recipient Name</label>
+                <input
+                  type="text"
+                  required
+                  value={editAddressForm.name}
+                  onChange={(e) => setEditAddressForm((p) => ({ ...p, name: e.target.value }))}
+                  className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 focus:outline-none focus:border-[#3b2d7d]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-gray-700 mb-1">Phone / Mobile Number</label>
+                <input
+                  type="text"
+                  required
+                  value={editAddressForm.phone}
+                  onChange={(e) => setEditAddressForm((p) => ({ ...p, phone: e.target.value }))}
+                  className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 focus:outline-none focus:border-[#3b2d7d]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-gray-700 mb-1">Full Address (Flat/House No, Building, Street)</label>
+                <textarea
+                  rows={2}
+                  required
+                  value={editAddressForm.address}
+                  onChange={(e) => setEditAddressForm((p) => ({ ...p, address: e.target.value }))}
+                  className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 focus:outline-none focus:border-[#3b2d7d]"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-gray-700 mb-1">City</label>
+                  <input
+                    type="text"
+                    required
+                    value={editAddressForm.city}
+                    onChange={(e) => setEditAddressForm((p) => ({ ...p, city: e.target.value }))}
+                    className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 focus:outline-none focus:border-[#3b2d7d]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-gray-700 mb-1">Pincode</label>
+                  <input
+                    type="text"
+                    required
+                    value={editAddressForm.pinCode}
+                    onChange={(e) => setEditAddressForm((p) => ({ ...p, pinCode: e.target.value }))}
+                    className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 focus:outline-none focus:border-[#3b2d7d]"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-3 border-t border-gray-150 flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowAddressModal(false)}
+                  className="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-6 py-2.5 bg-[#3b2d7d] hover:bg-[#2c2060] text-white font-black rounded-xl uppercase tracking-wider"
+                >
+                  Save Address
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
+
+      <GuestCheckoutGate
+        onSuccess={() => {
+          const info = readChildInfo();
+          setChildInfo(info);
+          setAddress(toAddress(info));
+        }}
+      />
     </div>
   );
 };

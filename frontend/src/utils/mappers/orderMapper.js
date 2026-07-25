@@ -1,9 +1,18 @@
 import { formatRupee } from './productMapper';
 
 const PRODUCT_PLACEHOLDER =
-  'https://images.unsplash.com/photo-1523275335684-37898b6baf30?q=80&w=400&h=400&fit=crop';
+  'https://images.unsplash.com/photo-1503676260728-1c00da094a0b?q=80&w=400&h=400&fit=crop';
 
 const isUrl = (value) => typeof value === 'string' && /^https?:\/\//i.test(value);
+
+const resolveOrderItemImage = (image) => {
+  if (typeof image === 'string' && image.trim().length > 0) {
+    if (!image.includes('photo-1523275335684-37898b6baf30')) {
+      return image;
+    }
+  }
+  return PRODUCT_PLACEHOLDER;
+};
 
 export const ORDER_STATUS_LABELS = {
   placed: 'Order Placed',
@@ -46,8 +55,6 @@ export const formatOrderDateShort = (value) => {
 export const paiseToRupees = (paise) => Number(paise || 0) / 100;
 
 export const formatOrderAmount = (paise) => formatRupee(paise);
-
-const resolveOrderItemImage = (image) => (isUrl(image) ? image : PRODUCT_PLACEHOLDER);
 
 export const mapOrderForListCard = (order) => {
   const items = order?.items || [];
@@ -177,12 +184,15 @@ export const getOrderStatusStyle = (status = '') => {
 };
 
 export const buildCheckoutAddress = (source = {}) => ({
+  name: source.name || 'Customer',
+  phone: source.phone || '9999999999',
   line1: source.address || source.line1 || source.schoolAddress || 'Address not provided',
-  line2: source.line2,
+  line2: source.line2 || '',
   city: source.city || 'Indore',
   state: source.state || 'Madhya Pradesh',
   country: source.country || 'India',
   pinCode: String(source.pinCode || source.pincode || '452018').slice(0, 6),
+  addressType: source.addressType || 'home',
 });
 
 export const buildCheckoutPayload = ({

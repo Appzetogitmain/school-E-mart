@@ -46,6 +46,23 @@ const linkParentByPhone = async (schoolId, student, payload, session) => {
     );
   }
 
+  // One phone number = one child. If this parent phone is already linked to a
+  // DIFFERENT student, reject the request and ask the school to use a separate
+  // phone number for the second child.
+  if (existingUser) {
+    const existingChild = await ChildProfile.findOne({
+      parentUserId: existingUser._id,
+      'softDelete.isDeleted': { $ne: true },
+    }).session(session);
+
+    if (existingChild && String(existingChild.studentId) !== String(student._id)) {
+      throw new ConflictError(
+        'This phone number is already linked to another student. Please use a different phone number for this child.',
+        'PHONE_ALREADY_LINKED_TO_ANOTHER_STUDENT'
+      );
+    }
+  }
+
   if (normalizedEmail) {
     const emailOwner = await User.findEmailOwner(normalizedEmail, {
       excludeUserId: existingUser?._id,

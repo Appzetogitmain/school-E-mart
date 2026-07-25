@@ -150,6 +150,7 @@ async function buildActiveChildDto(userId) {
     grade: child.grade,
     schoolId: child.schoolId ? child.schoolId.toString() : 'explore-schools',
     schoolName: school ? school.name : 'Explore Schools',
+    schoolLogo: school ? school.logoUrl : null,
     schoolRefNo: child.schoolRefNo || (school ? school.schoolRefNo : null),
     rollNo: child.rollNo || null,
     studentId: child.studentId ? child.studentId.toString() : null,

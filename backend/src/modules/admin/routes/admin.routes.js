@@ -396,8 +396,13 @@ router.delete(
 router.post('/uploads', ...adminOnly, uploadImage, adminController.uploadAttachment);
 router.post('/uploads/media', ...adminOnly, uploadMedia, adminController.uploadAttachment);
 
+const kitProductsRead = protectedRoute({
+  roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN, ROLES.TEACHER, ROLES.VENDOR],
+  tenant: { requireTenantId: false },
+});
+
 // Master Kit Products (SuperAdmin Master Catalogue)
-router.get('/kit-products', ...adminOnly, adminController.listMasterKitProducts);
+router.get('/kit-products', ...kitProductsRead, adminController.listMasterKitProducts);
 router.post('/kit-products', ...adminOnly, adminController.createMasterKitProduct);
 router.patch('/kit-products/:productId', ...adminOnly, adminController.updateMasterKitProduct);
 router.delete('/kit-products/:productId', ...adminOnly, adminController.deleteMasterKitProduct);

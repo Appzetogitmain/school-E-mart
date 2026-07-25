@@ -4,9 +4,9 @@ import {
   ArrowLeft, Search, Filter, ChevronDown, Check, X,
   MoreVertical, Package, CheckCircle, AlertCircle, Plus,
   Users, Layers, Award, Tag, Sparkles, ShoppingBag, Eye, Loader2,
-  Pencil, Trash2
+  Pencil, Trash2, Power, ToggleLeft, ToggleRight
 } from 'lucide-react';
-import { listKits, deleteKit } from '../../../services/schoolApi';
+import { listKits, updateKit, deleteKit } from '../../../services/schoolApi';
 import { useSchoolId } from '../../../utils/schoolContext';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 
@@ -107,6 +107,20 @@ const SchoolKitsPage = () => {
       setConfirmingDelete(null);
     } finally {
       setDeleting(false);
+    }
+  };
+
+  const handleToggleKitStatus = async (kit) => {
+    setError('');
+    try {
+      const nextStatus = kit.status === 'Active' ? 'draft' : 'active';
+      await updateKit(schoolId, kit.id, { status: nextStatus });
+      await loadKits();
+      if (selectedKit && selectedKit.id === kit.id) {
+        setSelectedKit((prev) => prev ? { ...prev, status: nextStatus === 'active' ? 'Active' : 'Draft' } : null);
+      }
+    } catch (err) {
+      setError(getErrorMessage(err, 'Unable to update status of this kit'));
     }
   };
 
@@ -371,7 +385,7 @@ const SchoolKitsPage = () => {
 
               {openMenuId === kit.id && (
                 <div
-                  className="absolute right-0 top-8 z-20 w-36 bg-white border border-gray-150 rounded-2xl shadow-xl overflow-hidden"
+                  className="absolute right-0 top-8 z-20 w-44 bg-white border border-gray-150 rounded-2xl shadow-xl overflow-hidden py-1"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <button
@@ -380,19 +394,43 @@ const SchoolKitsPage = () => {
                       setOpenMenuId(null);
                       navigate(`/school/create-kit?kitId=${kit.id}`);
                     }}
-                    className="w-full px-4 py-3 flex items-center gap-2.5 text-[11px] font-black text-deep-purple hover:bg-gray-50 text-left"
+                    className="w-full px-4 py-2.5 flex items-center gap-2.5 text-[11px] font-black text-deep-purple hover:bg-gray-50 text-left"
                   >
-                    <Pencil size={12} /> Edit kit
+                    <Pencil size={13} className="text-[#3b2d7d]" /> Edit kit details
                   </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpenMenuId(null);
+                      handleToggleKitStatus(kit);
+                    }}
+                    className={`w-full px-4 py-2.5 flex items-center gap-2.5 text-[11px] font-black text-left border-t border-gray-100 ${
+                      kit.status === 'Active'
+                        ? 'text-orange-600 hover:bg-orange-50'
+                        : 'text-emerald-600 hover:bg-emerald-50'
+                    }`}
+                  >
+                    {kit.status === 'Active' ? (
+                      <>
+                        <Power size={13} className="text-orange-500" /> Mark as Inactive
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle size={13} className="text-emerald-600" /> Activate Kit
+                      </>
+                    )}
+                  </button>
+
                   <button
                     type="button"
                     onClick={() => {
                       setOpenMenuId(null);
                       setConfirmingDelete(kit);
                     }}
-                    className="w-full px-4 py-3 flex items-center gap-2.5 text-[11px] font-black text-red-600 hover:bg-red-50 text-left border-t border-gray-100"
+                    className="w-full px-4 py-2.5 flex items-center gap-2.5 text-[11px] font-black text-red-600 hover:bg-red-50 text-left border-t border-gray-100"
                   >
-                    <Trash2 size={12} /> Delete kit
+                    <Trash2 size={13} /> Delete kit
                   </button>
                 </div>
               )}
@@ -528,13 +566,41 @@ const SchoolKitsPage = () => {
 
             </div>
 
-            {/* Footer */}
-            <div className="bg-gray-50 border-t border-gray-200 p-5 flex items-center justify-end shrink-0">
+            {/* Modal Footer */}
+            <div className="bg-gray-50 border-t border-gray-200 p-4 sm:p-5 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const kitToEdit = selectedKit;
+                    setSelectedKit(null);
+                    navigate(`/school/create-kit?kitId=${kitToEdit.id}`);
+                  }}
+                  className="flex-1 sm:flex-initial px-4 py-2.5 bg-white border border-gray-200 hover:border-[#3b2d7d] text-[#3b2d7d] font-black rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95 shadow-xs"
+                >
+                  <Pencil size={13} />
+                  <span>Edit Kit</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleToggleKitStatus(selectedKit)}
+                  className={`flex-1 sm:flex-initial px-4 py-2.5 border font-black rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95 shadow-xs ${
+                    selectedKit.status === 'Active'
+                      ? 'bg-orange-50 text-orange-600 border-orange-200 hover:bg-orange-100'
+                      : 'bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100'
+                  }`}
+                >
+                  <Power size={13} />
+                  <span>{selectedKit.status === 'Active' ? 'Set Inactive' : 'Activate'}</span>
+                </button>
+              </div>
+
               <button 
                 onClick={() => setSelectedKit(null)}
-                className="w-full sm:w-auto px-6 py-3.5 bg-[#3b2d7d] hover:bg-[#5942bc] text-white font-black rounded-2xl text-xs uppercase tracking-wider transition-all active:scale-95 shadow-md"
+                className="w-full sm:w-auto px-5 py-2.5 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold rounded-xl text-xs uppercase tracking-wider transition-all active:scale-95"
               >
-                Close breakdown
+                Close
               </button>
             </div>
 

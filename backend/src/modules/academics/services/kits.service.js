@@ -1,6 +1,10 @@
 const crypto = require('crypto');
 const Kit = require('../../../database/models/Kit');
 const SchoolKitCategory = require('../../../database/models/SchoolKitCategory');
+require('../../../database/models/School');
+require('../../../database/models/VendorProfile');
+require('../../../database/models/Attachment');
+require('../../../database/models/MasterKitProduct');
 const { NotFoundError, BadRequestError } = require('../../../common/errors');
 const { executePaginatedQuery } = require('../../../repositories');
 
@@ -99,7 +103,8 @@ const kitsService = {
   },
 
   async listKits(schoolId, query = {}) {
-    const filter = { schoolId, ...notDeleted };
+    const filter = { ...notDeleted };
+    if (schoolId && schoolId !== 'all') filter.schoolId = schoolId;
     if (query.status) filter.status = query.status;
     if (query.classGrade) filter.classGrade = query.classGrade;
     if (query.category) filter.category = query.category;
@@ -108,6 +113,7 @@ const kitsService = {
     const result = await executePaginatedQuery(Kit, filter, query, { defaultSort: '-audit.createdAt' });
     if (result.data && result.data.length) {
       result.data = await Kit.populate(result.data, [
+        { path: 'schoolId', select: 'name schoolRefNo code logoUrl address' },
         { path: 'vendorId', select: 'storeName businessName name phone email' },
         { path: 'imageId', select: 'storageKey mime sizeBytes' },
         { path: 'items.masterProductId', select: 'name category subcategory imageUrl productType' }
@@ -117,7 +123,11 @@ const kitsService = {
   },
 
   async getKit(schoolId, kitId) {
-    const kit = await Kit.findOne({ _id: kitId, schoolId, ...notDeleted })
+    const filter = { _id: kitId, ...notDeleted };
+    if (schoolId && schoolId !== 'all') filter.schoolId = schoolId;
+
+    const kit = await Kit.findOne(filter)
+      .populate({ path: 'schoolId', select: 'name schoolRefNo code logoUrl address' })
       .populate({ path: 'vendorId', select: 'storeName businessName name phone email' })
       .populate({ path: 'imageId', select: 'storageKey mime sizeBytes' })
       .populate({ path: 'items.masterProductId', select: 'name category subcategory imageUrl productType' })
@@ -131,9 +141,12 @@ const kitsService = {
     delete update.slug;
     delete update.sku;
 
+    const filter = { _id: kitId, ...notDeleted };
+    if (schoolId && schoolId !== 'all') filter.schoolId = schoolId;
+
     const goingLive = payload.status === 'active' || payload.flags?.availableOnline;
     if (goingLive) {
-      const current = await Kit.findOne({ _id: kitId, schoolId, ...notDeleted }).select('vendorId').lean();
+      const current = await Kit.findOne(filter).select('vendorId').lean();
       const resolvedVendor = payload.vendorId ?? current?.vendorId;
       if (!resolvedVendor) {
         throw new BadRequestError('Select a fulfilling vendor before publishing the kit', null, 'KIT_VENDOR_REQUIRED');
@@ -144,7 +157,7 @@ const kitsService = {
     if (payload.mrpPaise !== undefined) update.mrpPaise = Number(payload.mrpPaise) || update.pricePaise || 0;
 
     const kit = await Kit.findOneAndUpdate(
-      { _id: kitId, schoolId, ...notDeleted },
+      filter,
       { $set: update },
       { new: true }
     ).lean();
@@ -153,8 +166,11 @@ const kitsService = {
   },
 
   async deleteKit(schoolId, kitId, deletedBy) {
+    const filter = { _id: kitId, ...notDeleted };
+    if (schoolId && schoolId !== 'all') filter.schoolId = schoolId;
+
     const kit = await Kit.findOneAndUpdate(
-      { _id: kitId, schoolId, ...notDeleted },
+      filter,
       {
         $set: {
           'softDelete.isDeleted': true,

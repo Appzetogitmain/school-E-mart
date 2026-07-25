@@ -3,9 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, ShieldAlert, Camera, User, Phone,
   Mail, MapPin, Briefcase, Lock, CheckCircle2, ChevronRight,
-  Save, X, Loader2, LogOut
+  Save, X, Loader2, LogOut, Building2
 } from 'lucide-react';
-import { updateTeacher } from '../../../services/schoolApi';
+import { updateTeacher, getSchool } from '../../../services/schoolApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 import { resolveTeacherProfile } from '../../../utils/teacherApiHelpers';
 import { useAuthUser, useTeacherSchoolId } from '../../../utils/teacherContext';
@@ -57,6 +57,8 @@ const TeacherProfile = () => {
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
 
+  const [schoolInfo, setSchoolInfo] = useState(null);
+
   useEffect(() => {
     const loadProfile = async () => {
       if (!schoolId || !authUser?.id) {
@@ -66,6 +68,10 @@ const TeacherProfile = () => {
 
       setLoading(true);
       try {
+        if (schoolId) {
+          getSchool(schoolId).then((data) => setSchoolInfo(data)).catch(() => {});
+        }
+
         const profile = await resolveTeacherProfile(schoolId);
         if (!profile) {
           setFullName(authUser.name || '');
@@ -284,6 +290,34 @@ const TeacherProfile = () => {
 
         {/* Form Container */}
         <form onSubmit={handleSave} className="space-y-4">
+
+          {/* Linked School Information Block */}
+          {schoolInfo && (
+            <div className="bg-white border border-gray-200 rounded-3xl p-5 shadow-sm space-y-3">
+              <div className="flex items-center gap-2 border-b border-gray-50 pb-2">
+                <div className="w-7 h-7 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+                  <Building2 size={14} />
+                </div>
+                <span className="text-[11px] font-black text-deep-purple uppercase tracking-wider block">Linked School</span>
+              </div>
+              <div className="flex items-center gap-4 bg-gray-50/80 p-3.5 rounded-2xl border border-gray-100">
+                <div className="w-14 h-14 rounded-2xl bg-white p-1 border border-gray-200 shadow-sm flex items-center justify-center overflow-hidden shrink-0">
+                  {schoolInfo.logoUrl ? (
+                    <img src={schoolInfo.logoUrl} alt={schoolInfo.name} className="w-full h-full object-cover rounded-xl" />
+                  ) : (
+                    <Building2 size={24} className="text-gray-400" />
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h4 className="text-xs font-black text-deep-purple truncate">{schoolInfo.name}</h4>
+                  <p className="text-[10px] text-gray-500 font-bold mt-0.5">Ref No: {schoolInfo.schoolRefNo || 'N/A'}</p>
+                  {schoolInfo.address?.line1 && (
+                    <p className="text-[9.5px] text-gray-400 font-medium truncate mt-0.5">{schoolInfo.address.line1}, {schoolInfo.address.city || ''}</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* 3. Personal Information Block */}
           <div className="bg-white border border-gray-200 rounded-3xl p-5 shadow-sm space-y-4">

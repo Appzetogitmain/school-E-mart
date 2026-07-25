@@ -3,6 +3,7 @@ const cartRepository = require('../repositories/cart.repository');
 const productRepository = require('../repositories/product.repository');
 const variantRepository = require('../repositories/variant.repository');
 const productService = require('./product.service');
+const Kit = require('../../../database/models/Kit');
 
 const itemKey = (productId, variantId) => `${productId}:${variantId || 'base'}`;
 
@@ -40,9 +41,31 @@ const cartService = {
 
   async validateCartItems(items) {
     for (const item of items) {
-      const product = await productRepository.findOne(
+      let product = await productRepository.findOne(
         productRepository.findPublishedFilter({ _id: item.productId })
       );
+      if (!product) {
+        const kit = await Kit.findById(item.productId).lean();
+        if (kit) {
+          const kitImg =
+            kit.imageUrl ||
+            kit.items?.find((i) => i.imageUrl)?.imageUrl ||
+            kit.items?.[0]?.imageUrl ||
+            '';
+          product = {
+            _id: kit._id,
+            name: kit.name,
+            stock: 999,
+            pricePaise: kit.pricePaise || 0,
+          };
+          if (!item.image && kitImg) {
+            item.image = kitImg;
+          }
+          if (item.name !== kit.name) {
+            item.name = kit.name;
+          }
+        }
+      }
       if (!product) throw new BadRequestError(`Product unavailable: ${item.productId}`, null, 'CART_ITEM_INVALID');
 
       let stock = product.stock;
@@ -64,9 +87,31 @@ const cartService = {
   },
 
   async addItem(userId, audience, payload) {
-    const product = await productRepository.findOne(
+    let product = await productRepository.findOne(
       productRepository.findPublishedFilter({ _id: payload.productId })
     );
+    let isKit = false;
+    if (!product) {
+      const kit = await Kit.findById(payload.productId).lean();
+      if (kit) {
+        isKit = true;
+        const kitImg =
+          kit.imageUrl ||
+          kit.items?.find((i) => i.imageUrl)?.imageUrl ||
+          kit.items?.[0]?.imageUrl ||
+          '';
+        product = {
+          _id: kit._id,
+          name: kit.name,
+          stock: 999,
+          pricePaise: kit.pricePaise || 0,
+          originalPricePaise: kit.mrpPaise || kit.pricePaise || 0,
+          sku: kit.sku || `KIT-${kit._id}`,
+          imageUrl: kitImg,
+          images: [{ url: kitImg, alt: kit.name }],
+        };
+      }
+    }
     if (!product) throw new NotFoundError('Product not found', 'PRODUCT_NOT_FOUND');
 
     let variant = null;
@@ -77,6 +122,20 @@ const cartService = {
       if (!variant) throw new NotFoundError('Variant not found', 'VARIANT_NOT_FOUND');
       pricePaise = variant.pricePaise;
       stock = variant.stock;
+    }
+
+    if (isKit) {
+      const Order = require('../../../database/models/Order');
+      const existingOrder = await Order.findOne({
+        userId,
+        $or: [{ 'items.productId': product._id }, { 'items.kitId': product._id }],
+        orderStatus: { $nin: ['cancelled', 'returned'] },
+        $or: [{ paymentStatus: { $in: ['paid', 'authorized'] } }, { paymentMethod: 'cod' }],
+      }).lean();
+
+      if (existingOrder) {
+        throw new BadRequestError('You have already purchased this kit.', null, 'KIT_ALREADY_PURCHASED');
+      }
     }
 
     if (stock < payload.quantity) {
@@ -91,14 +150,24 @@ const cartService = {
         String(item.variantId || '') === String(payload.variantId || '')
     );
 
+    const itemImage = isKit
+      ? product.imageUrl
+      : product.images?.[0]?.url || product.images?.[0]?.alt || product.imageUrl || '';
+
     if (index >= 0) {
       items[index].quantity += payload.quantity;
+      if (!items[index].image && itemImage) {
+        items[index].image = itemImage;
+      }
+      if (!items[index].name && product.name) {
+        items[index].name = product.name;
+      }
     } else {
       items.push({
         productId: product._id,
         variantId: payload.variantId || undefined,
         name: product.name,
-        image: product.images?.[0]?.alt || undefined,
+        image: itemImage,
         sku: variant?.sku || product.sku,
         pricePaise,
         mrpPaise: product.originalPricePaise || pricePaise,

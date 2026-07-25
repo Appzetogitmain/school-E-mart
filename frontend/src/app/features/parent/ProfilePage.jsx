@@ -198,8 +198,13 @@ const ProfilePage = () => {
                     )}
                   </div>
                   {childProfile?.schoolName && (
-                    <p className="text-white/70 text-[11px] font-semibold mt-1.5 truncate flex items-center gap-1">
-                      <School size={11} /> {childProfile.schoolName}
+                    <p className="text-white/70 text-[11px] font-semibold mt-1.5 truncate flex items-center gap-1.5">
+                      {childProfile?.schoolLogo ? (
+                        <img src={childProfile.schoolLogo} alt="School Logo" className="w-4 h-4 object-cover rounded-full border border-white/20 shrink-0" />
+                      ) : (
+                        <School size={11} className="shrink-0" />
+                      )}
+                      <span className="truncate">{childProfile.schoolName}</span>
                     </p>
                   )}
                 </div>

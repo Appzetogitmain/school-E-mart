@@ -1,5 +1,5 @@
 const PRODUCT_PLACEHOLDER =
-  'https://images.unsplash.com/photo-1523275335684-37898b6baf30?q=80&w=400&h=400&fit=crop';
+  'https://images.unsplash.com/photo-1503676260728-1c00da094a0b?q=80&w=400&h=400&fit=crop';
 
 export const formatRupee = (paise) => {
   const amount = Number(paise || 0) / 100;

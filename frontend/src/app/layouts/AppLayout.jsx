@@ -62,11 +62,12 @@ const AppLayout = () => {
   const showEcommerceNav = isAuthenticated && !isSchoolLinked(childInfo);
 
 
-  // Exclude bottom nav on login, signup, storefront product detail pages, and reels page
+  // Exclude bottom nav on login, signup, storefront product detail, kit detail, checkout, and reels pages
   const isAuthPage = location.pathname.includes('/user/login') || location.pathname.includes('/user/signup');
-  const isProductDetailPage = location.pathname.includes('/user/product/') || location.pathname.includes('/user/reels');
+  const isProductDetailPage = location.pathname.includes('/user/product/') || location.pathname.includes('/user/kit/') || location.pathname.includes('/user/reels');
   const isCartOrCheckoutPage = location.pathname.includes('/user/cart') || location.pathname.includes('/user/checkout') || location.pathname.includes('/user/order-success');
-  const showCartPill = totalQuantity > 0 && !isAuthPage && !isProductDetailPage && !isCartOrCheckoutPage;
+  const hideBottomNav = isAuthPage || isProductDetailPage || isCartOrCheckoutPage;
+  const showCartPill = totalQuantity > 0 && !hideBottomNav;
 
   // Automatically scroll to the top of the container on route navigation
   React.useEffect(() => {
@@ -128,7 +129,7 @@ const AppLayout = () => {
 
       {/* Persistent Bottom Navigation - in-flow flex child (not fixed) so it
           always reserves its own space and never overlaps page content. */}
-      {!isAuthPage && !isProductDetailPage && (
+      {!hideBottomNav && (
         <nav className="shrink-0 bg-white border-t border-gray-100/60 px-4 py-2.5 pb-[calc(0.625rem+env(safe-area-inset-bottom))] z-40 shadow-[0_-4px_16px_rgba(0,0,0,0.02)]">
           <div className="flex items-center justify-between gap-1">
             {showEcommerceNav ? (

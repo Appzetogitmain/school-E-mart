@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
+import { useNavigate } from 'react-router-dom';
 import {
   Search, Eye, X, School, MapPin, Mail, User, Check, Ban, RefreshCw, Loader2,
-  GraduationCap, Plus, Phone, Hash, CalendarDays, AlertCircle,
+  GraduationCap, Plus, Phone, Hash, CalendarDays, AlertCircle, Package,
 } from 'lucide-react';
 import {
   listSchools,
@@ -129,6 +130,7 @@ const DetailBlock = ({ icon, label, value }) => (
 );
 
 const SchoolListManagement = () => {
+  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('All');
   const [showCount, setShowCount] = useState(10);

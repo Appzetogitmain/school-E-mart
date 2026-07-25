@@ -2,14 +2,19 @@ const { Joi, schemas } = require('../../../common/validation');
 
 const objectId = schemas.objectId;
 
-const schoolIdParam = Joi.object({ schoolId: objectId.required() });
+const schoolIdParam = Joi.object({
+  schoolId: Joi.alternatives().try(objectId, Joi.string().valid('all')).required()
+});
 const eventIdParam = Joi.object({ schoolId: objectId.required(), eventId: objectId.required() });
 const entryIdParam = Joi.object({ schoolId: objectId.required(), entryId: objectId.required() });
-const kitIdParam = Joi.object({ schoolId: objectId.required(), kitId: objectId.required() });
+const kitIdParam = Joi.object({
+  schoolId: Joi.alternatives().try(objectId, Joi.string().valid('all')).required(),
+  kitId: objectId.required()
+});
 
 const paginationQuery = Joi.object({
   page: Joi.number().integer().min(1).default(1),
-  limit: Joi.number().integer().min(1).max(100).default(20),
+  limit: Joi.number().integer().min(1).max(500).default(20),
   sort: Joi.string().trim().optional(),
   search: Joi.string().trim().max(120).optional(),
   status: Joi.string().trim().optional(),

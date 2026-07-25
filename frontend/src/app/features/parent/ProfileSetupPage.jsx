@@ -154,16 +154,17 @@ const ProfileSetupPage = () => {
     } catch (err) {
       console.error('Registration failed:', err);
       const errorMessage = err.response?.data?.message || 'Registration failed. Please try again.';
-      
-      // Dynamic mapping of field-specific validation errors from backend
-      if (err.response?.data?.code === 'VALIDATION_ERROR' && err.response?.data?.errors) {
+      const errorCode = err.response?.data?.code;
+
+      if (errorCode === 'VALIDATION_ERROR' && err.response?.data?.errors) {
         setErrors(prev => ({ ...prev, ...err.response.data.errors }));
-      } else if (err.response?.data?.code === 'PHONE_EXISTS') {
-        setErrors(prev => ({ ...prev, phone: errorMessage }));
-      } else if (err.response?.data?.code === 'INVALID_SCHOOL_REF') {
+      } else if (errorCode === 'PHONE_EXISTS') {
+        setErrors(prev => ({ ...prev, phone: 'This number is already registered. Please log in instead.' }));
+      } else if (errorCode === 'PHONE_ALREADY_LINKED_TO_ANOTHER_STUDENT') {
+        setErrors(prev => ({ ...prev, phone: 'This number is linked to another student. Use a different number for this child.' }));
+      } else if (errorCode === 'INVALID_SCHOOL_REF') {
         setErrors(prev => ({ ...prev, schoolRefNo: errorMessage }));
       } else {
-        // Fallback: set it as a phone field or general validation error
         setErrors(prev => ({ ...prev, phone: errorMessage }));
       }
     } finally {

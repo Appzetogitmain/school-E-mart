@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   Package, Plus, Search, Filter, Trash2, Edit3, X, Check, 
-  Loader2, AlertCircle, ImageIcon, Layers, Tag, Image as LucideImage 
+  Loader2, AlertCircle, ImageIcon, Layers, Tag, Upload, FileText, Sparkles, Image as LucideImage,
+  LayoutGrid, List
 } from 'lucide-react';
 import { 
   listMasterKitProducts, createMasterKitProduct, 
@@ -20,11 +22,11 @@ const CATEGORY_OPTIONS = [
 ];
 
 const PRODUCT_TYPES = [
-  { value: 'textbook', label: 'Textbook / Book' },
-  { value: 'notebook', label: 'Notebook / Copy' },
-  { value: 'uniform', label: 'School Uniform (Ask Size & Color)' },
+  { value: 'textbook', label: 'Textbook / Book (Requires Subject/Grade)' },
+  { value: 'notebook', label: 'Notebook / Copy (Requires Pages/R触)' },
+  { value: 'uniform', label: 'School Uniform (Requires Size & Color)' },
   { value: 'stationary', label: 'Stationary Item' },
-  { value: 'winter', label: 'Winter Wear (Ask Size & Color)' },
+  { value: 'winter', label: 'Winter Wear (Requires Size & Color)' },
   { value: 'project', label: 'Project Item' },
   { value: 'general', label: 'General Product' },
 ];
@@ -35,6 +37,7 @@ const KitProductsManagement = () => {
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
+  const [viewMode, setViewMode] = useState('grid'); // 'grid' | 'table'
 
   // Modal State
   const [showModal, setShowModal] = useState(false);
@@ -112,11 +115,22 @@ const KitProductsManagement = () => {
       data.append('file', file);
       data.append('purpose', 'kit_product_template');
       const attachment = await uploadAdminMedia(data);
-      if (attachment?.storageKey) {
-        setFormData((prev) => ({ ...prev, imageUrl: attachment.storageKey }));
+      const url = attachment?.url || (attachment?.storageKey ? (attachment.storageKey.startsWith('/uploads/') ? attachment.storageKey : `/uploads/${attachment.storageKey}`) : null);
+      if (url) {
+        setFormData((prev) => ({ ...prev, imageUrl: url }));
+      } else {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setFormData((prev) => ({ ...prev, imageUrl: reader.result }));
+        };
+        reader.readAsDataURL(file);
       }
-    } catch (err) {
-      setFormError(getErrorMessage(err, 'Failed to upload product image'));
+    } catch {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setFormData((prev) => ({ ...prev, imageUrl: reader.result }));
+      };
+      reader.readAsDataURL(file);
     } finally {
       setUploadingImage(false);
     }
@@ -174,22 +188,27 @@ const KitProductsManagement = () => {
     <div className="p-6 md:p-8 max-w-7xl mx-auto font-outfit space-y-6">
       
       {/* Header Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-gradient-to-r from-[#3b2d7d] to-[#5942bc] p-6 rounded-3xl text-white shadow-xl">
-        <div>
-          <div className="flex items-center gap-2">
-            <Package size={22} className="text-purple-200" />
-            <h1 className="text-xl font-black uppercase tracking-wide">Master Kit Products Catalogue</h1>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-gradient-to-r from-[#3b2d7d] via-[#4c3a9e] to-[#5942bc] p-7 rounded-3xl text-white shadow-xl relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-amber-400/10 rounded-full -mr-20 -mt-20 blur-3xl pointer-events-none"></div>
+        <div className="relative z-10">
+          <div className="flex items-center gap-2.5">
+            <div className="w-10 h-10 rounded-2xl bg-white/15 backdrop-blur-md flex items-center justify-center text-amber-300 border border-white/20 shadow-inner">
+              <Package size={22} />
+            </div>
+            <div>
+              <h1 className="text-xl font-black uppercase tracking-wide">Master Kit Products Catalogue</h1>
+              <p className="text-xs text-purple-100 font-bold mt-0.5">
+                Standardized product templates for schools to bundle into Class Kits & Packages
+              </p>
+            </div>
           </div>
-          <p className="text-xs text-purple-200 mt-1 font-bold">
-            Create and manage product templates for schools to include in their Class Kits
-          </p>
         </div>
         <button
           onClick={openAddModal}
-          className="px-5 py-3 bg-white text-[#3b2d7d] hover:bg-purple-50 active:scale-95 font-black text-xs rounded-2xl shadow-md transition-all flex items-center gap-2 self-start sm:self-auto uppercase tracking-wider"
+          className="relative z-10 px-6 py-3.5 bg-white text-[#3b2d7d] hover:bg-amber-300 hover:text-[#2a1e5c] active:scale-95 font-black text-xs rounded-2xl shadow-lg transition-all flex items-center gap-2 self-start sm:self-auto uppercase tracking-wider shrink-0"
         >
           <Plus size={16} className="stroke-[3]" />
-          Add Master Product
+          <span>Add Master Product</span>
         </button>
       </div>
 
@@ -206,33 +225,61 @@ const KitProductsManagement = () => {
           />
         </div>
 
-        <div className="flex items-center gap-2 overflow-x-auto w-full md:w-auto scrollbar-none">
-          <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider shrink-0 flex items-center gap-1">
-            <Filter size={12} /> Category:
-          </span>
-          <button
-            onClick={() => setSelectedCategory('All')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 ${
-              selectedCategory === 'All'
-                ? 'bg-[#3b2d7d] text-white shadow-sm'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-            }`}
-          >
-            All
-          </button>
-          {CATEGORY_OPTIONS.map((cat) => (
+        <div className="flex items-center gap-3 overflow-x-auto w-full md:w-auto scrollbar-none justify-between md:justify-end">
+          <div className="flex items-center gap-2 overflow-x-auto scrollbar-none">
+            <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider shrink-0 flex items-center gap-1">
+              <Filter size={12} /> Category:
+            </span>
             <button
-              key={cat}
-              onClick={() => setSelectedCategory(cat)}
+              onClick={() => setSelectedCategory('All')}
               className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 ${
-                selectedCategory === cat
+                selectedCategory === 'All'
                   ? 'bg-[#3b2d7d] text-white shadow-sm'
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
-              {cat}
+              All
             </button>
-          ))}
+            {CATEGORY_OPTIONS.map((cat) => (
+              <button
+                key={cat}
+                onClick={() => setSelectedCategory(cat)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 ${
+                  selectedCategory === cat
+                    ? 'bg-[#3b2d7d] text-white shadow-sm'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
+
+          {/* View Mode Switcher */}
+          <div className="flex items-center gap-1 p-1 bg-gray-100 rounded-xl border border-gray-200/80 shrink-0">
+            <button
+              onClick={() => setViewMode('table')}
+              title="Table View"
+              className={`p-1.5 rounded-lg transition-all ${
+                viewMode === 'table'
+                  ? 'bg-white text-[#3b2d7d] shadow-sm font-black'
+                  : 'text-gray-400 hover:text-gray-700'
+              }`}
+            >
+              <List size={16} />
+            </button>
+            <button
+              onClick={() => setViewMode('grid')}
+              title="Grid View"
+              className={`p-1.5 rounded-lg transition-all ${
+                viewMode === 'grid'
+                  ? 'bg-white text-[#3b2d7d] shadow-sm font-black'
+                  : 'text-gray-400 hover:text-gray-700'
+              }`}
+            >
+              <LayoutGrid size={16} />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -257,6 +304,85 @@ const KitProductsManagement = () => {
           <p className="text-xs text-gray-400 font-bold max-w-sm mx-auto">
             Click "Add Master Product" to populate product templates for schools to use when creating kits.
           </p>
+        </div>
+      ) : viewMode === 'table' ? (
+        /* Data Table View */
+        <div className="bg-white border border-gray-200/80 rounded-3xl shadow-sm overflow-hidden">
+          <div className="overflow-x-auto w-full scrollbar-thin">
+            <table className="w-full min-w-[640px] text-left text-xs font-semibold text-gray-600 border-collapse select-none">
+              <thead>
+                <tr className="border-b border-gray-200 bg-gray-50/80 text-[10px] font-black uppercase text-gray-400 tracking-wider">
+                  <th className="py-4 px-5">#</th>
+                  <th className="py-4 px-5">Product Template</th>
+                  <th className="py-4 px-5">Category</th>
+                  <th className="py-4 px-5">Product Type</th>
+                  <th className="py-4 px-5">Description</th>
+                  <th className="py-4 px-5 text-right pr-6">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 bg-white">
+                {products.map((item, idx) => (
+                  <tr key={item._id || item.id} className="hover:bg-gray-50/70 transition-colors">
+                    <td className="py-4 px-5">
+                      <span className="font-extrabold text-gray-400 text-xs">{idx + 1}</span>
+                    </td>
+                    <td className="py-4 px-5">
+                      <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 rounded-2xl border border-gray-150 p-1 bg-gray-50 shrink-0 overflow-hidden flex items-center justify-center">
+                          {item.imageUrl ? (
+                            <img src={item.imageUrl} alt={item.name} className="w-full h-full object-contain" />
+                          ) : (
+                            <ImageIcon size={18} className="text-gray-300" />
+                          )}
+                        </div>
+                        <div>
+                          <h4 className="font-black text-gray-900 text-xs leading-snug">{item.name}</h4>
+                          {item.subcategory && (
+                            <span className="text-[10px] font-bold text-gray-400 block mt-0.5">
+                              Subcategory: {item.subcategory}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="py-4 px-5">
+                      <span className="px-3 py-1 bg-purple-50 text-[#3b2d7d] border border-purple-100/80 rounded-xl text-[11px] font-black inline-block">
+                        {item.category}
+                      </span>
+                    </td>
+                    <td className="py-4 px-5">
+                      <span className="px-2.5 py-1 bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-lg text-[10px] font-black uppercase tracking-wider inline-block">
+                        {item.productType || 'general'}
+                      </span>
+                    </td>
+                    <td className="py-4 px-5 max-w-xs">
+                      <p className="text-[11px] text-gray-500 font-medium line-clamp-2">
+                        {item.description || '—'}
+                      </p>
+                    </td>
+                    <td className="py-4 px-5 text-right pr-6">
+                      <div className="flex items-center gap-1.5 justify-end">
+                        <button
+                          onClick={() => openEditModal(item)}
+                          className="p-2 rounded-xl bg-purple-50 text-[#3b2d7d] hover:bg-purple-100 active:scale-95 transition-all"
+                          title="Edit Master Product"
+                        >
+                          <Edit3 size={14} />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(item._id || item.id)}
+                          className="p-2 rounded-xl bg-red-50 text-red-600 hover:bg-red-100 active:scale-95 transition-all"
+                          title="Delete Master Product"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       ) : (
         /* Product Cards Grid */
@@ -317,139 +443,237 @@ const KitProductsManagement = () => {
         </div>
       )}
 
-      {/* Add / Edit Master Product Modal */}
-      {showModal && (
-        <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
-          <div className="w-full max-w-lg bg-white rounded-3xl shadow-2xl border border-gray-150 overflow-hidden flex flex-col max-h-[90vh]">
+      {/* Modern Premium Add / Edit Master Product Modal */}
+      {showModal && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 md:p-6 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full max-w-2xl bg-white rounded-3xl shadow-2xl border border-gray-150 overflow-hidden flex flex-col max-h-[88vh] animate-in zoom-in-95 duration-200">
             
-            <div className="bg-[#3b2d7d] text-white px-6 py-4 flex items-center justify-between shrink-0">
-              <h3 className="text-sm font-black uppercase tracking-wider">
-                {editingId ? 'Edit Master Kit Product' : 'Add Master Kit Product'}
-              </h3>
+            {/* Header Section */}
+            <div className="bg-[#0B1528] text-white p-5 px-6 border-b border-gray-800 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-white/10 flex items-center justify-center text-amber-400 border border-white/10 shrink-0">
+                  <Package size={20} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-white uppercase tracking-wider leading-none">
+                    {editingId ? 'Edit Master Kit Product' : 'Add Master Kit Product'}
+                  </h3>
+                  <p className="text-[10px] text-gray-400 font-bold mt-1">
+                    Admin catalog template for school kits & packages
+                  </p>
+                </div>
+              </div>
+
               <button
+                type="button"
                 onClick={() => setShowModal(false)}
-                className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 text-white"
+                className="p-1.5 rounded-xl hover:bg-white/10 text-gray-400 hover:text-white transition-all border border-white/10 shrink-0"
               >
-                <X size={16} />
+                <X size={18} />
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-4 text-xs scrollbar-none">
+            {/* Modal Form Content */}
+            <form onSubmit={handleSubmit} className="p-6 overflow-y-auto flex-1 min-h-0 space-y-5 text-xs bg-[#F9F9FC] scrollbar-thin">
               
               {formError && (
-                <div className="p-3 bg-red-50 border border-red-100 rounded-xl text-red-600 font-bold text-xs flex items-center gap-2">
-                  <AlertCircle size={15} />
+                <div className="p-3.5 bg-red-50 border border-red-200 rounded-2xl text-red-600 font-bold text-xs flex items-center gap-2.5">
+                  <AlertCircle size={16} className="shrink-0" />
                   <span>{formError}</span>
                 </div>
               )}
 
-              <div>
-                <label className="block font-bold text-gray-700 mb-1">
-                  Product Name <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  placeholder="e.g. NCERT Mathematics Textbook Grade 1"
-                  className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl font-bold text-gray-800 focus:outline-none focus:border-[#3b2d7d]"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold text-gray-700 mb-1">
-                    Category <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    value={formData.category}
-                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl font-bold text-gray-800 focus:outline-none focus:border-[#3b2d7d]"
-                  >
-                    {CATEGORY_OPTIONS.map((cat) => (
-                      <option key={cat} value={cat}>{cat}</option>
-                    ))}
-                  </select>
+              {/* 1. Basic Information Block */}
+              <div className="bg-white p-4 md:p-5 rounded-2xl border border-gray-200/80 shadow-sm space-y-3.5">
+                <div className="flex items-center gap-2 border-b border-gray-100 pb-2.5">
+                  <div className="w-5 h-5 rounded-md bg-purple-50 text-[#0B1528] flex items-center justify-center font-bold">
+                    1
+                  </div>
+                  <h4 className="text-[11px] font-black text-gray-800 uppercase tracking-wider">Product Identity</h4>
                 </div>
 
                 <div>
-                  <label className="block font-bold text-gray-700 mb-1">Subcategory</label>
+                  <label className="block text-[10px] font-black text-gray-500 uppercase tracking-wider mb-1 ml-0.5">
+                    Product Title <span className="text-red-500">*</span>
+                  </label>
                   <input
                     type="text"
-                    value={formData.subcategory}
-                    onChange={(e) => setFormData({ ...formData, subcategory: e.target.value })}
-                    placeholder="e.g. Textbooks / Shirts"
-                    className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl font-bold text-gray-800 focus:outline-none focus:border-[#3b2d7d]"
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    placeholder="e.g. NCERT Mathematics Textbook Class 1"
+                    className="w-full px-3.5 py-2.5 bg-gray-50/80 border border-gray-200 rounded-xl font-bold text-gray-800 focus:bg-white focus:outline-none focus:border-[#0B1528] transition-all text-xs"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                  <div>
+                    <label className="block text-[10px] font-black text-gray-500 uppercase tracking-wider mb-1 ml-0.5">
+                      Category <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={formData.category}
+                      onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                      className="w-full px-3.5 py-2.5 bg-gray-50/80 border border-gray-200 rounded-xl font-bold text-gray-800 focus:bg-white focus:outline-none focus:border-[#0B1528] transition-all text-xs cursor-pointer"
+                    >
+                      {CATEGORY_OPTIONS.map((cat) => (
+                        <option key={cat} value={cat}>{cat}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-black text-gray-500 uppercase tracking-wider mb-1 ml-0.5">
+                      Subcategory
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.subcategory}
+                      onChange={(e) => setFormData({ ...formData, subcategory: e.target.value })}
+                      placeholder="e.g. Textbooks / Shirts"
+                      className="w-full px-3.5 py-2.5 bg-gray-50/80 border border-gray-200 rounded-xl font-bold text-gray-800 focus:bg-white focus:outline-none focus:border-[#0B1528] transition-all text-xs"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* 2. Product Classification & Rules */}
+              <div className="bg-white p-4 md:p-5 rounded-2xl border border-gray-200/80 shadow-sm space-y-3.5">
+                <div className="flex items-center gap-2 border-b border-gray-100 pb-2.5">
+                  <div className="w-5 h-5 rounded-md bg-indigo-50 text-[#0B1528] flex items-center justify-center font-bold">
+                    2
+                  </div>
+                  <h4 className="text-[11px] font-black text-gray-800 uppercase tracking-wider">Classification & Variation Rules</h4>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-black text-gray-500 uppercase tracking-wider mb-1 ml-0.5">
+                    Product Type / Variation Parameters
+                  </label>
+                  <select
+                    value={formData.productType}
+                    onChange={(e) => setFormData({ ...formData, productType: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-gray-50/80 border border-gray-200 rounded-xl font-bold text-gray-800 focus:bg-white focus:outline-none focus:border-[#0B1528] transition-all text-xs cursor-pointer"
+                  >
+                    {PRODUCT_TYPES.map((pt) => (
+                      <option key={pt.value} value={pt.value}>{pt.label}</option>
+                    ))}
+                  </select>
+                  <p className="text-[10px] text-gray-400 font-medium mt-1.5 ml-0.5">
+                    Selecting uniform or winter wear triggers mandatory size/color selection prompts when schools create custom kits.
+                  </p>
+                </div>
+              </div>
+
+              {/* 3. Product Image Section */}
+              <div className="bg-white p-4 md:p-5 rounded-2xl border border-gray-200/80 shadow-sm space-y-3.5">
+                <div className="flex items-center justify-between border-b border-gray-100 pb-2.5">
+                  <div className="flex items-center gap-2">
+                    <div className="w-5 h-5 rounded-md bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
+                      3
+                    </div>
+                    <h4 className="text-[11px] font-black text-gray-800 uppercase tracking-wider">Product Visual Asset</h4>
+                  </div>
+                  {formData.imageUrl && (
+                    <span className="text-[9px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100 uppercase">
+                      Ready
+                    </span>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 items-center">
+                  <div className="w-full h-28 rounded-xl border-2 border-dashed border-gray-200 bg-gray-50/50 flex flex-col items-center justify-center relative overflow-hidden">
+                    {formData.imageUrl ? (
+                      <>
+                        <img src={formData.imageUrl} alt="Product Preview" className="w-full h-full object-contain p-1.5" />
+                        <button
+                          type="button"
+                          onClick={() => setFormData({ ...formData, imageUrl: '' })}
+                          className="absolute top-1.5 right-1.5 p-1 bg-red-500 text-white rounded-lg shadow-md hover:bg-red-600 active:scale-90 transition-all"
+                          title="Remove Image"
+                        >
+                          <X size={12} />
+                        </button>
+                      </>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center text-center p-2 text-gray-400 gap-1">
+                        <LucideImage size={24} className="text-gray-300" />
+                        <span className="text-[9px] font-bold">No Image</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="md:col-span-2 space-y-2.5">
+                    <label className="w-full px-4 py-2.5 bg-purple-50 hover:bg-purple-100 active:scale-95 text-[#0B1528] font-black rounded-xl cursor-pointer transition-all flex items-center justify-center gap-2 border border-purple-200/60 shadow-sm text-xs">
+                      {uploadingImage ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+                      <span>{uploadingImage ? 'Uploading Image...' : 'Choose Photo File'}</span>
+                      <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" disabled={uploadingImage} />
+                    </label>
+
+                    <div>
+                      <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Or Direct Image URL</span>
+                      <input
+                        type="text"
+                        value={formData.imageUrl}
+                        onChange={(e) => setFormData({ ...formData, imageUrl: e.target.value })}
+                        placeholder="https://example.com/product.jpg or /uploads/..."
+                        className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl font-bold text-gray-700 text-[11px] focus:outline-none focus:border-[#0B1528]"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* 4. Description Section */}
+              <div className="bg-white p-4 md:p-5 rounded-2xl border border-gray-200/80 shadow-sm space-y-3.5">
+                <div className="flex items-center gap-2 border-b border-gray-100 pb-2.5">
+                  <div className="w-5 h-5 rounded-md bg-purple-50 text-[#0B1528] flex items-center justify-center font-bold">
+                    4
+                  </div>
+                  <h4 className="text-[11px] font-black text-gray-800 uppercase tracking-wider">Product Notes</h4>
+                </div>
+
+                <div>
+                  <textarea
+                    rows={2}
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    placeholder="Specifications, publisher details, features..."
+                    className="w-full px-3.5 py-2.5 bg-gray-50/80 border border-gray-200 rounded-xl font-bold text-gray-800 focus:bg-white focus:outline-none focus:border-[#0B1528] transition-all text-xs"
                   />
                 </div>
               </div>
 
-              <div>
-                <label className="block font-bold text-gray-700 mb-1">Product Type (Defines Attributes Required)</label>
-                <select
-                  value={formData.productType}
-                  onChange={(e) => setFormData({ ...formData, productType: e.target.value })}
-                  className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl font-bold text-gray-800 focus:outline-none focus:border-[#3b2d7d]"
-                >
-                  {PRODUCT_TYPES.map((pt) => (
-                    <option key={pt.value} value={pt.value}>{pt.label}</option>
-                  ))}
-                </select>
-              </div>
+            </form>
 
-              <div>
-                <label className="block font-bold text-gray-700 mb-1">Product Image</label>
-                <div className="flex items-center gap-3">
-                  {formData.imageUrl ? (
-                    <div className="w-14 h-14 rounded-xl border border-gray-200 p-1 bg-gray-50 shrink-0 overflow-hidden relative">
-                      <img src={formData.imageUrl} alt="Preview" className="w-full h-full object-contain" />
-                    </div>
-                  ) : (
-                    <div className="w-14 h-14 rounded-xl border border-dashed border-gray-300 bg-gray-50 flex items-center justify-center shrink-0 text-gray-400">
-                      <LucideImage size={20} />
-                    </div>
-                  )}
+            {/* Modal Footer */}
+            <div className="p-4 px-6 bg-gray-50/80 border-t border-gray-150 flex items-center justify-between shrink-0">
+              <span className="text-[10px] font-bold text-gray-400">
+                <span className="text-red-500">*</span> Required fields
+              </span>
 
-                  <label className="px-4 py-2 bg-gray-100 hover:bg-gray-200 active:scale-95 text-gray-700 font-bold rounded-xl cursor-pointer transition-all flex items-center gap-1.5">
-                    {uploadingImage ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
-                    <span>{uploadingImage ? 'Uploading...' : 'Upload Image'}</span>
-                    <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" disabled={uploadingImage} />
-                  </label>
-                </div>
-              </div>
-
-              <div>
-                <label className="block font-bold text-gray-700 mb-1">Description</label>
-                <textarea
-                  rows={3}
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  placeholder="Informational details about this product template..."
-                  className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl font-bold text-gray-800 focus:outline-none focus:border-[#3b2d7d]"
-                />
-              </div>
-
-              <div className="pt-3 flex items-center justify-end gap-3 border-t border-gray-100">
+              <div className="flex items-center gap-3">
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
-                  className="px-5 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-xl"
+                  className="px-5 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-xl text-xs transition-all active:scale-95"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
+                  onClick={handleSubmit}
                   disabled={formSubmitting || uploadingImage}
-                  className="px-6 py-2.5 bg-[#3b2d7d] hover:bg-[#5942bc] text-white font-black rounded-xl uppercase tracking-wider flex items-center gap-1.5 disabled:opacity-60"
+                  className="px-6 py-2.5 bg-[#0B1528] hover:bg-[#1a2942] text-white font-black rounded-xl text-xs uppercase tracking-wider flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50 shadow-md"
                 >
                   {formSubmitting ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
                   <span>{editingId ? 'Save Changes' : 'Create Product'}</span>
                 </button>
               </div>
+            </div>
 
-            </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
     </div>

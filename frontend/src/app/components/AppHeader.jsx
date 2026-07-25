@@ -95,16 +95,24 @@ const AppHeader = ({ showSearch = true, scrolled = false, onMenuClick, childInfo
           {/* Stylized Rounded-Square Student Profile Avatar Button */}
           <button 
             onClick={() => navigate('/user/profile')}
-            className="w-16 h-16 rounded-2xl bg-white p-1.5 border border-white/20 shadow-[0_4px_12px_rgba(0,0,0,0.15)] flex items-center justify-center overflow-hidden hover:bg-white/95 active:scale-95 transition-all outline-none relative group animate-shine shrink-0"
+            className="w-16 h-16 rounded-2xl bg-white p-1 border border-white/20 shadow-[0_4px_12px_rgba(0,0,0,0.15)] flex items-center justify-center overflow-hidden hover:bg-white/95 active:scale-95 transition-all outline-none relative group animate-shine shrink-0"
             aria-label="Open profile menu"
           >
             {/* Inner premium golden-white gradient ring overlay */}
             <div className="absolute inset-[2px] rounded-[14px] bg-gradient-to-tr from-[#FFC933]/15 to-transparent pointer-events-none z-20"></div>
-            <img 
-              src="/assets/school_logo.webp" 
-              alt="School Logo" 
-              className="w-full h-full object-contain relative z-10" 
-            />
+            {childInfo?.schoolLogo || childInfo?.photo ? (
+              <img 
+                src={childInfo.schoolLogo || childInfo.photo} 
+                alt={childInfo?.school || "School Logo"} 
+                className="w-full h-full object-cover rounded-xl relative z-10" 
+              />
+            ) : (
+              <img 
+                src="/assets/school_logo.webp" 
+                alt="School Logo" 
+                className="w-full h-full object-contain relative z-10" 
+              />
+            )}
           </button>
 
           {/* Child Metadata Text */}

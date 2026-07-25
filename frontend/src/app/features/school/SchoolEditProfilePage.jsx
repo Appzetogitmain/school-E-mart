@@ -21,6 +21,7 @@ const SchoolEditProfilePage = () => {
   const [loadError, setLoadError] = useState('');
 
   const [formData, setFormData] = useState({
+    schoolName: '',
     fullName: '',
     email: '',
     phone: '',
@@ -52,16 +53,17 @@ const SchoolEditProfilePage = () => {
       }
 
       setFormData({
+        schoolName: school?.name || profile?.schoolName || parsed.school || '',
         fullName: user?.name || school?.principalName || parsed.name || 'School Admin',
         email: user?.email || school?.adminEmail || parsed.email || '',
-        phone: user?.phone || parsed.phone || '',
+        phone: user?.phone || school?.phone || parsed.phone || '',
         altPhone: profile?.altPhone || parsed.altPhone || '',
         address: school?.address?.line1 || parsed.address || '',
         pinCode: school?.address?.pinCode || parsed.pinCode || '',
         city: school?.address?.city || parsed.city || '',
         state: school?.address?.state || parsed.state || '',
         country: school?.address?.country || parsed.country || 'India',
-        photo: profile?.avatarUrl || parsed.photo || '',
+        photo: school?.logoUrl || profile?.schoolLogo || profile?.avatarUrl || parsed.schoolLogo || parsed.photo || '',
       });
     } catch (err) {
       setLoadError(getErrorMessage(err, 'Unable to load school profile'));
@@ -102,6 +104,7 @@ const SchoolEditProfilePage = () => {
 
   const validate = () => {
     const newErrors = {};
+    if (!formData.schoolName.trim()) newErrors.schoolName = "School Name is required";
     if (!formData.fullName.trim()) newErrors.fullName = "Contact Name is required";
     if (!formData.phone.trim()) newErrors.phone = "Phone is required";
     setErrors(newErrors);
@@ -117,6 +120,8 @@ const SchoolEditProfilePage = () => {
 
     const updatedInfo = {
       ...existing,
+      school: formData.schoolName,
+      schoolLogo: formData.photo,
       name: formData.fullName,
       email: formData.email,
       phone: formData.phone,
@@ -132,6 +137,7 @@ const SchoolEditProfilePage = () => {
     try {
       // 1. Update backend user profile credentials, phone, altPhone & photo avatar
       await updateMyProfile({
+        schoolName: formData.schoolName,
         name: formData.fullName,
         email: formData.email,
         phone: formData.phone,
@@ -147,6 +153,9 @@ const SchoolEditProfilePage = () => {
       // 2. Sync with School document directly
       if (schoolId) {
         await updateSchool(schoolId, {
+          name: formData.schoolName,
+          logoUrl: formData.photo,
+          phone: formData.phone,
           principalName: formData.fullName,
           adminEmail: formData.email,
           address: {
@@ -208,9 +217,9 @@ const SchoolEditProfilePage = () => {
         <div className="flex flex-col items-center gap-4">
           <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" className="hidden" />
           <div className="relative group">
-            <div className="w-28 h-28 rounded-[2.5rem] bg-white p-1 shadow-xl border-2 border-primary/20">
-              <div className="w-full h-full rounded-[2.2rem] bg-gray-100 overflow-hidden relative flex items-center justify-center">
-                {formData.photo ? <img src={formData.photo} alt="Avatar" className="w-full h-full object-cover" /> : <Building2 size={32} className="text-gray-300" />}
+            <div className="w-28 h-28 rounded-[2.5rem] bg-white p-1.5 shadow-xl border-2 border-primary/20">
+              <div className="w-full h-full rounded-[2rem] bg-gray-100 overflow-hidden relative flex items-center justify-center">
+                {formData.photo ? <img src={formData.photo} alt="School Logo" className="w-full h-full object-cover" /> : <Building2 size={36} className="text-gray-300" />}
               </div>
             </div>
             <button onClick={handlePhotoClick} className="absolute bottom-0 right-0 w-10 h-10 bg-primary text-white rounded-2xl flex items-center justify-center shadow-lg border-4 border-white active:scale-90 transition-all">
@@ -218,14 +227,19 @@ const SchoolEditProfilePage = () => {
             </button>
           </div>
           <div className="text-center">
-            <h2 className="text-lg font-black text-deep-purple">{formData.fullName}</h2>
-            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-[0.2em]">School Account</p>
+            <h2 className="text-lg font-black text-deep-purple">{formData.schoolName || 'School Name'}</h2>
+            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-[0.2em]">Upload Official School Logo & Info</p>
           </div>
         </div>
 
         <div className="space-y-5">
-          <SectionTitle title="School Admin Details" />
-          <InputField label="Contact Person" icon={User} value={formData.fullName} onChange={(v) => handleInputChange('fullName', v)} error={errors.fullName} placeholder="Enter name" />
+          <SectionTitle title="School Details" />
+          <InputField label="School Name" icon={Building2} value={formData.schoolName} onChange={(v) => handleInputChange('schoolName', v)} error={errors.schoolName} placeholder="Enter official school name" />
+        </div>
+
+        <div className="space-y-5">
+          <SectionTitle title="School Admin Contact" />
+          <InputField label="Contact Person / Principal" icon={User} value={formData.fullName} onChange={(v) => handleInputChange('fullName', v)} error={errors.fullName} placeholder="Enter principal or admin name" />
           <InputField label="School Email" icon={Mail} type="email" value={formData.email} onChange={(v) => handleInputChange('email', v)} error={errors.email} placeholder="admin@school.com" />
           <InputField label="Direct Phone" icon={Phone} value={formData.phone} onChange={(v) => handleInputChange('phone', v)} error={errors.phone} placeholder="+91 XXXXX XXXXX" />
           <InputField label="Alternate Phone" icon={Phone} value={formData.altPhone} onChange={(v) => handleInputChange('altPhone', v)} placeholder="+91 XXXXX XXXXX" />

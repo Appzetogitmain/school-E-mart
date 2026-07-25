@@ -12,8 +12,11 @@ import { getErrorMessage } from '../../../utils/apiHelpers';
  * calls onDone so the checkout can proceed.
  */
 const GuestCheckoutGate = ({ onDone, onCancel }) => {
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const loginFromAuthResponse = useAuthStore((s) => s.loginFromAuthResponse);
   const refreshUser = useAuthStore((s) => s.refreshUser);
+
+  if (isAuthenticated) return null;
 
   const [step, setStep] = useState('details'); // 'details' | 'otp'
   const [form, setForm] = useState({ name: '', phone: '', address: '', city: '', pinCode: '' });

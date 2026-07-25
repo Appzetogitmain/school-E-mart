@@ -1,11 +1,16 @@
 const Product = require('../../../database/models/Product');
 const ProductVariant = require('../../../database/models/ProductVariant');
+const Kit = require('../../../database/models/Kit');
 const { BadRequestError } = require('../../../common/errors');
 
 const inventoryService = {
   async deductStock(items, session = null) {
     const opts = session ? { session } : {};
     for (const item of items) {
+      if (item.kitId) continue;
+      const isKit = await Kit.exists({ _id: item.productId });
+      if (isKit) continue;
+
       if (item.variantId) {
         const variant = await ProductVariant.findOneAndUpdate(
           { _id: item.variantId, productId: item.productId, stock: { $gte: item.quantity } },
@@ -31,6 +36,10 @@ const inventoryService = {
   async restoreStock(items, session = null) {
     const opts = session ? { session } : {};
     for (const item of items) {
+      if (item.kitId) continue;
+      const isKit = await Kit.exists({ _id: item.productId });
+      if (isKit) continue;
+
       if (item.variantId) {
         await ProductVariant.findByIdAndUpdate(item.variantId, { $inc: { stock: item.quantity } }, opts);
       } else {

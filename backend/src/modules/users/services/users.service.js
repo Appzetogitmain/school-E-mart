@@ -56,7 +56,7 @@ const usersService = {
       // Batch the school lookups so many children don't fan out to many queries
       const schoolIds = [...new Set(allChildren.map((c) => c.schoolId).filter(Boolean).map(String))];
       const schools = schoolIds.length
-        ? await School.find({ _id: { $in: schoolIds } }).select('name schoolRefNo').lean()
+        ? await School.find({ _id: { $in: schoolIds } }).select('name logoUrl schoolRefNo address phone principalName').lean()
         : [];
       const schoolById = new Map(schools.map((s) => [String(s._id), s]));
 
@@ -68,6 +68,7 @@ const usersService = {
           grade: c.grade,
           schoolId: c.schoolId ? c.schoolId.toString() : 'explore-schools',
           schoolName: school ? school.name : 'Explore Schools',
+          schoolLogo: school ? school.logoUrl : null,
           schoolRefNo: c.schoolRefNo || (school ? school.schoolRefNo : null),
           rollNo: c.rollNo || null,
           studentId: c.studentId ? c.studentId.toString() : null,
@@ -103,12 +104,45 @@ const usersService = {
     } else if (user.role === 'teacher') {
       const TeacherProfile = require('../../../database/models/TeacherProfile');
       profile = await TeacherProfile.findOne({ userId, 'softDelete.isDeleted': { $ne: true } }).lean();
+      const targetSchoolId = user.tenantSchoolId || profile?.schoolId;
+      if (targetSchoolId) {
+        const school = await School.findById(targetSchoolId).lean();
+        if (school) {
+          profile = profile || {};
+          profile.schoolName = school.name;
+          profile.schoolLogo = school.logoUrl || null;
+          profile.school = {
+            id: school._id.toString(),
+            name: school.name,
+            logoUrl: school.logoUrl || null,
+            phone: school.phone || null,
+            address: school.address || null,
+            schoolRefNo: school.schoolRefNo || null,
+          };
+        }
+      }
     } else if (user.role === 'admin') {
       const AdminProfile = require('../../../database/models/AdminProfile');
       profile = await AdminProfile.findOne({ userId, 'softDelete.isDeleted': { $ne: true } }).lean();
     } else if (user.role === 'school') {
       const SchoolStaffProfile = require('../../../database/models/SchoolStaffProfile');
       profile = await SchoolStaffProfile.findOne({ userId, 'softDelete.isDeleted': { $ne: true } }).lean();
+      if (user.tenantSchoolId) {
+        const school = await School.findById(user.tenantSchoolId).lean();
+        if (school) {
+          profile = profile || {};
+          profile.schoolName = school.name;
+          profile.schoolLogo = school.logoUrl || null;
+          profile.school = {
+            id: school._id.toString(),
+            name: school.name,
+            logoUrl: school.logoUrl || null,
+            phone: school.phone || null,
+            address: school.address || null,
+            schoolRefNo: school.schoolRefNo || null,
+          };
+        }
+      }
     }
 
     return {
@@ -155,8 +189,9 @@ const usersService = {
       }
 
       let savedPhotoUrl = null;
-      if (payload.photo) {
-        savedPhotoUrl = saveBase64Image(payload.photo, 'school-staff-avatar');
+      const rawLogo = payload.photo || payload.logoUrl || payload.logo;
+      if (rawLogo) {
+        savedPhotoUrl = saveBase64Image(rawLogo, 'school-logo');
         if (savedPhotoUrl && staffProfile) {
           staffProfile.avatarUrl = savedPhotoUrl;
         }
@@ -172,11 +207,20 @@ const usersService = {
       if (user.tenantSchoolId) {
         const school = await School.findOne({ _id: user.tenantSchoolId, 'softDelete.isDeleted': { $ne: true } });
         if (school) {
+          if (payload.schoolName) {
+            school.name = payload.schoolName;
+          }
           if (payload.name) {
             school.principalName = payload.name;
           }
           if (payload.email !== undefined) {
             school.adminEmail = payload.email || undefined;
+          }
+          if (payload.phone !== undefined) {
+            school.phone = payload.phone ? normalizePhone(payload.phone) : undefined;
+          }
+          if (savedPhotoUrl) {
+            school.logoUrl = savedPhotoUrl;
           }
           if (payload.address !== undefined || payload.pinCode !== undefined || payload.city !== undefined || payload.state !== undefined || payload.country !== undefined) {
             school.address = school.address || {};

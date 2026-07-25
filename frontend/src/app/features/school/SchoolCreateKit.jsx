@@ -1,17 +1,20 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft, Package, Layers, Trash2, Plus, Info, Check, ChevronRight,
   Upload, Sparkles, TrendingUp, X, Loader2, AlertCircle, ShoppingBag, Store, Tag,
-  Search, Filter, Sliders, DollarSign, Image as LucideImage, Minus, HelpCircle
+  Search, Filter, Sliders, DollarSign, Image as LucideImage, Minus, HelpCircle,
+  LayoutGrid, List, School as LucideSchool
 } from 'lucide-react';
 import { 
   createKit, updateKit, getKit, listClasses, listVendors, 
   uploadSchoolFile, listKitCategories, createKitCategory, 
-  deleteKitCategory, listMasterKitProductsForSchool 
+  deleteKitCategory, listMasterKitProductsForSchool, listSchools
 } from '../../../services/schoolApi';
 import { useSchoolId } from '../../../utils/schoolContext';
 import { getErrorMessage } from '../../../utils/apiHelpers';
+import useAuthStore from '../../../store/useAuthStore';
 
 const DEFAULT_CATEGORIES = [
   'Textbooks & Notebooks',
@@ -26,15 +29,52 @@ const STANDARD_UNIFORM_SIZES = ['24', '26', '28', '30', '32', '34', '36', '38', 
 
 const SchoolCreateKit = () => {
   const navigate = useNavigate();
-  const schoolId = useSchoolId();
+  const schoolIdFromContext = useSchoolId();
+  const user = useAuthStore((state) => state.user);
+  const isAdmin = user?.role === 'super_admin' || user?.role === 'admin' || user?.role === 'SUPER_ADMIN';
+
   const [searchParams] = useSearchParams();
   const kitId = searchParams.get('kitId');
+  const initialSchoolIdParam = searchParams.get('schoolId');
   const isEditing = Boolean(kitId);
+
+  // Admin Target School State
+  const [allSchools, setAllSchools] = useState([]);
+  const [selectedSchoolId, setSelectedSchoolId] = useState(initialSchoolIdParam || '');
+  const [loadingSchools, setLoadingSchools] = useState(false);
+
+  const effectiveSchoolId = isAdmin ? selectedSchoolId : schoolIdFromContext;
 
   const [loadingKit, setLoadingKit] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [isSuccess, setIsSuccess] = useState(false);
+
+  // Load All Schools for Super Admin
+  useEffect(() => {
+    if (!isAdmin) return;
+    setLoadingSchools(true);
+    (async () => {
+      try {
+        const { data: schoolsData } = await listSchools({ limit: 500 });
+        const schools = (schoolsData || []).map((s) => ({
+          id: s._id || s.id,
+          name: s.name,
+          code: s.schoolRefNo || s.code || s.refId || '',
+          city: s.address?.city || s.city || '',
+        }));
+        setAllSchools(schools);
+
+        if (!selectedSchoolId && schools.length > 0) {
+          setSelectedSchoolId(schools[0].id);
+        }
+      } catch (err) {
+        console.error('Failed to load schools for admin kit creation:', err);
+      } finally {
+        setLoadingSchools(false);
+      }
+    })();
+  }, [isAdmin]);
 
   // Form Basic Info
   const [kitName, setKitName] = useState('');
@@ -66,18 +106,19 @@ const SchoolCreateKit = () => {
   const [showProductPicker, setShowProductPicker] = useState(false);
   const [productSearch, setProductSearch] = useState('');
   const [selectedCatFilter, setSelectedCatFilter] = useState('All');
+  const [pickerViewMode, setPickerViewMode] = useState('grid'); // 'grid' | 'table'
 
   // Kit Items List
   const [items, setItems] = useState([]);
 
   // Load Dependencies
   const loadInitialData = useCallback(async () => {
-    if (!schoolId) return;
+    if (!effectiveSchoolId) return;
     try {
       const [clsList, vList, catRes, mpRes] = await Promise.all([
-        listClasses(schoolId).catch(() => []),
-        listVendors(schoolId, { limit: 100 }).catch(() => ({ data: [] })),
-        listKitCategories(schoolId).catch(() => ({ defaults: DEFAULT_CATEGORIES, custom: [], all: DEFAULT_CATEGORIES })),
+        listClasses(effectiveSchoolId).catch(() => []),
+        listVendors(effectiveSchoolId, { limit: 100 }).catch(() => ({ data: [] })),
+        listKitCategories(effectiveSchoolId).catch(() => ({ defaults: DEFAULT_CATEGORIES, custom: [], all: DEFAULT_CATEGORIES })),
         listMasterKitProductsForSchool({ limit: 300 }).catch(() => ({ data: [] })),
       ]);
 
@@ -86,13 +127,15 @@ const SchoolCreateKit = () => {
       setCategoriesData(catRes || { defaults: DEFAULT_CATEGORIES, custom: [], all: DEFAULT_CATEGORIES });
       setMasterProducts(mpRes?.data || []);
 
-      if (vList?.data?.length && !vendorId) {
+      if (vList?.data?.length) {
         setVendorId(vList.data[0]._id || vList.data[0].id);
+      } else {
+        setVendorId('');
       }
     } catch (err) {
       console.error('Failed to load kit form dependencies:', err);
     }
-  }, [schoolId]);
+  }, [effectiveSchoolId]);
 
   useEffect(() => {
     loadInitialData();
@@ -100,11 +143,11 @@ const SchoolCreateKit = () => {
 
   // Load Existing Kit for Edit Mode
   useEffect(() => {
-    if (!schoolId || !kitId) return;
+    if (!effectiveSchoolId || !kitId) return;
     setLoadingKit(true);
     (async () => {
       try {
-        const kit = await getKit(schoolId, kitId);
+        const kit = await getKit(effectiveSchoolId, kitId);
         if (kit) {
           setKitName(kit.name || '');
           setClassGrade(kit.classGrade || '');
@@ -145,7 +188,7 @@ const SchoolCreateKit = () => {
         setLoadingKit(false);
       }
     })();
-  }, [schoolId, kitId]);
+  }, [effectiveSchoolId, kitId]);
 
   // Image Handler
   const handleImageChange = (e) => {
@@ -158,13 +201,13 @@ const SchoolCreateKit = () => {
 
   // Add Custom Category Handler
   const handleCreateCategory = async () => {
-    if (!newCatName.trim()) return;
+    if (!newCatName.trim() || !effectiveSchoolId) return;
     setCreatingCat(true);
     try {
-      await createKitCategory(schoolId, newCatName.trim());
+      await createKitCategory(effectiveSchoolId, newCatName.trim());
       setNewCatName('');
       setShowAddCatModal(false);
-      const updatedCats = await listKitCategories(schoolId);
+      const updatedCats = await listKitCategories(effectiveSchoolId);
       setCategoriesData(updatedCats);
       setCategory(newCatName.trim());
     } catch (err) {
@@ -178,8 +221,8 @@ const SchoolCreateKit = () => {
   const handleDeleteCategory = async (catObj) => {
     if (!window.confirm(`Delete custom category "${catObj.name}"?`)) return;
     try {
-      await deleteKitCategory(schoolId, catObj._id || catObj.id);
-      const updatedCats = await listKitCategories(schoolId);
+      await deleteKitCategory(effectiveSchoolId, catObj._id || catObj.id);
+      const updatedCats = await listKitCategories(effectiveSchoolId);
       setCategoriesData(updatedCats);
       if (category === catObj.name) {
         setCategory(DEFAULT_CATEGORIES[0]);
@@ -261,6 +304,10 @@ const SchoolCreateKit = () => {
   // Form Submit
   const handleSubmit = async (e) => {
     if (e) e.preventDefault();
+    if (!effectiveSchoolId) {
+      setError('Please select a target school for this kit.');
+      return;
+    }
     if (!kitName.trim()) {
       setError('Please enter a Kit Name.');
       return;
@@ -284,7 +331,7 @@ const SchoolCreateKit = () => {
     try {
       let uploadedImageId = existingImageId;
       if (imageFile) {
-        const attachment = await uploadSchoolFile(schoolId, imageFile, 'kit_image');
+        const attachment = await uploadSchoolFile(effectiveSchoolId, imageFile, 'kit_image');
         if (attachment?._id || attachment?.id) {
           uploadedImageId = attachment._id || attachment.id;
         }
@@ -316,14 +363,18 @@ const SchoolCreateKit = () => {
       };
 
       if (isEditing) {
-        await updateKit(schoolId, kitId, payload);
+        await updateKit(effectiveSchoolId, kitId, payload);
       } else {
-        await createKit(schoolId, payload);
+        await createKit(effectiveSchoolId, payload);
       }
 
       setIsSuccess(true);
       setTimeout(() => {
-        navigate('/school/kits');
+        if (isAdmin) {
+          navigate('/superadmin/school-kits');
+        } else {
+          navigate('/school/kits');
+        }
       }, 1500);
 
     } catch (err) {
@@ -343,6 +394,14 @@ const SchoolCreateKit = () => {
     ? Math.round(((Number(mrp) - Number(sellingPrice)) / Number(mrp)) * 100)
     : 0;
 
+  const handleBackToKits = () => {
+    if (isAdmin) {
+      navigate('/superadmin/school-kits');
+    } else {
+      navigate('/school/kits');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50/50 pb-32 font-outfit text-gray-800">
       
@@ -351,7 +410,7 @@ const SchoolCreateKit = () => {
         <div className="max-w-3xl mx-auto flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <button
-              onClick={() => navigate('/school/kits')}
+              onClick={handleBackToKits}
               className="p-2.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 transition-all active:scale-95 shrink-0"
               title="Back to Kits"
             >
@@ -368,7 +427,7 @@ const SchoolCreateKit = () => {
           <div className="flex items-center gap-3">
             <button
               type="button"
-              onClick={() => navigate('/school/kits')}
+              onClick={handleBackToKits}
               className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs rounded-xl transition-all"
             >
               Cancel
@@ -388,6 +447,50 @@ const SchoolCreateKit = () => {
 
       {/* Main Single Column Container */}
       <div className="max-w-3xl mx-auto py-10 px-4 sm:px-6 space-y-10">
+
+        {/* Super Admin Target School Selection Card */}
+        {isAdmin && (
+          <div className="bg-gradient-to-r from-purple-900 via-[#3b2d7d] to-indigo-900 rounded-3xl p-6 text-white shadow-xl space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center text-amber-300 border border-white/20">
+                <LucideSchool size={20} />
+              </div>
+              <div>
+                <span className="text-[10px] font-black uppercase tracking-widest text-purple-200 block">Super Admin Action</span>
+                <h3 className="text-base font-black text-white leading-tight">Create Kit on Behalf of Partner School</h3>
+              </div>
+            </div>
+
+            <div className="bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/15 space-y-2">
+              <label className="text-[10px] font-black uppercase tracking-wider text-purple-100 block">
+                Select Target School
+              </label>
+              {loadingSchools ? (
+                <div className="flex items-center gap-2 text-xs font-bold text-purple-200 py-1">
+                  <Loader2 size={16} className="animate-spin" /> Loading partner schools list…
+                </div>
+              ) : (
+                <select
+                  value={selectedSchoolId}
+                  onChange={(e) => setSelectedSchoolId(e.target.value)}
+                  className="w-full bg-white text-gray-900 font-bold text-xs rounded-xl px-3.5 py-2.5 border-0 focus:ring-2 focus:ring-amber-400 focus:outline-none"
+                >
+                  <option value="" disabled>-- Choose a Partner School --</option>
+                  {allSchools.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name} {s.code ? `(${s.code})` : ''} {s.city ? `• ${s.city}` : ''}
+                    </option>
+                  ))}
+                </select>
+              )}
+              {selectedSchoolId && (
+                <p className="text-[11px] text-purple-200 font-medium">
+                  This kit will be published directly to <span className="font-black text-amber-300">{allSchools.find(s => String(s.id) === String(selectedSchoolId))?.name || 'Selected School'}</span> and will appear in their school kit store.
+                </p>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Global Notifications */}
         {error && (
@@ -711,80 +814,90 @@ const SchoolCreateKit = () => {
                   </button>
                 </div>
               ) : (
-                <div className="space-y-5">
+                <div className="space-y-4">
                   {items.map((item, index) => (
                     <div
                       key={item.id || index}
-                      className="p-6 bg-gray-50/80 border border-gray-200 rounded-2xl space-y-5 hover:border-purple-300 transition-all shadow-xs"
+                      className="p-4 sm:p-5 bg-white border border-gray-200/90 rounded-3xl space-y-4 hover:border-purple-300 transition-all shadow-xs relative overflow-hidden"
                     >
-                      {/* Product Item Header */}
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                        <div className="flex items-center gap-4">
+                      {/* Product Header Row */}
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-start gap-3.5 min-w-0 flex-1">
                           {item.imageUrl ? (
-                            <img src={item.imageUrl} alt={item.name} className="w-14 h-14 rounded-xl object-contain bg-white border border-gray-200 p-1.5 shrink-0 shadow-xs" />
+                            <img
+                              src={item.imageUrl}
+                              alt={item.name}
+                              className="w-12 h-12 rounded-2xl object-contain bg-gray-50 border border-gray-150 p-1 shrink-0 shadow-xs"
+                            />
                           ) : (
-                            <div className="w-14 h-14 rounded-xl bg-purple-100 text-[#3b2d7d] flex items-center justify-center font-black text-sm shrink-0">
+                            <div className="w-12 h-12 rounded-2xl bg-purple-50 text-[#3b2d7d] border border-purple-100 flex items-center justify-center font-black text-xs shrink-0">
                               {item.name.slice(0, 2).toUpperCase()}
                             </div>
                           )}
-                          <div>
-                            <span className="text-[10px] font-black text-purple-700 uppercase tracking-wider block">
-                              {item.category} {item.subcategory ? `• ${item.subcategory}` : ''} ({item.productType})
-                            </span>
-                            <h4 className="text-sm font-black text-gray-900">{item.name}</h4>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="text-[9px] font-black text-purple-700 uppercase tracking-wider bg-purple-50 px-2 py-0.5 rounded-md border border-purple-100/70 inline-block truncate max-w-full">
+                                {item.category} {item.subcategory ? `• ${item.subcategory}` : ''}
+                              </span>
+                              <span className="text-[9px] font-black text-indigo-600 uppercase tracking-wider bg-indigo-50 px-1.5 py-0.5 rounded-md border border-indigo-100/70 inline-block">
+                                {item.productType || 'general'}
+                              </span>
+                            </div>
+                            <h4 className="text-xs font-black text-gray-900 leading-snug mt-1 break-words">{item.name}</h4>
                           </div>
                         </div>
 
-                        {/* Quantity Stepper & Delete */}
-                        <div className="flex items-center justify-between sm:justify-end gap-4 pt-3 sm:pt-0 border-t sm:border-t-0 border-gray-200">
-                          <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl p-1 shadow-xs">
-                            <button
-                              type="button"
-                              onClick={() => updateItem(index, 'qty', Math.max(1, item.qty - 1))}
-                              className="w-8 h-8 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 flex items-center justify-center font-bold"
-                            >
-                              <Minus size={13} />
-                            </button>
-                            <span className="w-8 text-center text-xs font-black text-gray-900">{item.qty}</span>
-                            <button
-                              type="button"
-                              onClick={() => updateItem(index, 'qty', item.qty + 1)}
-                              className="w-8 h-8 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 flex items-center justify-center font-bold"
-                            >
-                              <Plus size={13} />
-                            </button>
-                          </div>
+                        {/* Remove Action Button */}
+                        <button
+                          type="button"
+                          onClick={() => removeItem(index)}
+                          className="p-2 text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all shrink-0"
+                          title="Remove Product"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
 
+                      {/* Item Quantity Bar */}
+                      <div className="pt-3 border-t border-gray-100 flex items-center justify-between gap-3">
+                        <span className="text-[10px] font-black text-gray-500 uppercase tracking-wider">Item Quantity</span>
+                        <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-xl p-1 shadow-xs">
                           <button
                             type="button"
-                            onClick={() => removeItem(index)}
-                            className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
-                            title="Remove Product"
+                            onClick={() => updateItem(index, 'qty', Math.max(1, item.qty - 1))}
+                            className="w-7 h-7 rounded-lg bg-white hover:bg-gray-200 text-gray-700 flex items-center justify-center font-bold shadow-xs active:scale-95 transition-all"
                           >
-                            <Trash2 size={18} />
+                            <Minus size={12} />
+                          </button>
+                          <span className="w-7 text-center text-xs font-black text-gray-900">{item.qty}</span>
+                          <button
+                            type="button"
+                            onClick={() => updateItem(index, 'qty', item.qty + 1)}
+                            className="w-7 h-7 rounded-lg bg-white hover:bg-gray-200 text-gray-700 flex items-center justify-center font-bold shadow-xs active:scale-95 transition-all"
+                          >
+                            <Plus size={12} />
                           </button>
                         </div>
                       </div>
 
-                      {/* Dynamic Attributes (Single Column Stack) */}
-                      <div className="pt-4 border-t border-gray-200/80 space-y-4">
-                        
+                      {/* Dynamic Attributes Container */}
+                      <div className="space-y-3">
                         {/* Uniform / Winter Wear Controls */}
                         {(item.productType === 'uniform' || item.productType === 'winter') && (
-                          <div className="space-y-4 bg-white p-5 rounded-2xl border border-gray-200/80 shadow-xs">
-                            <div className="w-full">
-                              <label className="block text-xs font-bold text-gray-700 mb-1.5">Uniform Color</label>
+                          <div className="space-y-3.5 bg-gray-50/70 p-4 rounded-2xl border border-gray-150/80">
+                            <div>
+                              <label className="block text-[10px] font-black text-gray-600 uppercase tracking-wider mb-1 ml-0.5">Uniform Color</label>
                               <input
                                 type="text"
                                 value={item.attributes?.color || ''}
                                 onChange={(e) => updateItemAttribute(index, 'color', e.target.value)}
                                 placeholder="e.g. Navy Blue / White"
-                                className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 focus:outline-none focus:border-[#3b2d7d]"
+                                className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-900 focus:outline-none focus:border-[#3b2d7d]"
                               />
                             </div>
 
-                            <div className="w-full">
-                              <label className="block text-xs font-bold text-gray-700 mb-1.5">Gender</label>
+                            <div>
+                              <label className="block text-[10px] font-black text-gray-600 uppercase tracking-wider mb-1 ml-0.5">Gender</label>
                               <div className="flex gap-2">
                                 {['Unisex', 'Boy', 'Girl'].map((g) => (
                                   <button
@@ -794,7 +907,7 @@ const SchoolCreateKit = () => {
                                     className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all border ${
                                       (item.attributes?.gender || 'Unisex') === g
                                         ? 'bg-[#3b2d7d] text-white border-[#3b2d7d]'
-                                        : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
+                                        : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-100'
                                     }`}
                                   >
                                     {g}
@@ -803,9 +916,9 @@ const SchoolCreateKit = () => {
                               </div>
                             </div>
 
-                            <div className="w-full">
-                              <label className="block text-xs font-bold text-gray-700 mb-2">Available Sizes</label>
-                              <div className="flex flex-wrap gap-2">
+                            <div>
+                              <label className="block text-[10px] font-black text-gray-600 uppercase tracking-wider mb-1.5 ml-0.5">Available Sizes</label>
+                              <div className="flex flex-wrap gap-1.5">
                                 {STANDARD_UNIFORM_SIZES.map((sz) => {
                                   const isSelected = (item.attributes?.sizes || []).includes(sz);
                                   return (
@@ -813,10 +926,10 @@ const SchoolCreateKit = () => {
                                       key={sz}
                                       type="button"
                                       onClick={() => toggleSizeForUniform(index, sz)}
-                                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border ${
+                                      className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all border ${
                                         isSelected
                                           ? 'bg-[#3b2d7d] text-white border-[#3b2d7d] shadow-xs'
-                                          : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
+                                          : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-100'
                                       }`}
                                     >
                                       {sz}
@@ -830,26 +943,26 @@ const SchoolCreateKit = () => {
 
                         {/* Textbook / Notebook Controls */}
                         {(item.productType === 'textbook' || item.productType === 'notebook') && (
-                          <div className="space-y-4 bg-white p-5 rounded-2xl border border-gray-200/80 shadow-xs">
-                            <div className="w-full">
-                              <label className="block text-xs font-bold text-gray-700 mb-1.5">Subject</label>
+                          <div className="space-y-3.5 bg-gray-50/70 p-4 rounded-2xl border border-gray-150/80">
+                            <div>
+                              <label className="block text-[10px] font-black text-gray-600 uppercase tracking-wider mb-1 ml-0.5">Subject</label>
                               <input
                                 type="text"
                                 value={item.attributes?.subject || ''}
                                 onChange={(e) => updateItemAttribute(index, 'subject', e.target.value)}
                                 placeholder="e.g. Mathematics / English"
-                                className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 focus:outline-none focus:border-[#3b2d7d]"
+                                className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-900 focus:outline-none focus:border-[#3b2d7d]"
                               />
                             </div>
 
-                            <div className="w-full">
-                              <label className="block text-xs font-bold text-gray-700 mb-1.5">Publisher / Board</label>
+                            <div>
+                              <label className="block text-[10px] font-black text-gray-600 uppercase tracking-wider mb-1 ml-0.5">Publisher / Board</label>
                               <input
                                 type="text"
                                 value={item.attributes?.publisher || ''}
                                 onChange={(e) => updateItemAttribute(index, 'publisher', e.target.value)}
                                 placeholder="e.g. NCERT / CBSE"
-                                className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 focus:outline-none focus:border-[#3b2d7d]"
+                                className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-900 focus:outline-none focus:border-[#3b2d7d]"
                               />
                             </div>
                           </div>
@@ -857,18 +970,17 @@ const SchoolCreateKit = () => {
 
                         {/* General / Stationary Specification */}
                         {item.productType !== 'uniform' && item.productType !== 'winter' && item.productType !== 'textbook' && item.productType !== 'notebook' && (
-                          <div className="bg-white p-4 rounded-2xl border border-gray-200/80 shadow-xs">
-                            <label className="block text-xs font-bold text-gray-700 mb-1.5">Specification / Pack Details</label>
+                          <div className="bg-gray-50/70 p-4 rounded-2xl border border-gray-150/80">
+                            <label className="block text-[10px] font-black text-gray-600 uppercase tracking-wider mb-1 ml-0.5">Specification / Pack Details</label>
                             <input
                               type="text"
                               value={item.attributes?.packDetails || ''}
                               onChange={(e) => updateItemAttribute(index, 'packDetails', e.target.value)}
                               placeholder="e.g. Pack of 5 pencils + eraser + sharpener"
-                              className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 focus:outline-none focus:border-[#3b2d7d]"
+                              className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-900 focus:outline-none focus:border-[#3b2d7d]"
                             />
                           </div>
                         )}
-
                       </div>
 
                     </div>
@@ -945,83 +1057,199 @@ const SchoolCreateKit = () => {
       )}
 
       {/* Master Product Picker Modal */}
-      {showProductPicker && (
-        <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-sm animate-in fade-in">
-          <div className="w-full max-w-4xl bg-white rounded-3xl shadow-2xl border border-gray-150 overflow-hidden flex flex-col max-h-[85vh]">
+      {showProductPicker && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-sm animate-in fade-in">
+          <div className="w-full max-w-4xl bg-white rounded-3xl shadow-2xl border border-gray-150 overflow-hidden flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-200">
             
             <div className="bg-[#3b2d7d] text-white px-6 py-4 flex items-center justify-between shrink-0">
-              <h3 className="text-sm font-black uppercase tracking-wider">Select Product from Master Catalogue</h3>
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-white/15 flex items-center justify-center text-amber-300">
+                  <Package size={18} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black uppercase tracking-wider leading-none">Select Product from Master Catalogue</h3>
+                  <p className="text-[10px] text-purple-200 font-bold mt-1">Choose product templates to include in this Class Kit</p>
+                </div>
+              </div>
               <button
+                type="button"
                 onClick={() => setShowProductPicker(false)}
-                className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 text-white transition-all"
+                className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 text-white transition-all shrink-0"
               >
                 <X size={16} />
               </button>
             </div>
 
-            <div className="p-4 bg-gray-50 border-b border-gray-150 flex flex-col sm:flex-row items-center gap-3 shrink-0">
-              <div className="relative w-full sm:w-72">
-                <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-                <input
-                  type="text"
-                  value={productSearch}
-                  onChange={(e) => setProductSearch(e.target.value)}
-                  placeholder="Search master products..."
-                  className="w-full pl-9 pr-3.5 py-2.5 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-900 focus:outline-none focus:border-[#3b2d7d]"
-                />
+            <div className="p-4 bg-gray-50 border-b border-gray-150 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
+              <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
+                <div className="relative w-full sm:w-72">
+                  <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    value={productSearch}
+                    onChange={(e) => setProductSearch(e.target.value)}
+                    placeholder="Search master products..."
+                    className="w-full pl-9 pr-3.5 py-2 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-900 focus:outline-none focus:border-[#3b2d7d]"
+                  />
+                </div>
+
+                <select
+                  value={selectedCatFilter}
+                  onChange={(e) => setSelectedCatFilter(e.target.value)}
+                  className="w-full sm:w-56 px-3.5 py-2 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-900 focus:outline-none focus:border-[#3b2d7d] cursor-pointer"
+                >
+                  <option value="All">All Categories</option>
+                  {DEFAULT_CATEGORIES.map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
               </div>
 
-              <select
-                value={selectedCatFilter}
-                onChange={(e) => setSelectedCatFilter(e.target.value)}
-                className="w-full sm:w-56 px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-900 focus:outline-none focus:border-[#3b2d7d]"
-              >
-                <option value="All">All Categories</option>
-                {DEFAULT_CATEGORIES.map((c) => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
-              </select>
+              {/* View Switcher Toggle */}
+              <div className="flex items-center gap-1 p-1 bg-gray-200/80 rounded-xl shrink-0 self-end sm:self-auto">
+                <button
+                  type="button"
+                  onClick={() => setPickerViewMode('table')}
+                  title="Table View"
+                  className={`p-1.5 rounded-lg transition-all ${
+                    pickerViewMode === 'table'
+                      ? 'bg-white text-[#3b2d7d] shadow-sm font-black'
+                      : 'text-gray-500 hover:text-gray-800'
+                  }`}
+                >
+                  <List size={16} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPickerViewMode('grid')}
+                  title="Grid View"
+                  className={`p-1.5 rounded-lg transition-all ${
+                    pickerViewMode === 'grid'
+                      ? 'bg-white text-[#3b2d7d] shadow-sm font-black'
+                      : 'text-gray-500 hover:text-gray-800'
+                  }`}
+                >
+                  <LayoutGrid size={16} />
+                </button>
+              </div>
             </div>
 
-            <div className="p-6 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 scrollbar-none">
-              {filteredMasterProducts.length === 0 ? (
-                <div className="col-span-full py-16 text-center text-gray-400 font-bold text-xs">
-                  No master products found matching your search.
-                </div>
-              ) : (
-                filteredMasterProducts.map((mp) => (
-                  <div
-                    key={mp._id || mp.id}
-                    className="bg-white border border-gray-200/80 rounded-2xl p-3.5 shadow-xs hover:border-[#3b2d7d] transition-all flex flex-col justify-between group"
-                  >
-                    <div>
-                      <div className="w-full h-24 bg-gray-50 rounded-xl overflow-hidden p-1.5 flex items-center justify-center mb-2">
-                        {mp.imageUrl ? (
-                          <img src={mp.imageUrl} alt={mp.name} className="w-full h-full object-contain group-hover:scale-105 transition-transform" />
-                        ) : (
-                          <Package size={28} className="text-gray-300" />
-                        )}
-                      </div>
-                      <span className="text-[9px] font-black text-purple-700 uppercase tracking-wider block">
-                        {mp.category}
-                      </span>
-                      <h4 className="text-xs font-black text-gray-900 line-clamp-2 leading-snug">{mp.name}</h4>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => handleAddMasterProduct(mp)}
-                      className="mt-3 w-full py-2 bg-purple-50 hover:bg-[#3b2d7d] text-[#3b2d7d] hover:text-white font-black text-[10px] uppercase rounded-xl transition-all active:scale-95"
-                    >
-                      + Add to Kit
-                    </button>
+            {/* Modal Body */}
+            {pickerViewMode === 'table' ? (
+              /* Data Table View */
+              <div className="p-6 overflow-y-auto flex-1 min-h-0 scrollbar-thin">
+                {filteredMasterProducts.length === 0 ? (
+                  <div className="py-16 text-center text-gray-400 font-bold text-xs">
+                    No master products found matching your search.
                   </div>
-                ))
-              )}
-            </div>
+                ) : (
+                  <div className="bg-white border border-gray-200/80 rounded-2xl overflow-x-auto shadow-sm scrollbar-thin">
+                    <table className="w-full min-w-[580px] text-left text-xs font-semibold text-gray-600 border-collapse select-none">
+                      <thead>
+                        <tr className="border-b border-gray-200 bg-gray-50/80 text-[10px] font-black uppercase text-gray-400 tracking-wider">
+                          <th className="py-3.5 px-4">#</th>
+                          <th className="py-3.5 px-4">Product Template</th>
+                          <th className="py-3.5 px-4">Category</th>
+                          <th className="py-3.5 px-4">Type</th>
+                          <th className="py-3.5 px-4 text-right pr-5">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100 bg-white">
+                        {filteredMasterProducts.map((mp, idx) => (
+                          <tr key={mp._id || mp.id} className="hover:bg-purple-50/40 transition-colors">
+                            <td className="py-3 px-4 font-extrabold text-gray-400 text-xs">
+                              {idx + 1}
+                            </td>
+                            <td className="py-3 px-4">
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-xl border border-gray-150 p-1 bg-gray-50 shrink-0 overflow-hidden flex items-center justify-center">
+                                  {mp.imageUrl ? (
+                                    <img src={mp.imageUrl} alt={mp.name} className="w-full h-full object-contain" />
+                                  ) : (
+                                    <Package size={16} className="text-gray-300" />
+                                  )}
+                                </div>
+                                <div>
+                                  <h4 className="font-black text-gray-900 text-xs leading-snug">{mp.name}</h4>
+                                  {mp.subcategory && (
+                                    <span className="text-[10px] font-bold text-gray-400 block mt-0.5">
+                                      Subcategory: {mp.subcategory}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </td>
+                            <td className="py-3 px-4">
+                              <span className="px-2.5 py-0.5 bg-purple-50 text-[#3b2d7d] border border-purple-100/80 rounded-lg text-[10px] font-black inline-block">
+                                {mp.category}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4">
+                              <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-md text-[9px] font-black uppercase tracking-wider inline-block">
+                                {mp.productType || 'general'}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 text-right pr-5">
+                              <button
+                                type="button"
+                                onClick={() => handleAddMasterProduct(mp)}
+                                className="px-3.5 py-1.5 bg-[#3b2d7d] hover:bg-[#2b205d] active:scale-95 text-white font-black text-[10px] uppercase rounded-xl shadow-xs transition-all flex items-center gap-1.5 ml-auto"
+                              >
+                                <Plus size={12} className="stroke-[3]" />
+                                <span>Add to Kit</span>
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            ) : (
+              /* Grid View */
+              <div className="p-6 overflow-y-auto flex-1 min-h-0 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 scrollbar-thin">
+                {filteredMasterProducts.length === 0 ? (
+                  <div className="col-span-full py-16 text-center text-gray-400 font-bold text-xs">
+                    No master products found matching your search.
+                  </div>
+                ) : (
+                  filteredMasterProducts.map((mp) => (
+                    <div
+                      key={mp._id || mp.id}
+                      className="bg-white border border-gray-200/80 rounded-2xl p-3.5 shadow-xs hover:border-[#3b2d7d] transition-all flex flex-col justify-between group"
+                    >
+                      <div>
+                        <div className="w-full h-24 bg-gray-50 rounded-xl overflow-hidden p-1.5 flex items-center justify-center mb-2">
+                          {mp.imageUrl ? (
+                            <img src={mp.imageUrl} alt={mp.name} className="w-full h-full object-contain group-hover:scale-105 transition-transform" />
+                          ) : (
+                            <Package size={28} className="text-gray-300" />
+                          )}
+                        </div>
+                        <span className="text-[9px] font-black text-purple-700 uppercase tracking-wider block">
+                          {mp.category}
+                        </span>
+                        <h4 className="text-xs font-black text-gray-900 line-clamp-2 leading-snug">{mp.name}</h4>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => handleAddMasterProduct(mp)}
+                        className="mt-3 w-full py-2 bg-purple-50 hover:bg-[#3b2d7d] text-[#3b2d7d] hover:text-white font-black text-[10px] uppercase rounded-xl transition-all active:scale-95 flex items-center justify-center gap-1"
+                      >
+                        <Plus size={12} className="stroke-[3]" />
+                        <span>Add to Kit</span>
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
 
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
     </div>

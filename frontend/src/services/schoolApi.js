@@ -292,7 +292,14 @@ export const deleteKitCategory = async (schoolId, categoryId) => {
 
 export const listMasterKitProductsForSchool = async (params = {}) => {
   const response = await apiClient.get('/admin/kit-products', { params });
-  return extractPaginated(response, 'products');
+  const unwrapped = unwrapData(response);
+  if (Array.isArray(unwrapped)) {
+    return { data: unwrapped };
+  }
+  if (Array.isArray(unwrapped?.data)) {
+    return unwrapped;
+  }
+  return { data: unwrapped?.products || [] };
 };
 
 export const createKit = async (schoolId, payload) => {
@@ -302,6 +309,9 @@ export const createKit = async (schoolId, payload) => {
 
 export const listKits = async (schoolId, params = {}) => {
   const response = await apiClient.get(schoolPath(schoolId, '/kits'), { params });
+  const unwrapped = unwrapData(response);
+  if (Array.isArray(unwrapped)) return { data: unwrapped };
+  if (unwrapped?.kits) return { data: unwrapped.kits, pagination: response.data?.pagination || null };
   return extractPaginated(response, 'kits');
 };
 

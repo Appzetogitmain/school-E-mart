@@ -3,9 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { 
   Bell, GraduationCap, Users, Clock, ArrowRight, 
   Calendar, BookOpen, FileText, CheckSquare, Plus,
-  ChevronDown, UserCheck, MessageSquare, PlusCircle, FileCheck, Loader2
+  ChevronDown, UserCheck, MessageSquare, PlusCircle, FileCheck, Loader2, Building2
 } from 'lucide-react';
-import { getDailyAttendance, listStudents } from '../../../services/schoolApi';
+import { getDailyAttendance, listStudents, getSchool } from '../../../services/schoolApi';
 import { listCourses, listAssignments } from '../../../services/lmsApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 import { parseClassGrade, parseSection } from '../../../utils/mappers/teacherMapper';
@@ -22,6 +22,7 @@ const TeacherDashboard = () => {
   const [teacherAvatar, setTeacherAvatar] = useState(
     "https://ui-avatars.com/api/?name=Teacher&background=3b2d7d&color=fff"
   );
+  const [schoolInfo, setSchoolInfo] = useState(null);
 
   useEffect(() => {
     const name = authUser?.name || authUser?.fullName;
@@ -33,6 +34,18 @@ const TeacherDashboard = () => {
       setTeacherAvatar(authUser.avatarUrl);
     }
   }, [authUser]);
+
+  useEffect(() => {
+    let active = true;
+    if (schoolId) {
+      getSchool(schoolId).then((data) => {
+        if (active && data) {
+          setSchoolInfo(data);
+        }
+      }).catch(() => {});
+    }
+    return () => { active = false; };
+  }, [schoolId]);
 
   const { classLabels, getSectionLabels, loading: classesLoading, hasClasses } = useTeacherClassOptions(schoolId);
 
@@ -156,6 +169,18 @@ const TeacherDashboard = () => {
               />
             </div>
             <div>
+              {schoolInfo && (
+                <div className="flex items-center gap-1.5 mb-1.5 px-2.5 py-0.5 bg-white/15 border border-white/20 rounded-full w-fit backdrop-blur-md">
+                  {schoolInfo.logoUrl ? (
+                    <img src={schoolInfo.logoUrl} alt="School Logo" className="w-3.5 h-3.5 rounded-full object-cover shrink-0" />
+                  ) : (
+                    <Building2 size={11} className="text-[#FFC933] shrink-0" />
+                  )}
+                  <span className="text-[10px] font-extrabold text-white/90 truncate max-w-[160px]">
+                    {schoolInfo.name}
+                  </span>
+                </div>
+              )}
               <span className="text-white/70 text-[11px] font-bold block leading-none">Good Morning,</span>
               <h1 className="text-[19px] font-black text-white flex items-center gap-1.5 leading-tight mt-1 drop-shadow-[0_2px_4px_rgba(0,0,0,0.15)]">
                 {teacherName} <span className="animate-bounce">👋</span>

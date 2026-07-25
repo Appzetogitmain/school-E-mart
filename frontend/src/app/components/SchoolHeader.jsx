@@ -25,12 +25,18 @@ const SchoolHeader = ({ childInfo, showSearch: propShowSearch }) => {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-white rounded-xl p-1.5 shadow-lg">
-                <img src="/assets/logo.jpeg" alt="Logo" className="w-full h-full object-contain" />
+              <div className="w-10 h-10 bg-white rounded-xl p-1 shadow-lg overflow-hidden flex items-center justify-center">
+                {childInfo?.schoolLogo || childInfo?.photo ? (
+                  <img src={childInfo.schoolLogo || childInfo.photo} alt={childInfo?.school || "School Logo"} className="w-full h-full object-cover rounded-lg" />
+                ) : (
+                  <img src="/assets/logo.jpeg" alt="Logo" className="w-full h-full object-contain" />
+                )}
               </div>
               <div className="flex flex-col">
-                <h1 className="text-white font-black text-sm tracking-tight leading-none">SCHOOL E-MART</h1>
-                <span className="text-white/50 text-[8px] font-bold tracking-[0.2em] mt-1">SCHOOL PORTAL</span>
+                <h1 className="text-white font-black text-sm tracking-tight leading-none truncate max-w-[200px]">
+                  {childInfo?.school && childInfo.school !== 'School Management' ? childInfo.school : 'SCHOOL E-MART'}
+                </h1>
+                <span className="text-white/50 text-[8px] font-bold tracking-[0.2em] mt-1 uppercase">SCHOOL PORTAL</span>
               </div>
             </div>
           </div>

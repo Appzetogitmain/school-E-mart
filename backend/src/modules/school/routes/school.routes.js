@@ -13,6 +13,10 @@ const { uploadImage } = require('../../admin/middlewares/upload.middleware');
 const router = express.Router();
 
 const superAdminOnly = protectedRoute({ roles: [ROLES.SUPER_ADMIN], scopes: ['*'] });
+const schoolRead = protectedRoute({
+  roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN, ROLES.TEACHER, ROLES.PARENT, ROLES.USER, ROLES.VENDOR],
+  tenant: { requireTenantId: false },
+});
 const schoolAdmin = protectedRoute({
   roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN],
   permissions: [PERMISSIONS.SCHOOLS_READ],
@@ -44,7 +48,7 @@ router.post('/', ...superAdminOnly, validateBody(validators.createSchoolSchema),
 
 router.get(
   '/:schoolId',
-  ...schoolAdmin,
+  ...schoolRead,
   resolveSchool(),
   schoolController.getSchool
 );
@@ -401,8 +405,7 @@ router.delete(
 );
 
 const noticeRead = protectedRoute({
-  roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN, ROLES.TEACHER, ROLES.PARENT],
-  permissions: [PERMISSIONS.NOTICES_READ],
+  roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN, ROLES.TEACHER, ROLES.PARENT, ROLES.USER, ROLES.VENDOR],
   tenant: { requireTenantId: false },
 });
 const noticeWrite = protectedRoute({

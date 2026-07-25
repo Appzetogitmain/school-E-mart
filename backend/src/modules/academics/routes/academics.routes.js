@@ -11,8 +11,7 @@ const router = express.Router({ mergeParams: true });
 
 // Parents/teachers/school read; school admin writes. Mirrors the notices guards.
 const schoolRead = protectedRoute({
-  roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN, ROLES.TEACHER, ROLES.PARENT],
-  permissions: [PERMISSIONS.NOTICES_READ],
+  roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN, ROLES.TEACHER, ROLES.PARENT, ROLES.USER, ROLES.VENDOR],
 });
 const schoolManage = protectedRoute({
   roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN],

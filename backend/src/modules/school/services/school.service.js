@@ -1,6 +1,7 @@
 const { NotFoundError, ConflictError, BadRequestError } = require('../../../common/errors');
 const schoolRepository = require('../repositories/school.repository');
 const { generateSchoolCode } = require('../utils/refId');
+const { saveBase64File } = require('../../../utils/fileStorage');
 
 const schoolService = {
   async createSchool(payload) {
@@ -15,8 +16,17 @@ const schoolService = {
       throw new ConflictError('School reference number already exists', 'SCHOOL_REF_EXISTS');
     }
 
+    const updatePayload = { ...payload };
+    const rawLogo = updatePayload.logoUrl || updatePayload.logo || updatePayload.photo;
+    if (rawLogo) {
+      const saved = saveBase64File(rawLogo, 'school-logo');
+      if (saved) updatePayload.logoUrl = saved;
+    }
+    delete updatePayload.logo;
+    delete updatePayload.photo;
+
     return schoolRepository.create({
-      ...payload,
+      ...updatePayload,
       code,
       gradesOffered: payload.gradesOffered || [],
       sectionsConfig: payload.sectionsConfig || [],
@@ -34,7 +44,16 @@ const schoolService = {
   },
 
   async updateSchool(schoolId, payload) {
-    const school = await schoolRepository.updateById(schoolId, { $set: payload });
+    const updatePayload = { ...payload };
+    const rawLogo = updatePayload.logoUrl || updatePayload.logo || updatePayload.photo;
+    if (rawLogo) {
+      const saved = saveBase64File(rawLogo, 'school-logo');
+      if (saved) updatePayload.logoUrl = saved;
+    }
+    delete updatePayload.logo;
+    delete updatePayload.photo;
+
+    const school = await schoolRepository.updateById(schoolId, { $set: updatePayload });
     if (!school) throw new NotFoundError('School not found', 'SCHOOL_NOT_FOUND');
     return school;
   },

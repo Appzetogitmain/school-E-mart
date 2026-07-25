@@ -1,14 +1,21 @@
 import { formatRupee, resolveProductImage } from './productMapper';
 
 const PRODUCT_PLACEHOLDER =
-  'https://images.unsplash.com/photo-1523275335684-37898b6baf30?q=80&w=400&h=400&fit=crop';
+  'https://images.unsplash.com/photo-1503676260728-1c00da094a0b?q=80&w=400&h=400&fit=crop';
 
 const isUrl = (value) => typeof value === 'string' && /^https?:\/\//i.test(value);
 
 const resolveCartItemImage = (item, product) => {
-  if (isUrl(item?.image)) return item.image;
-  if (product) return resolveProductImage(product);
-  return PRODUCT_PLACEHOLDER;
+  if (item?.image && typeof item.image === 'string' && item.image.trim().length > 0) {
+    if (!item.image.includes('photo-1523275335684-37898b6baf30')) {
+      return item.image;
+    }
+  }
+  if (product) {
+    const img = resolveProductImage(product);
+    if (img && !img.includes('photo-1523275335684-37898b6baf30')) return img;
+  }
+  return null;
 };
 
 export const mapCartItemFromApi = (item, product = null) => {

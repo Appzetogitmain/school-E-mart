@@ -4,11 +4,12 @@ const productRepository = require('../../marketplace/repositories/product.reposi
 const variantRepository = require('../../marketplace/repositories/variant.repository');
 const orderAccessPolicy = require('../policies/orderAccess.policy');
 const BillingConfig = require('../../../database/models/BillingConfig');
+const Kit = require('../../../database/models/Kit');
 
 // Fallbacks used only if the admin has never saved a BillingConfig. Real values
 // come from the admin's Billing & Charges page and are resolved per checkout.
 const DEFAULT_DELIVERY_CHARGE_PAISE = 0;
-const DEFAULT_PLATFORM_FEE_PAISE = 0;
+const DEFAULT_PLATFORM_FEE_PAISE = 1000; // Default ₹10 platform fee
 const DEFAULT_HANDLING_CHARGE_PAISE = 0;
 
 const toNumber = (value) => {
@@ -26,9 +27,28 @@ const checkoutService = {
   async buildLineItems(cartItems) {
     const lineItems = [];
     for (const item of cartItems) {
-      const product = await productRepository.findOne(
+      let product = await productRepository.findOne(
         productRepository.findPublishedFilter({ _id: item.productId })
       );
+      if (!product) {
+        const kit = await Kit.findById(item.productId).lean();
+        if (kit) {
+          product = {
+            _id: kit._id,
+            vendorId: kit.vendorId || kit.schoolId,
+            name: kit.name,
+            sku: kit.sku || `KIT-${kit._id}`,
+            images: [{ alt: kit.imageUrl || '' }],
+            stock: 999,
+            pricePaise: kit.pricePaise || 0,
+            originalPricePaise: kit.mrpPaise || kit.pricePaise || 0,
+            taxRatePercent: 0,
+            audience: 'schools',
+            kitId: kit._id,
+            schoolId: kit.schoolId,
+          };
+        }
+      }
       if (!product) {
         throw new BadRequestError(`Product unavailable: ${item.productId}`, null, 'CART_ITEM_INVALID');
       }
@@ -82,8 +102,13 @@ const checkoutService = {
    * never from the client payload — otherwise a caller could zero out its own
    * delivery/platform fees. Delivery is waived once the subtotal clears the
    * free-delivery threshold.
+  /**
+   * Server-authoritative charges. Fees are read from the admin's BillingConfig,
+   * never from the client payload — otherwise a caller could zero out its own
+   * delivery/platform fees. Delivery is waived for 'school' delivery type or once
+   * the subtotal clears the free-delivery threshold.
    */
-  async resolveCharges(subtotalPaise) {
+  async resolveCharges(subtotalPaise, deliveryType = 'home') {
     const config = await BillingConfig.findById('default').lean();
     if (!config) {
       return {
@@ -93,13 +118,17 @@ const checkoutService = {
       };
     }
 
-    const platformFeePaise = toNumber(config.platformFeePaise);
+    const platformFeePaise =
+      config.platformFeePaise != null && Number(config.platformFeePaise) > 0
+        ? toNumber(config.platformFeePaise)
+        : DEFAULT_PLATFORM_FEE_PAISE;
     const freeDeliveryThresholdPaise = toNumber(config.freeDeliveryThresholdPaise);
-    const qualifiesForFreeDelivery =
-      freeDeliveryThresholdPaise > 0 && subtotalPaise >= freeDeliveryThresholdPaise;
 
-    // Distance-based pricing needs a rider distance we don't have at checkout, so
-    // it falls back to the fixed charge until that path is wired.
+    // School delivery option has NO shipping/delivery charge (FREE). Home delivery applies admin configured delivery charge.
+    const isSchoolDelivery = deliveryType === 'school';
+    const qualifiesForFreeDelivery =
+      isSchoolDelivery || (freeDeliveryThresholdPaise > 0 && subtotalPaise >= freeDeliveryThresholdPaise);
+
     const deliveryChargePaise = qualifiesForFreeDelivery
       ? 0
       : toNumber(config.fixedDeliveryChargePaise);
@@ -107,7 +136,7 @@ const checkoutService = {
     return { deliveryChargePaise, platformFeePaise, handlingChargePaise: DEFAULT_HANDLING_CHARGE_PAISE };
   },
 
-  async computeOrderTotals(lineItems) {
+  async computeOrderTotals(lineItems, deliveryType = 'home') {
     const subtotalPaise = lineItems.reduce((sum, item) => sum + item.pricePaise * item.quantity, 0);
     const taxPaise = lineItems.reduce((sum, item) => sum + item.taxPaise, 0);
     const discountPaise = lineItems.reduce(
@@ -116,7 +145,7 @@ const checkoutService = {
     );
 
     const { deliveryChargePaise, platformFeePaise, handlingChargePaise } =
-      await this.resolveCharges(subtotalPaise);
+      await this.resolveCharges(subtotalPaise, deliveryType);
     const totalPaise =
       subtotalPaise + taxPaise + deliveryChargePaise + platformFeePaise + handlingChargePaise;
 
@@ -140,14 +169,14 @@ const checkoutService = {
     }
   },
 
-  async validateCheckout(userId, audience, payload = {}) {
+  async validateCheckout(userId, audience, payload = {}, isSummaryOnly = false) {
     const cart = await cartService.getOrCreateCart(userId, audience);
     if (!cart.items?.length) {
       throw new BadRequestError('Cart is empty', null, 'CART_EMPTY');
     }
     await cartService.validateCartItems(cart.items);
     const lineItems = await this.buildLineItems(cart.items);
-    if (payload.address || payload.deliveryType) {
+    if (!isSummaryOnly && (payload.address || payload.deliveryType)) {
       this.validateShipping({
         address: payload.address,
         deliveryType: payload.deliveryType || 'home',
@@ -158,8 +187,30 @@ const checkoutService = {
   },
 
   async getOrderSummary(userId, audience, payload = {}) {
-    const { cart, lineItems } = await this.validateCheckout(userId, audience, payload);
-    const totals = await this.computeOrderTotals(lineItems);
+    const deliveryType = payload.deliveryType || (payload.address?.addressType === 'school' ? 'school' : 'home');
+    const cart = await cartService.getOrCreateCart(userId, audience);
+    if (!cart.items?.length) {
+      const { deliveryChargePaise, platformFeePaise, handlingChargePaise } =
+        await this.resolveCharges(0, deliveryType);
+      return {
+        audience,
+        itemCount: 0,
+        items: [],
+        vendorCount: 0,
+        subtotalPaise: 0,
+        taxPaise: 0,
+        discountPaise: 0,
+        deliveryChargePaise,
+        platformFeePaise,
+        handlingChargePaise,
+        totalPaise: deliveryChargePaise + platformFeePaise + handlingChargePaise,
+        deliveryType,
+        address: payload.address || null,
+        paymentMethod: payload.paymentMethod || 'cod',
+      };
+    }
+    const { lineItems } = await this.validateCheckout(userId, audience, payload, true);
+    const totals = await this.computeOrderTotals(lineItems, deliveryType);
     const vendorIds = [...new Set(lineItems.map((item) => String(item.vendorId)))];
 
     return {
@@ -168,7 +219,7 @@ const checkoutService = {
       items: lineItems,
       vendorCount: vendorIds.length,
       ...totals,
-      deliveryType: payload.deliveryType || 'home',
+      deliveryType,
       address: payload.address || null,
       paymentMethod: payload.paymentMethod || 'cod',
     };

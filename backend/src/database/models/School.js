@@ -5,6 +5,8 @@ const softDeletePlugin = require('../plugins/softDelete.plugin');
 const schoolSchema = new mongoose.Schema({
   code: { type: String, required: true },
   name: { type: String, required: true },
+  logoUrl: { type: String },
+  phone: { type: String },
   principalName: { type: String },
   adminEmail: { type: String },
   schoolRefNo: { type: String, required: true },

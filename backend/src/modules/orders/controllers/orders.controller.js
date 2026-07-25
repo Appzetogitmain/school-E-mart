@@ -28,12 +28,17 @@ const ordersController = {
   createOrder: asyncHandler(async (req, res) => {
     const audience = checkoutService.resolveAudience(req.auth, req.body.audience);
     const order = await orderService.createOrder(req.auth.userId, audience, req.body, req.auth);
+    if (!order) {
+      throw new BadRequestError('Failed to create order', null, 'ORDER_CREATION_FAILED');
+    }
     const payment = await paymentService.getPaymentByOrder(order._id);
 
+    const razorpayKeyId = config.env.RAZORPAY_KEY_ID || process.env.RAZORPAY_KEY_ID;
+
     const checkout =
-      payment.gateway === 'razorpay'
+      payment && payment.gateway === 'razorpay'
         ? {
-            keyId: config.env.RAZORPAY_KEY_ID,
+            keyId: razorpayKeyId,
             razorpayOrderId: payment.gatewayOrderId,
             amountPaise: payment.amountPaise,
             currency: payment.currency || 'INR',

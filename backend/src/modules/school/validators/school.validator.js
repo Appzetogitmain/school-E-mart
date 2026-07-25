@@ -15,6 +15,8 @@ const sectionParam = classGradeParam.keys({ section: Joi.string().trim().require
 
 const createSchoolSchema = Joi.object({
   name: Joi.string().trim().min(2).max(120).required(),
+  logoUrl: Joi.string().trim().optional().allow('', null),
+  phone: Joi.string().trim().optional().allow('', null),
   code: Joi.string().trim().max(32).optional().allow('', null),
   principalName: Joi.string().trim().max(80).optional().allow('', null),
   adminEmail: schemas.email.optional().allow('', null),
