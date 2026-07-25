@@ -10,6 +10,8 @@ const billingConfigSchema = new mongoose.Schema({
     required: true
   },
   fixedDeliveryChargePaise: { type: Number, required: true },
+  schoolDeliveryFreeDays: { type: Number, default: 7 },
+  schoolDeliveryChargePaise: { type: Number, default: 4900 },
   baseChargePaise: { type: Number, required: true },
   baseDistanceKm: { type: mongoose.Schema.Types.Decimal128, required: true },
   extraKmChargePaise: { type: Number, required: true },

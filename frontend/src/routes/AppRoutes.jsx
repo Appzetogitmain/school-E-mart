@@ -253,7 +253,7 @@ const AppRoutes = () => {
             <Route path={`${ROUTES.SCHOOL.ROOT}/*`} element={<div>School Portal</div>} />
           </Route>
 
-          <Route element={<RoleRoute allowedRoles={[ROLES.VENDOR]} />}>
+          <Route element={<RoleRoute allowedRoles={[ROLES.VENDOR]} redirectTo={ROUTES.VENDOR.LOGIN} />}>
             <Route path={ROUTES.VENDOR.ROOT} element={<VendorLayout />}>
               <Route index element={<Navigate to="dashboard" replace />} />
               <Route path="dashboard" element={<VendorDashboard />} />

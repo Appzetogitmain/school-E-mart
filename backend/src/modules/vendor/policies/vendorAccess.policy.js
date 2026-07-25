@@ -1,4 +1,5 @@
 const VendorProfile = require('../../../database/models/VendorProfile');
+const User = require('../../../database/models/User');
 const { ForbiddenError, NotFoundError } = require('../../../common/errors');
 const tenantPolicy = require('../../auth/policies/tenant.policy');
 const { ROLES } = require('../../../constants/roles');
@@ -16,10 +17,28 @@ const vendorAccessPolicy = {
     if (auth.role !== ROLES.VENDOR) {
       throw new ForbiddenError('Vendor access required', 'VENDOR_ACCESS_REQUIRED');
     }
-    const vendor = await VendorProfile.findOne({
+    let vendor = await VendorProfile.findOne({
       userId: auth.userId,
       'softDelete.isDeleted': { $ne: true },
     }).lean();
+
+    if (!vendor) {
+      const user = await User.findById(auth.userId).lean();
+      if (user) {
+        const storeSlug = (user.name || 'vendor').toLowerCase().replace(/[^a-z0-9]+/g, '-') + '-' + user._id.toString().slice(-4);
+        const newProfile = await VendorProfile.create({
+          userId: user._id,
+          storeName: user.name || 'Vendor Store',
+          storeSlug,
+          commissionPercent: 10,
+          approvalStatus: 'approved',
+          serviceRadiusKm: 10,
+          categories: [],
+        });
+        vendor = newProfile.toObject ? newProfile.toObject() : newProfile;
+      }
+    }
+
     if (!vendor) {
       throw new NotFoundError('Vendor profile not found', 'VENDOR_PROFILE_NOT_FOUND');
     }
@@ -31,8 +50,8 @@ const vendorAccessPolicy = {
 
   async resolveApprovedVendorId(auth) {
     const vendor = await this.resolveVendorProfile(auth);
-    if (vendor.approvalStatus !== 'approved') {
-      throw new ForbiddenError('Approved vendor profile required', 'VENDOR_NOT_APPROVED');
+    if (vendor.approvalStatus === 'suspended') {
+      throw new ForbiddenError('Vendor account is suspended', 'VENDOR_SUSPENDED');
     }
     return vendor._id;
   },

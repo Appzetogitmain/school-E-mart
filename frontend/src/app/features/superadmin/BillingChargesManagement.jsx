@@ -23,6 +23,8 @@ const BillingChargesManagement = () => {
   const [platformFee, setPlatformFee] = useState(0);
   const [freeDeliveryThreshold, setFreeDeliveryThreshold] = useState(0);
   const [deliveryCharge, setDeliveryCharge] = useState(0);
+  const [schoolFreeDays, setSchoolFreeDays] = useState(7);
+  const [schoolDeliveryCharge, setSchoolDeliveryCharge] = useState(49);
 
   // --- platform commission rates (marketplace settings) ---
   const [marketplace, setMarketplace] = useState({}); // full section, preserved on save
@@ -59,6 +61,8 @@ const BillingChargesManagement = () => {
         setPlatformFee(paiseToRupees(config.platformFeePaise));
         setFreeDeliveryThreshold(paiseToRupees(config.freeDeliveryThresholdPaise));
         setDeliveryCharge(paiseToRupees(config.fixedDeliveryChargePaise));
+        setSchoolFreeDays(config.schoolDeliveryFreeDays ?? 7);
+        setSchoolDeliveryCharge(paiseToRupees(config.schoolDeliveryChargePaise ?? 4900));
       }
       if (mk) {
         setMarketplace(mk);
@@ -96,6 +100,8 @@ const BillingChargesManagement = () => {
         freeDeliveryThresholdPaise: rupeesToPaise(freeDeliveryThreshold),
         pricingMode: 'fixed',
         fixedDeliveryChargePaise: rupeesToPaise(deliveryCharge),
+        schoolDeliveryFreeDays: Number(schoolFreeDays) || 7,
+        schoolDeliveryChargePaise: rupeesToPaise(schoolDeliveryCharge),
       });
       flash('Delivery & platform charges saved.');
     } catch (err) {
@@ -245,6 +251,38 @@ const BillingChargesManagement = () => {
                       className="w-full bg-white pl-8 pr-4 py-2.5 focus:outline-none font-bold text-xs" />
                   </div>
                   <span className="block text-[8px] text-gray-400 font-medium">Orders at or above this subtotal ship free (0 = never).</span>
+                </div>
+              </div>
+            </div>
+
+            {/* School Address Delivery Policy */}
+            <div className="bg-white border border-gray-200 rounded-3xl p-6 shadow-xs space-y-6">
+              <div className="border-b border-gray-100 pb-3 flex items-center gap-2">
+                <SchoolIcon size={16} className="text-indigo-600 stroke-[2.5]" />
+                <h3 className="text-sm font-black text-[#0B1528] uppercase tracking-wider">School Address Delivery Policy</h3>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-1.5">
+                  <label className="block text-gray-500 uppercase tracking-wide text-[9px] font-black">Free Delivery Period for School Address (Days)</label>
+                  <div className={`relative rounded-xl overflow-hidden shadow-2xs border border-gray-200 ${inputRing} transition-all`}>
+                    <input type="number" min="0" required value={schoolFreeDays}
+                      onChange={(e) => setSchoolFreeDays(Number(e.target.value))}
+                      className="w-full bg-white px-4 py-2.5 focus:outline-none font-bold text-xs" />
+                    <span className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 font-bold select-none text-xs">Days</span>
+                  </div>
+                  <span className="block text-[8px] text-gray-400 font-medium">School address delivery is free for orders placed within this many days of kit creation (e.g. 7 days).</span>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="block text-gray-500 uppercase tracking-wide text-[9px] font-black">School Delivery Fee After Window (₹)</label>
+                  <div className={`relative rounded-xl overflow-hidden shadow-2xs border border-gray-200 ${inputRing} transition-all`}>
+                    <span className="absolute inset-y-0 left-0 pl-4 flex items-center text-gray-400 font-bold select-none text-xs">₹</span>
+                    <input type="number" min="0" step="0.01" required value={schoolDeliveryCharge}
+                      onChange={(e) => setSchoolDeliveryCharge(Number(e.target.value))}
+                      className="w-full bg-white pl-8 pr-4 py-2.5 focus:outline-none font-bold text-xs" />
+                  </div>
+                  <span className="block text-[8px] text-gray-400 font-medium">Applied to school address orders after the free delivery window has passed.</span>
                 </div>
               </div>
             </div>

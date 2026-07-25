@@ -4,20 +4,32 @@ const productRepository = require('../../marketplace/repositories/product.reposi
 const vendorAccessPolicy = require('../policies/vendorAccess.policy');
 const { resolveSort } = require('../../marketplace/services/search.service');
 
+require('../../../database/models/HeaderCategory');
+require('../../../database/models/Category');
+require('../../../database/models/Subcategory');
+require('../../../database/models/VendorProfile');
+require('../../../database/models/Attachment');
+
 const vendorProductService = {
   listProducts(vendorId, query) {
     const filter = { vendorId };
     if (query.approval) filter.approvalStatus = query.approval;
     if (query.publishStatus) filter.publishStatus = query.publishStatus;
-    if (query.search || query.q) {
-      return productRepository.paginateProducts(filter, {
-        ...query,
-        q: query.search || query.q,
-      });
-    }
-    return productRepository.paginateProducts(filter, query, {
+    const options = {
       defaultSort: resolveSort(query.sort),
-    });
+      populate: productService.ADMIN_PRODUCT_POPULATE,
+    };
+    if (query.search || query.q) {
+      return productRepository.paginateProducts(
+        filter,
+        {
+          ...query,
+          q: query.search || query.q,
+        },
+        options
+      );
+    }
+    return productRepository.paginateProducts(filter, query, options);
   },
 
   async getProduct(vendorId, productId) {

@@ -21,8 +21,21 @@ const VendorLayout = () => {
 
   const handleLogout = () => {
     logout();
-    navigate('/login');
+    navigate('/vendor/login');
   };
+
+  const [pendingRfqCount, setPendingRfqCount] = useState(0);
+
+  React.useEffect(() => {
+    import('../services/rfqApi').then(({ listVendorRfqs }) => {
+      listVendorRfqs({ limit: 100 })
+        .then((res) => {
+          const pending = (res?.data || []).filter((r) => r.status === 'pending').length;
+          setPendingRfqCount(pending);
+        })
+        .catch(() => setPendingRfqCount(0));
+    });
+  }, []);
 
   // Define sidebar menu structure
   const sidebarItems = [
@@ -40,7 +53,7 @@ const VendorLayout = () => {
       label: 'Quotations', 
       path: '/vendor/quotations', 
       icon: FileText, 
-      badge: 5 
+      badge: pendingRfqCount > 0 ? pendingRfqCount : null
     },
     { 
       label: 'Products', 
@@ -199,8 +212,8 @@ const VendorLayout = () => {
                 <User size={18} />
               </div>
               {!isCollapsed && (
-                <div className="min-w-0 flex flex-col leading-tight animate-fade-in">
-                  <span className="text-sm font-bold text-white truncate">ABC Uniforms</span>
+                <div className="min-w-0 flex flex-col leading-tight animate-fade-in text-left">
+                  <span className="text-sm font-bold text-white truncate">{user?.profile?.storeName || user?.name || 'Vendor Store'}</span>
                   <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-1 mt-0.5">
                     <CheckCircle2 size={10} className="fill-emerald-400/20 text-emerald-400" />
                     Verified Vendor
@@ -333,8 +346,8 @@ const VendorLayout = () => {
                   <div className="w-10 h-10 rounded-xl bg-purple-500/20 border border-purple-500/30 flex items-center justify-center text-purple-200">
                     <User size={18} />
                   </div>
-                  <div className="flex flex-col leading-tight">
-                    <span className="text-sm font-bold text-white">ABC Uniforms</span>
+                  <div className="flex flex-col leading-tight text-left">
+                    <span className="text-sm font-bold text-white">{user?.profile?.storeName || user?.name || 'Vendor Store'}</span>
                     <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-1 mt-0.5">
                       <CheckCircle2 size={10} className="fill-emerald-400/20 text-emerald-400" />
                       Verified Vendor
@@ -426,20 +439,20 @@ const VendorLayout = () => {
                 className="flex items-center gap-3 pl-3 pr-2 py-1.5 bg-gray-50 border border-gray-100 hover:border-gray-200 rounded-xl transition-all"
               >
                 <div className="w-8 h-8 rounded-full bg-[#5B3FD6] flex items-center justify-center text-white font-extrabold text-xs shadow-md shadow-purple-200 shrink-0">
-                  AK
+                  {(user?.name || 'V').split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()}
                 </div>
                 <div className="hidden sm:flex flex-col text-left leading-tight">
-                  <span className="font-bold text-xs text-gray-800">Ankit Kumar</span>
-                  <span className="text-[9px] font-bold text-gray-400">ABC Uniforms</span>
+                  <span className="font-bold text-xs text-gray-800">{user?.name || 'Vendor'}</span>
+                  <span className="text-[9px] font-bold text-gray-400">{user?.profile?.storeName || user?.name || 'Vendor Store'}</span>
                 </div>
                 <ChevronDown size={14} className="text-gray-400 shrink-0 hidden sm:block" />
               </button>
 
               {profileDropdownOpen && (
                 <div className="absolute right-0 mt-3 w-56 bg-white rounded-2xl shadow-xl border border-gray-100 p-2.5 z-50 animate-scale-in">
-                  <div className="px-3 py-2 mb-1 text-xs border-b border-gray-50">
-                    <p className="font-extrabold text-gray-800">Ankit Kumar</p>
-                    <p className="text-[10px] text-gray-400 font-medium mt-0.5">ankit@abcuniforms.com</p>
+                  <div className="px-3 py-2 mb-1 text-xs border-b border-gray-50 text-left">
+                    <p className="font-extrabold text-gray-800">{user?.name || 'Vendor'}</p>
+                    <p className="text-[10px] text-gray-400 font-medium mt-0.5">{user?.email || 'vendor@schoolemart.com'}</p>
                   </div>
                   <button 
                     onClick={() => { navigate('/vendor/profile'); setProfileDropdownOpen(false); }}

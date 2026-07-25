@@ -5,11 +5,11 @@ import {
   ChevronRight, Plus, HelpCircle, ArrowUpDown, ChevronDown, Check, X,
   Tag, Layers, ShieldCheck, ShoppingCart, ListCollapse, ArrowLeft,
   Bold, Italic, List, AlignLeft, Folder, Image, FileText, CheckCircle2,
-  UploadCloud, Loader2
+  UploadCloud, Loader2, Edit3, Trash2, Eye, Power
 } from 'lucide-react';
 import {
   deleteVendorProduct, listVendorProducts, setVendorProductPublishStatus,
-  createVendorProduct, uploadVendorDocument,
+  createVendorProduct, updateVendorProduct, uploadVendorDocument,
 } from '../../services/vendorApi';
 import { getCategoryTree } from '../../services/catalogApi';
 import { getErrorMessage } from '../../utils/apiHelpers';
@@ -54,7 +54,7 @@ const VendorProducts = () => {
     setLoading(true);
     setError('');
     try {
-      const { data } = await listVendorProducts({ limit: 200 });
+      const { data } = await listVendorProducts({ limit: 100 });
       setProducts((data || []).map(mapVendorProductForList));
     } catch (err) {
       setProducts([]);
@@ -153,11 +153,91 @@ const VendorProducts = () => {
     }
   };
 
+  // Edit Product Modal states
+  const [editingProduct, setEditingProduct] = useState(null);
+  const [editName, setEditName] = useState('');
+  const [editBrand, setEditBrand] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editPrice, setEditPrice] = useState('');
+  const [editStock, setEditStock] = useState('');
+  const [editHeaderId, setEditHeaderId] = useState('');
+  const [editCategoryId, setEditCategoryId] = useState('');
+  const [editSubcategoryId, setEditSubcategoryId] = useState('');
+  const [editImageAttachmentId, setEditImageAttachmentId] = useState(null);
+  const [editImagePreview, setEditImagePreview] = useState(null);
+  const [editPublishStatus, setEditPublishStatus] = useState('published');
+  const [updating, setUpdating] = useState(false);
+
+  const openEditModal = (product) => {
+    setEditingProduct(product);
+    setEditName(product.name || '');
+    setEditBrand(product.raw?.brand || '');
+    setEditDescription(product.raw?.description || '');
+    setEditPrice(product.price ? product.price.toString() : '');
+    setEditStock(product.stock ? product.stock.toString() : '0');
+    setEditPublishStatus(product.publishStatus || 'published');
+    setEditHeaderId(product.raw?.headerId?._id || product.raw?.headerId || '');
+    setEditCategoryId(product.raw?.categoryId?._id || product.raw?.categoryId || '');
+    setEditSubcategoryId(product.raw?.subcategoryId?._id || product.raw?.subcategoryId || '');
+    setEditImagePreview(product.imageUrl || null);
+    setEditImageAttachmentId(null);
+  };
+
+  const handleEditImageUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingImage(true);
+    try {
+      const att = await uploadVendorDocument(file);
+      setEditImageAttachmentId(att.id || att._id);
+      setEditImagePreview(URL.createObjectURL(file));
+    } catch (err) {
+      setError(getErrorMessage(err, 'Image upload failed'));
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  const handleUpdateSubmit = async (e) => {
+    e.preventDefault();
+    if (!editingProduct) return;
+    setError('');
+    setUpdating(true);
+    try {
+      const payload = {
+        name: editName.trim(),
+        brand: editBrand.trim() || undefined,
+        description: editDescription.trim() || undefined,
+        pricePaise: Math.round(Number(editPrice) * 100),
+        stock: Number(editStock) || 0,
+        publishStatus: editPublishStatus,
+      };
+      if (editHeaderId) payload.headerId = editHeaderId;
+      if (editCategoryId) payload.categoryId = editCategoryId;
+      if (editSubcategoryId) payload.subcategoryId = editSubcategoryId;
+      if (editImageAttachmentId) payload.images = [{ attachmentId: editImageAttachmentId }];
+
+      await updateVendorProduct(editingProduct.id, payload);
+      await loadProducts();
+      setEditingProduct(null);
+      if (selectedProduct?.id === editingProduct.id) {
+        setSelectedProduct(null);
+      }
+    } catch (err) {
+      setError(getErrorMessage(err, 'Unable to update product'));
+    } finally {
+      setUpdating(false);
+    }
+  };
+
   const handleDeleteProduct = async (productId) => {
-    if (!window.confirm('Delete this product?')) return;
+    if (!window.confirm('Are you sure you want to delete this product?')) return;
     try {
       await deleteVendorProduct(productId);
       await loadProducts();
+      if (selectedProduct?.id === productId) {
+        setSelectedProduct(null);
+      }
     } catch (err) {
       setError(getErrorMessage(err, 'Unable to delete product'));
     }
@@ -175,8 +255,8 @@ const VendorProducts = () => {
 
   // Metrics calculators
   const totalItemsCount = useMemo(() => products.length, [products]);
-  const activeItemsCount = useMemo(() => products.filter(p => p.approval === 'Approved').length, [products]);
-  const lowStockCount = useMemo(() => products.filter(p => p.stock > 0 && p.stock <= 5).length, [products]);
+  const activeItemsCount = useMemo(() => products.filter(p => p.approval === 'Approved' || p.approval === 'Pending').length, [products]);
+  const lowStockCount = useMemo(() => products.filter(p => p.stock > 0 && p.stock <= (p.lowStockThreshold || 5)).length, [products]);
   const outOfStockCount = useMemo(() => products.filter(p => p.stock === 0).length, [products]);
 
   // Filtered array logic
@@ -360,12 +440,23 @@ const VendorProducts = () => {
                         {/* PRODUCT */}
                         <td className="px-6 py-4.5">
                           <div className="flex items-center gap-3">
-                            <div className={`w-8 h-8 rounded-lg ${product.imgBg} flex items-center justify-center font-black text-sm shrink-0 border border-gray-100 shadow-sm`}>
-                              {product.name.charAt(0)}
-                            </div>
+                            {product.imageUrl ? (
+                              <div className="w-10 h-10 rounded-xl border border-gray-200 overflow-hidden bg-gray-50 shrink-0 shadow-xs">
+                                <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover" />
+                              </div>
+                            ) : (
+                              <div className={`w-10 h-10 rounded-xl ${product.imgBg} flex items-center justify-center font-black text-sm shrink-0 border border-gray-100 shadow-xs`}>
+                                {product.name.charAt(0)}
+                              </div>
+                            )}
                             <div>
                               <p className="font-extrabold text-gray-900 tracking-tight leading-tight">{product.name}</p>
-                              <p className="text-[9px] font-bold text-gray-400 mt-1 uppercase">Stock left: {product.stock} units</p>
+                              <div className="flex items-center gap-2 mt-1">
+                                <span className="text-[10px] font-black text-[#5B3FD6] bg-purple-50 px-1.5 py-0.5 rounded border border-purple-100">
+                                  ₹{product.price}
+                                </span>
+                                <span className="text-[9px] font-bold text-gray-400 uppercase">Stock: {product.stock}</span>
+                              </div>
                             </div>
                           </div>
                         </td>
@@ -409,12 +500,31 @@ const VendorProducts = () => {
 
                         {/* ACTIONS */}
                         <td className="px-6 py-4.5 text-center">
-                          <button 
-                            onClick={() => setSelectedProduct(product)}
-                            className="px-3 py-1.5 rounded-xl border border-purple-100 hover:border-transparent bg-gray-50 hover:bg-[#5B3FD6]/10 text-gray-600 hover:text-[#5B3FD6] text-xs font-bold transition-all shadow-sm cursor-pointer"
-                          >
-                            View Info
-                          </button>
+                          <div className="flex items-center justify-center gap-1.5">
+                            <button 
+                              onClick={() => setSelectedProduct(product)}
+                              className="p-2 rounded-xl border border-purple-100 bg-gray-50 hover:bg-[#5B3FD6] hover:text-white text-gray-600 text-xs font-bold transition-all shadow-xs cursor-pointer"
+                              title="View Details"
+                            >
+                              <Eye size={14} />
+                            </button>
+
+                            <button 
+                              onClick={() => openEditModal(product)}
+                              className="p-2 rounded-xl border border-blue-100 bg-blue-50 hover:bg-blue-600 hover:text-white text-blue-600 text-xs font-bold transition-all shadow-xs cursor-pointer"
+                              title="Edit Product"
+                            >
+                              <Edit3 size={14} />
+                            </button>
+
+                            <button 
+                              onClick={() => handleDeleteProduct(product.id)}
+                              className="p-2 rounded-xl border border-red-100 bg-red-50 hover:bg-red-600 hover:text-white text-red-600 text-xs font-bold transition-all shadow-xs cursor-pointer"
+                              title="Delete Product"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
                         </td>
 
                       </tr>
@@ -510,6 +620,26 @@ const VendorProducts = () => {
                       </div>
                     </div>
                   </div>
+                </div>
+
+                <div className="p-6 border-t border-gray-100 flex items-center gap-3 shrink-0 bg-gray-50/50">
+                  <button
+                    onClick={() => {
+                      const prodToEdit = selectedProduct;
+                      setSelectedProduct(null);
+                      openEditModal(prodToEdit);
+                    }}
+                    className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-[#5B3FD6] hover:bg-[#4C31BD] text-white text-xs font-black transition-all shadow-md shadow-purple-200 cursor-pointer"
+                  >
+                    <Edit3 size={15} /> Edit Product
+                  </button>
+                  <button
+                    onClick={() => handleDeleteProduct(selectedProduct.id)}
+                    className="px-4 py-3 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 text-xs font-black transition-all border border-red-100 cursor-pointer"
+                    title="Delete product"
+                  >
+                    <Trash2 size={15} />
+                  </button>
                 </div>
               </div>
             </div>
@@ -871,6 +1001,178 @@ const VendorProducts = () => {
                 Your new catalog item was created successfully and is now live for school review.
               </p>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT PRODUCT MODAL OVERLAY */}
+      {editingProduct && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4 transition-all animate-fade-in">
+          <div className="bg-white border border-gray-100 max-w-[500px] w-full p-6 rounded-[2rem] shadow-2xl space-y-5 animate-scale-in relative">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-4">
+              <div>
+                <span className="text-[10px] font-black text-[#5B3FD6] uppercase tracking-wider block">Edit Catalog Item</span>
+                <h3 className="text-base font-extrabold text-gray-900 mt-0.5">{editingProduct.name}</h3>
+              </div>
+              <button 
+                onClick={() => setEditingProduct(null)}
+                className="p-1.5 rounded-xl bg-gray-50 hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition-colors border border-gray-100 cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateSubmit} className="space-y-4 max-h-[75vh] overflow-y-auto pr-1">
+              
+              {/* Product Image Section */}
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-black text-gray-600 uppercase tracking-wider block">Product Image</label>
+                <div className="flex items-center gap-3">
+                  {editImagePreview ? (
+                    <div className="w-16 h-16 rounded-xl border border-gray-200 overflow-hidden bg-gray-50 shrink-0">
+                      <img src={editImagePreview} alt="Product" className="w-full h-full object-cover" />
+                    </div>
+                  ) : (
+                    <div className="w-16 h-16 rounded-xl border border-dashed border-gray-300 bg-gray-50 flex items-center justify-center text-gray-400 shrink-0">
+                      <Image size={20} />
+                    </div>
+                  )}
+                  <label className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-purple-50 hover:bg-purple-100 text-[#5B3FD6] text-xs font-bold border border-purple-100 cursor-pointer transition-colors">
+                    {uploadingImage ? <Loader2 size={14} className="animate-spin" /> : <UploadCloud size={14} />}
+                    <span>{editImagePreview ? 'Change Image' : 'Upload Image'}</span>
+                    <input type="file" accept="image/*" className="hidden" onChange={handleEditImageUpload} />
+                  </label>
+                </div>
+              </div>
+
+              {/* Header & Category Selection */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-black text-gray-600 uppercase tracking-wider block">Header Group</label>
+                  <select
+                    value={editHeaderId}
+                    onChange={(e) => {
+                      setEditHeaderId(e.target.value);
+                      setEditCategoryId('');
+                      setEditSubcategoryId('');
+                    }}
+                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#5B3FD6]/20 focus:border-[#5B3FD6]"
+                  >
+                    <option value="">Select header...</option>
+                    {categoryTree.map((h) => (
+                      <option key={h._id} value={h._id}>{h.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-black text-gray-600 uppercase tracking-wider block">Category</label>
+                  <select
+                    value={editCategoryId}
+                    onChange={(e) => {
+                      setEditCategoryId(e.target.value);
+                      setEditSubcategoryId('');
+                    }}
+                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#5B3FD6]/20 focus:border-[#5B3FD6]"
+                  >
+                    <option value="">Select category...</option>
+                    {(categoryTree.find(h => h._id === editHeaderId)?.categories || []).map((c) => (
+                      <option key={c._id} value={c._id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-black text-gray-600 uppercase tracking-wider block">Product Name</label>
+                <input 
+                  type="text"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  required
+                  className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#5B3FD6]/20 focus:border-[#5B3FD6]"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-black text-gray-600 uppercase tracking-wider block">Brand</label>
+                  <input 
+                    type="text"
+                    value={editBrand}
+                    onChange={(e) => setEditBrand(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#5B3FD6]/20 focus:border-[#5B3FD6]"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-black text-gray-600 uppercase tracking-wider block">Price (₹)</label>
+                  <input 
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={editPrice}
+                    onChange={(e) => setEditPrice(e.target.value)}
+                    required
+                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#5B3FD6]/20 focus:border-[#5B3FD6]"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-black text-gray-600 uppercase tracking-wider block">Stock Quantity</label>
+                  <input 
+                    type="number"
+                    min="0"
+                    value={editStock}
+                    onChange={(e) => setEditStock(e.target.value)}
+                    required
+                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#5B3FD6]/20 focus:border-[#5B3FD6]"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-black text-gray-600 uppercase tracking-wider block">Status</label>
+                  <select 
+                    value={editPublishStatus}
+                    onChange={(e) => setEditPublishStatus(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#5B3FD6]/20 focus:border-[#5B3FD6]"
+                  >
+                    <option value="published">Published</option>
+                    <option value="draft">Draft</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-black text-gray-600 uppercase tracking-wider block">Description</label>
+                <textarea 
+                  rows={3}
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-semibold text-gray-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#5B3FD6]/20 focus:border-[#5B3FD6]"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
+                <button 
+                  type="button"
+                  onClick={() => setEditingProduct(null)}
+                  className="px-4 py-2.5 rounded-xl border border-gray-200 text-xs font-bold text-gray-600 hover:bg-gray-50 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit"
+                  disabled={updating}
+                  className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-[#5B3FD6] hover:bg-[#4C31BD] text-white text-xs font-black transition-all shadow-md shadow-purple-200 cursor-pointer disabled:opacity-50"
+                >
+                  {updating ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                  Save Changes
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

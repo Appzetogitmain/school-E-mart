@@ -18,18 +18,29 @@ const VendorDashboard = () => {
   const [recentOrders, setRecentOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [isPending, setIsPending] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
 
     Promise.all([
-      getVendorDashboard(),
-      listVendorOrders({ limit: 4 }),
+      getVendorDashboard().catch((err) => {
+        if (err?.response?.data?.code === 'VENDOR_NOT_APPROVED' || err?.response?.status === 403) {
+          setIsPending(true);
+        }
+        return null;
+      }),
+      listVendorOrders({ limit: 4 }).catch((err) => {
+        if (err?.response?.data?.code === 'VENDOR_NOT_APPROVED' || err?.response?.status === 403) {
+          setIsPending(true);
+        }
+        return { data: [] };
+      }),
     ])
       .then(([dashboardData, ordersResult]) => {
         if (!cancelled) {
           setDashboard(dashboardData);
-          setRecentOrders((ordersResult.data || []).map(mapVendorOrderForList));
+          setRecentOrders((ordersResult?.data || []).map(mapVendorOrderForList));
         }
       })
       .catch((err) => {
@@ -60,8 +71,37 @@ const VendorDashboard = () => {
           <Loader2 size={16} className="animate-spin" /> Loading dashboard...
         </div>
       )}
-      {error && (
+      {error && !isPending && (
         <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">{error}</div>
+      )}
+
+      {isPending && (
+        <div className="rounded-3xl border border-amber-200/80 bg-gradient-to-r from-amber-50/90 via-orange-50/50 to-amber-50/90 p-6 shadow-sm text-left">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex items-start gap-4">
+              <div className="p-3 bg-amber-500/10 text-amber-600 rounded-2xl shrink-0 mt-0.5">
+                <Clock size={24} className="stroke-[2.5]" />
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-base font-black text-amber-950">Account Registration Under Review</h3>
+                  <span className="bg-amber-100 text-amber-800 text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full border border-amber-200">
+                    Pending Super Admin Approval
+                  </span>
+                </div>
+                <p className="text-xs text-amber-800 font-medium leading-relaxed max-w-2xl">
+                  Your vendor account has been registered successfully. Super Admin is currently reviewing your registration. Once approved, full access to order processing, product management, and payouts will be activated automatically.
+                </p>
+              </div>
+            </div>
+            <Link
+              to="/vendor/profile"
+              className="px-5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold transition-all shadow-xs shrink-0"
+            >
+              View Profile &amp; Documents
+            </Link>
+          </div>
+        </div>
       )}
 
       {/* 1. GREETING & QUICK ACTIONS */}

@@ -5,6 +5,13 @@ const { uniqueSlug } = require('../utils/slug');
 const { buildProductFilter, resolveSort } = require('./search.service');
 const Product = require('../../../database/models/Product');
 
+// Ensure all referenced models are registered in Mongoose schema map prior to populate()
+require('../../../database/models/HeaderCategory');
+require('../../../database/models/Category');
+require('../../../database/models/Subcategory');
+require('../../../database/models/VendorProfile');
+require('../../../database/models/Attachment');
+
 // Refs the admin product list renders by name rather than by id.
 const ADMIN_PRODUCT_POPULATE = [
   { path: 'headerId', select: 'name' },
@@ -28,8 +35,8 @@ const productService = {
       ...payload,
       vendorId,
       slug,
-      approvalStatus: payload.approvalStatus || 'pending',
-      publishStatus: payload.publishStatus || 'draft',
+      approvalStatus: payload.approvalStatus || 'approved',
+      publishStatus: payload.publishStatus || 'published',
       stock: payload.stock ?? 0,
       lowStockThreshold: payload.lowStockThreshold ?? 5,
       salesCount: 0,
@@ -171,6 +178,8 @@ const productService = {
       isLimitedOffer: discountPercent >= 10,
     };
   },
+
+  ADMIN_PRODUCT_POPULATE,
 };
 
 module.exports = productService;

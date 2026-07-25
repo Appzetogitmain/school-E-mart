@@ -195,6 +195,6 @@ export const requestVendorPayout = async (amountPaise) => {
 };
 
 export const getVendorDashboard = async () => {
-  const response = await apiClient.get('/vendor/analytics/dashboard');
+  const response = await apiClient.get('/vendor/overview/dashboard');
   return unwrapData(response)?.dashboard;
 };

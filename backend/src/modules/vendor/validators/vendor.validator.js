@@ -5,7 +5,7 @@ const objectId = schemas.objectId;
 
 const paginationQuery = Joi.object({
   page: Joi.number().integer().min(1).default(1),
-  limit: Joi.number().integer().min(1).max(100).default(20),
+  limit: Joi.number().integer().min(1).max(500).default(20),
   sort: Joi.string().trim().optional(),
   fields: Joi.string().trim().optional(),
   search: Joi.string().trim().max(120).optional(),
@@ -36,7 +36,7 @@ const registerSchema = Joi.object({
   storeName: vendorFields.identityFields.storeName.required(),
   phone: schemas.indianMobile.required(),
   email: schemas.email.required(),
-  password: schemas.password.required(),
+  password: schemas.passwordBasic.required(),
   serviceRadiusKm: vendorFields.identityFields.serviceRadiusKm.default(10),
   categories: vendorFields.identityFields.categories.optional(),
   address: vendorFields.addressSchema.optional(),

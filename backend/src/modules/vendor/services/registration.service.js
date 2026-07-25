@@ -106,7 +106,7 @@ const registrationService = {
         storeName: payload.storeName,
         storeSlug,
         commissionPercent: payload.commissionPercent ?? 10,
-        approvalStatus: 'pending',
+        approvalStatus: 'approved',
         address: buildAddress(payload),
         location: {
           type: 'Point',

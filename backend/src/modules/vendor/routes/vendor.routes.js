@@ -267,10 +267,17 @@ router.post(
   vendorController.requestPayout
 );
 
-// Analytics
+// Analytics & Overview
 router.get('/analytics/dashboard', ...vendorApproved, vendorController.getDashboard);
+router.get('/overview/dashboard', ...vendorApproved, vendorController.getDashboard);
 router.get(
   '/analytics/revenue',
+  ...vendorApproved,
+  validateQuery(validators.paginationQuery),
+  vendorController.getRevenueSummary
+);
+router.get(
+  '/overview/revenue',
   ...vendorApproved,
   validateQuery(validators.paginationQuery),
   vendorController.getRevenueSummary

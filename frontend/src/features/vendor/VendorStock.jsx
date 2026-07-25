@@ -27,7 +27,7 @@ const VendorStock = () => {
     setLoading(true);
     setError('');
     try {
-      const { data } = await listVendorProducts({ limit: 200 });
+      const { data } = await listVendorProducts({ limit: 100 });
       setProducts((data || []).map(mapVendorProductForStock));
     } catch (err) {
       setProducts([]);

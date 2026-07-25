@@ -39,6 +39,8 @@ const settingsRepository = {
         freeDeliveryThresholdPaise: 50000,
         pricingMode: 'fixed',
         fixedDeliveryChargePaise: 4900,
+        schoolDeliveryFreeDays: 7,
+        schoolDeliveryChargePaise: 4900,
         baseChargePaise: 4900,
         baseDistanceKm: 5,
         extraKmChargePaise: 1000,

@@ -46,6 +46,7 @@ const checkoutService = {
             audience: 'schools',
             kitId: kit._id,
             schoolId: kit.schoolId,
+            kitCreatedAt: kit.audit?.createdAt || kit.createdAt || null,
           };
         }
       }
@@ -90,6 +91,8 @@ const checkoutService = {
         taxPaise,
         lineTotalPaise: lineSubtotal + taxPaise,
         availableStock: stock,
+        kitId: product.kitId || null,
+        kitCreatedAt: product.kitCreatedAt || null,
         // Drives the commission split: 'users' = retail, 'schools' = bulk.
         productAudience: product.audience || 'users',
       });
@@ -98,17 +101,11 @@ const checkoutService = {
   },
 
   /**
-   * Server-authoritative charges. Fees are read from the admin's BillingConfig,
-   * never from the client payload — otherwise a caller could zero out its own
-   * delivery/platform fees. Delivery is waived once the subtotal clears the
-   * free-delivery threshold.
-  /**
-   * Server-authoritative charges. Fees are read from the admin's BillingConfig,
-   * never from the client payload — otherwise a caller could zero out its own
-   * delivery/platform fees. Delivery is waived for 'school' delivery type or once
-   * the subtotal clears the free-delivery threshold.
+   * Server-authoritative charges. Fees are read from the admin's BillingConfig.
+   * School delivery is free ONLY within the configured free days window (default 7 days)
+   * after kit creation. Otherwise, the configured school delivery fee applies.
    */
-  async resolveCharges(subtotalPaise, deliveryType = 'home') {
+  async resolveCharges(subtotalPaise, deliveryType = 'home', lineItems = []) {
     const config = await BillingConfig.findById('default').lean();
     if (!config) {
       return {
@@ -124,14 +121,46 @@ const checkoutService = {
         : DEFAULT_PLATFORM_FEE_PAISE;
     const freeDeliveryThresholdPaise = toNumber(config.freeDeliveryThresholdPaise);
 
-    // School delivery option has NO shipping/delivery charge (FREE). Home delivery applies admin configured delivery charge.
-    const isSchoolDelivery = deliveryType === 'school';
-    const qualifiesForFreeDelivery =
-      isSchoolDelivery || (freeDeliveryThresholdPaise > 0 && subtotalPaise >= freeDeliveryThresholdPaise);
+    const isSchoolDelivery = deliveryType === 'school' || deliveryType === 'school_address';
+    let deliveryChargePaise = 0;
 
-    const deliveryChargePaise = qualifiesForFreeDelivery
-      ? 0
-      : toNumber(config.fixedDeliveryChargePaise);
+    if (isSchoolDelivery) {
+      const freeDaysLimit = toNumber(config.schoolDeliveryFreeDays ?? 7);
+      const kitItems = (lineItems || []).filter(
+        (item) => item.kitId || item.kitCreatedAt || item.productAudience === 'schools'
+      );
+
+      let isFreeWindow = true;
+      if (kitItems.length > 0) {
+        let maxKitAgeDays = 0;
+        for (const item of kitItems) {
+          let createdAt = item.kitCreatedAt;
+          if (!createdAt && item.kitId) {
+            const kitDoc = await Kit.findById(item.kitId).lean();
+            createdAt = kitDoc?.audit?.createdAt || kitDoc?.createdAt;
+          }
+          if (createdAt) {
+            const ageMs = Date.now() - new Date(createdAt).getTime();
+            const ageDays = ageMs / (1000 * 60 * 60 * 24);
+            if (ageDays > maxKitAgeDays) maxKitAgeDays = ageDays;
+          }
+        }
+        isFreeWindow = maxKitAgeDays <= freeDaysLimit;
+      }
+
+      if (isFreeWindow) {
+        deliveryChargePaise = 0;
+      } else {
+        deliveryChargePaise =
+          config.schoolDeliveryChargePaise != null
+            ? toNumber(config.schoolDeliveryChargePaise)
+            : toNumber(config.fixedDeliveryChargePaise);
+      }
+    } else {
+      const qualifiesForFreeDelivery =
+        freeDeliveryThresholdPaise > 0 && subtotalPaise >= freeDeliveryThresholdPaise;
+      deliveryChargePaise = qualifiesForFreeDelivery ? 0 : toNumber(config.fixedDeliveryChargePaise);
+    }
 
     return { deliveryChargePaise, platformFeePaise, handlingChargePaise: DEFAULT_HANDLING_CHARGE_PAISE };
   },
@@ -145,7 +174,7 @@ const checkoutService = {
     );
 
     const { deliveryChargePaise, platformFeePaise, handlingChargePaise } =
-      await this.resolveCharges(subtotalPaise, deliveryType);
+      await this.resolveCharges(subtotalPaise, deliveryType, lineItems);
     const totalPaise =
       subtotalPaise + taxPaise + deliveryChargePaise + platformFeePaise + handlingChargePaise;
 

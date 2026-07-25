@@ -7,6 +7,18 @@ const APPROVAL_LABELS = {
   rejected: 'Rejected',
 };
 
+const resolveImageUrl = (img) => {
+  if (!img) return null;
+  if (typeof img === 'string') {
+    if (img.startsWith('http') || img.startsWith('blob:')) return img;
+    return `http://localhost:5000${img.startsWith('/') ? '' : '/'}${img}`;
+  }
+  const key = img.attachmentId?.storageKey || img.storageKey || img.url || img.path;
+  if (!key) return null;
+  if (key.startsWith('http') || key.startsWith('blob:')) return key;
+  return `http://localhost:5000${key.startsWith('/') ? '' : '/'}${key}`;
+};
+
 export const mapVendorProductForList = (product) => {
   const stock = Number(product?.stock ?? product?.inventory?.stock ?? 0);
   const lowStockThreshold = Number(product?.lowStockThreshold ?? 5);
@@ -15,11 +27,11 @@ export const mapVendorProductForList = (product) => {
     id: product?._id?.toString?.() || product?.id,
     name: product?.name,
     code: product?.sku,
-    header: product?.headerName || 'Catalog',
-    category: product?.categoryName || 'General',
-    subcategory: product?.subcategoryName || '—',
+    header: product?.headerId?.name || product?.headerName || 'Catalog',
+    category: product?.categoryId?.name || product?.categoryName || 'General',
+    subcategory: product?.subcategoryId?.name || product?.subcategoryName || '—',
     variant: product?.sizes?.[0] || 'Standard',
-    approval: APPROVAL_LABELS[product?.approvalStatus] || 'Pending',
+    approval: APPROVAL_LABELS[product?.approvalStatus] || 'Approved',
     approvalRaw: product?.approvalStatus,
     publishStatus: product?.publishStatus,
     stock,
@@ -27,6 +39,7 @@ export const mapVendorProductForList = (product) => {
     stockStatus: stock === 0 ? 'out' : stock <= lowStockThreshold ? 'low' : 'ok',
     price: paiseToRupees(product?.pricePaise),
     salesCount: product?.salesCount || 0,
+    imageUrl: resolveImageUrl(product?.images?.[0]),
     imgBg: 'bg-purple-100 text-purple-700',
     raw: product,
   };
