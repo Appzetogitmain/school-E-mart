@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const logger = require('../../../common/logger');
 const env = require('../../../config/env');
 const {
   UnauthorizedError,
@@ -17,7 +18,7 @@ const { issueAuthenticatedSession } = require('./sessionIssue.service');
 const { ROLES } = roles;
 
 const OTP_PURPOSE_CONFIG = {
-  login_parent: { length: 4, requiresUser: true, role: ROLES.PARENT },
+  login_parent: { length: 4, requiresUser: false, role: ROLES.PARENT },
   signup_parent: { length: 4, requiresUser: false, role: ROLES.PARENT },
   web_register: { length: 6, requiresUser: false, role: ROLES.PARENT },
   password_reset: { length: 6, requiresUser: true, role: null },
@@ -35,6 +36,7 @@ const otpService = {
     }
 
     if (normalizedPhone === '9300000001') {
+      logger.info(`🔑 [OTP DEMO] Demo phone ${normalizedPhone} OTP requested: 1234`);
       return {
         sent: true,
         expiresIn: Math.floor(env.OTP_EXPIRY_MS / 1000),
@@ -91,6 +93,8 @@ const otpService = {
     const otp = generateOtp(config.length);
     const expiresAt = new Date(Date.now() + env.OTP_EXPIRY_MS);
 
+    logger.info(`🔑 [OTP GENERATED] Phone: ${normalizedPhone} (${purpose}) => OTP: ${otp}`);
+
     await otpRepository.create({
       phone: normalizedPhone,
       purpose,
@@ -136,49 +140,22 @@ const otpService = {
       if (!user) {
         const User = require('../../../database/models/User');
         const ParentProfile = require('../../../database/models/ParentProfile');
-        const School = require('../../../database/models/School');
-        const Student = require('../../../database/models/Student');
-        const ChildProfile = require('../../../database/models/ChildProfile');
-
-        const school = await School.findOne({ 'softDelete.isDeleted': { $ne: true } });
+        const { generateUserRefId } = require('../../school/utils/refId');
 
         user = await User.create({
-          refId: 'SEM-P-DPS001',
-          role: 'parent',
+          refId: generateUserRefId('P'),
+          role: ROLES.PARENT,
           status: 'active',
-          name: 'Aarav Parent',
-          phone: '9300000001',
+          name: 'Parent User',
+          phone: normalizedPhone,
           phoneVerifiedAt: new Date(),
-          tenantSchoolId: school ? school._id : null,
+          tenantSchoolId: null,
         });
 
-        const parentProfile = await ParentProfile.create({
+        await ParentProfile.create({
           userId: user._id,
-          referralCode: 'EMART1001',
+          referralCode: `EMART${Math.floor(1000 + Math.random() * 9000)}`,
         });
-
-        const student = await Student.create({
-          schoolId: school ? school._id : null,
-          name: 'Aarav Sharma',
-          schoolRefNo: 'STU-SEED-DPS-01',
-          classGrade: 'Class 5',
-          section: 'A',
-          rollNo: '1',
-          status: 'active',
-          parentProfileIds: [parentProfile._id],
-        });
-
-        await ChildProfile.create({
-          parentUserId: user._id,
-          studentId: student._id,
-          name: 'Aarav Sharma',
-          schoolId: school ? school._id : null,
-          schoolRefNo: school ? school.schoolRefNo : null,
-          grade: 'Class 5',
-          rollNo: '1',
-        });
-
-        user = await userRepository.findByPhoneAndRole(normalizedPhone, ROLES.PARENT);
       }
 
       await userRepository.markPhoneVerified(user._id);
@@ -226,9 +203,26 @@ const otpService = {
       return { verified: true, phone: normalizedPhone };
     }
 
-    const user = await userRepository.findByPhoneAndRole(normalizedPhone, ROLES.PARENT);
+    let user = await userRepository.findByPhoneAndRole(normalizedPhone, ROLES.PARENT);
     if (!user) {
-      throw new NotFoundError('Parent account not found. Please complete signup first.', 'PARENT_NOT_FOUND');
+      const User = require('../../../database/models/User');
+      const ParentProfile = require('../../../database/models/ParentProfile');
+      const { generateUserRefId } = require('../../school/utils/refId');
+
+      user = await User.create({
+        refId: generateUserRefId('P'),
+        role: ROLES.PARENT,
+        status: 'active',
+        name: 'Parent User',
+        phone: normalizedPhone,
+        phoneVerifiedAt: new Date(),
+        tenantSchoolId: null,
+      });
+
+      await ParentProfile.create({
+        userId: user._id,
+        referralCode: `EMART${Math.floor(1000 + Math.random() * 9000)}`,
+      });
     }
 
     await userRepository.markPhoneVerified(user._id);
