@@ -14,11 +14,15 @@ import AuthPrompt from '../../components/AuthPrompt';
 import * as catalogApi from '../../../services/catalogApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 import { mapProductForCard, mapProductForDetailView } from '../../../utils/mappers/productMapper';
+import { getMarketplaceAudience } from '../../../utils/marketplaceAudience';
 
 const ProductDetailsPage = () => {
   const { productId } = useParams();
   const navigate = useNavigate();
   const { addToCart, updateQuantity, getProductQuantity } = useCart();
+  // This page is shared by the User app and the School module (bulk products);
+  // keep post-purchase navigation inside whichever portal the shopper is in.
+  const basePath = getMarketplaceAudience() === 'school' ? '/school' : '/user';
   const [activeImage, setActiveImage] = useState(0);
   const [selectedSize, setSelectedSize] = useState('');
   const [isWishlisted, setIsWishlisted] = useState(false);
@@ -79,7 +83,7 @@ const ProductDetailsPage = () => {
       setIsAuthPromptOpen(true);
       return;
     }
-    navigate('/user/checkout');
+    navigate(`${basePath}/checkout`);
   };
 
   if (loading) {
@@ -119,7 +123,7 @@ const ProductDetailsPage = () => {
               <p className="text-[10px] text-white/60 font-medium">{product.name} (Size: {selectedSize})</p>
             </div>
             <button
-              onClick={() => navigate('/user/cart')}
+              onClick={() => navigate(`${basePath}/cart`)}
               className="text-[10px] font-black text-primary bg-white px-3 py-2 rounded-xl shadow-sm whitespace-nowrap"
             >
               VIEW CART
@@ -292,7 +296,7 @@ const ProductDetailsPage = () => {
           </button>
         ) : (
           <button
-            onClick={() => navigate('/user/cart')}
+            onClick={() => navigate(`${basePath}/cart`)}
             className="flex-1 py-4 bg-[#34A853] hover:bg-[#2c8e47] text-white rounded-2xl text-xs font-black shadow-lg shadow-green-500/20 active:scale-95 transition-all flex items-center justify-center gap-2 animate-in fade-in zoom-in duration-300"
           >
             <ShoppingCart size={18} /> View Cart

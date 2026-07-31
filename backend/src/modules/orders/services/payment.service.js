@@ -68,12 +68,15 @@ const paymentService = {
     orderId,
     { razorpayPaymentId, razorpayOrderId, razorpaySignature, session = null } = {}
   ) {
-    const payment = await paymentRepository.findByOrderId(orderId);
+    const opts = session ? { session } : {};
+    // Within an active transaction (e.g. COD confirmation right after order
+    // creation), the payment was just inserted in this same session — a
+    // session-less read would miss it under snapshot isolation and 404 here.
+    const payment = await paymentRepository.findByOrderId(orderId, opts);
     if (!payment) throw new NotFoundError('Payment not found', 'PAYMENT_NOT_FOUND');
     if (payment.status === 'captured') return payment;
 
     let gatewayPaymentId;
-    const opts = session ? { session } : {};
 
     if (payment.gateway === 'razorpay') {
       if (!razorpayPaymentId || !razorpayOrderId || !razorpaySignature) {
@@ -130,7 +133,8 @@ const paymentService = {
   },
 
   async initiateRefund(orderId, { amountPaise, reason, actorUserId }, { session = null } = {}) {
-    const payment = await paymentRepository.findByOrderId(orderId);
+    const opts = session ? { session } : {};
+    const payment = await paymentRepository.findByOrderId(orderId, opts);
     if (!payment) throw new NotFoundError('Payment not found', 'PAYMENT_NOT_FOUND');
     if (!['captured', 'authorized', 'partially_refunded'].includes(payment.status)) {
       throw new BadRequestError('Payment is not refundable', null, 'PAYMENT_NOT_REFUNDABLE');
@@ -158,7 +162,6 @@ const paymentService = {
     };
 
     const newStatus = refundAmount >= payment.amountPaise ? 'refunded' : 'partially_refunded';
-    const opts = session ? { session } : {};
     return Payment.findByIdAndUpdate(
       payment._id,
       {

@@ -51,8 +51,15 @@ const vendorProfileSchema = new mongoose.Schema({
   }],
   rating: { type: mongoose.Schema.Types.Decimal128, min: 0, max: 5 },
   ordersCount: { type: Number, required: true, default: 0 },
-  verifiedBadge: { type: Boolean, required: true, default: false }
+  verifiedBadge: { type: Boolean, required: true, default: false },
+  fulfillmentMethod: {
+    type: String,
+    enum: ['shiprocket', 'manual'],
+    required: true,
+    default: 'shiprocket'
+  }
 }, { collection: 'vendorProfiles' });
+
 
 // Plugins
 vendorProfileSchema.plugin(auditPlugin);

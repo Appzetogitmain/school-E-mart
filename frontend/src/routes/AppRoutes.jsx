@@ -365,6 +365,7 @@ const AppRoutes = () => {
             <Route path="about" element={<SchoolAboutUsPage />} />
             <Route path="checkout" element={<SchoolCheckoutPage />} />
             <Route path="kit/:kitId" element={<SchoolKitDetailsPage />} />
+            <Route path="product/:productId" element={<ProductDetailsPage />} />
           </Route>
         </Route>
 

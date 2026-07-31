@@ -41,6 +41,7 @@ export const mapVendorProductForList = (product) => {
     salesCount: product?.salesCount || 0,
     imageUrl: resolveImageUrl(product?.images?.[0]),
     imgBg: 'bg-purple-100 text-purple-700',
+    audience: product?.audience || 'users',
     raw: product,
   };
 };

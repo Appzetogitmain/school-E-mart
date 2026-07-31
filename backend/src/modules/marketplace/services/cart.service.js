@@ -114,6 +114,23 @@ const cartService = {
     }
     if (!product) throw new NotFoundError('Product not found', 'PRODUCT_NOT_FOUND');
 
+    // Isolation: a 'parent' (retail) cart may only hold 'users'-audience products,
+    // a 'school' (bulk) cart only 'schools'-audience ones. Kits are exempt — they're
+    // a separate entity always purchased through the 'parent' channel.
+    if (!isKit) {
+      const productAudience = product.audience || 'users';
+      const expectedAudience = audience === 'school' ? 'schools' : 'users';
+      if (productAudience !== expectedAudience) {
+        throw new BadRequestError(
+          expectedAudience === 'schools'
+            ? 'This product is not available for school bulk orders'
+            : 'This product is not available in the retail store',
+          null,
+          'PRODUCT_AUDIENCE_MISMATCH'
+        );
+      }
+    }
+
     let variant = null;
     let pricePaise = product.pricePaise;
     let stock = product.stock;

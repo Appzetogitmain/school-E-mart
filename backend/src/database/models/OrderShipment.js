@@ -10,7 +10,9 @@ const orderShipmentSchema = new mongoose.Schema({
   }],
   courier: { type: String },
   awbNumber: { type: String },
+  deliveryProvider: { type: String, enum: ['shiprocket', 'manual'], default: 'shiprocket' },
   shiprocketOrderId: { type: String, index: true },
+
   shiprocketShipmentId: { type: String, index: true },
   awbCode: { type: String, index: true },
   courierName: { type: String },

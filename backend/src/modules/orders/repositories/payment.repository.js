@@ -7,8 +7,8 @@ class PaymentRepository extends BaseRepository {
     super(Payment, { useSoftDelete: false });
   }
 
-  findByOrderId(orderId) {
-    return this.findOne({ orderId });
+  findByOrderId(orderId, queryOptions = {}) {
+    return this.findOne({ orderId }, queryOptions);
   }
 
   findByIdempotencyKey(key) {
