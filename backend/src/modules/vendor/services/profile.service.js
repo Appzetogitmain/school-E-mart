@@ -69,6 +69,7 @@ const profileService = {
       );
     }
     if (payload.serviceRadiusKm !== undefined) vendorUpdate.serviceRadiusKm = payload.serviceRadiusKm;
+    if (payload.fulfillmentMethod) vendorUpdate.fulfillmentMethod = payload.fulfillmentMethod;
     if (payload.categories) vendorUpdate.categories = payload.categories;
 
     if (payload.address) vendorUpdate.address = { ...vendor.address, ...payload.address };
@@ -98,8 +99,10 @@ const profileService = {
     }
     if (payload.categories) update.categories = payload.categories;
     if (payload.serviceRadiusKm !== undefined) update.serviceRadiusKm = payload.serviceRadiusKm;
+    if (payload.fulfillmentMethod) update.fulfillmentMethod = payload.fulfillmentMethod;
 
     const updated = await vendorRepository.updateById(vendor._id, { $set: update });
+
     const user = await User.findById(userId).lean();
     return sanitizeProfile(updated, user);
   },

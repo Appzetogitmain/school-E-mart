@@ -23,6 +23,7 @@ const VendorProducts = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [selectedApproval, setSelectedApproval] = useState('All');
+  const [selectedAudience, setSelectedAudience] = useState('All'); // 'All' | 'users' | 'schools'
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -54,7 +55,10 @@ const VendorProducts = () => {
     setLoading(true);
     setError('');
     try {
-      const { data } = await listVendorProducts({ limit: 100 });
+      const { data } = await listVendorProducts({
+        limit: 100,
+        ...(selectedAudience !== 'All' ? { audience: selectedAudience } : {}),
+      });
       setProducts((data || []).map(mapVendorProductForList));
     } catch (err) {
       setProducts([]);
@@ -62,7 +66,7 @@ const VendorProducts = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [selectedAudience]);
 
   useEffect(() => {
     loadProducts();
@@ -166,6 +170,7 @@ const VendorProducts = () => {
   const [editImageAttachmentId, setEditImageAttachmentId] = useState(null);
   const [editImagePreview, setEditImagePreview] = useState(null);
   const [editPublishStatus, setEditPublishStatus] = useState('published');
+  const [editAudience, setEditAudience] = useState('users');
   const [updating, setUpdating] = useState(false);
 
   const openEditModal = (product) => {
@@ -176,6 +181,7 @@ const VendorProducts = () => {
     setEditPrice(product.price ? product.price.toString() : '');
     setEditStock(product.stock ? product.stock.toString() : '0');
     setEditPublishStatus(product.publishStatus || 'published');
+    setEditAudience(product.audience || product.raw?.audience || 'users');
     setEditHeaderId(product.raw?.headerId?._id || product.raw?.headerId || '');
     setEditCategoryId(product.raw?.categoryId?._id || product.raw?.categoryId || '');
     setEditSubcategoryId(product.raw?.subcategoryId?._id || product.raw?.subcategoryId || '');
@@ -211,6 +217,7 @@ const VendorProducts = () => {
         pricePaise: Math.round(Number(editPrice) * 100),
         stock: Number(editStock) || 0,
         publishStatus: editPublishStatus,
+        audience: editAudience,
       };
       if (editHeaderId) payload.headerId = editHeaderId;
       if (editCategoryId) payload.categoryId = editCategoryId;
@@ -259,10 +266,16 @@ const VendorProducts = () => {
   const lowStockCount = useMemo(() => products.filter(p => p.stock > 0 && p.stock <= (p.lowStockThreshold || 5)).length, [products]);
   const outOfStockCount = useMemo(() => products.filter(p => p.stock === 0).length, [products]);
 
+  // Real categories present in the vendor's own catalog, not a hardcoded guess.
+  const availableCategories = useMemo(
+    () => ['All', ...new Set(products.map((p) => p.category).filter(Boolean))],
+    [products]
+  );
+
   // Filtered array logic
   const filteredProducts = useMemo(() => {
     return products.filter(product => {
-      const matchesSearch = searchQuery === '' || 
+      const matchesSearch = searchQuery === '' ||
         product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         product.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
         product.header.toLowerCase().includes(searchQuery.toLowerCase());
@@ -299,6 +312,28 @@ const VendorProducts = () => {
             >
               <Plus size={16} strokeWidth={2.5} /> Add New Product
             </button>
+          </div>
+
+          {/* Audience Tabs — keeps retail (Users) and bulk (Schools) catalogs visibly separate */}
+          <div className="flex items-center gap-2 bg-gray-50 border border-gray-100 rounded-2xl p-1.5 w-fit">
+            {[
+              { key: 'All', label: 'All Products' },
+              { key: 'users', label: 'Users (Retail)' },
+              { key: 'schools', label: 'Schools (Bulk)' },
+            ].map((tab) => (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setSelectedAudience(tab.key)}
+                className={`px-4 py-2 rounded-xl text-xs font-black transition-all ${
+                  selectedAudience === tab.key
+                    ? 'bg-white text-[#5B3FD6] shadow-sm border border-purple-100'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
           </div>
 
           {/* Top Metrics Grid */}
@@ -375,10 +410,9 @@ const VendorProducts = () => {
                   onChange={(e) => setSelectedCategory(e.target.value)}
                   className="appearance-none pl-4 pr-9 py-2.5 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#5B3FD6]/10 focus:border-[#5B3FD6] shadow-sm cursor-pointer"
                 >
-                  <option value="All">All Categories</option>
-                  <option value="Apparel">Apparel</option>
-                  <option value="Footwear">Footwear</option>
-                  <option value="Accessories">Accessories</option>
+                  {availableCategories.map((cat) => (
+                    <option key={cat} value={cat}>{cat === 'All' ? 'All Categories' : cat}</option>
+                  ))}
                 </select>
                 <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
               </div>
@@ -424,6 +458,7 @@ const VendorProducts = () => {
                   <tr className="border-b border-gray-100 text-[10px] font-black text-gray-400 uppercase tracking-widest bg-gray-50/50">
                     <th className="px-6 py-4">Product</th>
                     <th className="px-6 py-4">Product Code</th>
+                    <th className="px-6 py-4">Sell To</th>
                     <th className="px-6 py-4">Header</th>
                     <th className="px-6 py-4">Category</th>
                     <th className="px-6 py-4">Subcategory</th>
@@ -465,6 +500,17 @@ const VendorProducts = () => {
                         <td className="px-6 py-4.5">
                           <span className="font-mono text-gray-900 bg-gray-50 px-2 py-1 rounded-md text-[11px] font-bold border border-gray-100">
                             {product.code}
+                          </span>
+                        </td>
+
+                        {/* SELL TO (audience) */}
+                        <td className="px-6 py-4.5">
+                          <span className={`inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border ${
+                            product.audience === 'schools'
+                              ? 'bg-blue-50 text-blue-600 border-blue-100'
+                              : 'bg-gray-50 text-gray-600 border-gray-150'
+                          }`}>
+                            {product.audience === 'schools' ? 'Schools' : 'Users'}
                           </span>
                         </td>
 
@@ -531,7 +577,7 @@ const VendorProducts = () => {
                     ))
                   ) : (
                     <tr>
-                      <td colSpan={8} className="px-6 py-12 text-center text-gray-400 font-bold bg-white">
+                      <td colSpan={9} className="px-6 py-12 text-center text-gray-400 font-bold bg-white">
                         No products cataloged matching search criteria.
                       </td>
                     </tr>
@@ -594,6 +640,12 @@ const VendorProducts = () => {
                   <div className="space-y-3">
                     <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block font-sans">Details</span>
                     <div className="border border-gray-100 rounded-2xl p-4 space-y-3 bg-white shadow-sm text-xs font-semibold">
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-400">Sell To</span>
+                        <span className={selectedProduct.audience === 'schools' ? 'text-blue-600 font-bold' : 'text-gray-800 font-bold'}>
+                          {selectedProduct.audience === 'schools' ? 'Schools (Bulk)' : 'Users (Retail)'}
+                        </span>
+                      </div>
                       <div className="flex justify-between items-center">
                         <span className="text-gray-400">Header Group</span>
                         <span className="text-gray-800">{selectedProduct.header}</span>
@@ -1059,7 +1111,7 @@ const VendorProducts = () => {
                     className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#5B3FD6]/20 focus:border-[#5B3FD6]"
                   >
                     <option value="">Select header...</option>
-                    {categoryTree.map((h) => (
+                    {catTree.map((h) => (
                       <option key={h._id} value={h._id}>{h.name}</option>
                     ))}
                   </select>
@@ -1076,10 +1128,36 @@ const VendorProducts = () => {
                     className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#5B3FD6]/20 focus:border-[#5B3FD6]"
                   >
                     <option value="">Select category...</option>
-                    {(categoryTree.find(h => h._id === editHeaderId)?.categories || []).map((c) => (
+                    {(catTree.find(h => h._id === editHeaderId)?.categories || []).map((c) => (
                       <option key={c._id} value={c._id}>{c.name}</option>
                     ))}
                   </select>
+                </div>
+              </div>
+
+              {/* Sell To — who this product is sold to */}
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-black text-gray-600 uppercase tracking-wider block">Sell To</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { key: 'users', label: 'Users', hint: 'Retail' },
+                    { key: 'schools', label: 'Schools', hint: 'Bulk' },
+                  ].map((opt) => {
+                    const active = editAudience === opt.key;
+                    return (
+                      <button
+                        key={opt.key}
+                        type="button"
+                        onClick={() => setEditAudience(opt.key)}
+                        className={`rounded-xl px-3 py-2.5 text-left border transition-all ${
+                          active ? 'bg-[#0E0E2C] border-[#0E0E2C] text-white' : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300'
+                        }`}
+                      >
+                        <span className="block text-[11px] font-black">{opt.label}</span>
+                        <span className={`block text-[8px] font-bold uppercase tracking-wide ${active ? 'text-white/60' : 'text-gray-400'}`}>{opt.hint}</span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 

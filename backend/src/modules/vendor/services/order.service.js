@@ -36,7 +36,7 @@ const vendorOrderService = {
     return { ...order, vendorItems };
   },
 
-  async updateOrderStatus(vendorId, orderId, { status, note }, actor = {}) {
+  async updateOrderStatus(vendorId, orderId, { status, note, courierName, awbNumber, trackingUrl }, actor = {}) {
     const order = await orderRepository.findVendorOrder(vendorId, orderId);
     if (!order) throw new NotFoundError('Order not found', 'ORDER_NOT_FOUND');
 
@@ -76,6 +76,24 @@ const vendorOrderService = {
       update,
       { new: true }
     ).lean();
+
+    const OrderShipment = require('../../../database/models/OrderShipment');
+    const shipmentUpdate = { status };
+    if (courierName) {
+      shipmentUpdate.courier = courierName;
+      shipmentUpdate.courierName = courierName;
+    }
+    if (awbNumber) {
+      shipmentUpdate.awbNumber = awbNumber;
+      shipmentUpdate.awbCode = awbNumber;
+    }
+    if (trackingUrl) shipmentUpdate.trackingUrl = trackingUrl;
+
+    await OrderShipment.findOneAndUpdate(
+      { orderId, vendorId },
+      { $set: shipmentUpdate },
+      { upsert: false }
+    );
 
     if (status === 'delivered') {
       // Record vendor earnings + referral bonus — mirrors the orders-module path

@@ -111,9 +111,17 @@ const VendorOrders = () => {
         case 'dispatch':
           await markVendorOrderReadyForDispatch(orderId);
           break;
-        case 'shipped':
-          await updateVendorOrderStatus(orderId, { status: 'shipped' });
+        case 'shipped': {
+          const courierName = window.prompt('Enter Courier / Delivery Partner Name (Optional, e.g. Self Delivery, Porter, BlueDart):');
+          if (courierName === null) return;
+          const awbNumber = courierName.trim() ? window.prompt('Enter Tracking / AWB / Delivery Contact Number (Optional):') : null;
+          await updateVendorOrderStatus(orderId, {
+            status: 'shipped',
+            ...(courierName.trim() ? { courierName: courierName.trim() } : {}),
+            ...(awbNumber && awbNumber.trim() ? { awbNumber: awbNumber.trim() } : {}),
+          });
           break;
+        }
         case 'out_for_delivery':
           await updateVendorOrderStatus(orderId, { status: 'out_for_delivery' });
           break;

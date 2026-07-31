@@ -13,6 +13,8 @@ const paginationQuery = Joi.object({
   status: Joi.string().trim().optional(),
   approval: Joi.string().valid('pending', 'approved', 'rejected').optional(),
   publishStatus: Joi.string().valid('draft', 'published').optional(),
+  // Vendor product list filter: 'users' (retail) | 'schools' (bulk).
+  audience: Joi.string().valid('users', 'schools').optional(),
   from: Joi.date().iso().optional(),
   to: Joi.date().iso().optional(),
   approvalStatus: Joi.string().valid('pending', 'approved', 'suspended').optional(),
@@ -125,6 +127,9 @@ const orderStatusSchema = Joi.object({
     .valid('accepted', 'processed', 'packed', 'shipped', 'out_for_delivery', 'delivered', 'cancelled')
     .required(),
   note: Joi.string().trim().max(500).optional(),
+  courierName: Joi.string().trim().max(120).optional(),
+  awbNumber: Joi.string().trim().max(120).optional(),
+  trackingUrl: Joi.string().trim().max(500).optional(),
 });
 
 const orderActionSchema = Joi.object({

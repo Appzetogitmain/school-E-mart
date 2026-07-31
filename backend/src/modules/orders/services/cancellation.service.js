@@ -77,8 +77,7 @@ const cancellationService = {
           await paymentService.initiateRefund(
             orderId,
             { amountPaise: gatewayPaidPaise, reason: reason || 'Order cancelled' },
-            { actorUserId: cancelledBy },
-            { session }
+            { actorUserId: cancelledBy, session }
           );
         } catch {
           // refund initiation is best-effort when payment record missing

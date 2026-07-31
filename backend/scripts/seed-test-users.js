@@ -32,6 +32,8 @@ const HeaderCategory = require('../src/database/models/HeaderCategory');
 const Category = require('../src/database/models/Category');
 const productService = require('../src/modules/marketplace/services/product.service');
 const taxonomyService = require('../src/modules/marketplace/services/taxonomy.service');
+const cartService = require('../src/modules/marketplace/services/cart.service');
+const orderService = require('../src/modules/orders/services/order.service');
 
 const PASSWORD = '123456';
 
@@ -42,6 +44,9 @@ const SEED_SCHOOLS = [
       code: 'DPS-SEED',
       name: 'Delhi Public School (Seed)',
       partnerStatus: 'active',
+      // Non-zero so the seeded retail order actually credits a visible amount
+      // to the school's ledger/wallet, not just a 0% snapshot.
+      commission: { kitPercent: 5, retailPercent: 10 },
     },
     schoolAdmin: {
       refId: 'SEM-ADM-DPS01',
@@ -147,10 +152,9 @@ async function ensureSchool(schoolData) {
   });
 
   if (school) {
-    await School.updateOne(
-      { _id: school._id },
-      { $set: { partnerStatus: schoolData.partnerStatus, name: schoolData.name } }
-    );
+    const update = { partnerStatus: schoolData.partnerStatus, name: schoolData.name };
+    if (schoolData.commission) update.commission = schoolData.commission;
+    await School.updateOne({ _id: school._id }, { $set: update });
     school = await School.findById(school._id);
     logResult('School (existing)', { schoolRefNo: school.schoolRefNo, id: school._id.toString() });
     return school;
@@ -462,10 +466,18 @@ async function ensureVendor(seedVendor) {
 const SEED_HEADER_NAME = 'School Essentials (Seed)';
 const SEED_CATEGORY_NAME = 'Stationery (Seed)';
 
+// audience: 'users' = retail (User app), 'schools' = bulk (School module). Each
+// vendor gets both, so the storefront isolation and vendor-side "Sell To" filter
+// both have real, distinct catalogs to exercise.
 const SEED_PRODUCTS = [
-  { suffix: 'NB', name: 'A4 Ruled Notebook (200 pages)', pricePaise: 12000, stock: 120 },
-  { suffix: 'PEN', name: 'Blue Gel Pen (Pack of 10)', pricePaise: 8500, stock: 80 },
-  { suffix: 'GEO', name: 'Geometry Box Deluxe', pricePaise: 24900, stock: 40 },
+  { suffix: 'NB', name: 'A4 Ruled Notebook (200 pages)', pricePaise: 12000, stock: 120, audience: 'users' },
+  { suffix: 'PEN', name: 'Blue Gel Pen (Pack of 10)', pricePaise: 8500, stock: 80, audience: 'users' },
+  { suffix: 'GEO', name: 'Geometry Box Deluxe', pricePaise: 24900, stock: 40, audience: 'users' },
+];
+
+const SEED_SCHOOL_PRODUCTS = [
+  { suffix: 'SCH-UNI', name: 'Bulk School Uniform Set (Pack of 30)', pricePaise: 450000, stock: 25, audience: 'schools' },
+  { suffix: 'SCH-BAG', name: 'Bulk School Bag (Pack of 30)', pricePaise: 600000, stock: 20, audience: 'schools' },
 ];
 
 async function ensureCatalogTaxonomy() {
@@ -490,18 +502,23 @@ async function ensureCatalogTaxonomy() {
 }
 
 async function ensureVendorProducts(seedVendor, profile, taxonomy) {
+  const specs = [...SEED_PRODUCTS, ...SEED_SCHOOL_PRODUCTS];
   const products = [];
-  for (const spec of SEED_PRODUCTS) {
+  for (const spec of specs) {
     // Deterministic SKU keeps the seed idempotent — createProduct rejects a
     // duplicate SKU, so skip any that already exist for a re-run.
     const sku = `SEED-${seedVendor.refId}-${spec.suffix}`;
-    let product = await Product.findOne({ sku, 'softDelete.isDeleted': { $ne: true } });
+    // Include soft-deleted matches: a prior manual test (e.g. exercising the
+    // vendor's delete-product action) can leave this SKU soft-deleted, and its
+    // slug still occupies the unique index — revive it instead of colliding.
+    let product = await Product.findOne({ sku }).setOptions({ includeDeleted: true });
     if (!product) {
       product = await productService.createProduct(profile._id, {
         name: `${spec.name} — ${profile.storeName}`,
         sku,
         headerId: taxonomy.headerId,
         categoryId: taxonomy.categoryId,
+        audience: spec.audience,
         pricePaise: spec.pricePaise,
         images: [{ attachmentId: new mongoose.Types.ObjectId() }],
         approvalStatus: 'approved',
@@ -509,11 +526,31 @@ async function ensureVendorProducts(seedVendor, profile, taxonomy) {
         stock: spec.stock,
         lowStockThreshold: 10,
       });
+    } else if (product.audience !== spec.audience || product.softDelete?.isDeleted) {
+      // Re-tag on rerun in case the seed spec changed, and revive if deleted.
+      await Product.updateOne(
+        { _id: product._id },
+        {
+          $set: {
+            audience: spec.audience,
+            publishStatus: 'published',
+            approvalStatus: 'approved',
+            stock: spec.stock,
+            'softDelete.isDeleted': false,
+            'softDelete.deletedAt': null,
+            'softDelete.deletedBy': null,
+          },
+        },
+        { includeDeleted: true }
+      );
+      product = await Product.findById(product._id).setOptions({ includeDeleted: true });
     }
     products.push(product);
   }
-  logResult('Vendor products', { count: products.length });
-  return products;
+  const retailProducts = products.filter((p) => p.audience !== 'schools');
+  const schoolProducts = products.filter((p) => p.audience === 'schools');
+  logResult('Vendor products', { retail: retailProducts.length, school: schoolProducts.length });
+  return { products, retailProducts, schoolProducts };
 }
 
 async function ensureVendorOrder(seedVendor, profile, products, customerUserId) {
@@ -573,6 +610,36 @@ async function ensureVendorOrder(seedVendor, profile, products, customerUserId) 
   logResult('Vendor order (created)', { orderNumber, items: items.length });
 }
 
+// Places a real order through the actual cart -> checkout -> commission
+// pipeline (not a raw Order.create), so the seed doubles as a live proof that
+// audience isolation, delivery charges, and commission crediting all work.
+// cartAudience is the buyer channel ('parent' | 'school'); the product's own
+// `audience` ('users' | 'schools') must match it or cartService.addItem rejects it.
+async function ensureRealOrder({ label, buyerUser, cartAudience, product, address, quantity = 1 }) {
+  if (!buyerUser || !product) return;
+
+  const existing = await Order.findOne({
+    userId: buyerUser._id,
+    audience: cartAudience,
+    'items.sku': product.sku,
+    'softDelete.isDeleted': { $ne: true },
+  }).lean();
+  if (existing) {
+    logResult(`${label} (existing)`, { orderNumber: existing.orderNumber, status: existing.orderStatus });
+    return existing;
+  }
+
+  await cartService.addItem(buyerUser._id, cartAudience, { productId: product._id, quantity });
+  const order = await orderService.createOrder(
+    buyerUser._id,
+    cartAudience,
+    { address, deliveryType: 'home', paymentMethod: 'cod' },
+    { userId: buyerUser._id }
+  );
+  logResult(`${label} (created)`, { orderNumber: order.orderNumber, total: order.totalPaise });
+  return order;
+}
+
 async function seedSchoolBundle(bundle) {
   console.log(`\n--- ${bundle.school.name} ---`);
   const school = await ensureSchool(bundle.school);
@@ -599,11 +666,68 @@ async function seedTestUsers() {
   // One customer (a seeded parent) receives the demo orders so the vendor has a
   // real incoming order to accept. Falls back to no order if parents were skipped.
   const demoCustomer = await findUserByRefId('SEM-P-DPS001');
+  const dpsSchoolAdmin = await findUserByRefId('SEM-ADM-DPS01');
+  const dpsSchool = await School.findOne({ schoolRefNo: 'SCH-SEED-DPS', 'softDelete.isDeleted': { $ne: true } });
   const taxonomy = await ensureCatalogTaxonomy();
+  const vendorResults = {};
   for (const seedVendor of SEED_VENDORS) {
     const { profile } = await ensureVendor(seedVendor);
-    const products = await ensureVendorProducts(seedVendor, profile, taxonomy);
-    await ensureVendorOrder(seedVendor, profile, products, demoCustomer?._id);
+    const result = await ensureVendorProducts(seedVendor, profile, taxonomy);
+    await ensureVendorOrder(seedVendor, profile, result.retailProducts, demoCustomer?._id);
+    vendorResults[seedVendor.refId] = { profile, ...result };
+  }
+
+  // Exercise the real cart -> checkout -> commission pipeline for the primary
+  // seed vendor, so the isolation guard and school commission crediting are
+  // both provably working, not just structurally present.
+  const primaryVendor = vendorResults['SEM-VEN-SEED1'];
+  if (primaryVendor && demoCustomer && dpsSchool) {
+    console.log('\n--- Real order flow (vendor: SEM-VEN-SEED1) ---');
+    const buyerAddress = {
+      name: 'Aarav Parent',
+      phone: '9300000001',
+      line1: '12 Rajpath Lane',
+      city: 'Delhi',
+      state: 'Delhi',
+      pinCode: '110001',
+    };
+
+    // Retail purchase by a parent linked to DPS -> DPS should earn its
+    // configured retail commission % on this line (see commission.service.js).
+    // Index 2 (GEO) deliberately avoids products[0..1], which ensureVendorOrder's
+    // raw demo order above already placed for this same parent.
+    if (primaryVendor.retailProducts[2]) {
+      await ensureRealOrder({
+        label: 'Retail order (parent, general marketplace)',
+        buyerUser: demoCustomer,
+        cartAudience: 'parent',
+        product: primaryVendor.retailProducts[2],
+        address: buyerAddress,
+        quantity: 1,
+      });
+    }
+
+    // Bulk purchase by the school itself -> school is the buyer, so it earns
+    // no commission on its own order (platform-only split); proves the
+    // 'schools' audience product is reachable only through the school cart.
+    if (primaryVendor.schoolProducts[0] && dpsSchoolAdmin) {
+      const schoolAddress = {
+        name: 'Delhi Public School (Seed)',
+        phone: dpsSchoolAdmin.phone || '9100000001',
+        line1: '1 School Campus Road',
+        city: 'Delhi',
+        state: 'Delhi',
+        pinCode: '110001',
+      };
+      await ensureRealOrder({
+        label: 'Bulk order (school, school module)',
+        buyerUser: dpsSchoolAdmin,
+        cartAudience: 'school',
+        product: primaryVendor.schoolProducts[0],
+        address: schoolAddress,
+        quantity: 2,
+      });
+    }
   }
 
   console.log('\n========================================');
@@ -629,8 +753,17 @@ async function seedTestUsers() {
 
   console.log('\nVENDORS:');
   SEED_VENDORS.forEach((v) => {
-    console.log(`  ${v.email} | ${v.phone} | store: ${v.storeName}`);
+    console.log(`  ${v.email} | ${v.phone} | store: ${v.storeName} | refId: ${v.refId}`);
   });
+
+  console.log('\nVENDOR CATALOG (per vendor, "Sell To" tagged):');
+  console.log(`  Retail (Users): ${SEED_PRODUCTS.map((p) => p.name).join(', ')}`);
+  console.log(`  Bulk (Schools): ${SEED_SCHOOL_PRODUCTS.map((p) => p.name).join(', ')}`);
+  console.log('  -> Log in as vendor1@seed.test, open Products, use the Users/Schools tabs to see them isolated.');
+  console.log('  -> Log in as school1@seed.test, open Bulk Products — only the "Bulk" catalog above is visible.');
+  console.log('  -> Log in as parent 9300000001 (OTP), open the store — only the "Retail" catalog above is visible.');
+  console.log('  -> A real retail order + a real bulk order were placed via the actual checkout/commission pipeline');
+  console.log('     for vendor1 — check Vendor > Orders, and School > Wallet for the credited retail commission.');
   console.log('========================================\n');
 }
 

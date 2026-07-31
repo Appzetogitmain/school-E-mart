@@ -92,6 +92,7 @@ const VendorProfile = () => {
       email: p.user?.email || '',
       phone: p.user?.phone || '',
       serviceRadiusKm: String(p.serviceRadiusKm ?? ''),
+      fulfillmentMethod: p.fulfillmentMethod || 'shiprocket',
     });
     setAddress({
       line1: isBlank(p.address?.line1) ? '' : p.address.line1,
@@ -166,6 +167,7 @@ const VendorProfile = () => {
         storeName: business.storeName.trim(),
         email: business.email.trim(),
         phone: business.phone.trim(),
+        fulfillmentMethod: business.fulfillmentMethod || 'shiprocket',
         ...(business.serviceRadiusKm !== ''
           ? { serviceRadiusKm: parseFloat(business.serviceRadiusKm) || 0 }
           : {}),
@@ -392,6 +394,20 @@ const VendorProfile = () => {
               <div>
                 <label className={labelCls}>Delivery Radius (km)</label>
                 <input type="number" step="0.1" min="0" max="500" className={inputCls} value={business.serviceRadiusKm} onChange={(e) => setBusiness({ ...business, serviceRadiusKm: e.target.value })} />
+              </div>
+              <div className="sm:col-span-2">
+                <label className={labelCls}>Delivery & Order Fulfillment Mode</label>
+                <select
+                  className={inputCls}
+                  value={business.fulfillmentMethod || 'shiprocket'}
+                  onChange={(e) => setBusiness({ ...business, fulfillmentMethod: e.target.value })}
+                >
+                  <option value="shiprocket">🚀 Shiprocket (Automated Courier Dispatch & Tracking)</option>
+                  <option value="manual">📦 Manual / Self Delivery (Local Logistics & Custom Order Updates)</option>
+                </select>
+                <p className="text-[11px] text-gray-400 font-semibold mt-1">
+                  Choose how your store orders are processed. Switch anytime.
+                </p>
               </div>
             </div>
             <div className="flex justify-end pt-2 border-t border-gray-100"><SaveButton section="business" savingSection={savingSection} savedSection={savedSection} /></div>

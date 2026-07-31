@@ -4,6 +4,7 @@ import { Star, ShoppingCart, Minus, Plus, ShieldCheck, Heart } from 'lucide-reac
 import { useCart } from '../context/CartContext';
 import { useWishlist } from '../context/WishlistContext';
 import AuthPrompt from './AuthPrompt';
+import { getMarketplaceAudience } from '../../utils/marketplaceAudience';
 
 const ProductCard = ({ product, showBuyNow = true }) => {
   const { addToCart, updateQuantity, getProductQuantity } = useCart();
@@ -12,6 +13,9 @@ const ProductCard = ({ product, showBuyNow = true }) => {
   const [isAuthPromptOpen, setIsAuthPromptOpen] = useState(false);
   const isWishlisted = isInWishlist(product.id);
   const quantity = getProductQuantity(product.id);
+  // School module renders this same card for bulk products — route detail
+  // views back into the school portal instead of dropping into the User app.
+  const detailBasePath = getMarketplaceAudience() === 'school' ? '/school' : '/user';
 
   const isGuest = !localStorage.getItem('childInfo');
 
@@ -72,8 +76,8 @@ const ProductCard = ({ product, showBuyNow = true }) => {
         </div>
       )}
       
-      <Link 
-        to={`/user/product/${product.id}`}
+      <Link
+        to={`${detailBasePath}/product/${product.id}`}
         className="bg-white rounded-3xl shadow-sm border border-gray-100 flex flex-col overflow-hidden group active:scale-[0.98] transition-all cursor-pointer h-full"
       >
         {/* Image & Actions */}

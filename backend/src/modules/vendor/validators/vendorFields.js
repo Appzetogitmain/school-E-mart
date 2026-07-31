@@ -68,6 +68,7 @@ const identityFields = {
   name: Joi.string().trim().min(2).max(80),
   storeName: Joi.string().trim().min(2).max(80),
   serviceRadiusKm: Joi.number().min(0).max(500),
+  fulfillmentMethod: Joi.string().valid('shiprocket', 'manual').optional(),
   categories: Joi.array().items(require('../../../common/validation').schemas.objectId),
 };
 

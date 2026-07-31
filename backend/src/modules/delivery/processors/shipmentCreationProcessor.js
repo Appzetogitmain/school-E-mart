@@ -11,8 +11,42 @@ const processShipmentCreationJob = async (job) => {
   const existing = await idempotencyService.check(idemKey);
   if (existing?.result) return existing.result;
 
+  const VendorProfile = require('../../../database/models/VendorProfile');
+
+  const orderShipments = await OrderShipment.find({ orderId: context.orderMongoId }).lean();
+  const vendorIds = orderShipments.map((s) => s.vendorId).filter(Boolean);
+  const vendorProfiles = await VendorProfile.find({ _id: { $in: vendorIds } }).lean();
+
+  const allManual = vendorProfiles.length > 0 && vendorProfiles.every((vp) => vp.fulfillmentMethod === 'manual');
+
+  if (allManual) {
+    await DeliveryShipment.findOneAndUpdate(
+      { orderId: String(context.orderId) },
+      {
+        $set: {
+          orderMongoId: context.orderMongoId,
+          deliveryProvider: 'manual',
+          status: 'pending',
+          idempotencyKey: context.idempotencyKey || idemKey,
+        },
+      },
+      { upsert: true, new: true }
+    );
+
+    await OrderShipment.updateMany(
+      { orderId: context.orderMongoId },
+      { $set: { deliveryProvider: 'manual' } }
+    );
+
+    const manualResult = { manualDelivery: true, provider: 'manual' };
+    await idempotencyService.store(idemKey, manualResult, 86400);
+    logger.info('Order assigned to manual delivery vendor - Shiprocket creation skipped', { domain: 'delivery', provider: 'manual', orderId: context.orderId });
+    return manualResult;
+  }
+
   const result = await shiprocketService.createShipment(context);
   if (!result) return null;
+
 
   await DeliveryShipment.findOneAndUpdate(
     { orderId: String(context.orderId) },
