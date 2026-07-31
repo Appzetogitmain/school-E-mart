@@ -197,6 +197,13 @@ router.post(
   validateBody(validators.orderActionSchema),
   vendorController.markReadyForDispatch
 );
+router.patch(
+  '/orders/:orderId/kit-items/pack',
+  ...vendorOrdersWrite,
+  validateParams(validators.orderIdParam),
+  validateBody(validators.kitItemPackSchema),
+  vendorController.toggleKitItemPacked
+);
 
 // Returns
 router.get('/returns', ...vendorOrders, validateQuery(validators.paginationQuery), vendorController.listReturns);

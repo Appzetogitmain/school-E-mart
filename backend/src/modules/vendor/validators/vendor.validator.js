@@ -132,6 +132,12 @@ const orderActionSchema = Joi.object({
   reason: Joi.string().trim().max(500).optional(),
 });
 
+const kitItemPackSchema = Joi.object({
+  itemIndex: Joi.number().integer().min(0).required(),
+  kitItemIndex: Joi.number().integer().min(0).required(),
+  packed: Joi.boolean().required(),
+});
+
 const returnStatusSchema = Joi.object({
   status: Joi.string()
     .valid('approved', 'rejected', 'qc_passed', 'pickup_assigned', 'in_transit', 'completed')
@@ -176,6 +182,7 @@ module.exports = {
   inventoryAdjustSchema,
   orderStatusSchema,
   orderActionSchema,
+  kitItemPackSchema,
   returnStatusSchema,
   returnActionSchema,
   verificationActionSchema,

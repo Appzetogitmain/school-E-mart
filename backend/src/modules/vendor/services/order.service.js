@@ -120,6 +120,26 @@ const vendorOrderService = {
       status: query.status || undefined,
     });
   },
+
+  async toggleKitItemPacked(vendorId, orderId, { itemIndex, kitItemIndex, packed }) {
+    const order = await orderRepository.findVendorOrder(vendorId, orderId);
+    if (!order) throw new NotFoundError('Order not found', 'ORDER_NOT_FOUND');
+
+    const item = order.items?.[itemIndex];
+    if (!item || String(item.vendorId) !== String(vendorId)) {
+      throw new NotFoundError('Order item not found', 'ORDER_ITEM_NOT_FOUND');
+    }
+    if (!item.kitItems?.[kitItemIndex]) {
+      throw new NotFoundError('Kit item not found', 'KIT_ITEM_NOT_FOUND');
+    }
+
+    await Order.updateOne(
+      { _id: orderId, vendorIds: vendorId },
+      { $set: { [`items.${itemIndex}.kitItems.${kitItemIndex}.packed`]: !!packed } }
+    );
+
+    return this.getOrder(vendorId, orderId);
+  },
 };
 
 module.exports = vendorOrderService;

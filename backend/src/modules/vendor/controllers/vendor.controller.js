@@ -243,6 +243,16 @@ const vendorController = {
     return paginated(res, { orders: data }, pagination, 'Order history fetched', req);
   }),
 
+  toggleKitItemPacked: asyncHandler(async (req, res) => {
+    const vendorId = await vendorAccessPolicy.resolveApprovedVendorId(req.auth);
+    const order = await vendorOrderService.toggleKitItemPacked(
+      vendorId,
+      req.params.orderId,
+      req.body
+    );
+    return success(res, { order }, 'Kit item updated', undefined, req);
+  }),
+
   listReturns: asyncHandler(async (req, res) => {
     const vendorId = await vendorAccessPolicy.resolveApprovedVendorId(req.auth);
     const { data, pagination } = await vendorReturnService.listReturns(vendorId, req.query);

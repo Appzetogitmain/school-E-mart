@@ -142,6 +142,11 @@ export const updateVendorOrderStatus = async (orderId, payload) => {
   return unwrapData(response)?.order;
 };
 
+export const toggleVendorKitItemPacked = async (orderId, payload) => {
+  const response = await apiClient.patch(`/vendor/orders/${orderId}/kit-items/pack`, payload);
+  return unwrapData(response)?.order;
+};
+
 // Returns
 export const listVendorReturns = async (params = {}) => {
   const response = await apiClient.get('/vendor/returns', { params });

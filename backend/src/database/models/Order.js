@@ -23,6 +23,17 @@ const orderSchema = new mongoose.Schema({
     // school commission) and the kit itself. Left empty for ordinary products.
     schoolId: { type: mongoose.Schema.Types.ObjectId, ref: 'School' },
     kitId: { type: mongoose.Schema.Types.ObjectId, ref: 'Kit' },
+    // Snapshot of the kit's individual contents at order time, so the vendor has
+    // a pick list even if the kit definition changes or items are later edited.
+    kitItems: [{
+      name: { type: String },
+      category: { type: String },
+      subcategory: { type: String },
+      imageUrl: { type: String },
+      qty: { type: Number },
+      attributes: { type: mongoose.Schema.Types.Mixed },
+      packed: { type: Boolean, default: false }
+    }],
     // Commission split snapshotted at order time so a later rate change never
     // rewrites the economics of an order already placed. When present, settlement
     // uses these; when absent it falls back to the vendor's flat rate.

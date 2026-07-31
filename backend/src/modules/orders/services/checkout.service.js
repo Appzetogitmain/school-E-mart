@@ -47,6 +47,14 @@ const checkoutService = {
             kitId: kit._id,
             schoolId: kit.schoolId,
             kitCreatedAt: kit.audit?.createdAt || kit.createdAt || null,
+            kitItems: (kit.items || []).map((kitItem) => ({
+              name: kitItem.name,
+              category: kitItem.category,
+              subcategory: kitItem.subcategory,
+              imageUrl: kitItem.imageUrl,
+              qty: kitItem.qty,
+              attributes: kitItem.attributes,
+            })),
           };
         }
       }
@@ -93,6 +101,7 @@ const checkoutService = {
         availableStock: stock,
         kitId: product.kitId || null,
         kitCreatedAt: product.kitCreatedAt || null,
+        kitItems: product.kitItems || undefined,
         // Drives the commission split: 'users' = retail, 'schools' = bulk.
         productAudience: product.audience || 'users',
       });

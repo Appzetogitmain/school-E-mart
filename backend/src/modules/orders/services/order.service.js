@@ -93,6 +93,7 @@ const orderService = {
               // Commission snapshot (see commission.service). schoolId is the
               // school that earns the school share on this line, if any.
               kitId: item.kitId || undefined,
+              kitItems: item.kitItems || undefined,
               schoolId: commissionSplits[idx]?.schoolId || undefined,
               commission: {
                 adminPercent: commissionSplits[idx]?.adminPercent ?? 0,

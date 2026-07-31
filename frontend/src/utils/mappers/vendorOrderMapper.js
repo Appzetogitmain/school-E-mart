@@ -25,12 +25,22 @@ const sumVendorItemsPaise = (order) => {
 
 const mapVendorOrderItems = (items = []) =>
   items.map((item, index) => ({
+    itemIndex: index,
     srNo: item.sku?.slice(-4) || String(index + 1).padStart(4, '0'),
     name: item.name,
     unit: item.size || 'unit',
     price: paiseToRupees(item.pricePaise),
     tax: `${paiseToRupees(item.taxPaise || 0).toFixed(2)} (${item.taxRatePercent || 0}%)`,
     qty: item.quantity,
+    isKit: Boolean(item.kitId),
+    kitItems: (item.kitItems || []).map((kitItem, kitItemIndex) => ({
+      kitItemIndex,
+      name: kitItem.name,
+      category: kitItem.category,
+      subcategory: kitItem.subcategory,
+      qty: kitItem.qty,
+      packed: Boolean(kitItem.packed),
+    })),
   }));
 
 export const mapVendorOrderForList = (order) => {

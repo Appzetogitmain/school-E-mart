@@ -13,6 +13,7 @@ import {
   processVendorOrder,
   markVendorOrderReadyForDispatch,
   updateVendorOrderStatus,
+  toggleVendorKitItemPacked,
 } from '../../services/vendorApi';
 import { getErrorMessage } from '../../utils/apiHelpers';
 import {
@@ -131,6 +132,16 @@ const VendorOrders = () => {
     }
   };
 
+  const handleToggleKitItemPacked = async (itemIndex, kitItemIndex, packed) => {
+    if (!selectedOrder?.mongoId) return;
+    try {
+      await toggleVendorKitItemPacked(selectedOrder.mongoId, { itemIndex, kitItemIndex, packed });
+      await refreshSelectedOrder(selectedOrder.mongoId);
+    } catch (err) {
+      setError(getErrorMessage(err, 'Unable to update kit item'));
+    }
+  };
+
   const filteredOrders = useMemo(() => orders, [orders]);
 
   const paginatedOrders = useMemo(() => {
@@ -242,14 +253,62 @@ const VendorOrders = () => {
               </thead>
               <tbody className="divide-y divide-gray-50 text-gray-700 font-semibold">
                 {selectedOrder.items.map((item, idx) => (
-                  <tr key={idx} className="hover:bg-gray-50/30 transition-colors">
-                    <td className="px-6 py-4 text-gray-400 font-mono">{item.srNo}</td>
-                    <td className="px-6 py-4 font-black text-gray-900">{item.name}</td>
-                    <td className="px-6 py-4 text-gray-500">{item.unit}</td>
-                    <td className="px-6 py-4">₹{item.price.toFixed(2)}</td>
-                    <td className="px-6 py-4 text-center font-bold">{item.qty}</td>
-                    <td className="px-6 py-4 text-right font-black text-gray-900">₹{(item.qty * item.price).toFixed(2)}</td>
-                  </tr>
+                  <React.Fragment key={idx}>
+                    <tr className="hover:bg-gray-50/30 transition-colors">
+                      <td className="px-6 py-4 text-gray-400 font-mono">{item.srNo}</td>
+                      <td className="px-6 py-4 font-black text-gray-900">
+                        {item.name}
+                        {item.isKit && (
+                          <span className="ml-2 inline-block text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border bg-purple-50 text-[#5B3FD6] border-purple-100">
+                            Kit
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 text-gray-500">{item.unit}</td>
+                      <td className="px-6 py-4">₹{item.price.toFixed(2)}</td>
+                      <td className="px-6 py-4 text-center font-bold">{item.qty}</td>
+                      <td className="px-6 py-4 text-right font-black text-gray-900">₹{(item.qty * item.price).toFixed(2)}</td>
+                    </tr>
+                    {item.isKit && item.kitItems?.length > 0 && (
+                      <tr>
+                        <td colSpan={6} className="px-6 pb-4 bg-gray-50/40">
+                          <div className="ml-4 border border-gray-100 rounded-xl bg-white p-3">
+                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
+                              Kit Contents — Pick List ({item.kitItems.filter((k) => k.packed).length}/{item.kitItems.length} packed)
+                            </p>
+                            <ul className="space-y-1.5">
+                              {item.kitItems.map((kitItem) => (
+                                <li
+                                  key={kitItem.kitItemIndex}
+                                  className="flex items-center justify-between gap-3 text-xs px-2 py-1.5 rounded-lg hover:bg-gray-50"
+                                >
+                                  <label className="flex items-center gap-2.5 cursor-pointer flex-1">
+                                    <input
+                                      type="checkbox"
+                                      checked={kitItem.packed}
+                                      onChange={(e) =>
+                                        handleToggleKitItemPacked(item.itemIndex, kitItem.kitItemIndex, e.target.checked)
+                                      }
+                                      className="w-4 h-4 rounded accent-[#5B3FD6]"
+                                    />
+                                    <span className={kitItem.packed ? 'line-through text-gray-400 font-medium' : 'font-bold text-gray-700'}>
+                                      {kitItem.name}
+                                    </span>
+                                    {(kitItem.category || kitItem.subcategory) && (
+                                      <span className="text-gray-400 font-medium">
+                                        ({[kitItem.category, kitItem.subcategory].filter(Boolean).join(' / ')})
+                                      </span>
+                                    )}
+                                  </label>
+                                  <span className="text-gray-500 font-bold shrink-0">Qty: {kitItem.qty}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
                 ))}
               </tbody>
             </table>
