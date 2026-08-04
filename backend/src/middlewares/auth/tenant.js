@@ -13,7 +13,14 @@ const requireTenant =
         throw new UnauthorizedError(messages.AUTH.UNAUTHORIZED);
       }
 
-      const allowedRoles = options.roles || [ROLES.SCHOOL_ADMIN, ROLES.TEACHER, ROLES.SUPER_ADMIN];
+      const allowedRoles = options.roles || [
+        ROLES.SCHOOL_ADMIN,
+        ROLES.TEACHER,
+        ROLES.SUPER_ADMIN,
+        ROLES.PARENT,
+        'user',
+        ROLES.VENDOR,
+      ];
       if (!allowedRoles.includes(req.auth.role)) {
         throw new ForbiddenError(messages.AUTH.FORBIDDEN, 'TENANT_ROLE_FORBIDDEN');
       }

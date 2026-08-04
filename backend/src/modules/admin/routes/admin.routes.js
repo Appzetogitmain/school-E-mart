@@ -463,7 +463,7 @@ router.put(
 router.get('/cms/terms', ...adminOnly, adminController.getTermsAndConditions);
 router.get('/cms/privacy', ...adminOnly, adminController.getPrivacyPolicy);
 router.get('/cms/about', ...adminOnly, adminController.getAboutUs);
-router.get('/cms/contact', ...adminOnly, adminController.getContactInfo);
+router.get('/cms/contact', adminController.getContactInfo);
 
 // Settings
 router.get('/settings', ...adminOnly, adminController.getAllSettings);

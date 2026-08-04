@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { 
   Bell, GraduationCap, Users, Clock, ArrowRight, 
   Calendar, BookOpen, FileText, CheckSquare, Plus,
-  ChevronDown, UserCheck, MessageSquare, PlusCircle, FileCheck, Loader2, Building2
+  ChevronDown, UserCheck, MessageSquare, PlusCircle, FileCheck, Loader2, Building2, Megaphone
 } from 'lucide-react';
 import { getDailyAttendance, listStudents, getSchool } from '../../../services/schoolApi';
 import { listCourses, listAssignments } from '../../../services/lmsApi';
@@ -12,6 +12,7 @@ import { parseClassGrade, parseSection } from '../../../utils/mappers/teacherMap
 import { toLocalDateKey } from '../../../utils/date';
 import { useAuthUser, useTeacherSchoolId } from '../../../utils/teacherContext';
 import { useTeacherClassOptions } from '../../../hooks/useTeacherClassOptions';
+import { toAbsoluteUrl } from '../../../utils/url';
 
 const TeacherDashboard = () => {
   const navigate = useNavigate();
@@ -172,7 +173,7 @@ const TeacherDashboard = () => {
               {schoolInfo && (
                 <div className="flex items-center gap-1.5 mb-1.5 px-2.5 py-0.5 bg-white/15 border border-white/20 rounded-full w-fit backdrop-blur-md">
                   {schoolInfo.logoUrl ? (
-                    <img src={schoolInfo.logoUrl} alt="School Logo" className="w-3.5 h-3.5 rounded-full object-cover shrink-0" />
+                    <img src={toAbsoluteUrl(schoolInfo.logoUrl)} alt="School Logo" className="w-3.5 h-3.5 rounded-full object-cover shrink-0" />
                   ) : (
                     <Building2 size={11} className="text-[#FFC933] shrink-0" />
                   )}
@@ -316,6 +317,12 @@ const TeacherDashboard = () => {
             icon={<FileCheck size={20} />} 
             label="Check Homework" 
             onClick={() => navigate('/school/teacher/homework/check')}
+          />
+          <QuickActionButton 
+            color="bg-indigo-50 text-indigo-500 hover:bg-indigo-100/50" 
+            icon={<Megaphone size={20} />} 
+            label="Send Notice" 
+            onClick={() => navigate('/school/teacher/send-notice')}
           />
           <QuickActionButton 
             color="bg-amber-50 text-amber-500 hover:bg-amber-100/50" 

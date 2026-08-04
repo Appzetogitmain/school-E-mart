@@ -252,6 +252,16 @@ export const updateBillingConfig = async (payload) => {
   return unwrapData(response)?.section;
 };
 
+export const getContactSettings = async () => {
+  const response = await apiClient.get('/admin/cms/contact');
+  return unwrapData(response)?.content;
+};
+
+export const updateContactSettings = async (payload) => {
+  const response = await apiClient.put('/admin/settings/contact', payload);
+  return unwrapData(response)?.section;
+};
+
 export const listPlatformCourses = async (params = {}) => {
   const response = await apiClient.get('/admin/lms/courses', { params });
   return extractPaginated(response, 'courses');

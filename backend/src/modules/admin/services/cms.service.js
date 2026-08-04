@@ -155,7 +155,7 @@ const cmsService = {
     };
   },
 
-  listPublicBanners(query = {}) {
+  async listPublicBanners(query = {}) {
     const now = new Date();
     const filter = {
       status: 'active',
@@ -171,7 +171,11 @@ const cmsService = {
       filter.targetAudience = { $in: [query.audience, 'all'] };
     }
 
-    return promoBannerRepository.paginatePublic(filter, query);
+    const { data, pagination } = await promoBannerRepository.paginatePublic(filter, query);
+    return {
+      data: data.map(withBannerImageUrl),
+      pagination,
+    };
   },
 
   async getBanner(bannerId) {
@@ -264,7 +268,8 @@ const cmsService = {
   },
 
   async getContactInfo() {
-    return landingContentRepository.findBySlug('contact');
+    const settingsService = require('./settings.service');
+    return settingsService.getSection('contact');
   },
 
   async setStatus(resourceType, resourceId, status, actor = {}) {

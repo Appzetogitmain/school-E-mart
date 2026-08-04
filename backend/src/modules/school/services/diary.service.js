@@ -34,8 +34,10 @@ const buildParentDiaryFilter = async (schoolId, userId, studentId) => {
       { studentId: student._id },
       {
         classGrade: { $in: gradeVariants },
-        ...sectionFilter,
-        $or: [{ studentId: null }, { studentId: { $exists: false } }],
+        $and: [
+          sectionFilter,
+          { $or: [{ studentId: null }, { studentId: { $exists: false } }] },
+        ],
       },
     ],
   };

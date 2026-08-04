@@ -1,3 +1,5 @@
+import { toAbsoluteUrl } from '../url';
+
 const PRODUCT_PLACEHOLDER =
   'https://images.unsplash.com/photo-1503676260728-1c00da094a0b?q=80&w=400&h=400&fit=crop';
 
@@ -12,19 +14,22 @@ export const formatRupee = (paise) => {
 
 export const formatRupeeNumber = (paise) => Number(paise || 0) / 100;
 
-const isUrl = (value) => typeof value === 'string' && /^https?:\/\//i.test(value);
-
 export const resolveProductImage = (product, index = 0) => {
   const images = product?.images || [];
   const entry = images[index] || images[0];
 
   if (!entry) return PRODUCT_PLACEHOLDER;
-  if (isUrl(entry)) return entry;
-  if (isUrl(entry.url)) return entry.url;
-  if (isUrl(entry.imageUrl)) return entry.imageUrl;
-  if (isUrl(entry.alt)) return entry.alt;
+  // Product.images entries are { attachmentId: <Attachment ref>, alt }; when
+  // populated, attachmentId is the Attachment doc holding the real storageKey.
+  const key =
+    (typeof entry === 'string' && entry) ||
+    entry.attachmentId?.storageKey ||
+    entry.storageKey ||
+    entry.url ||
+    entry.imageUrl ||
+    (typeof entry.attachmentId === 'string' ? entry.attachmentId : null);
 
-  return PRODUCT_PLACEHOLDER;
+  return toAbsoluteUrl(key) || PRODUCT_PLACEHOLDER;
 };
 
 export const resolveProductImages = (product) => {

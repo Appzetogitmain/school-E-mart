@@ -107,6 +107,46 @@ export const listClasses = async (schoolId) => {
   return unwrapData(response)?.classes || [];
 };
 
+export const createNotice = async (schoolId, payload) => {
+  const response = await apiClient.post(schoolPath(schoolId, '/notices'), payload);
+  return unwrapData(response)?.notice;
+};
+
+export const listNotices = async (schoolId, params = {}) => {
+  const response = await apiClient.get(schoolPath(schoolId, '/notices'), { params });
+  return extractPaginated(response, 'notices');
+};
+
+export const deleteNotice = async (schoolId, noticeId) => {
+  const response = await apiClient.delete(schoolPath(schoolId, `/notices/${noticeId}`));
+  return unwrapData(response);
+};
+
+export const listSubjects = async (schoolId, params = {}) => {
+  const response = await apiClient.get(schoolPath(schoolId, '/subjects'), { params });
+  return extractPaginated(response, 'lookups');
+};
+
+export const createSubject = async (schoolId, payload) => {
+  const response = await apiClient.post(schoolPath(schoolId, '/subjects'), payload);
+  return unwrapData(response)?.subject;
+};
+
+export const updateSubject = async (schoolId, code, payload) => {
+  const response = await apiClient.patch(schoolPath(schoolId, `/subjects/${code}`), payload);
+  return unwrapData(response)?.subject;
+};
+
+export const deleteSubject = async (schoolId, code) => {
+  const response = await apiClient.delete(schoolPath(schoolId, `/subjects/${code}`));
+  return unwrapData(response);
+};
+
+export const assignSubjectToClass = async (schoolId, payload) => {
+  const response = await apiClient.post(schoolPath(schoolId, '/subjects/assign'), payload);
+  return unwrapData(response);
+};
+
 export const createClass = async (schoolId, payload) => {
   const response = await apiClient.post(schoolPath(schoolId, '/classes'), payload);
   return unwrapData(response)?.school;
@@ -140,16 +180,6 @@ export const removeTeacherAssignment = async (schoolId, teacherProfileId, { clas
     { params: { classGrade, section } }
   );
   return unwrapData(response)?.assignments || [];
-};
-
-export const listSubjects = async (schoolId, params = {}) => {
-  const response = await apiClient.get(schoolPath(schoolId, '/subjects'), { params });
-  return extractPaginated(response, 'subjects');
-};
-
-export const createSubject = async (schoolId, payload) => {
-  const response = await apiClient.post(schoolPath(schoolId, '/subjects'), payload);
-  return unwrapData(response);
 };
 
 export const getTeacher = async (schoolId, teacherId) => {
@@ -186,24 +216,20 @@ export const getAttendanceHistory = async (schoolId, params = {}) => {
   return { data: data?.records || [], pagination: data?.pagination || null };
 };
 
-export const createNotice = async (schoolId, payload) => {
-  const response = await apiClient.post(schoolPath(schoolId, '/notices'), payload);
-  return unwrapData(response)?.notice;
+
+export const listDiaryEntries = async (schoolId, params = {}) => {
+  const response = await apiClient.get(schoolPath(schoolId, '/diary'), { params });
+  return extractPaginated(response, 'entries');
 };
 
-export const listNotices = async (schoolId, params = {}) => {
-  const response = await apiClient.get(schoolPath(schoolId, '/notices'), { params });
-  return extractPaginated(response, 'notices');
+export const deleteDiaryEntry = async (schoolId, entryId) => {
+  const response = await apiClient.delete(schoolPath(schoolId, `/diary/${entryId}`));
+  return unwrapData(response);
 };
 
 export const createDiaryEntry = async (schoolId, payload) => {
   const response = await apiClient.post(schoolPath(schoolId, '/diary'), payload);
   return unwrapData(response)?.entry;
-};
-
-export const listDiaryEntries = async (schoolId, params = {}) => {
-  const response = await apiClient.get(schoolPath(schoolId, '/diary'), { params });
-  return extractPaginated(response, 'entries');
 };
 
 export const markDiaryRead = async (schoolId, entryId, params = {}) => {

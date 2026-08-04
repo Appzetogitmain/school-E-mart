@@ -9,9 +9,10 @@ import {
 import { listKits, updateKit, deleteKit } from '../../../services/schoolApi';
 import { useSchoolId } from '../../../utils/schoolContext';
 import { getErrorMessage } from '../../../utils/apiHelpers';
+import { toAbsoluteUrl } from '../../../utils/url';
 
 const mapKit = (k) => {
-  const imageUrl = k.imageId?.storageKey || k.imageUrl || k.image?.url;
+  const imageUrl = toAbsoluteUrl(k.imageId?.storageKey || k.imageUrl || k.image?.url);
   const avatar = imageUrl ? imageUrl : `https://ui-avatars.com/api/?background=3b2d7d&color=fff&bold=true&name=${encodeURIComponent(k.name || 'Kit')}`;
   const itemsList = (k.items || []).map((item) => {
     return {

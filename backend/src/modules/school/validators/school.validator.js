@@ -9,7 +9,7 @@ const paginationQuery = {
   search: Joi.string().trim().max(120).optional(),
 };
 
-const schoolIdParam = Joi.object({ schoolId: objectId.required() });
+const schoolIdParam = Joi.object({ schoolId: Joi.string().trim().required() });
 const classGradeParam = schoolIdParam.keys({ classGrade: Joi.string().trim().required() });
 const sectionParam = classGradeParam.keys({ section: Joi.string().trim().required() });
 
@@ -282,8 +282,8 @@ const noticeQuerySchema = Joi.object({
   ...paginationQuery,
   status: Joi.string().valid('draft', 'published', 'archived').optional(),
   targetAudience: Joi.string().valid('all', 'parents', 'teachers', 'staff', 'specific_classes').optional(),
-  studentId: objectId.optional(),
-});
+  studentId: objectId.optional().allow('', null, 'undefined'),
+}).unknown(true);
 
 const createDiarySchema = Joi.object({
   title: Joi.string().trim().min(2).max(200).required(),
@@ -307,8 +307,8 @@ const diaryQuerySchema = Joi.object({
 });
 
 const studentIdQuerySchema = Joi.object({
-  studentId: objectId.optional(),
-});
+  studentId: objectId.optional().allow('', null, 'undefined'),
+}).unknown(true);
 
 // School finance: bank details for payouts and a withdrawal request.
 const schoolBankSchema = Joi.object({
@@ -360,13 +360,13 @@ module.exports = {
     status: attendanceStatus.optional(),
     remarks: Joi.string().trim().max(300).optional().allow('', null),
   }).min(1),
-  teacherIdParam: schoolIdParam.keys({ teacherId: objectId.required() }),
-  studentIdParam: schoolIdParam.keys({ studentId: objectId.required() }),
+  teacherIdParam: schoolIdParam.keys({ teacherId: Joi.string().trim().required() }),
+  studentIdParam: schoolIdParam.keys({ studentId: Joi.string().trim().required() }),
   subjectCodeParam: schoolIdParam.keys({ code: Joi.string().trim().required() }),
-  slotIdParam: schoolIdParam.keys({ slotId: objectId.required() }),
-  attendanceIdParam: schoolIdParam.keys({ attendanceId: objectId.required() }),
-  noticeIdParam: schoolIdParam.keys({ noticeId: objectId.required() }),
-  diaryIdParam: schoolIdParam.keys({ entryId: objectId.required() }),
+  slotIdParam: schoolIdParam.keys({ slotId: Joi.string().trim().required() }),
+  attendanceIdParam: schoolIdParam.keys({ attendanceId: Joi.string().trim().required() }),
+  noticeIdParam: schoolIdParam.keys({ noticeId: Joi.string().trim().required() }),
+  diaryIdParam: schoolIdParam.keys({ entryId: Joi.string().trim().required() }),
   createNoticeSchema,
   updateNoticeSchema,
   noticeStatusSchema,
@@ -375,6 +375,12 @@ module.exports = {
   updateDiarySchema,
   diaryQuerySchema,
   studentIdQuerySchema,
+  studentQuerySchema: Joi.object({
+    ...paginationQuery,
+    classGrade: Joi.string().trim().optional(),
+    section: Joi.string().trim().optional(),
+    status: Joi.string().trim().optional(),
+  }).unknown(true),
   updateParentSchema: Joi.object({
     name: Joi.string().trim().min(2).max(80).optional(),
     email: schemas.email.optional().allow('', null),

@@ -82,16 +82,39 @@ const ParentCalendar = () => {
   // is already mapped, so it just needed somewhere to render.
   const [selectedEvent, setSelectedEvent] = useState(null);
 
+  const getParentSchoolId = () => {
+    if (childInfo?.schoolId && childInfo.schoolId !== 'explore-schools') {
+      return childInfo.schoolId;
+    }
+    try {
+      const school = localStorage.getItem('selectedSchool');
+      if (school) {
+        const p = JSON.parse(school);
+        if (p._id) return p._id;
+        if (p.id) return p.id;
+      }
+      const user = localStorage.getItem('user');
+      if (user) {
+        const p = JSON.parse(user);
+        if (p.tenantSchoolId) return p.tenantSchoolId;
+      }
+    } catch (e) {
+      // ignore
+    }
+    return null;
+  };
+
   useEffect(() => {
-    const schoolId = childInfo?.schoolId;
-    if (!schoolId || schoolId === 'explore-schools') return;
+    const schoolId = getParentSchoolId();
+    if (!schoolId) return;
 
     let cancelled = false;
     (async () => {
       try {
-        const { data } = await listEvents(schoolId, { limit: 100 });
-        if (!cancelled) setRawEvents(data || []);
-      } catch {
+        const res = await listEvents(schoolId, { limit: 100 });
+        const events = Array.isArray(res) ? res : (res?.data || []);
+        if (!cancelled) setRawEvents(events);
+      } catch (err) {
         if (!cancelled) setRawEvents([]);
       }
     })();

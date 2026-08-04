@@ -1,4 +1,4 @@
-import { ENV } from '../../config/env';
+import { toAbsoluteUrl } from '../url';
 
 export const parseClassGrade = (label = '') => {
   const trimmed = String(label).trim();
@@ -10,21 +10,38 @@ export const parseClassGrade = (label = '') => {
 export const parseSection = (label = '') =>
   String(label).replace(/^section\s*/i, '').trim().toUpperCase();
 
-export const mapStudentForTeacherManage = (student) => ({
-  id: student?._id?.toString?.() || student?.id,
-  mongoId: student?._id?.toString?.() || student?.id,
-  rollNo: student?.rollNo || '—',
-  name: student?.name,
-  parentName: '—',
-  motherName: '—',
-  phone: '—',
-  gender: student?.gender === 'female' ? 'Female' : student?.gender === 'male' ? 'Male' : '—',
-  dob: student?.dob ? new Date(student.dob).toISOString().slice(0, 10) : '',
-  admissionNo: student?.schoolRefNo || student?._id?.toString?.()?.slice(-6) || '—',
-  classGrade: student?.classGrade,
-  section: student?.section,
-  raw: student,
-});
+export const mapStudentForTeacherManage = (student) => {
+  const firstParentProfile = (Array.isArray(student?.parentProfileIds) && student.parentProfileIds.length > 0)
+    ? student.parentProfileIds[0]
+    : (typeof student?.parentProfileIds === 'object' ? student.parentProfileIds : null);
+
+  const parentUser = (firstParentProfile && typeof firstParentProfile.userId === 'object') 
+    ? firstParentProfile.userId 
+    : (student?.parentUserId && typeof student.parentUserId === 'object' ? student.parentUserId : (student?.parent || {}));
+
+  const pName = parentUser?.name || student?.parentName || student?.fatherName || '—';
+  const pPhone = parentUser?.phone || student?.parentPhone || student?.phone || '—';
+  const pAltPhone = firstParentProfile?.altPhone || parentUser?.altPhone || student?.altPhone || '—';
+  const pMotherName = student?.motherName || '—';
+
+  return {
+    id: student?._id?.toString?.() || student?.id,
+    mongoId: student?._id?.toString?.() || student?.id,
+    rollNo: student?.rollNo || '—',
+    name: student?.name || '—',
+    parentName: pName,
+    fatherName: pName,
+    motherName: pMotherName,
+    phone: pPhone,
+    altPhone: pAltPhone,
+    gender: student?.gender === 'female' ? 'Female' : student?.gender === 'male' ? 'Male' : (student?.gender || '—'),
+    dob: student?.dob ? new Date(student.dob).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—',
+    admissionNo: student?.schoolRefNo || student?.studentId || '—',
+    classGrade: student?.classGrade || '—',
+    section: student?.section || '—',
+    raw: student,
+  };
+};
 
 // A student with no record yet is UNMARKED, never Present. Defaulting to 'P' meant
 // saving an untouched roster silently recorded the whole class present.
@@ -105,16 +122,6 @@ export const scoreToGrade = (score) => {
   if (score == null) return '';
   const match = SCORE_TO_GRADE.find(([min]) => Number(score) >= min);
   return match ? match[1] : 'F';
-};
-
-// Submissions store server-relative paths like /uploads/homework-123.jpg. In dev the
-// API_URL is just "/api/v1" and Vite proxies /uploads, so this resolves to a relative
-// path; in prod it resolves against the API host.
-const toAbsoluteUrl = (url) => {
-  if (!url) return '';
-  if (/^https?:\/\//i.test(url)) return url;
-  const origin = ENV.API_URL.replace(/\/api\/v1\/?$/, '').replace(/\/$/, '');
-  return `${origin}${url}`;
 };
 
 /**

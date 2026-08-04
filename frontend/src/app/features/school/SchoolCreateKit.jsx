@@ -14,6 +14,7 @@ import {
 } from '../../../services/schoolApi';
 import { useSchoolId } from '../../../utils/schoolContext';
 import { getErrorMessage } from '../../../utils/apiHelpers';
+import { toAbsoluteUrl } from '../../../utils/url';
 import useAuthStore from '../../../store/useAuthStore';
 
 const DEFAULT_CATEGORIES = [
@@ -158,7 +159,7 @@ const SchoolCreateKit = () => {
           setMrp(kit.mrpPaise ? (kit.mrpPaise / 100).toString() : '');
           setKitStatus(kit.status || 'active');
           if (kit.imageId?.storageKey || kit.imageUrl) {
-            setImagePreview(kit.imageId?.storageKey || kit.imageUrl);
+            setImagePreview(toAbsoluteUrl(kit.imageId?.storageKey || kit.imageUrl));
             setExistingImageId(kit.imageId?._id || kit.imageId);
           }
           if (Array.isArray(kit.items)) {

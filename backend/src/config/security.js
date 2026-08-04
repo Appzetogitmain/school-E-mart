@@ -4,6 +4,7 @@ module.exports = Object.freeze({
   helmet: Object.freeze({
     contentSecurityPolicy: env.NODE_ENV === 'production',
     crossOriginEmbedderPolicy: false,
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
   }),
   cookie: Object.freeze({
     httpOnly: true,

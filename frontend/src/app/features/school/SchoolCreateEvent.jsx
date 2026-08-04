@@ -1,14 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft, Calendar, Clock, MapPin,
   Bell, Users, GraduationCap, Grid, Info,
-  Check, ArrowRight, ToggleLeft, ToggleRight
+  Check, ArrowRight, ToggleLeft, ToggleRight,
+  Pencil, Trash2, List, Loader2
 } from 'lucide-react';
-import { createEvent, updateEvent, getEvent, listClasses } from '../../../services/schoolApi';
+import { createEvent, updateEvent, getEvent, listEvents, deleteEvent, listClasses } from '../../../services/schoolApi';
 import { useSchoolId } from '../../../utils/schoolContext';
 import { getErrorMessage } from '../../../utils/apiHelpers';
-import { useEffect } from 'react';
 
 const combineDateTime = (date, time, allDay) => {
   if (!date) return null;
@@ -69,6 +69,30 @@ const SchoolCreateEvent = () => {
   const [error, setError] = useState('');
   const [classesList, setClassesList] = useState([]);
 
+  // Existing Events Management state
+  const [existingEvents, setExistingEvents] = useState([]);
+  const [loadingEvents, setLoadingEvents] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
+
+  const loadSchoolEvents = useCallback(async () => {
+    if (!schoolId) return;
+    setLoadingEvents(true);
+    try {
+      const res = await listEvents(schoolId, { limit: 100 });
+      const events = Array.isArray(res) ? res : (res?.data || []);
+      setExistingEvents(events);
+    } catch (err) {
+      setExistingEvents([]);
+    } finally {
+      setLoadingEvents(false);
+    }
+  }, [schoolId]);
+
+  useEffect(() => {
+    if (!schoolId) return;
+    loadSchoolEvents();
+  }, [schoolId, loadSchoolEvents]);
+
   useEffect(() => {
     if (!schoolId) return;
     (async () => {
@@ -115,7 +139,20 @@ const SchoolCreateEvent = () => {
   }, [schoolId, eventId]);
 
   const handleBack = () => {
-    navigate(isEditing ? '/school/events' : '/school/admin');
+    navigate('/school/admin');
+  };
+
+  const handleDeleteEvent = async (targetId) => {
+    if (!schoolId || !targetId) return;
+    setDeletingId(targetId);
+    try {
+      await deleteEvent(schoolId, targetId);
+      await loadSchoolEvents();
+    } catch (err) {
+      setError(getErrorMessage(err, 'Failed to delete event'));
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   const handleCreateEvent = async () => {
@@ -149,10 +186,22 @@ const SchoolCreateEvent = () => {
       if (isEditing) await updateEvent(schoolId, eventId, payload);
       else await createEvent(schoolId, payload);
       setIsSuccess(true);
+      await loadSchoolEvents();
       setTimeout(() => {
         setIsSuccess(false);
-        navigate(isEditing ? '/school/events' : '/school/admin');
-      }, 2000);
+        if (isEditing) {
+          navigate('/school/create-event');
+        } else {
+          setTitle('');
+          setDescription('');
+          setEventType('');
+          setStartDate('');
+          setStartTime('');
+          setEndDate('');
+          setEndTime('');
+          setVenue('');
+        }
+      }, 1500);
     } catch (err) {
       setError(getErrorMessage(err, isEditing ? 'Unable to update event' : 'Unable to create event'));
     } finally {
@@ -204,6 +253,15 @@ const SchoolCreateEvent = () => {
             </span>
           </div>
         </div>
+
+        <button
+          type="button"
+          onClick={() => navigate('/school/events')}
+          className="px-3.5 py-2 bg-purple-50 hover:bg-purple-100 border border-purple-100 text-primary rounded-xl text-xs font-black flex items-center gap-1.5 active:scale-95 transition-all"
+        >
+          <Calendar size={13} />
+          <span>All Events ({existingEvents.length})</span>
+        </button>
       </div>
 
       {/* Form Content Area */}
@@ -521,6 +579,85 @@ const SchoolCreateEvent = () => {
               </button>
             </div>
           </div>
+        </div>
+
+        {/* Step 5: Published School Events List (Edit & Delete Management) */}
+        <div className="bg-white border border-gray-200/80 rounded-[2.2rem] p-5 shadow-sm space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-7 h-7 rounded-full bg-primary text-white text-[11px] font-black flex items-center justify-center shadow-sm">
+                <List size={13} />
+              </div>
+              <div>
+                <h3 className="text-xs font-black text-deep-purple uppercase tracking-wider">
+                  Published School Events
+                </h3>
+                <p className="text-[10px] text-gray-400 font-bold">
+                  {existingEvents.length} event{existingEvents.length === 1 ? '' : 's'} managed
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => navigate('/school/events')}
+              className="text-[10px] font-black text-primary hover:underline"
+            >
+              View Calendar View
+            </button>
+          </div>
+
+          {loadingEvents ? (
+            <div className="flex justify-center py-6 text-primary">
+              <Loader2 size={22} className="animate-spin" />
+            </div>
+          ) : existingEvents.length === 0 ? (
+            <div className="text-center py-6 bg-gray-50/50 rounded-2xl border border-dashed border-gray-200">
+              <Calendar size={24} className="mx-auto text-gray-300 mb-1.5" />
+              <p className="text-xs font-bold text-gray-400">No published events found</p>
+            </div>
+          ) : (
+            <div className="space-y-3 max-h-[380px] overflow-y-auto pr-1 scrollbar-none">
+              {existingEvents.map((evt) => (
+                <div
+                  key={evt._id}
+                  className="p-3.5 bg-gray-50/70 border border-gray-200/60 rounded-2xl flex items-center justify-between gap-3 hover:border-primary/30 transition-all"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h4 className="text-xs font-black text-deep-purple truncate">{evt.title}</h4>
+                      <span className="px-2 py-0.5 text-[8px] font-black uppercase tracking-wider rounded-md bg-purple-100 text-primary shrink-0">
+                        {evt.eventType || 'General'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3 text-[10px] font-bold text-gray-400">
+                      <span>{evt.startDate ? new Date(evt.startDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'No date'}</span>
+                      {evt.location && <span>• {evt.location}</span>}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/school/create-event?eventId=${evt._id}`)}
+                      className="p-2 rounded-xl bg-white border border-gray-200 text-deep-purple hover:bg-purple-50 hover:text-primary active:scale-95 transition-all"
+                      title="Edit Event"
+                    >
+                      <Pencil size={13} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteEvent(evt._id)}
+                      disabled={deletingId === evt._id}
+                      className="p-2 rounded-xl bg-white border border-red-100 text-red-500 hover:bg-red-50 active:scale-95 transition-all disabled:opacity-50"
+                      title="Delete Event"
+                    >
+                      {deletingId === evt._id ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 

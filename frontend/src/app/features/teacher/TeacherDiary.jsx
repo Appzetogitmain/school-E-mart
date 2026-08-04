@@ -2,17 +2,20 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Users, MessageSquare, Book, User, 
-  Star, Check, Volume2, Send, Loader2
+  Star, Check, Volume2, Send, Loader2, Trash2, Calendar, Clock
 } from 'lucide-react';
-import { createDiaryEntry, listStudents } from '../../../services/schoolApi';
+import { createDiaryEntry, listStudents, listDiaryEntries, deleteDiaryEntry } from '../../../services/schoolApi';
 import { parseClassGrade, parseSection } from '../../../utils/mappers/teacherMapper';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 import { useTeacherSchoolId } from '../../../utils/teacherContext';
 import { useTeacherClassOptions } from '../../../hooks/useTeacherClassOptions';
+import useAuthStore from '../../../store/useAuthStore';
 
 const TeacherDiary = () => {
   const navigate = useNavigate();
   const schoolId = useTeacherSchoolId();
+  const user = useAuthStore((state) => state.user);
+  const teacherName = user?.name || 'Teacher';
   const { classLabels, getSections } = useTeacherClassOptions(schoolId);
 
   const [selectedClass, setSelectedClass] = useState('');
@@ -45,6 +48,44 @@ const TeacherDiary = () => {
   const [toastMessage, setToastMessage] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+
+  const [activeTab, setActiveTab] = useState('create'); // 'create' | 'sent_list'
+  const [sentEntries, setSentEntries] = useState([]);
+  const [loadingSent, setLoadingSent] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
+
+  const loadSentEntries = async () => {
+    if (!schoolId) return;
+    setLoadingSent(true);
+    try {
+      const res = await listDiaryEntries(schoolId, { limit: 100 });
+      setSentEntries(res.data || []);
+    } catch (err) {
+      console.error('Failed to load sent diary entries:', err);
+    } finally {
+      setLoadingSent(false);
+    }
+  };
+
+  useEffect(() => {
+    if (schoolId) {
+      loadSentEntries();
+    }
+  }, [schoolId]);
+
+  const handleDeleteDiaryEntry = async (entryId) => {
+    if (!schoolId || !entryId) return;
+    if (!window.confirm('Are you sure you want to delete this diary note?')) return;
+    setDeletingId(entryId);
+    try {
+      await deleteDiaryEntry(schoolId, entryId);
+      setSentEntries(prev => prev.filter(e => (e._id || e.id) !== entryId));
+    } catch (err) {
+      setError(getErrorMessage(err, 'Unable to delete diary entry'));
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   const classes = classLabels;
   const sections = getSections(selectedClass);
@@ -179,19 +220,140 @@ const TeacherDiary = () => {
       <div className="px-6 pt-7 pb-4 bg-white flex items-center justify-between border-b border-gray-100 relative z-30">
         <div className="flex items-center gap-4">
           <button 
+            type="button"
             onClick={() => navigate('/school/teacher/dashboard')}
             className="w-10 h-10 bg-gray-50 hover:bg-gray-100 active:scale-95 transition-all rounded-full flex items-center justify-center text-deep-purple mr-1"
           >
             <ArrowLeft size={20} strokeWidth={2.5} />
           </button>
           <div>
-            <h1 className="text-lg font-black text-deep-purple leading-none">Add Diary Note</h1>
-            <p className="text-[10px] text-gray-400 font-bold mt-1">Share a note with parents</p>
+            <h1 className="text-lg font-black text-deep-purple leading-none">Teacher Diary</h1>
+            <p className="text-[10px] text-gray-400 font-bold mt-1">Create and manage diary notes for parents</p>
           </div>
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-4 px-6 mt-4 relative z-20">
+      {/* Top Tab Bar: Create Note vs Sent Diary Notes */}
+      <div className="bg-white px-6 pt-3 pb-0 border-b border-gray-200/80 flex items-center gap-6 z-40 relative">
+        <button
+          type="button"
+          onClick={() => setActiveTab('create')}
+          className={`pb-3 text-xs font-black flex items-center gap-1.5 transition-all border-b-2 ${
+            activeTab === 'create'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-gray-400 hover:text-gray-600'
+          }`}
+        >
+          <Send size={14} /> Add Diary Note
+        </button>
+        <button
+          type="button"
+          onClick={() => { setActiveTab('sent_list'); loadSentEntries(); }}
+          className={`pb-3 text-xs font-black flex items-center gap-1.5 transition-all border-b-2 ${
+            activeTab === 'sent_list'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-gray-400 hover:text-gray-600'
+          }`}
+        >
+          <Book size={14} /> Sent Diary Notes
+          {sentEntries.length > 0 && (
+            <span className="px-2 py-0.5 rounded-full text-[9.5px] bg-purple-100 text-primary font-black ml-1">
+              {sentEntries.length}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {activeTab === 'sent_list' ? (
+        /* Sent Diary Notes List View */
+        <div className="px-6 py-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xs font-black text-deep-purple uppercase tracking-wider">
+              Sent Diary Notes ({sentEntries.length})
+            </h2>
+            <button 
+              type="button"
+              onClick={loadSentEntries}
+              className="text-[11px] font-black text-primary hover:underline flex items-center gap-1"
+            >
+              <Clock size={12} /> Refresh
+            </button>
+          </div>
+
+          {loadingSent ? (
+            <div className="bg-white border border-gray-200/80 rounded-[2rem] p-10 text-center shadow-sm">
+              <Loader2 size={24} className="animate-spin text-primary mx-auto mb-2" />
+              <p className="text-xs font-bold text-gray-500">Loading sent diary notes...</p>
+            </div>
+          ) : sentEntries.length === 0 ? (
+            <div className="bg-white border border-gray-200/80 rounded-[2rem] p-10 text-center shadow-sm">
+              <Book size={36} className="text-gray-300 mx-auto mb-2" />
+              <h4 className="text-xs font-black text-deep-purple">No Diary Notes Sent Yet</h4>
+              <p className="text-[10px] text-gray-400 font-bold mt-1 max-w-[220px] mx-auto">
+                Diary notes created by you will be listed here. You can view and delete sent notes anytime.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3.5">
+              {sentEntries.map((entry) => {
+                const entryId = entry._id || entry.id;
+                const createdDate = entry.audit?.createdAt || entry.createdAt;
+                const formattedDate = createdDate ? new Date(createdDate).toLocaleDateString('en-IN', {
+                  day: 'numeric',
+                  month: 'short',
+                  year: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit'
+                }) : '';
+
+                const targetLabel = entry.classGrade 
+                  ? `${entry.classGrade} - ${entry.section || ''}`.trim()
+                  : 'All Classes';
+
+                return (
+                  <div key={entryId} className="bg-white border border-gray-200/80 rounded-[1.8rem] p-4.5 shadow-sm hover:shadow-md transition-all space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="flex items-center gap-2 mb-1.5">
+                          <span className="px-2.5 py-0.5 rounded-full text-[9px] font-black bg-purple-50 text-primary border border-purple-100">
+                            {targetLabel}
+                          </span>
+                        </div>
+                        <h4 className="text-xs font-black text-deep-purple leading-snug">{entry.title}</h4>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteDiaryEntry(entryId)}
+                        disabled={deletingId === entryId}
+                        className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-all shrink-0"
+                        title="Delete Diary Note"
+                      >
+                        {deletingId === entryId ? (
+                          <Loader2 size={15} className="animate-spin text-red-500" />
+                        ) : (
+                          <Trash2 size={15} />
+                        )}
+                      </button>
+                    </div>
+
+                    <p className="text-[11px] text-gray-600 font-semibold line-clamp-2 leading-relaxed">
+                      {entry.content}
+                    </p>
+
+                    <div className="pt-2.5 border-t border-gray-100 flex items-center justify-between text-[9.5px] font-bold text-gray-400">
+                      <span className="flex items-center gap-1">
+                        <Calendar size={11} /> {formattedDate}
+                      </span>
+                      <span className="text-gray-400">ID: {String(entryId).slice(-6)}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      ) : (
+        <form onSubmit={handleSubmit} className="space-y-4 px-6 mt-4 relative z-20">
         
         {/* 2. Class & Section Dropdown Selectors */}
         <div className="grid grid-cols-2 gap-4">
@@ -543,7 +705,7 @@ const TeacherDiary = () => {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div>
-                  <span className="text-xs font-black text-deep-purple block leading-none">Mrs. Neha Sharma</span>
+                  <span className="text-xs font-black text-deep-purple block leading-none">{teacherName}</span>
                   <span className="text-[8px] text-gray-450 font-bold mt-1 block leading-none">{selectedClass} - Section {selectedSection}</span>
                 </div>
               </div>
@@ -578,29 +740,33 @@ const TeacherDiary = () => {
             {/* Date Footer details */}
             <div className="border-t border-gray-100 pt-2 flex items-center justify-between text-[7px] text-gray-400 font-bold uppercase tracking-wider">
               <span>{schedule === 'now' ? 'Published Just Now' : 'Scheduled for later'}</span>
-              <span>12 May 2025 • 10:30 AM</span>
+              <span>{new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} • {new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</span>
             </div>
 
           </div>
         </div>
 
       </form>
+      )}
 
-      {error && (
+      {error && activeTab === 'create' && (
         <p className="px-6 text-[10px] font-bold text-red-500 text-center">{error}</p>
       )}
 
-      {/* 12. Add Diary Note Primary Button */}
-      <div className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white border-t border-gray-100 p-4 z-40">
-        <button 
-          onClick={handleSubmit}
-          disabled={saving}
-          className="w-full py-4 bg-primary text-white hover:bg-deep-purple active:scale-98 transition-all rounded-[1.8rem] text-sm font-black shadow-lg shadow-purple-100 flex items-center justify-center gap-2 disabled:opacity-60"
-        >
-          {saving ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} strokeWidth={2.5} />}
-          <span>{saving ? 'Publishing...' : 'Publish Diary Note'}</span>
-        </button>
-      </div>
+      {/* 12. Add Diary Note Primary Button (Only on Create tab) */}
+      {activeTab === 'create' && (
+        <div className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white border-t border-gray-100 p-4 z-40">
+          <button 
+            type="button"
+            onClick={handleSubmit}
+            disabled={saving}
+            className="w-full py-4 bg-primary text-white hover:bg-deep-purple active:scale-98 transition-all rounded-[1.8rem] text-sm font-black shadow-lg shadow-purple-100 flex items-center justify-center gap-2 disabled:opacity-60"
+          >
+            {saving ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} strokeWidth={2.5} />}
+            <span>{saving ? 'Publishing...' : 'Publish Diary Note'}</span>
+          </button>
+        </div>
+      )}
 
     </div>
   );

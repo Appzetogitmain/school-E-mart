@@ -222,7 +222,7 @@ router.get(
   '/:schoolId/students',
   ...teacherRead,
   resolveSchool(),
-  validateQuery(validators.paginationQuery),
+  validateQuery(validators.studentQuerySchema),
   schoolController.listStudents
 );
 router.get(
@@ -266,7 +266,7 @@ router.delete(
 
 router.get(
   '/:schoolId/subjects',
-  ...protectedRoute({ roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN, ROLES.TEACHER], permissions: [PERMISSIONS.CLASSES_READ] }),
+  ...protectedRoute({ roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN, ROLES.TEACHER, ROLES.PARENT, 'user', ROLES.USER] }),
   resolveSchool(),
   validateQuery(validators.paginationQuery),
   schoolController.listSubjects
@@ -405,13 +405,13 @@ router.delete(
 );
 
 const noticeRead = protectedRoute({
-  roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN, ROLES.TEACHER, ROLES.PARENT, ROLES.USER, ROLES.VENDOR],
-  tenant: { requireTenantId: false },
+  roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN, ROLES.TEACHER, ROLES.PARENT, 'user', ROLES.VENDOR],
+  tenant: { requireTenantId: false, roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN, ROLES.TEACHER, ROLES.PARENT, 'user', ROLES.VENDOR] },
 });
 const noticeWrite = protectedRoute({
-  roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN],
+  roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN, ROLES.TEACHER],
   permissions: [PERMISSIONS.NOTICES_SEND],
-  tenant: { requireTenantId: false },
+  tenant: { requireTenantId: false, roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN, ROLES.TEACHER] },
 });
 const diaryRead = protectedRoute({
   roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN, ROLES.TEACHER, ROLES.PARENT],
@@ -482,7 +482,12 @@ router.delete(
 
 router.post(
   '/:schoolId/uploads',
-  ...schoolAdmin,
+  ...protectedRoute({
+    roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN, ROLES.TEACHER],
+    permissions: [PERMISSIONS.SCHOOLS_READ, PERMISSIONS.NOTICES_SEND],
+    permissionOptions: { mode: 'any' },
+    tenant: { requireTenantId: false },
+  }),
   resolveSchool(),
   uploadImage,
   schoolController.uploadAttachment

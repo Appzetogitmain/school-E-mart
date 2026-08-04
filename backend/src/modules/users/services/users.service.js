@@ -40,7 +40,7 @@ const usersService = {
     let childProfile = null;
     let children = [];
 
-    if (user.role === 'parent') {
+    if (user.role === 'parent' || user.role === 'user') {
       const parentProfile = await ParentProfile.findOne({ userId, 'softDelete.isDeleted': { $ne: true } }).lean();
       // All linked children (a parent may have more than one), oldest first so
       // the list order is stable. The active child leads the student-first UI.
@@ -235,8 +235,16 @@ const usersService = {
       }
     }
 
-    if (user.role === 'parent') {
-      const parentProfile = await ParentProfile.findOne({ userId, 'softDelete.isDeleted': { $ne: true } });
+    if (user.role === 'parent' || user.role === 'user') {
+      let parentProfile = await ParentProfile.findOne({ userId, 'softDelete.isDeleted': { $ne: true } });
+      if (!parentProfile) {
+        const generateCode = () => 'EMART' + Math.floor(1000 + Math.random() * 9000);
+        let refCode = generateCode();
+        while (await ParentProfile.findOne({ referralCode: refCode })) {
+          refCode = generateCode();
+        }
+        parentProfile = await ParentProfile.create({ userId, referralCode: refCode });
+      }
       // Edit the ACTIVE child (the one the parent is acting on behalf of), not
       // just the first one, so multi-child parents update the right student.
       const children = await ChildProfile.find({ parentUserId: userId, 'softDelete.isDeleted': { $ne: true } })

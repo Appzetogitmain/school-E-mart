@@ -27,6 +27,7 @@ import LoginRequired from '../../components/LoginRequired';
 import { listParentDiary, markParentDiaryRead } from '../../../services/parentApi';
 import { mapDiaryEntryForParent } from '../../../utils/mappers/parentMapper';
 import { getErrorMessage } from '../../../utils/apiHelpers';
+import useAuthStore from '../../../store/useAuthStore';
 
 const DIARY_ICONS = {
   message: <MessageSquare size={18} />,
@@ -129,11 +130,16 @@ const ParentDiary = () => {
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState('');
 
+  const authUser = useAuthStore((state) => state.user);
+  const activeSchoolId =
+    childInfo?.schoolId && childInfo.schoolId !== 'explore-schools'
+      ? childInfo.schoolId
+      : (authUser?.tenantSchoolId || authUser?.schoolId || authUser?.profile?.schoolId);
+
   useEffect(() => {
     const loadDiary = async () => {
-      const schoolId = childInfo?.schoolId;
       const studentId = childInfo?.studentId;
-      if (!schoolId || schoolId === 'explore-schools') {
+      if (!activeSchoolId) {
         setDiaryEntries([]);
         setLoading(false);
         return;
@@ -142,7 +148,7 @@ const ParentDiary = () => {
       setLoading(true);
       setFetchError('');
       try {
-        const { data } = await listParentDiary(schoolId, {
+        const { data } = await listParentDiary(activeSchoolId, {
           limit: 50,
           studentId,
         });
@@ -156,18 +162,17 @@ const ParentDiary = () => {
     };
 
     loadDiary();
-  }, [childInfo]);
+  }, [childInfo, activeSchoolId]);
 
   const handleAcknowledge = async (entry) => {
-    const schoolId = childInfo?.schoolId;
     const studentId = childInfo?.studentId;
-    if (!schoolId || !entry?.id || entry.isRead) {
+    if (!activeSchoolId || !entry?.id || entry.isRead) {
       setSelectedEntry(null);
       return;
     }
 
     try {
-      await markParentDiaryRead(schoolId, entry.id, { studentId });
+      await markParentDiaryRead(activeSchoolId, entry.id, { studentId });
       setDiaryEntries((prev) =>
         prev.map((item) =>
           item.id === entry.id

@@ -16,6 +16,7 @@ const rfqService = require('../../rfq/services/rfq.service');
 const parentService = require('../services/parent.service');
 const attachmentService = require('../../admin/services/attachment.service');
 const schoolAccessPolicy = require('../policies/schoolAccess.policy');
+const { ROLES } = require('../../../constants/roles');
 
 const schoolController = {
   createSchool: asyncHandler(async (req, res) => {
@@ -84,8 +85,9 @@ const schoolController = {
   }),
 
   listClasses: asyncHandler(async (req, res) => {
+    const isTeacher = ['teacher', ROLES.TEACHER].includes(req.auth?.role);
     const classes = await classService.listClasses(req.schoolId, {
-      userId: req.auth.role === 'teacher' ? req.auth.userId : undefined,
+      userId: isTeacher ? req.auth.userId : undefined,
     });
     return success(res, { classes }, 'Classes fetched successfully', undefined, req);
   }),

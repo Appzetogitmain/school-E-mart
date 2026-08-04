@@ -1,11 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Phone, Mail, MapPin, Clock,
   ArrowLeft, Send, CheckCircle2,
-  ChevronRight, LogIn
+  ChevronRight, LogIn, Loader2
 } from 'lucide-react';
 import { createSupportTicket } from '../../../services/supportApi';
+import { getContactSettings } from '../../../services/adminApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 import useAuthStore from '../../../store/useAuthStore';
 
@@ -14,6 +15,13 @@ const ContactUsPage = () => {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [contactInfo, setContactInfo] = useState({
+    phone: '+91 98765 43210',
+    email: 'support@schoolemart.com',
+    address: '123 Education Hub, Sector 62, Noida, Uttar Pradesh 201301',
+    workingHours: 'Mon - Sat: 9:00 AM - 7:00 PM',
+  });
+
   // Prefill from the signed-in account so the user isn't retyping known details.
   const [formData, setFormData] = useState(() => {
     const current = useAuthStore.getState().user;
@@ -25,6 +33,19 @@ const ContactUsPage = () => {
     };
   });
   const [errors, setErrors] = useState({});
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const info = await getContactSettings();
+        if (info) {
+          setContactInfo((prev) => ({ ...prev, ...info }));
+        }
+      } catch (err) {
+        console.error('Failed to load contact info:', err);
+      }
+    })();
+  }, []);
 
   const validate = () => {
     const newErrors = {};
@@ -83,19 +104,19 @@ const ContactUsPage = () => {
           <ContactCard
             icon={<Phone className="text-primary" size={20} />}
             label="Call Us"
-            value="+91 1234567890"
-            href="tel:+911234567890"
+            value={contactInfo.phone || '+91 98765 43210'}
+            href={`tel:${contactInfo.phone || '+91 98765 43210'}`}
           />
           <ContactCard
             icon={<Mail className="text-primary" size={20} />}
             label="Email Us"
-            value="info@schoolemart.com"
-            href="mailto:info@schoolemart.com"
+            value={contactInfo.email || 'support@schoolemart.com'}
+            href={`mailto:${contactInfo.email || 'support@schoolemart.com'}`}
           />
           <ContactCard
             icon={<MapPin className="text-primary" size={20} />}
             label="Visit Us"
-            value="India"
+            value={contactInfo.address || 'India'}
           />
           <div className="bg-white p-5 rounded-[2rem] shadow-sm border border-gray-100 flex items-center gap-4">
             <div className="w-12 h-12 rounded-2xl bg-primary/5 flex items-center justify-center shrink-0">
@@ -103,7 +124,7 @@ const ContactUsPage = () => {
             </div>
             <div>
               <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest mb-0.5">Support Hours</p>
-              <p className="text-sm font-bold text-deep-purple">Mon - Sat: 9:00 AM - 7:00 PM</p>
+              <p className="text-sm font-bold text-deep-purple">{contactInfo.workingHours || 'Mon - Sat: 9:00 AM - 7:00 PM'}</p>
             </div>
           </div>
         </div>

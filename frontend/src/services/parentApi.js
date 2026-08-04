@@ -27,10 +27,14 @@ export const listParentNotices = async (schoolId, params = {}) => {
 };
 
 export const acknowledgeParentNotice = async (schoolId, noticeId, params = {}) => {
+  const cleanParams = {};
+  if (params?.studentId && params.studentId !== 'undefined' && params.studentId !== 'null') {
+    cleanParams.studentId = params.studentId;
+  }
   const response = await apiClient.post(
     `/schools/${schoolId}/notices/${noticeId}/acknowledge`,
     null,
-    { params }
+    Object.keys(cleanParams).length ? { params: cleanParams } : undefined
   );
   return response.data?.data;
 };

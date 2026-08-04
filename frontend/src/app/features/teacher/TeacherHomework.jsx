@@ -6,6 +6,7 @@ import {
   Trash2, Plus, Save, File, Check, Loader2, Award
 } from 'lucide-react';
 import { createAssignment } from '../../../services/lmsApi';
+import { listSubjects } from '../../../services/schoolApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 import { parseClassGrade, parseSection } from '../../../utils/mappers/teacherMapper';
 import { ensureCourse } from '../../../utils/teacherApiHelpers';
@@ -22,9 +23,23 @@ const TeacherHomework = () => {
 
   const [selectedClass, setSelectedClass] = useState('');
   const [selectedSection, setSelectedSection] = useState('');
-  const [subject, setSubject] = useState('Mathematics');
+  const [subject, setSubject] = useState('');
+  const [subjectsList, setSubjectsList] = useState([]);
   const [title, setTitle] = useState('');
-  
+
+  useEffect(() => {
+    if (!schoolId) return;
+    listSubjects(schoolId)
+      .then((res) => {
+        const labels = (res.data || []).map((s) => s.label).filter(Boolean);
+        setSubjectsList(labels);
+        if (labels.length > 0) {
+          setSubject((prev) => (prev && labels.includes(prev) ? prev : labels[0]));
+        }
+      })
+      .catch(() => setSubjectsList([]));
+  }, [schoolId]);
+
   const [dateAssigned, setDateAssigned] = useState('');
   const [dueDate, setDueDate] = useState('');
   
@@ -49,7 +64,7 @@ const TeacherHomework = () => {
 
   const classes = classLabels;
   const sections = getSections(selectedClass);
-  const subjects = ['Mathematics', 'Science', 'English', 'Social Studies'];
+  const subjects = subjectsList;
   const homeworkTypes = ['Written', 'Reading', 'Project', 'Online Quiz'];
   const priorities = ['High', 'Medium', 'Low'];
 

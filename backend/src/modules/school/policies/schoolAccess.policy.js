@@ -40,7 +40,7 @@ const resolveTargetSchoolId = async (req) => {
     return schoolId;
   }
 
-  if (req.auth?.role === ROLES.PARENT || req.auth?.role === ROLES.USER) {
+  if (['parent', 'user', ROLES.PARENT].includes(req.auth?.role)) {
     const requestedSchoolId = toObjectId(requested);
     if (requestedSchoolId) {
       return requestedSchoolId;
@@ -50,10 +50,16 @@ const resolveTargetSchoolId = async (req) => {
     if (child?.schoolId) {
       return child.schoolId;
     }
-    throw new ForbiddenError('No associated school found for child profile', 'SCHOOL_REQUIRED');
+    const Student = require('../../../database/models/Student');
+    const ParentProfile = require('../../../database/models/ParentProfile');
+    const parentProfile = await ParentProfile.findOne({ userId: req.auth.userId, 'softDelete.isDeleted': { $ne: true } }).lean();
+    if (parentProfile) {
+      const student = await Student.findOne({ parentProfileIds: parentProfile._id, 'softDelete.isDeleted': { $ne: true } }).lean();
+      if (student?.schoolId) return student.schoolId;
+    }
   }
 
-  // Fallback for any other authenticated role accessing a valid target school ID
+  // Fallback for any authenticated user accessing a requested target school ID
   if (requested) {
     return toObjectId(requested);
   }

@@ -145,9 +145,11 @@ const cartService = {
       const Order = require('../../../database/models/Order');
       const existingOrder = await Order.findOne({
         userId,
-        $or: [{ 'items.productId': product._id }, { 'items.kitId': product._id }],
         orderStatus: { $nin: ['cancelled', 'returned'] },
-        $or: [{ paymentStatus: { $in: ['paid', 'authorized'] } }, { paymentMethod: 'cod' }],
+        $and: [
+          { $or: [{ 'items.productId': product._id }, { 'items.kitId': product._id }] },
+          { $or: [{ paymentStatus: { $in: ['paid', 'authorized'] } }, { paymentMethod: 'cod' }] },
+        ],
       }).lean();
 
       if (existingOrder) {

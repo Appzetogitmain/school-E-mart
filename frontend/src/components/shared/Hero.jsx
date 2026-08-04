@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { listPublicBanners } from '../../services/catalogApi';
 import { useCategoryTree } from '../../hooks/useCategoryTree';
+import { toAbsoluteUrl } from '../../utils/url';
 
 const PromoBanner = ({ banner, className = '' }) => {
   const navigate = useNavigate();
@@ -58,7 +59,7 @@ const Hero = ({ role = 'parent' }) => {
           .map((b) => ({
             id: b._id || b.id,
             mode: b.mode || 'creative',
-            image: b.imageUrl || b.image || b.images?.[0]?.url,
+            image: toAbsoluteUrl(b.imageUrl || b.image || b.images?.[0]?.url),
             title: b.title,
             subtitle: b.subtitle,
             badge: b.badge,

@@ -1,3 +1,5 @@
+import { toAbsoluteUrl } from '../url';
+
 const PLACEHOLDER =
   'https://images.unsplash.com/photo-1523275335684-37898b6baf30?q=80&w=120&h=120&fit=crop';
 
@@ -15,7 +17,7 @@ export const mapCategoryTreeForAdmin = (tree = []) =>
         // `imageUrl` is what the record actually holds; `image` is display-only and
         // may be a placeholder, so never write `image` back to the API.
         imageUrl: category?.imageUrl || category?.iconUrl || '',
-        image: category?.imageUrl || category?.iconUrl || PLACEHOLDER,
+        image: toAbsoluteUrl(category?.imageUrl || category?.iconUrl) || PLACEHOLDER,
         status: formatStatus(category?.status),
         header: header?.name || '—',
         headerId: header?._id?.toString?.(),
@@ -26,7 +28,7 @@ export const mapCategoryTreeForAdmin = (tree = []) =>
           type: 'subcategory',
           name: sub?.name,
           imageUrl: sub?.imageUrl || '',
-          image: sub?.imageUrl || PLACEHOLDER,
+          image: toAbsoluteUrl(sub?.imageUrl) || PLACEHOLDER,
           status: formatStatus(sub?.status),
           order: sub?.displayOrder ?? 0,
           categoryId,

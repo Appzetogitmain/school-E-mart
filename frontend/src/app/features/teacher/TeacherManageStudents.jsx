@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Users, User, Phone, Search, X,
-  Edit, Save, Calendar, BookOpen,
+  Edit, Save, Calendar, BookOpen, Eye,
   Check, MoreVertical, Trash2, Loader2
 } from 'lucide-react';
 import {
@@ -495,39 +495,16 @@ const TeacherManageStudents = () => {
                     </div>
                   </div>
 
-                  {/* Actions buttons right */}
+                  {/* Actions button right */}
                   <div className="flex items-center gap-1.5 relative shrink-0">
                     <button 
+                      type="button"
                       onClick={() => handleOpenEditDrawer(student)}
-                      className="px-2.5 py-1.5 hover:bg-primary/5 active:scale-95 transition-all text-primary rounded-xl flex items-center gap-1"
+                      className="px-3 py-1.5 bg-primary/5 hover:bg-primary/10 active:scale-95 transition-all text-primary rounded-xl flex items-center gap-1.5 border border-primary/10"
                     >
-                      <Edit size={12} strokeWidth={2.5} />
-                      <span className="text-[9px] font-black">Edit</span>
+                      <Eye size={13} strokeWidth={2.5} />
+                      <span className="text-[10px] font-black">View Details</span>
                     </button>
-
-                    <button 
-                      onClick={() => setActiveActionsMenu(activeActionsMenu === student.id ? null : student.id)}
-                      className="w-8 h-8 rounded-full hover:bg-gray-100 active:scale-95 transition-all flex items-center justify-center text-gray-400"
-                    >
-                      <MoreVertical size={14} />
-                    </button>
-
-                    {/* Actions Dropdown */}
-                    {activeActionsMenu === student.id && (
-                      <>
-                        <div className="fixed inset-0 z-40 bg-transparent" onClick={() => setActiveActionsMenu(null)} />
-                        <div className="absolute right-0 top-9 bg-white border border-gray-200 rounded-xl shadow-2xl z-50 py-1 w-24 animate-in fade-in slide-in-from-top-1 duration-200">
-                          <button 
-                            type="button"
-                            onClick={() => handleDeleteStudent(student.id)}
-                            className="w-full px-3 py-1.5 text-left text-[9px] font-black text-red-500 hover:bg-red-50 flex items-center gap-1.5 transition-all"
-                          >
-                            <Trash2 size={11} />
-                            <span>Delete</span>
-                          </button>
-                        </div>
-                      </>
-                    )}
                   </div>
 
                 </div>
@@ -556,10 +533,11 @@ const TeacherManageStudents = () => {
             {/* Drawer Drag bar / Header */}
             <div className="flex justify-between items-center px-6 pt-5 pb-3 border-b border-gray-100 shrink-0">
               <div>
-                <h3 className="text-sm font-black text-deep-purple leading-none">Edit Student Details</h3>
-                <p className="text-[9px] text-gray-400 font-bold mt-1">Update this student's class record</p>
+                <h3 className="text-sm font-black text-deep-purple leading-none">Student Information</h3>
+                <p className="text-[9px] text-gray-400 font-bold mt-1">Official class & contact details</p>
               </div>
               <button 
+                type="button"
                 onClick={() => setIsDrawerOpen(false)}
                 className="w-8 h-8 rounded-full bg-gray-50 hover:bg-gray-100 active:scale-95 transition-all flex items-center justify-center text-gray-450"
               >
@@ -567,8 +545,8 @@ const TeacherManageStudents = () => {
               </button>
             </div>
 
-            {/* Scrollable Form Content */}
-            <form onSubmit={handleSaveStudent} className="flex-1 overflow-y-auto px-6 py-4 space-y-4 pb-24">
+            {/* Scrollable Read-Only Content */}
+            <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4 pb-24">
               
               {/* Section 1: Student Information */}
               <div className="space-y-3">
@@ -577,54 +555,27 @@ const TeacherManageStudents = () => {
                 </span>
 
                 <div className="grid grid-cols-2 gap-3.5">
-                  <div className="bg-gray-50 border border-gray-150 rounded-2xl px-3 py-2">
-                    <label className="text-[8px] font-bold text-gray-400 block mb-0.5 leading-none">Student Name *</label>
-                    <input 
-                      type="text"
-                      value={formName}
-                      onChange={(e) => setFormName(e.target.value)}
-                      required
-                      className="w-full text-[11px] font-black text-deep-purple focus:outline-none bg-transparent leading-snug"
-                      placeholder="Enter student name"
-                    />
+                  <div className="bg-gray-50 border border-gray-150 rounded-2xl px-3.5 py-2.5">
+                    <label className="text-[8px] font-bold text-gray-400 block mb-0.5 leading-none">Student Name</label>
+                    <span className="text-[11px] font-black text-deep-purple block leading-snug">{formName || '—'}</span>
                   </div>
 
-                  <div className="bg-gray-50 border border-gray-150 rounded-2xl px-3 py-2">
-                    <label className="text-[8px] font-bold text-gray-400 block mb-0.5 leading-none">Roll Number *</label>
-                    <input 
-                      type="text"
-                      value={formRollNo}
-                      onChange={(e) => setFormRollNo(e.target.value)}
-                      required
-                      className="w-full text-[11px] font-black text-deep-purple focus:outline-none bg-transparent leading-snug"
-                      placeholder="Enter roll number"
-                    />
+                  <div className="bg-gray-50 border border-gray-150 rounded-2xl px-3.5 py-2.5">
+                    <label className="text-[8px] font-bold text-gray-400 block mb-0.5 leading-none">Roll Number</label>
+                    <span className="text-[11px] font-black text-deep-purple block leading-snug">{formRollNo || '—'}</span>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3.5">
-                  <div className="bg-gray-50 border border-gray-150 rounded-2xl px-3 py-2 relative">
-                    <label className="text-[8px] font-bold text-gray-400 block mb-1 leading-none">Gender</label>
-                    <select 
-                      value={formGender}
-                      onChange={(e) => setFormGender(e.target.value)}
-                      className="w-full text-[11px] font-black text-deep-purple focus:outline-none bg-transparent appearance-none leading-none pr-6 cursor-pointer"
-                    >
-                      <option value="Male">Male</option>
-                      <option value="Female">Female</option>
-                    </select>
-                    <span className="absolute bottom-2 right-3 text-[8px] text-gray-400">▼</span>
+                  <div className="bg-gray-50 border border-gray-150 rounded-2xl px-3.5 py-2.5">
+                    <label className="text-[8px] font-bold text-gray-400 block mb-0.5 leading-none">Gender</label>
+                    <span className="text-[11px] font-black text-deep-purple block leading-snug">{formGender || '—'}</span>
                   </div>
 
-                  <div className="bg-gray-50 border border-gray-150 rounded-2xl px-3 py-2 flex items-center justify-between">
+                  <div className="bg-gray-50 border border-gray-150 rounded-2xl px-3.5 py-2.5 flex items-center justify-between">
                     <div className="flex-1 min-w-0">
                       <label className="text-[8px] font-bold text-gray-400 block mb-0.5 leading-none">Date of Birth</label>
-                      <input 
-                        type="date"
-                        value={formDob}
-                        onChange={(e) => setFormDob(e.target.value)}
-                        className="w-full text-[10px] font-black text-deep-purple focus:outline-none bg-transparent leading-none"
-                      />
+                      <span className="text-[10px] font-black text-deep-purple block leading-snug">{formDob || '—'}</span>
                     </div>
                     <Calendar size={13} className="text-gray-400 shrink-0 ml-1.5" />
                   </div>
@@ -638,51 +589,26 @@ const TeacherManageStudents = () => {
                 </span>
 
                 <div className="grid grid-cols-2 gap-3.5">
-                  <div className="bg-gray-50 border border-gray-150 rounded-2xl px-3 py-2">
-                    <label className="text-[8px] font-bold text-gray-400 block mb-0.5 leading-none">Father Name *</label>
-                    <input 
-                      type="text"
-                      value={formFatherName}
-                      onChange={(e) => setFormFatherName(e.target.value)}
-                      className="w-full text-[11px] font-black text-deep-purple focus:outline-none bg-transparent leading-snug"
-                      placeholder="Enter father name"
-                    />
+                  <div className="bg-gray-50 border border-gray-150 rounded-2xl px-3.5 py-2.5">
+                    <label className="text-[8px] font-bold text-gray-400 block mb-0.5 leading-none">Father / Parent Name</label>
+                    <span className="text-[11px] font-black text-deep-purple block leading-snug">{formFatherName || '—'}</span>
                   </div>
 
-                  <div className="bg-gray-50 border border-gray-150 rounded-2xl px-3 py-2">
+                  <div className="bg-gray-50 border border-gray-150 rounded-2xl px-3.5 py-2.5">
                     <label className="text-[8px] font-bold text-gray-400 block mb-0.5 leading-none">Mother Name</label>
-                    <input 
-                      type="text"
-                      value={formMotherName}
-                      onChange={(e) => setFormMotherName(e.target.value)}
-                      className="w-full text-[11px] font-black text-deep-purple focus:outline-none bg-transparent leading-snug"
-                      placeholder="Enter mother name"
-                    />
+                    <span className="text-[11px] font-black text-deep-purple block leading-snug">{formMotherName || '—'}</span>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3.5">
-                  <div className="bg-gray-50 border border-gray-150 rounded-2xl px-3 py-2">
-                    <label className="text-[8px] font-bold text-gray-400 block mb-0.5 leading-none">Parent Phone Number *</label>
-                    <input 
-                      type="text"
-                      value={formPhone}
-                      onChange={(e) => setFormPhone(e.target.value)}
-                      required
-                      className="w-full text-[11px] font-black text-deep-purple focus:outline-none bg-transparent leading-snug"
-                      placeholder="Enter 10 digit number"
-                    />
+                  <div className="bg-gray-50 border border-gray-150 rounded-2xl px-3.5 py-2.5">
+                    <label className="text-[8px] font-bold text-gray-400 block mb-0.5 leading-none">Parent Phone Number</label>
+                    <span className="text-[11px] font-black text-deep-purple block leading-snug">{formPhone || '—'}</span>
                   </div>
 
-                  <div className="bg-gray-50 border border-gray-150 rounded-2xl px-3 py-2">
-                    <label className="text-[8px] font-bold text-gray-400 block mb-0.5 leading-none">Alternate Phone (Optional)</label>
-                    <input 
-                      type="text"
-                      value={formAltPhone}
-                      onChange={(e) => setFormAltPhone(e.target.value)}
-                      className="w-full text-[11px] font-black text-deep-purple focus:outline-none bg-transparent leading-snug"
-                      placeholder="Enter 10 digit number"
-                    />
+                  <div className="bg-gray-50 border border-gray-150 rounded-2xl px-3.5 py-2.5">
+                    <label className="text-[8px] font-bold text-gray-400 block mb-0.5 leading-none">Alternate Phone</label>
+                    <span className="text-[11px] font-black text-deep-purple block leading-snug">{formAltPhone || '—'}</span>
                   </div>
                 </div>
               </div>
@@ -694,41 +620,33 @@ const TeacherManageStudents = () => {
                 </span>
 
                 <div className="grid grid-cols-3 gap-2.5">
-                  <div className="bg-gray-50 border border-gray-150 rounded-2xl px-3 py-2 col-span-1">
+                  <div className="bg-gray-50 border border-gray-150 rounded-2xl px-3.5 py-2.5 col-span-1">
                     <label className="text-[8px] font-bold text-gray-400 block mb-0.5 leading-none">Admission No.</label>
-                    <input 
-                      type="text"
-                      value={formAdmissionNo}
-                      onChange={(e) => setFormAdmissionNo(e.target.value)}
-                      className="w-full text-[11px] font-black text-deep-purple focus:outline-none bg-transparent leading-snug"
-                      placeholder="Optional number"
-                    />
+                    <span className="text-[11px] font-black text-deep-purple block leading-snug">{formAdmissionNo || '—'}</span>
                   </div>
 
-                  <div className="bg-gray-100 border border-gray-150 rounded-2xl px-3 py-2 relative col-span-1 opacity-70">
-                    <label className="text-[8px] font-bold text-gray-400 block mb-1.5 leading-none">Class</label>
-                    <span className="text-[11px] font-black text-deep-purple block leading-none">{formClass}</span>
+                  <div className="bg-gray-50 border border-gray-150 rounded-2xl px-3.5 py-2.5 relative col-span-1">
+                    <label className="text-[8px] font-bold text-gray-400 block mb-0.5 leading-none">Class</label>
+                    <span className="text-[11px] font-black text-deep-purple block leading-snug">{formClass || selectedClass}</span>
                   </div>
 
-                  <div className="bg-gray-100 border border-gray-150 rounded-2xl px-3 py-2 relative col-span-1 opacity-70">
-                    <label className="text-[8px] font-bold text-gray-400 block mb-1.5 leading-none">Section</label>
-                    <span className="text-[11px] font-black text-deep-purple block leading-none">Section {formSection}</span>
+                  <div className="bg-gray-50 border border-gray-150 rounded-2xl px-3.5 py-2.5 relative col-span-1">
+                    <label className="text-[8px] font-bold text-gray-400 block mb-0.5 leading-none">Section</label>
+                    <span className="text-[11px] font-black text-deep-purple block leading-snug">{formSection ? `Section ${formSection}` : selectedSection}</span>
                   </div>
                 </div>
               </div>
 
-            </form>
+            </div>
 
             {/* Bottom Drawer Actions Bar */}
             <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-100 p-4 z-50 shrink-0">
               <button 
-                type="submit"
-                onClick={handleSaveStudent}
-                disabled={saving}
-                className="w-full py-4 bg-primary text-white hover:bg-deep-purple active:scale-98 transition-all rounded-[1.8rem] text-sm font-black shadow-lg shadow-purple-100 flex items-center justify-center gap-2 disabled:opacity-60"
+                type="button"
+                onClick={() => setIsDrawerOpen(false)}
+                className="w-full py-3.5 bg-gray-100 hover:bg-gray-200 active:scale-98 transition-all rounded-[1.8rem] text-xs font-black text-deep-purple flex items-center justify-center gap-2"
               >
-                {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} strokeWidth={2.5} />}
-                <span>{saving ? 'Saving...' : 'Save Student'}</span>
+                <span>Close</span>
               </button>
             </div>
 

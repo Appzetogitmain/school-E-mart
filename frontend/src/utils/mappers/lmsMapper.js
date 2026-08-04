@@ -1,3 +1,5 @@
+import { toAbsoluteUrl } from '../url';
+
 const DEFAULT_LESSON_IMAGE =
   'https://images.unsplash.com/photo-1497633762265-9d179a990aa6?q=80&w=500&fit=crop';
 
@@ -22,11 +24,9 @@ export const mapCourseToLesson = (course, progress = 0, lesson = null) => {
     progress: Number(progress) || 0,
     duration: course?.durationLabel || course?.duration || '—',
     image:
-      course?.thumbnailUrl ||
-      course?.thumbnail?.url ||
-      course?.imageUrl ||
+      toAbsoluteUrl(course?.thumbnailUrl || course?.thumbnail?.url || course?.imageUrl) ||
       DEFAULT_LESSON_IMAGE,
-    videoUrl: course?.videoUrl || '',
+    videoUrl: toAbsoluteUrl(course?.videoUrl) || '',
     teacher: instructor,
     teacherImg: course?.instructorAvatarUrl || defaultAvatar(instructor),
     type: course?.contentType || 'Video',

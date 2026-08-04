@@ -146,6 +146,7 @@ const BillingChargesManagement = React.lazy(() => import('../app/features/supera
 const AdminProfileManagement = React.lazy(() => import('../app/features/superadmin/AdminProfileManagement'));
 const KitProductsManagement = React.lazy(() => import('../app/features/superadmin/KitProductsManagement'));
 const SchoolKitsManagement = React.lazy(() => import('../app/features/superadmin/SchoolKitsManagement'));
+const ContactManagement = React.lazy(() => import('../app/features/superadmin/ContactManagement'));
 
 
 
@@ -241,6 +242,7 @@ const AppRoutes = () => {
           <Route path="lms" element={<LMSManagement />} />
           <Route path="promo-home-banners" element={<PromoHomeBanners />} />
           <Route path="setting-billing-charges" element={<BillingChargesManagement />} />
+          <Route path="contact-us-settings" element={<ContactManagement />} />
           <Route path="profile" element={<AdminProfileManagement />} />
           <Route path="kit-products" element={<KitProductsManagement />} />
         </Route>
@@ -379,6 +381,7 @@ const AppRoutes = () => {
             <Route path="homework" element={<TeacherHomework />} />
             <Route path="homework/check" element={<TeacherCheckHomework />} />
             <Route path="diary" element={<TeacherDiary />} />
+            <Route path="send-notice" element={<SchoolSendNotice />} />
             <Route path="profile" element={<TeacherProfile />} />
             <Route path="notifications" element={<TeacherNotifications />} />
           </Route>

@@ -4,7 +4,17 @@ const { SETTINGS_AUDIT_ENTITY_ID } = require('../repositories/settings.repositor
 const auditRepository = require('../../auth/repositories/audit.repository');
 const { runAtomic } = require('../../orders/utils/atomic');
 
-const VALID_SECTIONS = ['general', 'marketplace', 'orders', 'school', 'security', 'billing'];
+const VALID_SECTIONS = ['general', 'marketplace', 'orders', 'school', 'security', 'billing', 'contact'];
+
+const DEFAULT_CONTACT_SETTINGS = {
+  phone: '+91 98765 43210',
+  email: 'support@schoolemart.com',
+  address: '123 Education Hub, Sector 62, Noida, Uttar Pradesh 201301',
+  workingHours: 'Mon - Sat: 9:00 AM - 7:00 PM',
+  whatsapp: '+91 98765 43210',
+  bulkPhone: '+91 99999 88888',
+  bulkEmail: 'schools@schoolemart.com',
+};
 
 const settingsService = {
   async getAllSettings() {
@@ -23,6 +33,9 @@ const settingsService = {
       return settingsRepository.getBillingConfig();
     }
     const settings = await settingsRepository.getPlatformSettings();
+    if (section === 'contact') {
+      return { ...DEFAULT_CONTACT_SETTINGS, ...(settings.contact || {}) };
+    }
     return settings[section] || {};
   },
 

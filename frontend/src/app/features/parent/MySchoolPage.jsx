@@ -13,6 +13,7 @@ import LoginRequired from '../../components/LoginRequired';
 import AuthPrompt from '../../components/AuthPrompt';
 import { getSchool, listNotices, listKits } from '../../../services/schoolApi';
 import { listOrders } from '../../../services/ordersApi';
+import { toAbsoluteUrl } from '../../../utils/url';
 import { getChildInfoFromStorage } from '../../../utils/parentContext';
 
 const MySchoolPage = () => {
@@ -97,7 +98,7 @@ const MySchoolPage = () => {
       const { data: rawKits } = await listKits(schoolId, { status: 'active', limit: 100 });
 
       const mappedKits = (rawKits || []).map((k) => {
-        const imageUrl = k.imageId?.storageKey || k.imageUrl || k.image?.url;
+        const imageUrl = toAbsoluteUrl(k.imageId?.storageKey || k.imageUrl || k.image?.url);
         const avatar = imageUrl
           ? imageUrl
           : `https://ui-avatars.com/api/?background=3b2d7d&color=fff&bold=true&name=${encodeURIComponent(k.name || 'Kit')}`;

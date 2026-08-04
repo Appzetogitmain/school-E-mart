@@ -10,6 +10,7 @@ import AuthPrompt from '../../components/AuthPrompt';
 import { getKit } from '../../../services/schoolApi';
 import { useSchoolId } from '../../../utils/schoolContext';
 import { getErrorMessage } from '../../../utils/apiHelpers';
+import { toAbsoluteUrl } from '../../../utils/url';
 
 const SchoolKitDetailsPage = () => {
   const { kitId } = useParams();
@@ -41,7 +42,7 @@ const SchoolKitDetailsPage = () => {
         const mappedItems = (kitData.items || []).map((item) => {
           const prod = item.productId || {};
           const imageObj = prod.images?.[0] || {};
-          const imageUrl = imageObj.storageKey || imageObj.url || '';
+          const imageUrl = toAbsoluteUrl(imageObj.storageKey || imageObj.url || '');
           const imagePath = imageUrl ? imageUrl : `https://ui-avatars.com/api/?background=3b2d7d&color=fff&bold=true&name=${encodeURIComponent(prod.name || 'Component')}`;
           return {
             id: prod._id || item._id,
@@ -56,7 +57,7 @@ const SchoolKitDetailsPage = () => {
         const mappedAddons = (kitData.addOns || []).map((item) => {
           const prod = item.productId || {};
           const imageObj = prod.images?.[0] || {};
-          const imageUrl = imageObj.storageKey || imageObj.url || '';
+          const imageUrl = toAbsoluteUrl(imageObj.storageKey || imageObj.url || '');
           const imagePath = imageUrl ? imageUrl : `https://ui-avatars.com/api/?background=3b2d7d&color=fff&bold=true&name=${encodeURIComponent(prod.name || 'Add-on')}`;
           return {
             id: prod._id || item._id,
@@ -68,7 +69,7 @@ const SchoolKitDetailsPage = () => {
           };
         });
 
-        const kitImageUrl = kitData.imageId?.storageKey || kitData.imageUrl || `https://ui-avatars.com/api/?background=3b2d7d&color=fff&bold=true&name=${encodeURIComponent(kitData.name || 'Kit')}`;
+        const kitImageUrl = toAbsoluteUrl(kitData.imageId?.storageKey || kitData.imageUrl) || `https://ui-avatars.com/api/?background=3b2d7d&color=fff&bold=true&name=${encodeURIComponent(kitData.name || 'Kit')}`;
 
         setCurrentKitData({
           id: kitData._id,

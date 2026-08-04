@@ -57,7 +57,11 @@ const createApp = () => {
   app.get('/health', getHealth);
   // Public assets only. Homework submissions deliberately live outside this directory
   // and are readable solely through the authorized attachment stream endpoint.
-  app.use('/uploads', express.static(UPLOADS_DIR));
+  app.use('/uploads', (req, res, next) => {
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    next();
+  }, express.static(UPLOADS_DIR));
   app.use(config.env.API_PREFIX, routes);
 
   app.use(middlewares.notFoundHandler);
@@ -68,10 +72,32 @@ const createApp = () => {
 
 const app = createApp();
 
+// A transient DNS/network blip during startup (common on flaky dev networks, or
+// while Atlas wakes a paused cluster) shouldn't take the whole process down —
+// only give up after several attempts, not the first one.
+const connectWithRetry = async (connectDB, uri, { attempts = 5, delayMs = 2000 } = {}) => {
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      await connectDB(uri);
+      return;
+    } catch (error) {
+      if (attempt === attempts) throw error;
+      logger.warn('MongoDB connection attempt failed, retrying', {
+        attempt,
+        attempts,
+        message: error.message,
+        retryInMs: delayMs,
+      });
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+      delayMs = Math.min(delayMs * 2, 15000);
+    }
+  }
+};
+
 const startServer = async () => {
   const { connectDB } = require('./database/connection');
 
-  await connectDB(config.database.uri);
+  await connectWithRetry(connectDB, config.database.uri);
 
   const server = http.createServer(app);
 

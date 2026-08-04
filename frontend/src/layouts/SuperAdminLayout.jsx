@@ -213,6 +213,12 @@ const SuperAdminLayout = () => {
       label: 'Billing & Charges',
       icon: IndianRupee,
       path: '/superadmin/setting-billing-charges'
+    },
+    {
+      type: 'item',
+      label: 'Contact Us Settings',
+      icon: Phone,
+      path: '/superadmin/contact-us-settings'
     }
   ];
 

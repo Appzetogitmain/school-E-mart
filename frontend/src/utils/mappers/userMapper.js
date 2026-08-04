@@ -1,3 +1,5 @@
+import { toAbsoluteUrl } from '../url';
+
 export const normalizeUser = (user) => {
   if (!user) return null;
 
@@ -74,7 +76,7 @@ export const buildChildInfoFromUser = (user, existing = {}) => {
     email: normalized?.email || existing.email || '',
     refId: normalized?.refId || existing.refId,
     school: childProfile.schoolName || profile.schoolName || profile.school?.name || existing.school || profile.storeName || 'Explore Schools',
-    schoolLogo: childProfile.schoolLogo || profile.schoolLogo || profile.school?.logoUrl || existing.schoolLogo || '',
+    schoolLogo: toAbsoluteUrl(childProfile.schoolLogo || profile.schoolLogo || profile.school?.logoUrl) || existing.schoolLogo || '',
     grade: childProfile.grade || existing.grade || profile.grade || 'Select Grade',
     schoolId: childProfile.schoolId || normalized?.tenantSchoolId || profile.schoolId || existing.schoolId,
     schoolRefNo: childProfile.schoolRefNo || existing.schoolRefNo || null,

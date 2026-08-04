@@ -1,3 +1,5 @@
+import { toAbsoluteUrl } from '../url';
+
 export const mapFaqForAdmin = (faq) => ({
   id: faq?._id?.toString?.() || faq?.id,
   mongoId: faq?._id?.toString?.() || faq?.id,
@@ -9,10 +11,11 @@ export const mapFaqForAdmin = (faq) => ({
 });
 
 export const mapBannerForAdmin = (banner) => {
-  const imageUrl =
+  const imageUrl = toAbsoluteUrl(
     banner?.imageUrl ||
-    (typeof banner?.imageId === 'object' ? banner.imageId?.storageKey : null) ||
-    null;
+      (typeof banner?.imageId === 'object' ? banner.imageId?.storageKey : null) ||
+      null
+  );
 
   return {
     id: banner?._id?.toString?.() || banner?.id,

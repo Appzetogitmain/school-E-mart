@@ -10,6 +10,7 @@ import { getErrorMessage } from '../../../utils/apiHelpers';
 import { resolveTeacherProfile } from '../../../utils/teacherApiHelpers';
 import { useAuthUser, useTeacherSchoolId } from '../../../utils/teacherContext';
 import useAuthStore from '../../../store/useAuthStore';
+import { toAbsoluteUrl } from '../../../utils/url';
 
 const TeacherProfile = () => {
   const navigate = useNavigate();
@@ -303,7 +304,7 @@ const TeacherProfile = () => {
               <div className="flex items-center gap-4 bg-gray-50/80 p-3.5 rounded-2xl border border-gray-100">
                 <div className="w-14 h-14 rounded-2xl bg-white p-1 border border-gray-200 shadow-sm flex items-center justify-center overflow-hidden shrink-0">
                   {schoolInfo.logoUrl ? (
-                    <img src={schoolInfo.logoUrl} alt={schoolInfo.name} className="w-full h-full object-cover rounded-xl" />
+                    <img src={toAbsoluteUrl(schoolInfo.logoUrl)} alt={schoolInfo.name} className="w-full h-full object-cover rounded-xl" />
                   ) : (
                     <Building2 size={24} className="text-gray-400" />
                   )}

@@ -26,6 +26,8 @@ import { useCategoryTree } from '../../../hooks/useCategoryTree';
 import { useProducts } from '../../../hooks/useProducts';
 import { findHeaderCategory } from '../../../utils/mappers/categoryMapper';
 
+import useAuthStore from '../../../store/useAuthStore';
+
 const ParentHome = () => {
   const navigate = useNavigate();
   const notifRef = useDraggableScroll();
@@ -76,16 +78,55 @@ const ParentHome = () => {
     return () => window.removeEventListener('storage', handleUpdate);
   }, []);
 
+  const getResolvedContext = () => {
+    let studentId = childInfo?.studentId;
+    let schoolId = childInfo?.schoolId;
+
+    if (!studentId || !schoolId || schoolId === 'explore-schools') {
+      try {
+        const authUser = useAuthStore.getState().user;
+        if (authUser) {
+          studentId = studentId || authUser.studentId || authUser.childProfile?.studentId || authUser.profile?.studentId || authUser.childProfileId || authUser._id;
+          if (!schoolId || schoolId === 'explore-schools') {
+            schoolId = authUser.tenantSchoolId || authUser.schoolId;
+          }
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
+
+    if (!schoolId || schoolId === 'explore-schools') {
+      try {
+        const selected = localStorage.getItem('selectedSchool');
+        if (selected) {
+          const parsed = JSON.parse(selected);
+          schoolId = parsed._id || parsed.id;
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
+
+    return { studentId, schoolId };
+  };
+
   useEffect(() => {
     const fetchTodayAttendance = async () => {
-      const studentId = childInfo?.studentId;
-      const schoolId = childInfo?.schoolId;
-      if (!studentId || !schoolId || schoolId === 'explore-schools') return;
+      const { studentId, schoolId } = getResolvedContext();
+      if (!schoolId || schoolId === 'explore-schools') return;
 
       try {
         const today = toLocalDateKey();
-        const { data: records } = await getAttendanceHistory(schoolId, { studentId, date: today });
-        setTodayAttendance(records[0] || null);
+        const { data: records } = await getAttendanceHistory(schoolId, studentId ? { studentId, date: today } : { date: today });
+        if (records && records.length > 0) {
+          setTodayAttendance(records[0]);
+        } else {
+          // If no specific single-date record returned, query recent history to find today's entry
+          const { data: recentRecords } = await getAttendanceHistory(schoolId, studentId ? { studentId, limit: 10 } : { limit: 10 });
+          const todayRecord = (recentRecords || []).find((r) => toLocalDateKey(new Date(r.date)) === today);
+          setTodayAttendance(todayRecord || null);
+        }
       } catch (err) {
         console.error('Failed to fetch today attendance:', err);
       }
@@ -95,12 +136,11 @@ const ParentHome = () => {
 
   useEffect(() => {
     const loadHomeworkSummary = async () => {
-      const schoolId = childInfo?.schoolId;
-      const studentId = childInfo?.studentId;
+      const { studentId, schoolId } = getResolvedContext();
       if (!schoolId || schoolId === 'explore-schools') return;
 
       try {
-        const rows = await fetchParentHomework(schoolId, childInfo.grade, studentId);
+        const rows = await fetchParentHomework(schoolId, childInfo?.grade, studentId);
         const mapped = rows.map(({ assignment, course, submission }) =>
           mapAssignmentForParentHomework(assignment, course, submission)
         );
@@ -114,7 +154,7 @@ const ParentHome = () => {
 
   useEffect(() => {
     const loadNoticeAlerts = async () => {
-      const schoolId = childInfo?.schoolId;
+      const { schoolId } = getResolvedContext();
       if (!schoolId || schoolId === 'explore-schools') {
         setNoticeAlerts([]);
         return;
@@ -255,7 +295,10 @@ const ParentHome = () => {
               </div>
 
               {/* Homework Summary Card */}
-              <div className="bg-white border border-gray-100 rounded-2xl p-3 flex items-center gap-3 shadow-[0_2px_8px_rgba(0,0,0,0.02)] hover:shadow-md transition-all duration-300">
+              <div 
+                onClick={() => navigate('/user/homework')}
+                className="bg-white border border-gray-100 rounded-2xl p-3 flex items-center gap-3 shadow-[0_2px_8px_rgba(0,0,0,0.02)] hover:shadow-md active:scale-[0.98] transition-all duration-300 cursor-pointer"
+              >
                 {/* Double Ring Orange Book Badge */}
                 <div className="w-9 h-9 rounded-full bg-[#FFF6ED] flex items-center justify-center shrink-0">
                   <div className="w-[26px] h-[26px] rounded-full bg-[#F2994A] flex items-center justify-center text-white shadow-sm">

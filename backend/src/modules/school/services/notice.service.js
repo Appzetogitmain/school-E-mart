@@ -10,17 +10,34 @@ const isNoticeVisibleToParent = (notice, student) => {
   if (notice.status !== 'published') return false;
 
   const now = new Date();
-  if (notice.publishDate && new Date(notice.publishDate) > now) return false;
+  const nowWithBuffer = new Date(now.getTime() + 5 * 60 * 1000);
+  if (notice.publishDate && new Date(notice.publishDate) > nowWithBuffer) return false;
   if (notice.expiryDate && new Date(notice.expiryDate) < now) return false;
 
-  if (['all', 'parents'].includes(notice.targetAudience)) return true;
+  if (['all', 'parents', 'students'].includes(notice.targetAudience)) return true;
 
-  if (notice.targetAudience === 'specific_classes' && student) {
-    return (notice.targetClasses || []).some(
-      (entry) =>
-        entry.classGrade === student.classGrade &&
-        (!entry.sections?.length || entry.sections.includes(student.section))
-    );
+  if (notice.targetAudience === 'specific_classes') {
+    if (!student) return true;
+
+    const studentGrades = new Set([
+      student.classGrade,
+      student.classGrade ? String(student.classGrade).trim() : '',
+      student.classGrade ? String(student.classGrade).replace(/^class\s+/i, '').trim() : '',
+      student.classGrade ? `Class ${String(student.classGrade).replace(/^class\s+/i, '').trim()}` : '',
+    ]);
+
+    return (notice.targetClasses || []).some((entry) => {
+      const entryGrade = entry.classGrade ? String(entry.classGrade).trim() : '';
+      const entryGradeNorm = entryGrade.replace(/^class\s+/i, '').trim();
+      const isGradeMatch =
+        studentGrades.has(entryGrade) ||
+        studentGrades.has(entryGradeNorm) ||
+        studentGrades.has(`Class ${entryGradeNorm}`);
+
+      const isSectionMatch =
+        !entry.sections?.length || entry.sections.includes(student.section);
+      return isGradeMatch && isSectionMatch;
+    });
   }
 
   return false;
@@ -29,27 +46,41 @@ const isNoticeVisibleToParent = (notice, student) => {
 const buildParentNoticeFilter = async (schoolId, userId, studentId) => {
   const studentLookup = require('../../lms/repositories/student.repository');
   const resolved = await studentLookup.resolveStudentForUser(schoolId, userId, studentId);
+  const now = new Date();
+  const nowWithBuffer = new Date(now.getTime() + 5 * 60 * 1000);
+
+  const baseFilter = {
+    schoolId,
+    status: 'published',
+    publishDate: { $lte: nowWithBuffer },
+    $or: [{ expiryDate: null }, { expiryDate: { $gte: now } }],
+  };
+
   if (!resolved?.student) {
-    throw new ForbiddenError('Student context is required', 'STUDENT_REQUIRED');
+    // If specific student profile is pending, display all published notices intended for general audiences or specific classes
+    return baseFilter;
   }
 
   const student = resolved.student;
-  const now = new Date();
+  const studentGradeRaw = student.classGrade ? String(student.classGrade).trim() : '';
+  const studentGradeNum = studentGradeRaw.replace(/^class\s+/i, '').trim();
+  const studentGradeWithPrefix = studentGradeNum ? `Class ${studentGradeNum}` : '';
+
+  const studentGradeVariants = Array.from(
+    new Set([studentGradeRaw, studentGradeNum, studentGradeWithPrefix])
+  ).filter(Boolean);
 
   return {
-    schoolId,
-    status: 'published',
-    publishDate: { $lte: now },
-    $or: [{ expiryDate: null }, { expiryDate: { $gte: now } }],
+    ...baseFilter,
     $and: [
       {
         $or: [
-          { targetAudience: { $in: ['all', 'parents'] } },
+          { targetAudience: { $in: ['all', 'parents', 'students'] } },
           {
             targetAudience: 'specific_classes',
             targetClasses: {
               $elemMatch: {
-                classGrade: student.classGrade,
+                classGrade: { $in: studentGradeVariants },
                 $or: [
                   { sections: { $size: 0 } },
                   { sections: { $exists: false } },
@@ -81,16 +112,17 @@ const noticeService = {
   },
 
   async listNotices(req, schoolId, query) {
-    if (req.auth.role === ROLES.PARENT) {
-      const filter = await buildParentNoticeFilter(schoolId, req.auth.userId, query.studentId);
-      const result = await noticeRepository.paginateNotices(filter, query);
+    const { studentId, ...cleanQuery } = query || {};
+    if ([ROLES.PARENT, 'user', 'parent'].includes(req.auth.role)) {
+      const filter = await buildParentNoticeFilter(schoolId, req.auth.userId, studentId);
+      const result = await noticeRepository.paginateNotices(filter, cleanQuery);
       return this.decorateWithAcknowledgement(result, req.auth.userId);
     }
 
     const filter = { schoolId };
-    if (query.status) filter.status = query.status;
-    if (query.targetAudience) filter.targetAudience = query.targetAudience;
-    return noticeRepository.paginateNotices(filter, query);
+    if (cleanQuery.status) filter.status = cleanQuery.status;
+    if (cleanQuery.targetAudience) filter.targetAudience = cleanQuery.targetAudience;
+    return noticeRepository.paginateNotices(filter, cleanQuery);
   },
 
   /**
@@ -160,8 +192,13 @@ const noticeService = {
   },
 
   async updateNotice(schoolId, noticeId, payload) {
+    const oldNotice = await noticeRepository.findOne({ _id: noticeId, schoolId });
     const notice = await noticeRepository.updateById(noticeId, { $set: payload }, { schoolId });
     if (!notice) throw new NotFoundError('Notice not found', 'NOTICE_NOT_FOUND');
+
+    if (payload.status === 'published' && oldNotice?.status !== 'published') {
+      triggerService.notifySchoolNoticePublished(schoolId, notice);
+    }
     return notice;
   },
 

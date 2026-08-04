@@ -13,6 +13,7 @@ import { getKit, listKits } from '../../../services/schoolApi';
 import { listOrders } from '../../../services/ordersApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 import { mapProductForDetailView } from '../../../utils/mappers/productMapper';
+import { toAbsoluteUrl } from '../../../utils/url';
 
 const KitDetailsPage = () => {
   const { kitId } = useParams();
@@ -93,14 +94,14 @@ const KitDetailsPage = () => {
             id: rawKit._id || rawKit.id,
             name: rawKit.name,
             description: rawKit.description || 'Official school procurement kit',
-            image: rawKit.imageUrl || rawKit.avatar || rawKit.items?.find((i) => i.imageUrl)?.imageUrl || rawKit.items?.[0]?.imageUrl || '',
+            image: toAbsoluteUrl(rawKit.imageUrl || rawKit.avatar || rawKit.items?.find((i) => i.imageUrl)?.imageUrl || rawKit.items?.[0]?.imageUrl) || '',
             price: rawKit.pricePaise ? Math.round(rawKit.pricePaise / 100) : (rawKit.price || 0),
             mrp: rawKit.mrpPaise ? Math.round(rawKit.mrpPaise / 100) : (rawKit.mrp || 0),
             classes: rawKit.classGrade || rawKit.classes || '',
             category: rawKit.category || 'School Kit',
             items: (rawKit.items || []).map((item, index) => {
               const pName = item.name || item.masterProductId?.name || `Item ${index + 1}`;
-              const pImg = item.imageUrl || item.masterProductId?.imageUrl || rawKit.imageUrl || '';
+              const pImg = toAbsoluteUrl(item.imageUrl || item.masterProductId?.imageUrl || rawKit.imageUrl) || '';
               const pPrice = item.pricePaise ? Math.round(item.pricePaise / 100) : (item.price || 0);
               return {
                 id: item._id || item.id || item.masterProductId?._id || `item-${index}`,

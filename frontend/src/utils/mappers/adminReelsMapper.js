@@ -1,3 +1,5 @@
+import { toAbsoluteUrl } from '../url';
+
 export const mapReelForAdmin = (reel) => ({
   id: reel?._id || reel?.id,
   mongoId: reel?._id || reel?.id,
@@ -60,8 +62,8 @@ export const mapPublicReel = (reel) => ({
   id: reel?._id || reel?.id,
   title: reel?.title || '',
   description: reel?.description || '',
-  thumb: reel?.thumbnailUrl || '',
-  videoUrl: reel?.videoUrl || '',
+  thumb: toAbsoluteUrl(reel?.thumbnailUrl) || '',
+  videoUrl: toAbsoluteUrl(reel?.videoUrl) || '',
   views: formatViews(reel?.metrics?.views || 0),
   music: reel?.musicLabel || `Original Audio - ${reel?.storeName || 'School E-Mart'}`,
   category: reel?.category || 'All',
@@ -69,7 +71,7 @@ export const mapPublicReel = (reel) => ({
     ? {
         id: reel.linkedProduct.url || '#',
         name: reel.linkedProduct.title,
-        image: reel.linkedProduct.imageUrl,
+        image: toAbsoluteUrl(reel.linkedProduct.imageUrl),
         price: `₹${Number(reel.linkedProduct.price || 0).toLocaleString()}`,
         originalPrice: `₹${Number(reel.linkedProduct.mrp || 0).toLocaleString()}`,
         badge: reel.linkedProduct.badge || 'RECOMMENDED',

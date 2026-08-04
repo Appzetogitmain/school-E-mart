@@ -1,3 +1,5 @@
+import { toAbsoluteUrl } from '../url';
+
 const HEADER_IMAGE_FALLBACKS = {
   uniforms: '/assets/uniforms.png',
   uniform: '/assets/uniforms.png',
@@ -31,7 +33,7 @@ const normalizeKey = (value = '') =>
   String(value).trim().toLowerCase().replace(/\s+/g, '-');
 
 export const resolveCategoryImage = (entity, fallbackKey) => {
-  if (entity?.imageUrl) return entity.imageUrl;
+  if (entity?.imageUrl) return toAbsoluteUrl(entity.imageUrl);
   const key = normalizeKey(fallbackKey || entity?.slug || entity?.name);
   return HEADER_IMAGE_FALLBACKS[key] || '/assets/uniforms.png';
 };

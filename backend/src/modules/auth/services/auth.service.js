@@ -112,12 +112,38 @@ const authService = {
     // here the student name gets overwritten with the parent's name on refresh,
     // so attach the active child exactly like login does.
     const obj = typeof user.toObject === 'function' ? user.toObject() : { ...user };
-    if (obj.role === 'parent') {
+    if (obj.role === 'parent' || obj.role === 'user') {
       obj.childProfile = await buildActiveChildDto(userId);
+      obj.profile = await buildProfileDto(userId, obj.role);
     }
     return obj;
   },
 };
+
+async function buildProfileDto(userId, userRole) {
+  const ParentProfile = require('../../../database/models/ParentProfile');
+  const Address = require('../../../database/models/Address');
+  const parentProfile = await ParentProfile.findOne({
+    userId,
+    'softDelete.isDeleted': { $ne: true },
+  }).lean();
+
+  let defaultAddress = null;
+  if (parentProfile?.defaultAddressId) {
+    defaultAddress = await Address.findById(parentProfile.defaultAddressId).lean();
+  }
+
+  return {
+    altPhone: parentProfile?.altPhone || null,
+    avatarUrl: parentProfile?.avatarUrl || null,
+    referralCode: parentProfile?.referralCode || null,
+    address: defaultAddress?.line1 || null,
+    pinCode: defaultAddress?.pinCode || null,
+    city: defaultAddress?.city || null,
+    state: defaultAddress?.state || null,
+    country: defaultAddress?.country || null,
+  };
+}
 
 // Builds the active-child DTO for a parent (mirrors sessionIssue.service and
 // users.service). Active child = ParentProfile.activeChildId, else the first.

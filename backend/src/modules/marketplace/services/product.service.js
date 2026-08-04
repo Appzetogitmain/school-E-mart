@@ -12,13 +12,18 @@ require('../../../database/models/Subcategory');
 require('../../../database/models/VendorProfile');
 require('../../../database/models/Attachment');
 
+// Every product image is a ref to an Attachment doc holding the real storageKey —
+// without this, image.attachmentId stays an unpopulated ObjectId and the customer
+// catalog silently loses every product photo.
+const PRODUCT_IMAGE_POPULATE = [{ path: 'images.attachmentId', select: 'storageKey' }];
+
 // Refs the admin product list renders by name rather than by id.
 const ADMIN_PRODUCT_POPULATE = [
   { path: 'headerId', select: 'name' },
   { path: 'categoryId', select: 'name' },
   { path: 'subcategoryId', select: 'name' },
   { path: 'vendorId', select: 'storeName' },
-  { path: 'images.attachmentId', select: 'storageKey' },
+  ...PRODUCT_IMAGE_POPULATE,
 ];
 
 const productService = {
@@ -46,7 +51,7 @@ const productService = {
 
   async getProduct(productId, { publicOnly = false } = {}) {
     const filter = publicOnly ? productRepository.findPublishedFilter({ _id: productId }) : { _id: productId };
-    const product = await productRepository.findOne(filter);
+    const product = await productRepository.findOne(filter).populate(PRODUCT_IMAGE_POPULATE);
     if (!product) throw new NotFoundError('Product not found', 'PRODUCT_NOT_FOUND');
     return product;
   },
@@ -55,7 +60,7 @@ const productService = {
     const filter = buildProductFilter(query, options);
     return productRepository.paginateProducts(filter, query, {
       defaultSort: resolveSort(query.sort),
-      populate: options.populate,
+      populate: options.populate || PRODUCT_IMAGE_POPULATE,
     });
   },
 

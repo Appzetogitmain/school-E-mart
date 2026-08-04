@@ -34,17 +34,27 @@ export const RoleRoute = ({ allowedRoles, redirectTo }) => {
     if (allowedRoles?.includes('admin')) {
       return <Navigate to={ROUTES.SUPER_ADMIN.LOGIN} replace />;
     }
-    return <Navigate to={ROUTES.LOGIN} replace />;
+    return <Navigate to="/user/login" replace />;
   }
 
-  if (!user || !allowedRoles.includes(user.role)) {
-    if (allowedRoles.includes('vendor')) {
+  const normalizedAllowed = (allowedRoles || []).map(r => String(r).toLowerCase());
+  if (normalizedAllowed.includes('parent') && !normalizedAllowed.includes('user')) {
+    normalizedAllowed.push('user');
+  }
+
+  const userRole = String(user?.role || '').toLowerCase();
+
+  if (!user || (!normalizedAllowed.includes(userRole) && userRole !== 'super_admin')) {
+    if (redirectTo) {
+      return <Navigate to={redirectTo} replace />;
+    }
+    if (allowedRoles?.includes('vendor')) {
       return <Navigate to="/vendor/login" replace />;
     }
-    if (allowedRoles.includes('admin')) {
+    if (allowedRoles?.includes('admin')) {
       return <Navigate to={ROUTES.SUPER_ADMIN.LOGIN} replace />;
     }
-    return <Navigate to="/" replace />;
+    return <Navigate to="/user/login" replace />;
   }
 
   return <Outlet />;

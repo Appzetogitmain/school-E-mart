@@ -127,16 +127,43 @@ const teacherService = {
 
   async updateTeacher(schoolId, teacherProfileId, payload) {
     const { user, ...profileData } = payload;
-    const profile = await teacherRepository.updateById(
-      teacherProfileId,
-      { $set: profileData },
-      { schoolId }
-    );
+    const profile = await teacherRepository.findOne({ _id: teacherProfileId, schoolId });
     if (!profile) throw new NotFoundError('Teacher not found', 'TEACHER_NOT_FOUND');
 
     if (user) {
-      await User.findByIdAndUpdate(profile.userId, { $set: user }, { runValidators: true });
+      const userUpdates = { ...user };
+      if (userUpdates.phone) {
+        const { normalizePhone } = require('../../../utils');
+        const normPhone = normalizePhone(userUpdates.phone);
+        const existingPhone = await User.findOne({
+          _id: { $ne: profile.userId },
+          phone: normPhone,
+          'softDelete.isDeleted': { $ne: true },
+        });
+        if (existingPhone) {
+          throw new ConflictError('A user with this phone number already exists', 'PHONE_EXISTS');
+        }
+        userUpdates.phone = normPhone;
+      }
+      if (userUpdates.email) {
+        const normEmail = userUpdates.email.trim().toLowerCase();
+        const emailOwner = await User.findEmailOwner(normEmail, { excludeUserId: profile.userId });
+        if (emailOwner) {
+          throw new ConflictError(`Email already belongs to another account (${emailOwner.name})`, 'EMAIL_EXISTS');
+        }
+        userUpdates.email = normEmail;
+      }
+      await User.findByIdAndUpdate(profile.userId, { $set: userUpdates }, { runValidators: true });
     }
+
+    if (Object.keys(profileData).length > 0) {
+      await teacherRepository.updateById(
+        teacherProfileId,
+        { $set: profileData },
+        { schoolId }
+      );
+    }
+
     return this.getTeacher(schoolId, teacherProfileId);
   },
 

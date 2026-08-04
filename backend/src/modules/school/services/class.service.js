@@ -64,6 +64,7 @@ const classService = {
         approvalStatus: 'approved',
         'softDelete.isDeleted': { $ne: true },
       });
+
       buildClassMapFromAssignments(profile?.classAssignments || []).forEach((value, key) => {
         classMap.set(key, value);
       });

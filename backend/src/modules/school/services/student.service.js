@@ -46,23 +46,6 @@ const linkParentByPhone = async (schoolId, student, payload, session) => {
     );
   }
 
-  // One phone number = one child. If this parent phone is already linked to a
-  // DIFFERENT student, reject the request and ask the school to use a separate
-  // phone number for the second child.
-  if (existingUser) {
-    const existingChild = await ChildProfile.findOne({
-      parentUserId: existingUser._id,
-      'softDelete.isDeleted': { $ne: true },
-    }).session(session);
-
-    if (existingChild && String(existingChild.studentId) !== String(student._id)) {
-      throw new ConflictError(
-        'This phone number is already linked to another student. Please use a different phone number for this child.',
-        'PHONE_ALREADY_LINKED_TO_ANOTHER_STUDENT'
-      );
-    }
-  }
-
   if (normalizedEmail) {
     const emailOwner = await User.findEmailOwner(normalizedEmail, {
       excludeUserId: existingUser?._id,
@@ -291,9 +274,21 @@ const studentService = {
       sendParentWelcomeEmail(linkResult);
       return student;
     } catch (err) {
-      // Concurrent registrations can still race on the unique index
       if (err?.code === 11000) {
-        throw new ConflictError('Student reference already exists', 'STUDENT_REF_EXISTS');
+        const keyStr = JSON.stringify(err.keyPattern || err.keyValue || err.message || '');
+        if (keyStr.includes('schoolRefNo')) {
+          throw new ConflictError('Student reference already exists', 'STUDENT_REF_EXISTS');
+        }
+        if (keyStr.includes('phone')) {
+          throw new ConflictError('A user with this mobile number already exists', 'PHONE_EXISTS');
+        }
+        if (keyStr.includes('email')) {
+          throw new ConflictError('A user with this email address already exists', 'EMAIL_EXISTS');
+        }
+        if (keyStr.includes('userId')) {
+          throw new ConflictError('A profile for this user already exists', 'PROFILE_EXISTS');
+        }
+        throw new ConflictError('A record with this unique identifier already exists', 'DUPLICATE_KEY');
       }
       throw err;
     }
@@ -301,14 +296,29 @@ const studentService = {
 
   async listStudents(schoolId, query) {
     const filter = { schoolId };
-    if (query.classGrade) filter.classGrade = query.classGrade;
-    if (query.section) filter.section = query.section;
+    if (query.classGrade) {
+      const rawGrade = String(query.classGrade).trim();
+      const numberOnly = rawGrade.replace(/^Class\s*/i, '').trim();
+      const gradeVariants = Array.from(
+        new Set([rawGrade, numberOnly, `Class ${numberOnly}`])
+      ).filter(Boolean);
+      filter.classGrade = { $in: gradeVariants };
+    }
+    if (query.section) {
+      const rawSec = String(query.section).trim();
+      const letterOnly = rawSec.replace(/^Section\s*/i, '').trim().toUpperCase();
+      const sectionVariants = Array.from(
+        new Set([rawSec, letterOnly, `Section ${letterOnly}`, letterOnly.toLowerCase()])
+      ).filter(Boolean);
+      filter.section = { $in: sectionVariants };
+    }
     if (query.status) filter.status = query.status;
     const { data, pagination } = await studentRepository.paginateStudents(filter, query);
 
     const Student = require('../../../database/models/Student');
     const populatedData = await Student.populate(data, [
-      { path: 'parentProfileIds', populate: { path: 'userId', select: 'name phone email' } }
+      { path: 'parentProfileIds', populate: { path: 'userId', select: 'name phone email' } },
+      { path: 'parentUserId', select: 'name phone email' }
     ]);
 
     return { data: populatedData, pagination };
@@ -319,7 +329,8 @@ const studentService = {
     if (!student) throw new NotFoundError('Student not found', 'STUDENT_NOT_FOUND');
     const Student = require('../../../database/models/Student');
     return Student.populate(student, [
-      { path: 'parentProfileIds', populate: { path: 'userId', select: 'name phone email' } }
+      { path: 'parentProfileIds', populate: { path: 'userId', select: 'name phone email' } },
+      { path: 'parentUserId', select: 'name phone email' }
     ]);
   },
 

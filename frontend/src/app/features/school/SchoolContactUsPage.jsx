@@ -1,15 +1,36 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Phone, Mail, MapPin, Clock,
   ArrowLeft, Send, CheckCircle2,
   ChevronRight, Building2
 } from 'lucide-react';
+import { getContactSettings } from '../../../services/adminApi';
 
 const SchoolContactUsPage = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [contactInfo, setContactInfo] = useState({
+    bulkPhone: '+91 99999 88888',
+    bulkEmail: 'schools@schoolemart.com',
+    address: '123 Education Hub, Sector 62, Noida, Uttar Pradesh 201301',
+    workingHours: 'Mon - Sat: 9:00 AM - 7:00 PM',
+  });
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const info = await getContactSettings();
+        if (info) {
+          setContactInfo((prev) => ({ ...prev, ...info }));
+        }
+      } catch (err) {
+        console.error('Failed to load contact info:', err);
+      }
+    })();
+  }, []);
+
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -42,14 +63,21 @@ const SchoolContactUsPage = () => {
             <div className="w-12 h-12 rounded-2xl bg-primary/5 flex items-center justify-center text-primary"><Building2 size={24} /></div>
             <div>
               <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest mb-0.5">Procurement Desk</p>
-              <p className="text-sm font-bold text-deep-purple">+91 99999 88888</p>
+              <p className="text-sm font-bold text-deep-purple">{contactInfo.bulkPhone || contactInfo.phone || '+91 99999 88888'}</p>
             </div>
           </div>
           <div className="bg-white p-5 rounded-[2rem] shadow-sm border border-gray-100 flex items-center gap-4">
             <div className="w-12 h-12 rounded-2xl bg-primary/5 flex items-center justify-center text-primary"><Mail size={24} /></div>
             <div>
               <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest mb-0.5">Bulk Inquiries</p>
-              <p className="text-sm font-bold text-deep-purple">schools@schoolemart.com</p>
+              <p className="text-sm font-bold text-deep-purple">{contactInfo.bulkEmail || contactInfo.email || 'schools@schoolemart.com'}</p>
+            </div>
+          </div>
+          <div className="bg-white p-5 rounded-[2rem] shadow-sm border border-gray-100 flex items-center gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-primary/5 flex items-center justify-center text-primary"><MapPin size={24} /></div>
+            <div>
+              <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest mb-0.5">Headquarters Address</p>
+              <p className="text-xs font-bold text-deep-purple">{contactInfo.address || 'India'}</p>
             </div>
           </div>
         </div>

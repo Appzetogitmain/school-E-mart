@@ -27,6 +27,7 @@ import LoginRequired from '../../components/LoginRequired';
 import { listParentNotices, acknowledgeParentNotice } from '../../../services/parentApi';
 import { mapNoticeForParent } from '../../../utils/mappers/parentMapper';
 import { getErrorMessage } from '../../../utils/apiHelpers';
+import useAuthStore from '../../../store/useAuthStore';
 
 const NOTICE_ICONS = {
   megaphone: <Megaphone size={18} />,
@@ -119,10 +120,14 @@ const ParentNotices = () => {
   const [notices, setNotices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState('');
+  const authUser = useAuthStore((state) => state.user);
+  const activeSchoolId = (childInfo?.schoolId && childInfo.schoolId !== 'explore-schools')
+    ? childInfo.schoolId
+    : (authUser?.tenantSchoolId || authUser?.schoolId || authUser?.profile?.schoolId);
 
   useEffect(() => {
     const loadNotices = async () => {
-      const schoolId = childInfo?.schoolId;
+      const schoolId = activeSchoolId;
       const studentId = childInfo?.studentId;
       if (!schoolId || schoolId === 'explore-schools') {
         setNotices([]);
@@ -147,15 +152,15 @@ const ParentNotices = () => {
     };
 
     loadNotices();
-  }, [childInfo]);
+  }, [childInfo, activeSchoolId]);
 
   const [acknowledging, setAcknowledging] = useState(false);
   const [ackError, setAckError] = useState('');
 
   const handleAcknowledge = async (notice) => {
     if (!notice || notice.isAcknowledged) return;
-    const schoolId = childInfo?.schoolId;
-    if (!schoolId) return;
+    const schoolId = activeSchoolId;
+    if (!schoolId || schoolId === 'explore-schools') return;
 
     setAcknowledging(true);
     setAckError('');

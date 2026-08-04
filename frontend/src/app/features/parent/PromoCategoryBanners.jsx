@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { listPublicBanners } from '../../../services/catalogApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
+import { toAbsoluteUrl } from '../../../utils/url';
 
 const PromoCategoryBanners = () => {
   const [banners, setBanners] = useState([]);
@@ -22,7 +23,7 @@ const PromoCategoryBanners = () => {
               .map((b) => ({
                 id: b._id || b.id,
                 title: b.title || b.slug || 'Promotion',
-                image: b.imageUrl || b.image || b.images?.[0]?.url,
+                image: toAbsoluteUrl(b.imageUrl || b.image || b.images?.[0]?.url),
               }))
               .filter((b) => b.image)
           );

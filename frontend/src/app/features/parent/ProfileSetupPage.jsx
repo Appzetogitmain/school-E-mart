@@ -9,6 +9,7 @@ import apiClient from '../../../services/apiClient';
 import { lookupSchoolForRegistration } from '../../../services/authApi';
 import useAuthStore from '../../../store/useAuthStore';
 import { getErrorMessage } from '../../../utils/apiHelpers';
+import { toAbsoluteUrl } from '../../../utils/url';
 
 const ProfileSetupPage = () => {
   const navigate = useNavigate();
@@ -142,6 +143,7 @@ const ProfileSetupPage = () => {
         name: user.childProfile?.name || formData.studentName,
         school: user.childProfile?.schoolName || 'Explore Schools',
         schoolId: user.childProfile?.schoolId || 'explore-schools',
+        schoolLogo: toAbsoluteUrl(user.childProfile?.schoolLogo) || '',
         grade: user.childProfile?.grade || formData.grade,
         phone: user.phone || formData.phone,
         schoolRefNo: user.childProfile?.schoolRefNo || formData.schoolRefNo,

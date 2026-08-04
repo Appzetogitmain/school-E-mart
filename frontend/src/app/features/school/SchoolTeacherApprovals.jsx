@@ -4,9 +4,9 @@ import {
   ArrowLeft, Filter, Search, UserPlus, Check, X, 
   MoreVertical, Clock, Users, ArrowUpRight, 
   ThumbsUp, ThumbsDown, CheckCircle2, XCircle, Loader2,
-  AlertCircle, Trash2
+  AlertCircle, Trash2, Edit
 } from 'lucide-react';
-import { listTeachers, setTeacherStatus, createTeacher, deleteTeacher } from '../../../services/schoolApi';
+import { listTeachers, setTeacherStatus, createTeacher, deleteTeacher, updateTeacher } from '../../../services/schoolApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 import { mapTeacherForApproval } from '../../../utils/mappers/schoolTeacherMapper';
 import { useSchoolId } from '../../../utils/schoolContext';
@@ -36,9 +36,32 @@ const SchoolTeacherApprovals = () => {
     password: '',
     designation: '',
     department: '',
+    qualification: '',
+    experienceYears: '',
   });
   const [addLoading, setAddLoading] = useState(false);
   const [addError, setAddError] = useState('');
+
+  // Edit Teacher Mode States
+  const [isEditingTeacher, setIsEditingTeacher] = useState(false);
+  const [editFormData, setEditFormData] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    employeeId: '',
+    designation: '',
+    department: '',
+    qualification: '',
+    experienceYears: '',
+  });
+  const [editLoading, setEditLoading] = useState(false);
+  const [editError, setEditError] = useState('');
+
+  const handleCloseDetailsModal = () => {
+    setSelectedTeacher(null);
+    setIsEditingTeacher(false);
+    setEditError('');
+  };
 
   const handleAddInputChange = (field, value) => {
     setAddError('');
@@ -75,6 +98,12 @@ const SchoolTeacherApprovals = () => {
       if (addFormData.department?.trim()) {
         payload.department = addFormData.department.trim();
       }
+      if (addFormData.qualification?.trim()) {
+        payload.qualification = addFormData.qualification.trim();
+      }
+      if (addFormData.experienceYears !== undefined && addFormData.experienceYears !== '') {
+        payload.experienceYears = Number(addFormData.experienceYears);
+      }
 
       await createTeacher(schoolId, payload);
       setIsAddModalOpen(false);
@@ -85,12 +114,64 @@ const SchoolTeacherApprovals = () => {
         password: '',
         designation: '',
         department: '',
+        qualification: '',
+        experienceYears: '',
       });
-      loadTeachers();
+      await loadTeachers();
     } catch (err) {
       setAddError(getErrorMessage(err, 'Failed to create teacher account'));
     } finally {
       setAddLoading(false);
+    }
+  };
+
+  const handleStartEditTeacher = (teacher) => {
+    setEditFormData({
+      name: teacher.name || '',
+      email: teacher.email === '—' ? '' : (teacher.email || ''),
+      phone: teacher.phone === '—' ? '' : (teacher.phone || ''),
+      employeeId: teacher.id === '—' ? '' : (teacher.id || ''),
+      designation: teacher.designation === 'Teacher' ? '' : (teacher.designation || ''),
+      department: teacher.department === '—' ? '' : (teacher.department || ''),
+      qualification: teacher.qualifications === '—' ? '' : (teacher.qualifications || ''),
+      experienceYears: teacher.experience === '—' ? '' : (teacher.experience.replace(/\s*Years?/i, '').trim() || ''),
+    });
+    setEditError('');
+    setIsEditingTeacher(true);
+  };
+
+  const handleEditSubmit = async (e) => {
+    e.preventDefault();
+    if (!editFormData.name.trim()) return setEditError('Teacher name is required');
+    if (!editFormData.email.trim()) return setEditError('Email address is required');
+    if (!editFormData.phone || editFormData.phone.length !== 10) return setEditError('Valid 10-digit mobile number is required');
+    if (!selectedTeacher?.mongoId || !schoolId) return;
+
+    setEditLoading(true);
+    setEditError('');
+    try {
+      const payload = {
+        user: {
+          name: editFormData.name.trim(),
+          email: editFormData.email.trim(),
+          phone: editFormData.phone.trim(),
+        },
+        employeeId: editFormData.employeeId.trim() || undefined,
+        designation: editFormData.designation.trim() || 'Teacher',
+        department: editFormData.department.trim() || undefined,
+        qualification: editFormData.qualification.trim() || undefined,
+        experienceYears: editFormData.experienceYears ? Number(editFormData.experienceYears) : undefined,
+      };
+
+      const updated = await updateTeacher(schoolId, selectedTeacher.mongoId, payload);
+      const mapped = mapTeacherForApproval(updated);
+      setSelectedTeacher(mapped);
+      setIsEditingTeacher(false);
+      await loadTeachers();
+    } catch (err) {
+      setEditError(getErrorMessage(err, 'Failed to update teacher profile'));
+    } finally {
+      setEditLoading(false);
     }
   };
 
@@ -355,16 +436,27 @@ const SchoolTeacherApprovals = () => {
               </div>
 
               {/* Action Buttons Column */}
-              <div className="flex flex-col xs:flex-row md:flex-col items-stretch xs:items-center md:items-end gap-2.5 w-full md:w-auto shrink-0 border-t md:border-none pt-4 md:pt-0">
+              <div className="flex flex-col xs:flex-row md:flex-col items-stretch xs:items-center md:items-end gap-2 w-full md:w-auto shrink-0 border-t md:border-none pt-4 md:pt-0">
                 
-                {/* View Details Primary Action */}
-                <button 
-                  onClick={() => setSelectedTeacher(t)}
-                  className="px-4.5 py-2.5 border border-purple-200 text-[#3b2d7d] hover:bg-purple-50/50 bg-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1 active:scale-95 flex-1 xs:flex-initial"
-                >
-                  View Details
-                  <ArrowUpRight size={12} className="stroke-[2.5]" />
-                </button>
+                <div className="flex items-center gap-2 w-full xs:w-auto">
+                  {/* View Details Action */}
+                  <button 
+                    onClick={() => { setSelectedTeacher(t); setIsEditingTeacher(false); }}
+                    className="px-3 py-2 border border-purple-200 text-[#3b2d7d] hover:bg-purple-50/50 bg-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1 active:scale-95 flex-1 xs:flex-initial"
+                  >
+                    View
+                    <ArrowUpRight size={12} className="stroke-[2.5]" />
+                  </button>
+
+                  {/* Edit Profile Action */}
+                  <button 
+                    onClick={() => { setSelectedTeacher(t); handleStartEditTeacher(t); }}
+                    className="px-3 py-2 bg-[#3b2d7d] text-white hover:bg-purple-800 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1 active:scale-95 flex-1 xs:flex-initial shadow-sm"
+                  >
+                    <Edit size={11} className="stroke-[2.5]" />
+                    Edit
+                  </button>
+                </div>
 
                 {/* Confirm/Decline Grid for Pending list */}
                 {t.status === 'Pending' && (
@@ -372,7 +464,7 @@ const SchoolTeacherApprovals = () => {
                     <button 
                       onClick={() => handleApprove(t)}
                       disabled={actionId === t.mongoId}
-                      className="flex-1 xs:flex-initial px-4 py-2.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1 border border-emerald-200 active:scale-95 disabled:opacity-50"
+                      className="flex-1 xs:flex-initial px-4 py-2 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1 border border-emerald-200 active:scale-95 disabled:opacity-50"
                     >
                       <Check size={11} className="stroke-[3.5]" />
                       Approve
@@ -380,7 +472,7 @@ const SchoolTeacherApprovals = () => {
                     <button 
                       onClick={() => handleReject(t)}
                       disabled={actionId === t.mongoId}
-                      className="flex-1 xs:flex-initial px-4 py-2.5 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1 border border-rose-200 active:scale-95 disabled:opacity-50"
+                      className="flex-1 xs:flex-initial px-4 py-2 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1 border border-rose-200 active:scale-95 disabled:opacity-50"
                     >
                       <X size={11} className="stroke-[3.5]" />
                       Reject
@@ -424,19 +516,42 @@ const SchoolTeacherApprovals = () => {
 
       </div>
 
-      {/* Onboarding Details Modal */}
+      {/* Onboarding & Edit Details Modal */}
       {selectedTeacher && (
-        <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm transition-all duration-300 animate-in fade-in">
-          <div className="w-full max-w-lg bg-white rounded-[2.2rem] shadow-2xl border border-gray-150 overflow-hidden animate-in zoom-in duration-300 relative flex flex-col max-h-[90vh]">
+        <div 
+          className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm transition-all duration-300 animate-in fade-in"
+          onClick={handleCloseDetailsModal}
+        >
+          <div 
+            className="w-full max-w-lg bg-white rounded-[2.2rem] shadow-2xl border border-gray-150 overflow-hidden animate-in zoom-in duration-300 relative flex flex-col max-h-[90vh]"
+            onClick={(e) => e.stopPropagation()}
+          >
             
-            {/* Modal Header with nice purple/indigo gradient */}
-            <div className="bg-gradient-to-r from-[#3b2d7d] to-[#5942bc] text-white px-6 py-5 relative flex items-center justify-between shrink-0">
-              <div>
-                <h3 className="text-sm font-black tracking-wider uppercase">Teacher Onboarding Details</h3>
-                <span className="text-[10px] text-purple-200 font-bold block mt-0.5 font-bold">Registration Form Submission</span>
+            {/* Modal Header with nice purple/indigo gradient & Mode Switcher */}
+            <div className="bg-gradient-to-r from-[#3b2d7d] to-[#5942bc] text-white px-6 py-4 relative flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-2">
+                <div className="bg-white/10 p-1 rounded-xl flex items-center gap-1 border border-white/10">
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingTeacher(false)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all ${!isEditingTeacher ? 'bg-white text-[#3b2d7d] shadow-sm' : 'text-purple-100 hover:text-white'}`}
+                  >
+                    View Details
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleStartEditTeacher(selectedTeacher)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1 ${isEditingTeacher ? 'bg-white text-[#3b2d7d] shadow-sm' : 'text-purple-100 hover:text-white'}`}
+                  >
+                    <Edit size={12} />
+                    Edit Profile
+                  </button>
+                </div>
               </div>
+
               <button 
-                onClick={() => setSelectedTeacher(null)}
+                type="button"
+                onClick={handleCloseDetailsModal}
                 className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 active:scale-90 transition-all text-white border border-white/10"
               >
                 <X size={16} className="stroke-[3]" />
@@ -444,129 +559,271 @@ const SchoolTeacherApprovals = () => {
             </div>
 
             {/* Modal Scrollable Body */}
-            <div className="p-6 overflow-y-auto space-y-6 scrollbar-none">
-              
-              {/* Profile Avatar & Primary Title Header card */}
-              <div className="flex items-center gap-5 bg-purple-50/40 p-4 rounded-3xl border border-purple-150/40">
-                <img 
-                  src={selectedTeacher.avatar} 
-                  alt={selectedTeacher.name}
-                  className="w-20 h-20 rounded-full object-cover border-4 border-white shadow-md shrink-0"
-                />
-                <div className="min-w-0">
-                  <h4 className="text-base font-black text-deep-purple leading-tight truncate">{selectedTeacher.name}</h4>
-                  <span className="text-xs font-black text-[#3b2d7d] block mt-1">{selectedTeacher.designation}</span>
-                  <span className="text-[10px] text-gray-400 font-bold block mt-0.5">{selectedTeacher.date}</span>
-                </div>
-              </div>
+            {isEditingTeacher ? (
+              <form id="teacher-edit-form" onSubmit={handleEditSubmit} className="p-6 overflow-y-auto space-y-4 scrollbar-none flex-1">
+                {editError && (
+                  <div className="p-3.5 bg-red-50 border border-red-100 rounded-2xl text-xs font-bold text-red-600 flex items-center gap-2">
+                    <AlertCircle size={15} />
+                    <span>{editError}</span>
+                  </div>
+                )}
 
-              {/* Status Section */}
-              <div className="space-y-2">
-                <span className="text-[10px] text-gray-400 font-black uppercase tracking-wider block font-bold">Application Status</span>
-                <div className="flex items-center gap-2">
-                  {selectedTeacher.status === 'Pending' && (
-                    <span className="px-3.5 py-1.5 bg-amber-50 text-[11px] font-black text-amber-600 rounded-xl border border-amber-100 flex items-center gap-1.5 leading-none">
-                      <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-                      PENDING REVIEW
-                    </span>
-                  )}
-                  {selectedTeacher.status === 'Approved' && (
-                    <span className="px-3.5 py-1.5 bg-emerald-50 text-[11px] font-black text-emerald-600 rounded-xl border border-emerald-100 flex items-center gap-1.5 leading-none">
-                      <Check size={12} className="stroke-[3.5]" />
-                      APPROVED & SIGNED UP
-                    </span>
-                  )}
-                  {selectedTeacher.status === 'Rejected' && (
-                    <span className="px-3.5 py-1.5 bg-rose-50 text-[11px] font-black text-rose-500 rounded-xl border border-rose-100 flex items-center gap-1.5 leading-none">
-                      <X size={12} className="stroke-[3.5]" />
-                      REJECTED
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {/* General details grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-                
-                {/* Contact phone */}
-                <div className="bg-gray-50/50 p-4.5 rounded-2xl border border-gray-150 shadow-inner">
-                  <span className="text-[9px] text-gray-400 font-black uppercase tracking-wider block font-bold">Mobile Number</span>
-                  <span className="font-black text-deep-purple block mt-1 leading-relaxed">📞 {selectedTeacher.phone}</span>
+                {/* Teacher Full Name */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Teacher Full Name *</label>
+                  <input 
+                    type="text"
+                    required
+                    value={editFormData.name}
+                    onChange={(e) => setEditFormData(prev => ({ ...prev, name: e.target.value }))}
+                    placeholder="Enter full name"
+                    className="w-full px-4 py-3 bg-gray-50 border-none rounded-2xl text-sm font-bold text-deep-purple focus:ring-2 focus:ring-primary/10 outline-none placeholder:text-gray-300"
+                  />
                 </div>
 
-                {/* Contact email */}
-                <div className="bg-gray-50/50 p-4.5 rounded-2xl border border-gray-150 shadow-inner">
-                  <span className="text-[9px] text-gray-400 font-black uppercase tracking-wider block font-bold">Email Address</span>
-                  <span className="font-black text-deep-purple block mt-1 leading-relaxed truncate">✉️ {selectedTeacher.email}</span>
+                {/* Email Address */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Email Address *</label>
+                  <input 
+                    type="email"
+                    required
+                    value={editFormData.email}
+                    onChange={(e) => setEditFormData(prev => ({ ...prev, email: e.target.value }))}
+                    placeholder="teacher@school.com"
+                    className="w-full px-4 py-3 bg-gray-50 border-none rounded-2xl text-sm font-bold text-deep-purple focus:ring-2 focus:ring-primary/10 outline-none placeholder:text-gray-300"
+                  />
+                </div>
+
+                {/* Mobile Number */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Mobile Number *</label>
+                  <input 
+                    type="tel"
+                    required
+                    value={editFormData.phone}
+                    onChange={(e) => setEditFormData(prev => ({ ...prev, phone: e.target.value.replace(/\D/g, '').slice(-10) }))}
+                    placeholder="10-digit mobile number"
+                    className="w-full px-4 py-3 bg-gray-50 border-none rounded-2xl text-sm font-bold text-deep-purple focus:ring-2 focus:ring-primary/10 outline-none placeholder:text-gray-300"
+                  />
                 </div>
 
                 {/* Staff ID */}
-                <div className="bg-gray-50/50 p-4.5 rounded-2xl border border-gray-150 shadow-inner">
-                  <span className="text-[9px] text-gray-400 font-black uppercase tracking-wider block font-bold">Requested Staff ID</span>
-                  <span className="font-black text-deep-purple block mt-1 leading-relaxed">🪪 {selectedTeacher.id}</span>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Staff ID / Employee ID</label>
+                  <input 
+                    type="text"
+                    value={editFormData.employeeId}
+                    onChange={(e) => setEditFormData(prev => ({ ...prev, employeeId: e.target.value }))}
+                    placeholder="e.g. SEM-TCH-6DYB3D"
+                    className="w-full px-4 py-3 bg-gray-50 border-none rounded-2xl text-sm font-bold text-deep-purple focus:ring-2 focus:ring-primary/10 outline-none placeholder:text-gray-300"
+                  />
                 </div>
 
-                {/* Ref Code */}
-                <div className="bg-gray-50/50 p-4.5 rounded-2xl border border-gray-150 shadow-inner">
-                  <span className="text-[9px] text-gray-400 font-black uppercase tracking-wider block font-bold">Invitation Reference</span>
-                  <span className="font-black text-deep-purple block mt-1 leading-relaxed">🔑 {selectedTeacher.refCode || 'N/A'}</span>
+                {/* Designation */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Designation</label>
+                  <input 
+                    type="text"
+                    value={editFormData.designation}
+                    onChange={(e) => setEditFormData(prev => ({ ...prev, designation: e.target.value }))}
+                    placeholder="e.g. PGT Physics"
+                    className="w-full px-4 py-3 bg-gray-50 border-none rounded-2xl text-sm font-bold text-deep-purple focus:ring-2 focus:ring-primary/10 outline-none placeholder:text-gray-300"
+                  />
                 </div>
 
-              </div>
+                {/* Department */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Assigned Department</label>
+                  <input 
+                    type="text"
+                    value={editFormData.department}
+                    onChange={(e) => setEditFormData(prev => ({ ...prev, department: e.target.value }))}
+                    placeholder="e.g. Science Department"
+                    className="w-full px-4 py-3 bg-gray-50 border-none rounded-2xl text-sm font-bold text-deep-purple focus:ring-2 focus:ring-primary/10 outline-none placeholder:text-gray-300"
+                  />
+                </div>
 
-              {/* Profile Work/Academics Sections */}
-              <div className="space-y-4 text-xs">
+                {/* Academic Qualifications */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Academic Qualifications</label>
+                  <input 
+                    type="text"
+                    value={editFormData.qualification}
+                    onChange={(e) => setEditFormData(prev => ({ ...prev, qualification: e.target.value }))}
+                    placeholder="e.g. M.Sc Mathematics, B.Ed"
+                    className="w-full px-4 py-3 bg-gray-50 border-none rounded-2xl text-sm font-bold text-deep-purple focus:ring-2 focus:ring-primary/10 outline-none placeholder:text-gray-300"
+                  />
+                </div>
+
+                {/* Prior Teaching Experience */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Prior Teaching Experience (Years)</label>
+                  <input 
+                    type="number"
+                    min="0"
+                    max="50"
+                    value={editFormData.experienceYears}
+                    onChange={(e) => setEditFormData(prev => ({ ...prev, experienceYears: e.target.value }))}
+                    placeholder="e.g. 5"
+                    className="w-full px-4 py-3 bg-gray-50 border-none rounded-2xl text-sm font-bold text-deep-purple focus:ring-2 focus:ring-primary/10 outline-none placeholder:text-gray-300"
+                  />
+                </div>
+              </form>
+            ) : (
+              <div className="p-6 overflow-y-auto space-y-6 scrollbar-none">
                 
-                {/* Department Info */}
-                <div className="bg-gray-50/50 p-4.5 rounded-2xl border border-gray-150 shadow-inner">
-                  <span className="text-[9px] text-gray-400 font-black uppercase tracking-wider block font-bold">Assigned Department</span>
-                  <span className="font-bold text-deep-purple block mt-1 leading-relaxed">{selectedTeacher.department}</span>
+                {/* Profile Avatar & Primary Title Header card */}
+                <div className="flex items-center gap-5 bg-purple-50/40 p-4 rounded-3xl border border-purple-150/40">
+                  <img 
+                    src={selectedTeacher.avatar} 
+                    alt={selectedTeacher.name}
+                    className="w-20 h-20 rounded-full object-cover border-4 border-white shadow-md shrink-0"
+                  />
+                  <div className="min-w-0">
+                    <h4 className="text-base font-black text-deep-purple leading-tight truncate">{selectedTeacher.name}</h4>
+                    <span className="text-xs font-black text-[#3b2d7d] block mt-1">{selectedTeacher.designation}</span>
+                    <span className="text-[10px] text-gray-400 font-bold block mt-0.5">{selectedTeacher.date}</span>
+                  </div>
                 </div>
 
-                {/* Qualifications Info */}
-                <div className="bg-gray-50/50 p-4.5 rounded-2xl border border-gray-150 shadow-inner">
-                  <span className="text-[9px] text-gray-400 font-black uppercase tracking-wider block font-bold">Academic Qualifications</span>
-                  <span className="font-bold text-deep-purple block mt-1 leading-relaxed">{selectedTeacher.qualifications}</span>
+                {/* Status Section */}
+                <div className="space-y-2">
+                  <span className="text-[10px] text-gray-400 font-black uppercase tracking-wider block font-bold">Application Status</span>
+                  <div className="flex items-center gap-2">
+                    {selectedTeacher.status === 'Pending' && (
+                      <span className="px-3.5 py-1.5 bg-amber-50 text-[11px] font-black text-amber-600 rounded-xl border border-amber-100 flex items-center gap-1.5 leading-none">
+                        <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                        PENDING REVIEW
+                      </span>
+                    )}
+                    {selectedTeacher.status === 'Approved' && (
+                      <span className="px-3.5 py-1.5 bg-emerald-50 text-[11px] font-black text-emerald-600 rounded-xl border border-emerald-100 flex items-center gap-1.5 leading-none">
+                        <Check size={12} className="stroke-[3.5]" />
+                        APPROVED & SIGNED UP
+                      </span>
+                    )}
+                    {selectedTeacher.status === 'Rejected' && (
+                      <span className="px-3.5 py-1.5 bg-rose-50 text-[11px] font-black text-rose-500 rounded-xl border border-rose-100 flex items-center gap-1.5 leading-none">
+                        <X size={12} className="stroke-[3.5]" />
+                        REJECTED
+                      </span>
+                    )}
+                  </div>
                 </div>
 
-                {/* Experience Info */}
-                <div className="bg-gray-50/50 p-4.5 rounded-2xl border border-gray-150 shadow-inner">
-                  <span className="text-[9px] text-gray-400 font-black uppercase tracking-wider block font-bold">Prior Teaching Experience</span>
-                  <span className="font-bold text-deep-purple block mt-1 leading-relaxed">{selectedTeacher.experience}</span>
+                {/* General details grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                  
+                  {/* Contact phone */}
+                  <div className="bg-gray-50/50 p-4.5 rounded-2xl border border-gray-150 shadow-inner">
+                    <span className="text-[9px] text-gray-400 font-black uppercase tracking-wider block font-bold">Mobile Number</span>
+                    <span className="font-black text-deep-purple block mt-1 leading-relaxed">📞 {selectedTeacher.phone}</span>
+                  </div>
+
+                  {/* Contact email */}
+                  <div className="bg-gray-50/50 p-4.5 rounded-2xl border border-gray-150 shadow-inner">
+                    <span className="text-[9px] text-gray-400 font-black uppercase tracking-wider block font-bold">Email Address</span>
+                    <span className="font-black text-deep-purple block mt-1 leading-relaxed truncate">✉️ {selectedTeacher.email}</span>
+                  </div>
+
+                  {/* Staff ID */}
+                  <div className="bg-gray-50/50 p-4.5 rounded-2xl border border-gray-150 shadow-inner">
+                    <span className="text-[9px] text-gray-400 font-black uppercase tracking-wider block font-bold">Requested Staff ID</span>
+                    <span className="font-black text-deep-purple block mt-1 leading-relaxed">🪪 {selectedTeacher.id}</span>
+                  </div>
+
+                  {/* Ref Code */}
+                  <div className="bg-gray-50/50 p-4.5 rounded-2xl border border-gray-150 shadow-inner">
+                    <span className="text-[9px] text-gray-400 font-black uppercase tracking-wider block font-bold">Invitation Reference</span>
+                    <span className="font-black text-deep-purple block mt-1 leading-relaxed">🔑 {selectedTeacher.refCode || 'N/A'}</span>
+                  </div>
+
+                </div>
+
+                {/* Profile Work/Academics Sections */}
+                <div className="space-y-4 text-xs">
+                  
+                  {/* Department Info */}
+                  <div className="bg-gray-50/50 p-4.5 rounded-2xl border border-gray-150 shadow-inner">
+                    <span className="text-[9px] text-gray-400 font-black uppercase tracking-wider block font-bold">Assigned Department</span>
+                    <span className="font-bold text-deep-purple block mt-1 leading-relaxed">{selectedTeacher.department}</span>
+                  </div>
+
+                  {/* Qualifications Info */}
+                  <div className="bg-gray-50/50 p-4.5 rounded-2xl border border-gray-150 shadow-inner">
+                    <span className="text-[9px] text-gray-400 font-black uppercase tracking-wider block font-bold">Academic Qualifications</span>
+                    <span className="font-bold text-deep-purple block mt-1 leading-relaxed">{selectedTeacher.qualifications}</span>
+                  </div>
+
+                  {/* Experience Info */}
+                  <div className="bg-gray-50/50 p-4.5 rounded-2xl border border-gray-150 shadow-inner">
+                    <span className="text-[9px] text-gray-400 font-black uppercase tracking-wider block font-bold">Prior Teaching Experience</span>
+                    <span className="font-bold text-deep-purple block mt-1 leading-relaxed">{selectedTeacher.experience}</span>
+                  </div>
+
                 </div>
 
               </div>
-
-            </div>
+            )}
 
             {/* Modal Sticky Footer Actions */}
             <div className="bg-gray-50 border-t border-gray-200 p-5 flex items-center gap-3 shrink-0">
               
-              <button 
-                onClick={() => setSelectedTeacher(null)}
-                className="flex-1 py-3.5 border-2 border-gray-300 text-gray-500 hover:bg-gray-100 active:scale-95 bg-white rounded-2xl text-xs font-black uppercase tracking-wider transition-all shadow-sm"
-              >
-                Close Profile
-              </button>
-
-              {selectedTeacher.status === 'Pending' && (
+              {isEditingTeacher ? (
                 <>
                   <button 
-                    onClick={() => handleApprove(selectedTeacher)}
-                    disabled={actionId === selectedTeacher.mongoId}
-                    className="flex-1 py-3.5 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white rounded-2xl text-xs font-black uppercase tracking-wider transition-all shadow-md flex items-center justify-center gap-1.5 disabled:opacity-50"
+                    type="button"
+                    onClick={() => setIsEditingTeacher(false)}
+                    className="flex-1 py-3.5 border-2 border-gray-300 text-gray-500 hover:bg-gray-100 active:scale-95 bg-white rounded-2xl text-xs font-black uppercase tracking-wider transition-all shadow-sm"
                   >
-                    <Check size={14} className="stroke-[3]" />
-                    Approve
+                    Cancel
                   </button>
                   <button 
-                    onClick={() => handleReject(selectedTeacher)}
-                    disabled={actionId === selectedTeacher.mongoId}
-                    className="flex-1 py-3.5 bg-rose-500 hover:bg-rose-600 active:scale-95 text-white rounded-2xl text-xs font-black uppercase tracking-wider transition-all shadow-md flex items-center justify-center gap-1.5 disabled:opacity-50"
+                    type="submit"
+                    form="teacher-edit-form"
+                    disabled={editLoading}
+                    className="flex-1 py-3.5 bg-[#3b2d7d] hover:bg-purple-800 active:scale-95 text-white rounded-2xl text-xs font-black uppercase tracking-wider transition-all shadow-md flex items-center justify-center gap-2 disabled:opacity-50"
                   >
-                    <X size={14} className="stroke-[3]" />
-                    Reject
+                    {editLoading ? <Loader2 size={16} className="animate-spin" /> : 'Save Changes'}
                   </button>
+                </>
+              ) : (
+                <>
+                  <button 
+                    onClick={handleCloseDetailsModal}
+                    className="flex-1 py-3.5 border-2 border-gray-300 text-gray-500 hover:bg-gray-100 active:scale-95 bg-white rounded-2xl text-xs font-black uppercase tracking-wider transition-all shadow-sm"
+                  >
+                    Close Profile
+                  </button>
+
+                  <button 
+                    onClick={() => handleStartEditTeacher(selectedTeacher)}
+                    className="flex-1 py-3.5 bg-[#3b2d7d] hover:bg-purple-800 active:scale-95 text-white rounded-2xl text-xs font-black uppercase tracking-wider transition-all shadow-md flex items-center justify-center gap-1.5"
+                  >
+                    <Edit size={14} className="stroke-[2.5]" />
+                    Edit Profile
+                  </button>
+
+                  {selectedTeacher.status === 'Pending' && (
+                    <>
+                      <button 
+                        onClick={() => handleApprove(selectedTeacher)}
+                        disabled={actionId === selectedTeacher.mongoId}
+                        className="flex-1 py-3.5 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white rounded-2xl text-xs font-black uppercase tracking-wider transition-all shadow-md flex items-center justify-center gap-1.5 disabled:opacity-50"
+                      >
+                        <Check size={14} className="stroke-[3]" />
+                        Approve
+                      </button>
+                      <button 
+                        onClick={() => handleReject(selectedTeacher)}
+                        disabled={actionId === selectedTeacher.mongoId}
+                        className="flex-1 py-3.5 bg-rose-500 hover:bg-rose-600 active:scale-95 text-white rounded-2xl text-xs font-black uppercase tracking-wider transition-all shadow-md flex items-center justify-center gap-1.5 disabled:opacity-50"
+                      >
+                        <X size={14} className="stroke-[3]" />
+                        Reject
+                      </button>
+                    </>
+                  )}
                 </>
               )}
 
@@ -603,7 +860,7 @@ const SchoolTeacherApprovals = () => {
 
               {/* Name */}
               <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Teacher Full Name</label>
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Teacher Full Name *</label>
                 <input 
                   type="text"
                   required
@@ -616,7 +873,7 @@ const SchoolTeacherApprovals = () => {
 
               {/* Email */}
               <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Email ID</label>
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Email ID *</label>
                 <input 
                   type="email"
                   required
@@ -629,7 +886,7 @@ const SchoolTeacherApprovals = () => {
 
               {/* Phone */}
               <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Mobile Number</label>
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Mobile Number *</label>
                 <input 
                   type="tel"
                   required
@@ -642,7 +899,7 @@ const SchoolTeacherApprovals = () => {
 
               {/* Password */}
               <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Temporary Password</label>
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Temporary Password *</label>
                 <input 
                   type="text"
                   required
@@ -673,6 +930,32 @@ const SchoolTeacherApprovals = () => {
                   value={addFormData.department}
                   onChange={(e) => handleAddInputChange('department', e.target.value)}
                   placeholder="e.g. Science Department"
+                  className="w-full px-4 py-3 bg-gray-50 border-none rounded-2xl text-sm font-bold text-deep-purple focus:ring-2 focus:ring-primary/10 outline-none placeholder:text-gray-300"
+                />
+              </div>
+
+              {/* Academic Qualifications */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Academic Qualifications (Optional)</label>
+                <input 
+                  type="text"
+                  value={addFormData.qualification}
+                  onChange={(e) => handleAddInputChange('qualification', e.target.value)}
+                  placeholder="e.g. M.Sc Mathematics, B.Ed"
+                  className="w-full px-4 py-3 bg-gray-50 border-none rounded-2xl text-sm font-bold text-deep-purple focus:ring-2 focus:ring-primary/10 outline-none placeholder:text-gray-300"
+                />
+              </div>
+
+              {/* Prior Teaching Experience */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Prior Teaching Experience (Years)</label>
+                <input 
+                  type="number"
+                  min="0"
+                  max="50"
+                  value={addFormData.experienceYears}
+                  onChange={(e) => handleAddInputChange('experienceYears', e.target.value)}
+                  placeholder="e.g. 5"
                   className="w-full px-4 py-3 bg-gray-50 border-none rounded-2xl text-sm font-bold text-deep-purple focus:ring-2 focus:ring-primary/10 outline-none placeholder:text-gray-300"
                 />
               </div>

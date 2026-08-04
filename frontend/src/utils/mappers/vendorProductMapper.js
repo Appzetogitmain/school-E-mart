@@ -1,5 +1,6 @@
 import { formatRupee } from './productMapper';
 import { paiseToRupees } from './orderMapper';
+import { toAbsoluteUrl } from '../url';
 
 const APPROVAL_LABELS = {
   pending: 'Pending',
@@ -10,13 +11,10 @@ const APPROVAL_LABELS = {
 const resolveImageUrl = (img) => {
   if (!img) return null;
   if (typeof img === 'string') {
-    if (img.startsWith('http') || img.startsWith('blob:')) return img;
-    return `http://localhost:5000${img.startsWith('/') ? '' : '/'}${img}`;
+    return toAbsoluteUrl(img) || null;
   }
   const key = img.attachmentId?.storageKey || img.storageKey || img.url || img.path;
-  if (!key) return null;
-  if (key.startsWith('http') || key.startsWith('blob:')) return key;
-  return `http://localhost:5000${key.startsWith('/') ? '' : '/'}${key}`;
+  return toAbsoluteUrl(key) || null;
 };
 
 export const mapVendorProductForList = (product) => {

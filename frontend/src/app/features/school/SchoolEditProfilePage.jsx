@@ -9,6 +9,7 @@ import { getSchool, updateSchool } from '../../../services/schoolApi';
 import { getMyProfile, updateMyProfile } from '../../../services/parentApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 import { useSchoolId } from '../../../utils/schoolContext';
+import { toAbsoluteUrl } from '../../../utils/url';
 
 const SchoolEditProfilePage = () => {
   const navigate = useNavigate();
@@ -63,7 +64,7 @@ const SchoolEditProfilePage = () => {
         city: school?.address?.city || parsed.city || '',
         state: school?.address?.state || parsed.state || '',
         country: school?.address?.country || parsed.country || 'India',
-        photo: school?.logoUrl || profile?.schoolLogo || profile?.avatarUrl || parsed.schoolLogo || parsed.photo || '',
+        photo: toAbsoluteUrl(school?.logoUrl || profile?.schoolLogo || profile?.avatarUrl) || parsed.schoolLogo || parsed.photo || '',
       });
     } catch (err) {
       setLoadError(getErrorMessage(err, 'Unable to load school profile'));

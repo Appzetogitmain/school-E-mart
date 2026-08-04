@@ -11,6 +11,7 @@ import AuthPrompt from '../../components/AuthPrompt';
 import useAuthStore from '../../../store/useAuthStore';
 import { getMyProfile, setActiveChild } from '../../../services/parentApi';
 import { syncChildInfoToStorage } from '../../../utils/mappers/userMapper';
+import { toAbsoluteUrl } from '../../../utils/url';
 
 const ProfilePage = () => {
   const navigate = useNavigate();
@@ -200,7 +201,7 @@ const ProfilePage = () => {
                   {childProfile?.schoolName && (
                     <p className="text-white/70 text-[11px] font-semibold mt-1.5 truncate flex items-center gap-1.5">
                       {childProfile?.schoolLogo ? (
-                        <img src={childProfile.schoolLogo} alt="School Logo" className="w-4 h-4 object-cover rounded-full border border-white/20 shrink-0" />
+                        <img src={toAbsoluteUrl(childProfile.schoolLogo)} alt="School Logo" className="w-4 h-4 object-cover rounded-full border border-white/20 shrink-0" />
                       ) : (
                         <School size={11} className="shrink-0" />
                       )}

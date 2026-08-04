@@ -1,3 +1,5 @@
+import { toAbsoluteUrl } from '../url';
+
 const SUBJECT_IMAGES = {
   Mathematics: '/assets/math_homework.png',
   Science: '/assets/science_homework.png',
@@ -220,7 +222,7 @@ export const mapNoticeForParent = (notice) => {
       .filter((a) => a && typeof a === 'object' && a.storageKey)
       .map((a) => ({
         id: a._id?.toString?.() || a.id,
-        url: a.storageKey,
+        url: toAbsoluteUrl(a.storageKey),
         mime: a.mime || '',
         sizeBytes: a.sizeBytes || 0,
       })),

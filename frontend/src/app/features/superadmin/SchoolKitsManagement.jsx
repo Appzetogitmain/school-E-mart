@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { listKits, listSchools, updateKit, deleteKit } from '../../../services/schoolApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
+import { toAbsoluteUrl } from '../../../utils/url';
 
 const CATEGORY_OPTIONS = [
   'All Categories',
@@ -333,7 +334,7 @@ const SchoolKitsManagement = () => {
 
                   const price = kit.pricePaise ? (kit.pricePaise / 100).toFixed(0) : '0';
                   const mrp = kit.mrpPaise ? (kit.mrpPaise / 100).toFixed(0) : null;
-                  const avatar = kit.imageId?.storageKey || kit.imageUrl;
+                  const avatar = toAbsoluteUrl(kit.imageId?.storageKey || kit.imageUrl);
 
                   return (
                     <tr key={kitId} className="hover:bg-purple-50/20 transition-colors">

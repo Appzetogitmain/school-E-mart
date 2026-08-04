@@ -133,11 +133,12 @@ const SchoolStudentsPage = () => {
     setAttendanceLoading(true);
     (async () => {
       try {
-        const { data } = await getAttendanceHistory(schoolId, {
+        const res = await getAttendanceHistory(schoolId, {
           studentId: selectedStudent.mongoId,
-          limit: 150,
+          limit: 300,
         });
-        if (!cancelled) setStudentAttendanceLogs(data || []);
+        const logs = Array.isArray(res) ? res : (res?.data || []);
+        if (!cancelled) setStudentAttendanceLogs(logs);
       } catch {
         if (!cancelled) setStudentAttendanceLogs([]);
       } finally {
@@ -169,7 +170,7 @@ const SchoolStudentsPage = () => {
     let late = 0;
     let leave = 0;
     studentAttendanceLogs.forEach((rec) => {
-      const st = rec?.attendance?.status;
+      const st = rec?.status || rec?.attendance?.status;
       if (st === 'present') present += 1;
       else if (st === 'absent') absent += 1;
       else if (st === 'half_day' || st === 'late') late += 1;

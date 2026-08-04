@@ -32,8 +32,13 @@ const getVendorUserIds = async (vendorIds = []) => {
 };
 
 const parentUserIdsForStudents = async (studentIds) => {
-  if (!studentIds.length) return [];
+  if (!studentIds?.length) return [];
 
+  const ChildProfile = require('../../database/models/ChildProfile');
+  const Student = require('../../database/models/Student');
+  const ParentProfile = require('../../database/models/ParentProfile');
+
+  // Method A: parentUserId from ChildProfile
   const children = await ChildProfile.find({
     studentId: { $in: studentIds },
     'softDelete.isDeleted': { $ne: true },
@@ -41,7 +46,29 @@ const parentUserIdsForStudents = async (studentIds) => {
     .select('parentUserId')
     .lean();
 
-  return [...new Set(children.map((c) => String(c.parentUserId)))];
+  const userIdsA = children.map((c) => String(c.parentUserId)).filter(Boolean);
+
+  // Method B: parentProfileIds from Student -> ParentProfile.userId
+  const students = await Student.find({
+    _id: { $in: studentIds },
+    'softDelete.isDeleted': { $ne: true },
+  })
+    .select('parentProfileIds')
+    .lean();
+
+  const parentProfileIds = students.flatMap((s) => s.parentProfileIds || []).filter(Boolean);
+  let userIdsB = [];
+  if (parentProfileIds.length) {
+    const parentProfiles = await ParentProfile.find({
+      _id: { $in: parentProfileIds },
+      'softDelete.isDeleted': { $ne: true },
+    })
+      .select('userId')
+      .lean();
+    userIdsB = parentProfiles.map((p) => String(p.userId)).filter(Boolean);
+  }
+
+  return [...new Set([...userIdsA, ...userIdsB])];
 };
 
 /**
@@ -74,14 +101,40 @@ const getSchoolParentUserIds = async (schoolId, notice) => {
     return getParentUserIdsForClasses(schoolId, notice.targetClasses);
   }
 
+  const ChildProfile = require('../../database/models/ChildProfile');
+  const Student = require('../../database/models/Student');
+  const ParentProfile = require('../../database/models/ParentProfile');
+
+  // Method A: parentUserId from ChildProfile with this schoolId
   const children = await ChildProfile.find({
     schoolId,
     'softDelete.isDeleted': { $ne: true },
   })
     .select('parentUserId')
     .lean();
+  const userIdsA = children.map((c) => String(c.parentUserId)).filter(Boolean);
 
-  return [...new Set(children.map((c) => String(c.parentUserId)))];
+  // Method B: Student records with this schoolId -> ParentProfile.userId
+  const students = await Student.find({
+    schoolId,
+    status: 'active',
+    'softDelete.isDeleted': { $ne: true },
+  })
+    .select('parentProfileIds')
+    .lean();
+  const parentProfileIds = students.flatMap((s) => s.parentProfileIds || []).filter(Boolean);
+  let userIdsB = [];
+  if (parentProfileIds.length) {
+    const parentProfiles = await ParentProfile.find({
+      _id: { $in: parentProfileIds },
+      'softDelete.isDeleted': { $ne: true },
+    })
+      .select('userId')
+      .lean();
+    userIdsB = parentProfiles.map((p) => String(p.userId)).filter(Boolean);
+  }
+
+  return [...new Set([...userIdsA, ...userIdsB])];
 };
 
 const HOMEWORK_PARENT_ROUTE = '/parent/homework';
