@@ -2,12 +2,41 @@ import React from 'react';
 import { Outlet, NavLink, useLocation } from 'react-router-dom';
 import { Home, Grid, ShoppingCart, GraduationCap, Building2, MoreHorizontal } from 'lucide-react';
 import { useCart } from '../context/CartContext';
+import useAuthStore from '../../store/useAuthStore';
+import { getMyProfile } from '../../services/parentApi';
+import { syncChildInfoToStorage } from '../../utils/mappers/userMapper';
 
 const SchoolLayout = () => {
   const { totalQuantity } = useCart();
   const location = useLocation();
   const isAuthPage = location.pathname.includes('/school/login') || location.pathname.includes('/school/signup');
   const isProductDetailPage = location.pathname.includes('/school/product/');
+
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+
+  // On app load, rebuild childInfo from the server so the header always
+  // shows the real school name/logo instead of whatever was last cached in
+  // localStorage (which may belong to a different account on this device).
+  // Mirrors AppLayout's equivalent refresh for the parent portal.
+  React.useEffect(() => {
+    if (!isAuthenticated) return undefined;
+    let cancelled = false;
+    getMyProfile()
+      .then((data) => {
+        if (cancelled || !data?.user) return;
+        syncChildInfoToStorage({
+          ...data.user,
+          role: data.user.role,
+          childProfile: data.childProfile,
+          profile: data.profile,
+        });
+        window.dispatchEvent(new Event('storage'));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated]);
 
   return (
     <div className="max-w-md mx-auto h-[100dvh] bg-gray-50 shadow-2xl relative overflow-hidden flex flex-col font-outfit">

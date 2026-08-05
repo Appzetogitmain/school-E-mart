@@ -2,23 +2,12 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronDown, Bell, Package, Search, Filter, Menu, Hash, GraduationCap } from 'lucide-react';
 import AuthPrompt from './AuthPrompt';
+import { useChildInfo } from '../../utils/parentContext';
 
 const AppHeader = ({ showSearch = true, scrolled = false, onMenuClick, childInfo: propChildInfo, transparentAtTop = false }) => {
   const navigate = useNavigate();
   const [isAuthPromptOpen, setIsAuthPromptOpen] = useState(false);
-  const [internalChildInfo, setInternalChildInfo] = useState(() => {
-    const saved = localStorage.getItem('childInfo');
-    return saved ? JSON.parse(saved) : null;
-  });
-
-  React.useEffect(() => {
-    const handleUpdate = () => {
-      const saved = localStorage.getItem('childInfo');
-      setInternalChildInfo(saved ? JSON.parse(saved) : null);
-    };
-    window.addEventListener('storage', handleUpdate);
-    return () => window.removeEventListener('storage', handleUpdate);
-  }, []);
+  const internalChildInfo = useChildInfo();
 
   const childInfo = propChildInfo || internalChildInfo;
   const isGuest = !childInfo || childInfo.name === "Guest" || !localStorage.getItem('childInfo');
@@ -101,17 +90,21 @@ const AppHeader = ({ showSearch = true, scrolled = false, onMenuClick, childInfo
             {/* Inner premium golden-white gradient ring overlay */}
             <div className="absolute inset-[2px] rounded-[14px] bg-gradient-to-tr from-[#FFC933]/15 to-transparent pointer-events-none z-20"></div>
             {childInfo?.schoolLogo || childInfo?.photo ? (
-              <img 
-                src={childInfo.schoolLogo || childInfo.photo} 
-                alt={childInfo?.school || "School Logo"} 
-                className="w-full h-full object-cover rounded-xl relative z-10" 
+              <img
+                src={childInfo.schoolLogo || childInfo.photo}
+                alt={childInfo?.school || "School Logo"}
+                className="w-full h-full object-cover rounded-xl relative z-10"
               />
+            ) : isGuest ? (
+              // Genuine guest state (no session) — a neutral icon, not a
+              // pretend school logo.
+              <div className="w-full h-full rounded-xl bg-[#3B248C]/10 flex items-center justify-center text-[#3B248C] relative z-10">
+                <GraduationCap size={24} />
+              </div>
             ) : (
-              <img 
-                src="/assets/school_logo.webp" 
-                alt="School Logo" 
-                className="w-full h-full object-contain relative z-10" 
-              />
+              // Logged in but real identity hasn't synced yet — skeleton, not
+              // a stand-in logo that could be mistaken for the real one.
+              <div className="w-full h-full rounded-xl bg-gray-100 animate-pulse relative z-10" />
             )}
           </button>
 
@@ -141,7 +134,9 @@ const AppHeader = ({ showSearch = true, scrolled = false, onMenuClick, childInfo
                 
                 <p className="text-[11px] font-bold text-white/70 flex items-center gap-1.5 leading-none drop-shadow-[0_1px_2px_rgba(0,0,0,0.05)] mt-1">
                   <GraduationCap size={14} className="text-[#FFC933] shrink-0" />
-                  <span className="truncate max-w-[150px]">{childInfo.school}</span>
+                  <span className="truncate max-w-[150px]">
+                    {childInfo.school || <span className="inline-block h-2.5 w-20 bg-white/20 rounded animate-pulse align-middle" />}
+                  </span>
                 </p>
               </>
             )}

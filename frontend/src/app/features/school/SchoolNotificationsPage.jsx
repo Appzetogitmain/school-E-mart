@@ -9,15 +9,14 @@ import {
 import SchoolHeader from '../../components/SchoolHeader';
 import { listNotices } from '../../../services/schoolApi';
 import { useSchoolId } from '../../../utils/schoolContext';
+import { useChildInfo } from '../../../utils/parentContext';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 
 const SchoolNotificationsPage = () => {
   const navigate = useNavigate();
   const schoolId = useSchoolId();
-  const [schoolInfo] = useState(() => {
-    const saved = localStorage.getItem('childInfo');
-    return saved ? JSON.parse(saved) : { role: 'school', name: 'School Admin', school: 'School Management' };
-  });
+  // null until real data has synced — SchoolHeader renders a skeleton for that.
+  const schoolInfo = useChildInfo();
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');

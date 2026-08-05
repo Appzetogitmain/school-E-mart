@@ -43,6 +43,30 @@ const ParentHomeworkDetails = ({ homework, childInfo, onClose, onSubmitted }) =>
   const [attachmentUrls, setAttachmentUrls] = useState({});
   const [loadingAttachments, setLoadingAttachments] = useState(false);
 
+  const [bannerImageUrl, setBannerImageUrl] = useState(homework?.image || null);
+
+  React.useEffect(() => {
+    if (homework?.image) {
+      setBannerImageUrl(homework.image);
+      return undefined;
+    }
+    if (!homework?.bannerAttachmentId || !childInfo?.schoolId) return undefined;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const url = await fetchSubmissionAttachment(childInfo.schoolId, homework.bannerAttachmentId);
+        if (!cancelled) setBannerImageUrl(url);
+      } catch {
+        if (!cancelled) setBannerImageUrl(null);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [homework?.image, homework?.bannerAttachmentId, childInfo?.schoolId]);
+
   React.useEffect(() => {
     if (!homework?.attachments?.length || !childInfo?.schoolId) return undefined;
 
@@ -180,15 +204,19 @@ const ParentHomeworkDetails = ({ homework, childInfo, onClose, onSubmitted }) =>
         <div className="bg-white border border-gray-100 rounded-3xl p-5 shadow-[0_4px_20px_rgba(0,0,0,0.015)] flex flex-col md:flex-row gap-5 relative overflow-hidden">
 
           {/* Main Visual Image Column */}
-          <div className="relative w-full md:w-36 aspect-video md:h-36 rounded-2xl overflow-hidden bg-gray-50 border border-gray-100/50 shrink-0">
-            <img
-              src={homework.image || "/assets/math_homework.png"}
-              alt={homework.subject}
-              className="w-full h-full object-cover"
-              onError={(e) => {
-                e.target.src = "https://images.unsplash.com/photo-1497633762265-9d179a990aa6?auto=format&fit=crop&w=350&q=80";
-              }}
-            />
+          <div className="relative w-full md:w-36 aspect-video md:h-36 rounded-2xl overflow-hidden bg-purple-50/60 border border-purple-100/60 shrink-0 flex items-center justify-center">
+            {bannerImageUrl ? (
+              <img
+                src={bannerImageUrl}
+                alt={homework.subject}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div className="flex flex-col items-center justify-center text-center p-3">
+                <BookOpen size={32} className="text-[#5B3FD6] mb-1.5" />
+                <span className="text-xs font-black text-[#5B3FD6]">{homework.subject}</span>
+              </div>
+            )}
 
             {/* Priority Pill inside Image */}
             {homework.priority && (

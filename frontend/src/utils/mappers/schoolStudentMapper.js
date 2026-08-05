@@ -1,4 +1,5 @@
 import { formatOrderDateShort } from './orderMapper';
+import { toAbsoluteUrl } from '../url';
 
 const formatGender = (gender) => {
   if (gender === 'female') return 'Girl';
@@ -52,7 +53,7 @@ export const mapStudentForList = (student) => ({
   parentEmail: firstLinkedParent(student)?.email || '—',
   status: formatStatus(student?.status),
   statusRaw: student?.status || 'active',
-  avatar: student?.avatarUrl || null,
+  avatar: toAbsoluteUrl(student?.avatarUrl) || null,
   dob: student?.dob ? formatOrderDateShort(student.dob) : '—',
   age: calculateAge(student?.dob),
   bloodGroup: student?.bloodGroup || '—',

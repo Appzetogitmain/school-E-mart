@@ -1,5 +1,3 @@
-const fs = require('fs');
-const path = require('path');
 const User = require('../../../database/models/User');
 const ParentProfile = require('../../../database/models/ParentProfile');
 const ChildProfile = require('../../../database/models/ChildProfile');
@@ -7,29 +5,16 @@ const Address = require('../../../database/models/Address');
 const School = require('../../../database/models/School');
 const { NotFoundError, BadRequestError } = require('../../../common/errors');
 const { normalizePhone } = require('../../../utils');
+const { saveBase64File } = require('../../../utils/fileStorage');
 
-const saveBase64Image = (base64Str, prefix = 'avatar') => {
-  if (!base64Str) return null;
-  if (base64Str.startsWith('/uploads/')) return base64Str; // Already uploaded path
-
-  const match = base64Str.match(/^data:image\/(\w+);base64,(.+)$/);
-  if (!match) return null;
-
-  const ext = match[1];
-  const data = match[2];
-  const buffer = Buffer.from(data, 'base64');
-
-  const filename = `${prefix}-${Date.now()}-${Math.random().toString(36).substring(2, 7)}.${ext}`;
-  const uploadsDir = path.resolve(__dirname, '../../../../uploads');
-  
-  if (!fs.existsSync(uploadsDir)) {
-    fs.mkdirSync(uploadsDir, { recursive: true });
-  }
-
-  const filepath = path.join(uploadsDir, filename);
-  fs.writeFileSync(filepath, buffer);
-  return `/uploads/${filename}`;
-};
+// Was a hand-rolled duplicate that hardcoded its own uploads directory via
+// __dirname, ignoring the env.UPLOADS_DIR override that the static file
+// server (app.js) and every other upload path actually honor. In any deploy
+// that configures UPLOADS_DIR (the documented production setup — see
+// fileStorage.js), avatars/school logos saved through this function landed
+// in a folder nobody served, so their stored /uploads/... reference 404'd.
+// Delegate to the shared, env-aware writer instead — same call shape.
+const saveBase64Image = (base64Str, prefix = 'avatar') => saveBase64File(base64Str, prefix);
 
 const usersService = {
   async getProfile(userId) {

@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  ArrowLeft, Camera, User, Mail, Phone, 
+  ArrowLeft, Upload, User, Mail, Phone, 
   MapPin, Home, Globe, Navigation, 
   ShieldCheck, Check, AlertCircle, ImageIcon, Building2
 } from 'lucide-react';
@@ -42,16 +42,13 @@ const SchoolEditProfilePage = () => {
     setInitialLoading(true);
     setLoadError('');
     try {
-      // Load user profile details first
-      const profileData = await getMyProfile();
+      // User profile and school details are independent — fetch in parallel.
+      const [profileData, school] = await Promise.all([
+        getMyProfile(),
+        schoolId ? getSchool(schoolId) : Promise.resolve(null),
+      ]);
       const user = profileData?.user;
       const profile = profileData?.profile;
-
-      // Load school details
-      let school = null;
-      if (schoolId) {
-        school = await getSchool(schoolId);
-      }
 
       setFormData({
         schoolName: school?.name || profile?.schoolName || parsed.school || '',
@@ -223,8 +220,8 @@ const SchoolEditProfilePage = () => {
                 {formData.photo ? <img src={formData.photo} alt="School Logo" className="w-full h-full object-cover" /> : <Building2 size={36} className="text-gray-300" />}
               </div>
             </div>
-            <button onClick={handlePhotoClick} className="absolute bottom-0 right-0 w-10 h-10 bg-primary text-white rounded-2xl flex items-center justify-center shadow-lg border-4 border-white active:scale-90 transition-all">
-              <Camera size={18} />
+            <button onClick={handlePhotoClick} title="Upload Logo" className="absolute bottom-0 right-0 w-10 h-10 bg-primary text-white rounded-2xl flex items-center justify-center shadow-lg border-4 border-white active:scale-90 transition-all">
+              <Upload size={18} />
             </button>
           </div>
           <div className="text-center">

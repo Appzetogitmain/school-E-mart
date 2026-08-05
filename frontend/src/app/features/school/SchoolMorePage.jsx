@@ -10,6 +10,7 @@ import {
 import AuthPrompt from '../../components/AuthPrompt';
 import useAuthStore from '../../../store/useAuthStore';
 import { useSchoolId } from '../../../utils/schoolContext';
+import { useChildInfo } from '../../../utils/parentContext';
 import { listStudents, listTeachers, listEvents, getSchool } from '../../../services/schoolApi';
 import { listSchoolRfqs } from '../../../services/rfqApi';
 import { mapSchoolRfqForList } from '../../../utils/mappers/rfqMapper';
@@ -17,14 +18,7 @@ import { mapSchoolRfqForList } from '../../../utils/mappers/rfqMapper';
 const SchoolMorePage = () => {
   const navigate = useNavigate();
   // childInfo is shared with the parent portal — only a school login counts here
-  const storedInfo = (() => {
-    try {
-      const raw = localStorage.getItem('childInfo');
-      return raw ? JSON.parse(raw) : null;
-    } catch {
-      return null;
-    }
-  })();
+  const storedInfo = useChildInfo();
   const isGuest = !storedInfo || (storedInfo.role && storedInfo.role !== 'school');
   const user = isGuest ? null : storedInfo;
   const logout = useAuthStore((state) => state.logout);
@@ -333,7 +327,9 @@ const SchoolMorePage = () => {
           </button>
           <div>
             <h1 className="text-xl font-black leading-tight">
-              {isGuest ? 'School Portal' : (user?.school || 'School E-Mart')}
+              {isGuest ? 'School Portal' : (
+                user?.school || <span className="inline-block h-5 w-28 bg-white/20 rounded animate-pulse align-middle" />
+              )}
             </h1>
             {academicYear && (
               <div className="flex items-center gap-2 mt-1 text-[11px] text-purple-200 font-bold leading-none">
@@ -364,7 +360,9 @@ const SchoolMorePage = () => {
               {isGuest ? 'School Guest' : 'School Admin'}
             </span>
             <span className="text-sm font-black text-deep-purple block mt-1 leading-none">
-              {isGuest ? 'Guest User' : (user?.name || 'Administrator')}
+              {isGuest ? 'Guest User' : (
+                user?.name || <span className="inline-block h-4 w-24 bg-gray-200 rounded animate-pulse align-middle" />
+              )}
             </span>
           </div>
         </div>

@@ -313,7 +313,7 @@ const schoolController = {
   }),
 
   createNotice: asyncHandler(async (req, res) => {
-    const notice = await noticeService.createNotice(req.schoolId, req.body);
+    const notice = await noticeService.createNotice(req.schoolId, req.body, req.auth.userId);
     return created(res, { notice }, 'Notice created successfully', req);
   }),
 
@@ -333,17 +333,17 @@ const schoolController = {
   }),
 
   updateNotice: asyncHandler(async (req, res) => {
-    const notice = await noticeService.updateNotice(req.schoolId, req.params.noticeId, req.body);
+    const notice = await noticeService.updateNotice(req.schoolId, req.params.noticeId, req.body, req);
     return success(res, { notice }, 'Notice updated successfully', undefined, req);
   }),
 
   setNoticeStatus: asyncHandler(async (req, res) => {
-    const notice = await noticeService.setNoticeStatus(req.schoolId, req.params.noticeId, req.body.status);
+    const notice = await noticeService.setNoticeStatus(req.schoolId, req.params.noticeId, req.body.status, req);
     return success(res, { notice }, 'Notice status updated successfully', undefined, req);
   }),
 
   deleteNotice: asyncHandler(async (req, res) => {
-    await noticeService.deleteNotice(req.schoolId, req.params.noticeId, req.auth.userId);
+    await noticeService.deleteNotice(req.schoolId, req.params.noticeId, req.auth.userId, req);
     return success(res, null, 'Notice deleted successfully', undefined, req);
   }),
 

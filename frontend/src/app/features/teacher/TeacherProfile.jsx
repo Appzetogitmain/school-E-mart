@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft, ShieldAlert, Camera, User, Phone,
+  ArrowLeft, ShieldAlert, Upload, User, Phone,
   Mail, MapPin, Briefcase, Lock, CheckCircle2, ChevronRight,
   Save, X, Loader2, LogOut, Building2
 } from 'lucide-react';
@@ -300,8 +300,9 @@ const TeacherProfile = () => {
                 type="button"
                 onClick={handleAvatarChange}
                 className="absolute bottom-1 right-1 w-6 h-6 rounded-full bg-white shadow-md flex items-center justify-center text-primary hover:bg-primary hover:text-white transition-all active:scale-90"
+                title="Upload Photo"
               >
-                <Camera size={12} strokeWidth={2.5} />
+                <Upload size={12} strokeWidth={2.5} />
               </button>
             </div>
             <div>
@@ -323,7 +324,7 @@ const TeacherProfile = () => {
             onClick={handleAvatarChange}
             className="px-4 py-2 border border-primary hover:bg-primary hover:text-white text-primary active:scale-95 transition-all rounded-xl text-[9px] font-black flex items-center gap-1 shadow-sm"
           >
-            <Camera size={12} />
+            <Upload size={12} />
             <span>Change</span>
           </button>
         </div>

@@ -3,6 +3,7 @@ const asyncHandler = require('../../../utils/asyncHandler');
 const dashboardService = require('../services/dashboard.service');
 const analyticsService = require('../services/analytics.service');
 const userManagementService = require('../services/userManagement.service');
+const teacherManagementService = require('../services/teacherManagement.service');
 const vendorApprovalService = require('../services/vendorApproval.service');
 const schoolApprovalService = require('../services/schoolApproval.service');
 const reportsService = require('../services/reports.service');
@@ -138,6 +139,32 @@ const adminController = {
       req.body.reason
     );
     return success(res, { user }, 'User deleted', undefined, req);
+  }),
+
+  updateUser: asyncHandler(async (req, res) => {
+    const user = await userManagementService.updateUser(req.params.userId, req.body, actorFrom(req));
+    return success(res, { user }, 'User updated', undefined, req);
+  }),
+
+  // Teacher Management
+  listTeachers: asyncHandler(async (req, res) => {
+    const { data, pagination } = await teacherManagementService.listTeachers(req.query);
+    return paginated(res, { teachers: data }, pagination, 'Teachers fetched', req);
+  }),
+
+  getTeacher: asyncHandler(async (req, res) => {
+    const teacher = await teacherManagementService.getTeacher(req.params.teacherId);
+    return success(res, { teacher }, 'Teacher fetched', undefined, req);
+  }),
+
+  updateTeacher: asyncHandler(async (req, res) => {
+    const teacher = await teacherManagementService.updateTeacher(req.params.teacherId, req.body);
+    return success(res, { teacher }, 'Teacher updated', undefined, req);
+  }),
+
+  deleteTeacher: asyncHandler(async (req, res) => {
+    await teacherManagementService.deleteTeacher(req.params.teacherId, actorFrom(req));
+    return success(res, null, 'Teacher deleted', undefined, req);
   }),
 
   // Vendor Approval

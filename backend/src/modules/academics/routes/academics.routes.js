@@ -129,6 +129,7 @@ router.post(
   ...schoolManage,
   resolveSchool(),
   validateParams(validators.schoolIdParam),
+  validateBody(validators.createKitSchema),
   academicsController.createKit
 );
 router.get(

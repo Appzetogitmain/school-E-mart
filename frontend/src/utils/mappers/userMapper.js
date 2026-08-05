@@ -88,7 +88,7 @@ export const buildChildInfoFromUser = (user, existing = {}) => {
     city: profile.city || existing.city || '',
     state: profile.state || existing.state || '',
     country: profile.country || existing.country || 'India',
-    photo: childProfile.avatarUrl || childProfile.photo || profile.avatarUrl || existing.photo || '',
+    photo: toAbsoluteUrl(childProfile.avatarUrl || childProfile.photo || profile.avatarUrl) || existing.photo || '',
     progress: existing.progress,
   };
 };

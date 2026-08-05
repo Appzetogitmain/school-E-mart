@@ -4,9 +4,9 @@ import {
   ArrowLeft, Search, Filter, ChevronDown, X,
   MoreVertical, RefreshCw, GraduationCap, Users, User,
   Calendar, CheckCircle, AlertCircle, Sparkles, Upload,
-  Download, Award, Shield, MapPin, Phone, Mail, Loader2, UserPlus, Edit2
+  Download, Award, Shield, MapPin, Phone, Mail, Loader2, UserPlus, Edit2, Trash2
 } from 'lucide-react';
-import { listStudents, registerStudent, updateStudent, listClasses, updateStudentStatus, getAttendanceHistory } from '../../../services/schoolApi';
+import { listStudents, registerStudent, updateStudent, deleteStudent, listClasses, updateStudentStatus, getAttendanceHistory } from '../../../services/schoolApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 import { mapStudentForList, formatClassLabel, calculateAge } from '../../../utils/mappers/schoolStudentMapper';
 import { useSchoolId } from '../../../utils/schoolContext';
@@ -62,6 +62,29 @@ const SchoolStudentsPage = () => {
   const [studentAttendanceLogs, setStudentAttendanceLogs] = useState([]);
   const [attendanceLoading, setAttendanceLoading] = useState(false);
 
+  // Delete Student Modal state & handlers
+  const [studentToDelete, setStudentToDelete] = useState(null);
+  const [deleteSubmitting, setDeleteSubmitting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
+
+  const handleDeleteStudent = async () => {
+    if (!studentToDelete?.mongoId || !schoolId) return;
+    setDeleteSubmitting(true);
+    setDeleteError('');
+    try {
+      await deleteStudent(schoolId, studentToDelete.mongoId);
+      setStudentToDelete(null);
+      if (selectedStudent?.mongoId === studentToDelete.mongoId) {
+        setSelectedStudent(null);
+      }
+      await loadStudents();
+    } catch (err) {
+      setDeleteError(getErrorMessage(err, 'Failed to delete student'));
+    } finally {
+      setDeleteSubmitting(false);
+    }
+  };
+
   const loadStudents = useCallback(async () => {
     if (!schoolId) {
       setLoading(false);
@@ -72,7 +95,7 @@ const SchoolStudentsPage = () => {
     setLoading(true);
     setError('');
     try {
-      const { data } = await listStudents(schoolId, { limit: 200 });
+      const { data } = await listStudents(schoolId, { limit: 500 });
       setStudents((data || []).map(mapStudentForList));
     } catch (err) {
       setStudents([]);
@@ -360,8 +383,8 @@ const SchoolStudentsPage = () => {
     }
   };
 
-  const boysCount = students.filter((s) => s.gender === 'Boy' && s.status === 'Active').length;
-  const girlsCount = students.filter((s) => s.gender === 'Girl' && s.status === 'Active').length;
+  const boysCount = students.filter((s) => (s.gender || '').toLowerCase() === 'boy' || (s.gender || '').toLowerCase() === 'male').length;
+  const girlsCount = students.filter((s) => (s.gender || '').toLowerCase() === 'girl' || (s.gender || '').toLowerCase() === 'female').length;
   const totalCount = students.length;
 
   // Filter students based on all states combined
@@ -381,9 +404,9 @@ const SchoolStudentsPage = () => {
     // 4. Stat Tab Filter (All / Boys / Girls cards)
     let matchesStatTab = true;
     if (activeStatTab === 'Boys') {
-      matchesStatTab = s.gender === 'Boy' && s.status === 'Active';
+      matchesStatTab = (s.gender || '').toLowerCase() === 'boy' || (s.gender || '').toLowerCase() === 'male';
     } else if (activeStatTab === 'Girls') {
-      matchesStatTab = s.gender === 'Girl' && s.status === 'Active';
+      matchesStatTab = (s.gender || '').toLowerCase() === 'girl' || (s.gender || '').toLowerCase() === 'female';
     }
 
     return matchesSearch && matchesClass && matchesSection && matchesStatTab;
@@ -613,16 +636,32 @@ const SchoolStudentsPage = () => {
 
 
 
-            {/* Open full profile */}
-            <button
-              className="absolute top-4 right-4 w-7 h-7 rounded-full flex items-center justify-center hover:bg-gray-50 text-gray-400 active:scale-90 transition-transform"
-              onClick={(e) => {
-                e.stopPropagation();
-                setSelectedStudent(student);
-              }}
-            >
-              <MoreVertical size={16} />
-            </button>
+            {/* Action buttons */}
+            <div className="absolute top-4 right-4 flex items-center gap-1">
+              <button
+                type="button"
+                className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-red-50 text-gray-400 hover:text-red-600 active:scale-90 transition-all"
+                title="Delete Student"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setStudentToDelete(student);
+                  setDeleteError('');
+                }}
+              >
+                <Trash2 size={15} />
+              </button>
+              <button
+                type="button"
+                className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-gray-50 text-gray-400 active:scale-90 transition-transform"
+                title="View Profile"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedStudent(student);
+                }}
+              >
+                <MoreVertical size={16} />
+              </button>
+            </div>
 
           </div>
         ))}
@@ -891,14 +930,27 @@ const SchoolStudentsPage = () => {
 
             {/* Footer */}
             <div className="bg-gray-50 border-t border-gray-200 p-5 flex items-center justify-between gap-3 shrink-0">
-              <button
-                type="button"
-                onClick={() => openEditModal(selectedStudent)}
-                className="px-5 py-3 bg-amber-500 hover:bg-amber-600 active:scale-95 text-white font-black rounded-2xl text-xs uppercase tracking-wider transition-all shadow-md flex items-center gap-1.5"
-              >
-                <Edit2 size={14} className="stroke-[2.5]" />
-                Edit Profile
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => openEditModal(selectedStudent)}
+                  className="px-4 py-3 bg-amber-500 hover:bg-amber-600 active:scale-95 text-white font-black rounded-2xl text-xs uppercase tracking-wider transition-all shadow-md flex items-center gap-1.5"
+                >
+                  <Edit2 size={14} className="stroke-[2.5]" />
+                  Edit Profile
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStudentToDelete(selectedStudent);
+                    setDeleteError('');
+                  }}
+                  className="px-4 py-3 bg-red-600 hover:bg-red-700 active:scale-95 text-white font-black rounded-2xl text-xs uppercase tracking-wider transition-all shadow-md flex items-center gap-1.5"
+                >
+                  <Trash2 size={14} className="stroke-[2.5]" />
+                  Delete
+                </button>
+              </div>
               <button 
                 onClick={() => setSelectedStudent(null)}
                 className="px-6 py-3 bg-[#3b2d7d] hover:bg-[#5942bc] text-white font-black rounded-2xl text-xs uppercase tracking-wider transition-all active:scale-95 shadow-md flex items-center justify-center gap-1.5"
@@ -1525,6 +1577,63 @@ const SchoolStudentsPage = () => {
               </form>
             )}
 
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {studentToDelete && (
+        <div className="fixed inset-0 z-[1010] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+          <div className="w-full max-w-md bg-white rounded-[2.2rem] shadow-2xl border border-gray-150 p-6 space-y-4 animate-in zoom-in duration-200">
+            <div className="flex items-center gap-3 text-red-600">
+              <div className="w-10 h-10 rounded-2xl bg-red-50 flex items-center justify-center border border-red-100 shrink-0">
+                <Trash2 size={20} />
+              </div>
+              <div>
+                <h3 className="text-sm font-black text-gray-900 leading-tight">Delete Student</h3>
+                <span className="text-[11px] text-gray-400 font-bold block mt-0.5">This action will soft-delete the student record.</span>
+              </div>
+            </div>
+
+            <p className="text-xs font-bold text-gray-600 bg-gray-50 p-3.5 rounded-2xl border border-gray-200/80">
+              Are you sure you want to delete <span className="font-black text-gray-900">{studentToDelete.name}</span> ({studentToDelete.class}, Roll No. {studentToDelete.rollNo})?
+            </p>
+
+            {deleteError && (
+              <div className="p-3 bg-red-50 border border-red-100 rounded-xl text-red-600 text-xs font-bold flex items-center gap-2">
+                <AlertCircle size={14} />
+                <span>{deleteError}</span>
+              </div>
+            )}
+
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setStudentToDelete(null)}
+                disabled={deleteSubmitting}
+                className="flex-1 py-3 bg-white border border-gray-200 text-gray-600 font-black rounded-2xl text-xs uppercase tracking-wider hover:bg-gray-50 active:scale-95 transition-all disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteStudent}
+                disabled={deleteSubmitting}
+                className="flex-1 py-3 bg-red-600 hover:bg-red-700 active:scale-95 text-white font-black rounded-2xl text-xs uppercase tracking-wider transition-all shadow-md flex items-center justify-center gap-1.5 disabled:opacity-60"
+              >
+                {deleteSubmitting ? (
+                  <>
+                    <Loader2 size={14} className="animate-spin" />
+                    Deleting…
+                  </>
+                ) : (
+                  <>
+                    <Trash2 size={14} />
+                    Delete Student
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

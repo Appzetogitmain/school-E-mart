@@ -1,5 +1,6 @@
-const { NotFoundError, BadRequestError } = require('../../../common/errors');
+const { NotFoundError, BadRequestError, ConflictError } = require('../../../common/errors');
 const { ALL_ROLES } = require('../../../constants/roles');
+const { normalizePhone } = require('../../../utils');
 const adminUserRepository = require('../repositories/user.repository');
 const auditRepository = require('../../auth/repositories/audit.repository');
 const reportRepository = require('../repositories/report.repository');
@@ -7,12 +8,49 @@ const { getStateStore } = require('../../../common/stateStore');
 const env = require('../../../config/env');
 const { runAtomic } = require('../../orders/utils/atomic');
 const { triggerService } = require('../../../services/notification');
+const User = require('../../../database/models/User');
+const ParentProfile = require('../../../database/models/ParentProfile');
+const ChildProfile = require('../../../database/models/ChildProfile');
+const Address = require('../../../database/models/Address');
 
 const USER_LOCK_PREFIX = 'auth:user-lock:';
 
 const userManagementService = {
-  listUsers(query) {
-    return adminUserRepository.paginateUsers({}, query);
+  async listUsers(query) {
+    const { data, pagination } = await adminUserRepository.paginateUsers({}, query);
+
+    // Batch-join each parent's linked student(s) so the table can show who
+    // the account actually belongs to — the parent's own `name` field is
+    // often not what identifies the row to a school. Same $in + Map idiom
+    // users.service.js#getProfile already uses for its School lookup.
+    const parentUserIds = data.filter((u) => u.role === 'parent').map((u) => u._id);
+    if (parentUserIds.length) {
+      const children = await ChildProfile.find({
+        parentUserId: { $in: parentUserIds },
+        'softDelete.isDeleted': { $ne: true },
+      })
+        .select('parentUserId name grade')
+        .sort({ 'audit.createdAt': 1 })
+        .lean();
+
+      const childrenByParent = new Map();
+      for (const child of children) {
+        const key = String(child.parentUserId);
+        if (!childrenByParent.has(key)) childrenByParent.set(key, []);
+        childrenByParent.get(key).push({ name: child.name, grade: child.grade });
+      }
+
+      return {
+        data: data.map((user) =>
+          user.role === 'parent'
+            ? { ...user, children: childrenByParent.get(String(user._id)) || [] }
+            : user
+        ),
+        pagination,
+      };
+    }
+
+    return { data, pagination };
   },
 
   async getUser(userId) {
@@ -180,12 +218,79 @@ const userManagementService = {
     return { user, activity: data, pagination };
   },
 
-  async deleteUser(userId, actor = {}, reason) {
-    const user = await adminUserRepository.softDeleteById(userId, {
-      deletedBy: actor.userId,
-      reason,
-    });
+  // Name/email/phone edit for any role from the superadmin panel. Mirrors the
+  // uniqueness checks users.service.js#updateProfile already applies.
+  async updateUser(userId, payload = {}, actor = {}) {
+    const user = await User.findOne({ _id: userId, 'softDelete.isDeleted': { $ne: true } });
     if (!user) throw new NotFoundError('User not found', 'USER_NOT_FOUND');
+
+    const before = { name: user.name, email: user.email, phone: user.phone };
+
+    if (payload.name !== undefined) user.name = payload.name;
+
+    if (payload.email !== undefined) {
+      const normEmail = payload.email ? payload.email.trim().toLowerCase() : '';
+      if (normEmail) {
+        const emailOwner = await User.findEmailOwner(normEmail, { excludeUserId: userId });
+        if (emailOwner) {
+          throw new ConflictError(`Email already belongs to another account (${emailOwner.name})`, 'EMAIL_EXISTS');
+        }
+      }
+      user.email = normEmail || undefined;
+    }
+
+    if (payload.phone !== undefined) {
+      const normPhone = normalizePhone(payload.phone);
+      const existingPhone = await User.findOne({
+        _id: { $ne: userId },
+        phone: normPhone,
+        'softDelete.isDeleted': { $ne: true },
+      });
+      if (existingPhone) {
+        throw new ConflictError('A user with this phone number already exists', 'PHONE_EXISTS');
+      }
+      user.phone = normPhone;
+    }
+
+    await user.save();
+
+    await auditRepository.log({
+      actorUserId: actor.userId,
+      actorRole: actor.role,
+      action: 'user.updated_by_admin',
+      entityType: 'User',
+      entityId: userId,
+      before,
+      after: { name: user.name, email: user.email, phone: user.phone },
+    });
+
+    return user.toObject();
+  },
+
+  // Hard delete, per product decision: the account and its profile data
+  // (ParentProfile, linked ChildProfile(s), saved Addresses) are permanently
+  // removed. Orders are deliberately left untouched — they're financial
+  // history, not roster data (same reasoning as School's cascade delete in
+  // school.service.js#deleteSchool).
+  async deleteUser(userId, actor = {}, reason) {
+    const user = await User.findById(userId).lean();
+    if (!user) throw new NotFoundError('User not found', 'USER_NOT_FOUND');
+
+    const children = await ChildProfile.find({ parentUserId: userId }).select('_id').lean();
+    const childIds = children.map((c) => c._id);
+    const addresses = await Address.find({ userId }).select('_id').lean();
+    const addressIds = addresses.map((a) => a._id);
+
+    await runAtomic(async (session) => {
+      if (childIds.length) {
+        await ChildProfile.deleteMany({ _id: { $in: childIds } }).session(session);
+      }
+      if (addressIds.length) {
+        await Address.deleteMany({ _id: { $in: addressIds } }).session(session);
+      }
+      await ParentProfile.deleteOne({ userId }).session(session);
+      await User.deleteOne({ _id: userId }).session(session);
+    });
 
     await auditRepository.log({
       actorUserId: actor.userId,
@@ -193,7 +298,7 @@ const userManagementService = {
       action: 'user.deleted',
       entityType: 'User',
       entityId: userId,
-      after: { reason },
+      after: { reason, name: user.name, role: user.role, childrenRemoved: childIds.length },
     });
 
     return user;

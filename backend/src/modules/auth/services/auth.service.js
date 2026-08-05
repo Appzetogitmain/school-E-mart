@@ -108,81 +108,21 @@ const authService = {
     }
 
     // /auth/me is called on every app load and token refresh, and the client
-    // rebuilds childInfo (header, greetings, etc.) from it. Without childProfile
-    // here the student name gets overwritten with the parent's name on refresh,
-    // so attach the active child exactly like login does.
+    // rebuilds childInfo (header, greetings, school name/logo, etc.) from it.
+    // Without profile/childProfile here the client falls back to stale or
+    // placeholder identity on refresh, so attach it for every role that
+    // needs it — reusing usersService.getProfile(), the same builder that
+    // already backs GET /users/me, instead of a second parent-only copy of
+    // this logic that left teacher/school with no real data.
     const obj = typeof user.toObject === 'function' ? user.toObject() : { ...user };
-    if (obj.role === 'parent' || obj.role === 'user') {
-      obj.childProfile = await buildActiveChildDto(userId);
-      obj.profile = await buildProfileDto(userId, obj.role);
+    if (['parent', 'user', 'teacher', 'school'].includes(obj.role)) {
+      const usersService = require('../../users/services/users.service');
+      const { profile, childProfile } = await usersService.getProfile(userId);
+      obj.childProfile = childProfile;
+      obj.profile = profile;
     }
     return obj;
   },
 };
-
-async function buildProfileDto(userId, userRole) {
-  const ParentProfile = require('../../../database/models/ParentProfile');
-  const Address = require('../../../database/models/Address');
-  const parentProfile = await ParentProfile.findOne({
-    userId,
-    'softDelete.isDeleted': { $ne: true },
-  }).lean();
-
-  let defaultAddress = null;
-  if (parentProfile?.defaultAddressId) {
-    defaultAddress = await Address.findById(parentProfile.defaultAddressId).lean();
-  }
-
-  return {
-    altPhone: parentProfile?.altPhone || null,
-    avatarUrl: parentProfile?.avatarUrl || null,
-    referralCode: parentProfile?.referralCode || null,
-    address: defaultAddress?.line1 || null,
-    pinCode: defaultAddress?.pinCode || null,
-    city: defaultAddress?.city || null,
-    state: defaultAddress?.state || null,
-    country: defaultAddress?.country || null,
-  };
-}
-
-// Builds the active-child DTO for a parent (mirrors sessionIssue.service and
-// users.service). Active child = ParentProfile.activeChildId, else the first.
-async function buildActiveChildDto(userId) {
-  const ParentProfile = require('../../../database/models/ParentProfile');
-  const ChildProfile = require('../../../database/models/ChildProfile');
-  const School = require('../../../database/models/School');
-
-  const parentProfile = await ParentProfile.findOne({
-    userId,
-    'softDelete.isDeleted': { $ne: true },
-  }).lean();
-
-  const children = await ChildProfile.find({
-    parentUserId: userId,
-    'softDelete.isDeleted': { $ne: true },
-  })
-    .sort({ 'audit.createdAt': 1 })
-    .lean();
-  if (!children.length) return null;
-
-  const child =
-    children.find(
-      (c) => parentProfile?.activeChildId && String(c._id) === String(parentProfile.activeChildId)
-    ) || children[0];
-
-  const school = child.schoolId ? await School.findById(child.schoolId).lean() : null;
-  return {
-    name: child.name,
-    grade: child.grade,
-    schoolId: child.schoolId ? child.schoolId.toString() : 'explore-schools',
-    schoolName: school ? school.name : 'Explore Schools',
-    schoolLogo: school ? school.logoUrl : null,
-    schoolRefNo: child.schoolRefNo || (school ? school.schoolRefNo : null),
-    rollNo: child.rollNo || null,
-    studentId: child.studentId ? child.studentId.toString() : null,
-    photo: child.avatarUrl || null,
-    avatarUrl: child.avatarUrl || null,
-  };
-}
 
 module.exports = authService;

@@ -12,6 +12,7 @@ import ProductCard from '../../components/ProductCard';
 import { useDraggableScroll } from '../../hooks/useDraggableScroll';
 import { getSchool, listNotices } from '../../../services/schoolApi';
 import { useSchoolId } from '../../../utils/schoolContext';
+import { useChildInfo } from '../../../utils/parentContext';
 import { useProducts } from '../../../hooks/useProducts';
 
 const SchoolMySchoolPage = () => {
@@ -22,22 +23,28 @@ const SchoolMySchoolPage = () => {
   const [noticesLoading, setNoticesLoading] = useState(true);
   const kitsRef = useDraggableScroll();
   const [scrolled, setScrolled] = useState(false);
-  const [schoolInfo, setSchoolInfo] = useState(() => {
-    const saved = localStorage.getItem('childInfo');
-    return saved ? JSON.parse(saved) : { role: 'school', name: 'School Admin', school: 'School Management', progress: { completed: 85, total: 100 } };
-  });
+
+  // Shared, reactive identity (null until real data has synced — never a
+  // hardcoded placeholder). `schoolOverride` is an extra correction layer:
+  // if the School document has been edited more recently than the last
+  // childInfo sync, prefer its name/principal without waiting for a reload.
+  const rawChildInfo = useChildInfo();
+  const [schoolOverride, setSchoolOverride] = useState(null);
+  const schoolInfo = rawChildInfo
+    ? { ...rawChildInfo, ...(schoolOverride || {}) }
+    : null;
 
   const loadSchool = useCallback(async () => {
     if (!schoolId) return;
     try {
       const school = await getSchool(schoolId);
-      setSchoolInfo((prev) => ({
-        ...prev,
-        school: school?.name || prev.school,
-        name: school?.principalName || prev.name,
-      }));
+      if (!school) return;
+      setSchoolOverride({
+        ...(school.name ? { school: school.name } : {}),
+        ...(school.principalName ? { name: school.principalName } : {}),
+      });
     } catch {
-      // keep local fallback
+      // keep whatever childInfo already has
     }
   }, [schoolId]);
 
@@ -111,7 +118,9 @@ const SchoolMySchoolPage = () => {
                 <Building2 size={24} />
               </div>
               <div>
-                <h2 className="text-base font-bold text-deep-purple leading-none mb-1">{schoolInfo.school}</h2>
+                <h2 className="text-base font-bold text-deep-purple leading-none mb-1">
+                  {schoolInfo?.school || <span className="inline-block h-4 w-32 bg-gray-200 rounded animate-pulse align-middle" />}
+                </h2>
                 <span className="text-[11px] text-gray-500 font-medium">Administrator Console</span>
               </div>
             </div>

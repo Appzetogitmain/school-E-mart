@@ -178,7 +178,7 @@ const ProfilePage = () => {
               <div className="flex items-center gap-5 relative z-10">
                 <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center shadow-lg overflow-hidden border-2 border-white/20 shrink-0">
                   {childProfile?.photo ? (
-                    <img src={childProfile.photo} alt={studentName} className="w-full h-full object-cover" />
+                    <img src={toAbsoluteUrl(childProfile.photo)} alt={studentName} className="w-full h-full object-cover" />
                   ) : (
                     <GraduationCap size={34} className="text-deep-purple/60" />
                   )}
@@ -287,7 +287,7 @@ const ProfilePage = () => {
             <div className="bg-white rounded-3xl p-4 shadow-sm border border-gray-100/50 flex items-center gap-4">
               <div className="w-12 h-12 rounded-2xl bg-[#F4EBFF] text-deep-purple flex items-center justify-center shrink-0 overflow-hidden">
                 {data?.profile?.avatarUrl ? (
-                  <img src={data.profile.avatarUrl} alt={parentName} className="w-full h-full object-cover" />
+                  <img src={toAbsoluteUrl(data.profile.avatarUrl)} alt={parentName} className="w-full h-full object-cover" />
                 ) : (
                   <User size={22} />
                 )}

@@ -10,6 +10,7 @@ import {
   updateMasterKitProduct, deleteMasterKitProduct, uploadAdminMedia 
 } from '../../../services/adminApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
+import { toAbsoluteUrl } from '../../../utils/url';
 
 const CATEGORY_OPTIONS = [
   'Textbooks & Notebooks',
@@ -116,21 +117,14 @@ const KitProductsManagement = () => {
       data.append('purpose', 'kit_product_template');
       const attachment = await uploadAdminMedia(data);
       const url = attachment?.url || (attachment?.storageKey ? (attachment.storageKey.startsWith('/uploads/') ? attachment.storageKey : `/uploads/${attachment.storageKey}`) : null);
-      if (url) {
-        setFormData((prev) => ({ ...prev, imageUrl: url }));
-      } else {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          setFormData((prev) => ({ ...prev, imageUrl: reader.result }));
-        };
-        reader.readAsDataURL(file);
-      }
-    } catch {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setFormData((prev) => ({ ...prev, imageUrl: reader.result }));
-      };
-      reader.readAsDataURL(file);
+      if (!url) throw new Error('Upload did not return a file URL');
+      setFormData((prev) => ({ ...prev, imageUrl: url }));
+    } catch (err) {
+      // Every product image must live under the server's uploads folder —
+      // never fall back to embedding the raw file as base64 in the DB.
+      // Surface the failure so the admin can retry instead of silently
+      // getting a third-party-free but un-uploaded, unreliable image.
+      setFormError(getErrorMessage(err, 'Image upload failed — please try again'));
     } finally {
       setUploadingImage(false);
     }
@@ -330,7 +324,7 @@ const KitProductsManagement = () => {
                       <div className="flex items-center gap-3">
                         <div className="w-12 h-12 rounded-2xl border border-gray-150 p-1 bg-gray-50 shrink-0 overflow-hidden flex items-center justify-center">
                           {item.imageUrl ? (
-                            <img src={item.imageUrl} alt={item.name} className="w-full h-full object-contain" />
+                            <img src={toAbsoluteUrl(item.imageUrl)} alt={item.name} className="w-full h-full object-contain" />
                           ) : (
                             <ImageIcon size={18} className="text-gray-300" />
                           )}
@@ -396,7 +390,7 @@ const KitProductsManagement = () => {
                 <div className="w-full h-36 bg-gray-50 rounded-2xl overflow-hidden border border-gray-100 flex items-center justify-center relative">
                   {item.imageUrl ? (
                     <img
-                      src={item.imageUrl}
+                      src={toAbsoluteUrl(item.imageUrl)}
                       alt={item.name}
                       className="w-full h-full object-contain p-2 group-hover:scale-105 transition-transform duration-300"
                     />
@@ -584,7 +578,7 @@ const KitProductsManagement = () => {
                   <div className="w-full h-28 rounded-xl border-2 border-dashed border-gray-200 bg-gray-50/50 flex flex-col items-center justify-center relative overflow-hidden">
                     {formData.imageUrl ? (
                       <>
-                        <img src={formData.imageUrl} alt="Product Preview" className="w-full h-full object-contain p-1.5" />
+                        <img src={toAbsoluteUrl(formData.imageUrl)} alt="Product Preview" className="w-full h-full object-contain p-1.5" />
                         <button
                           type="button"
                           onClick={() => setFormData({ ...formData, imageUrl: '' })}
@@ -603,22 +597,14 @@ const KitProductsManagement = () => {
                   </div>
 
                   <div className="md:col-span-2 space-y-2.5">
+                    {/* Uploaded files only — every product image must live under
+                        the server's own uploads folder, never a pasted
+                        third-party URL. */}
                     <label className="w-full px-4 py-2.5 bg-purple-50 hover:bg-purple-100 active:scale-95 text-[#0B1528] font-black rounded-xl cursor-pointer transition-all flex items-center justify-center gap-2 border border-purple-200/60 shadow-sm text-xs">
                       {uploadingImage ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
                       <span>{uploadingImage ? 'Uploading Image...' : 'Choose Photo File'}</span>
                       <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" disabled={uploadingImage} />
                     </label>
-
-                    <div>
-                      <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Or Direct Image URL</span>
-                      <input
-                        type="text"
-                        value={formData.imageUrl}
-                        onChange={(e) => setFormData({ ...formData, imageUrl: e.target.value })}
-                        placeholder="https://example.com/product.jpg or /uploads/..."
-                        className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl font-bold text-gray-700 text-[11px] focus:outline-none focus:border-[#0B1528]"
-                      />
-                    </div>
                   </div>
                 </div>
               </div>

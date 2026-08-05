@@ -1,11 +1,13 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { 
-  Plus, Search, Edit, Trash2, X, ChevronRight, Upload, 
+import {
+  Plus, Search, Edit, Trash2, X, ChevronRight, Upload,
   ShoppingBag, HelpCircle, Utensils, Home as HomeIcon, Baby, Heart, ShieldAlert, Loader2
 } from 'lucide-react';
 import { listHeaderCategories, createHeaderCategory, updateHeaderCategory, deleteHeaderCategory } from '../../../services/catalogApi';
+import { uploadAdminFile } from '../../../services/adminApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
+import { toAbsoluteUrl } from '../../../utils/url';
 import { mapHeaderCategoryForAdmin } from '../../../utils/mappers/categoryAdminMapper';
 
 const HeaderCategoryManagement = () => {
@@ -23,7 +25,13 @@ const HeaderCategoryManagement = () => {
   const [formCommission, setFormCommission] = useState('0');
   const [formFees, setFormFees] = useState('0');
   const [formStatus, setFormStatus] = useState('active');
+  // `formImage` is the already-uploaded path shown as a preview (from an
+  // earlier save, on edit) — never a hand-typed external URL. `formImageFile`
+  // is a newly chosen file, uploaded to local disk on submit.
   const [formImage, setFormImage] = useState('');
+  const [formImageFile, setFormImageFile] = useState(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const headerFileInputRef = useRef(null);
 
   const [headers, setHeaders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -54,6 +62,23 @@ const HeaderCategoryManagement = () => {
     setFormSlug(suggestedSlug);
   };
 
+  // A chosen file is only uploaded (to local disk, via the admin uploads
+  // endpoint) at submit time — never a hand-typed URL, so every header image
+  // is guaranteed to live under UPLOADS_DIR.
+  const resolveImageUrl = async () => {
+    if (!formImageFile) return formImage || undefined;
+    setUploadingImage(true);
+    try {
+      const data = new FormData();
+      data.append('file', formImageFile);
+      data.append('purpose', 'header_image');
+      const attachment = await uploadAdminFile(data);
+      return attachment?.url || formImage || undefined;
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
   // Add Action Handler
   const handleAddHeader = async (e) => {
     e.preventDefault();
@@ -61,12 +86,13 @@ const HeaderCategoryManagement = () => {
 
     try {
       setLoading(true);
+      const imageUrl = await resolveImageUrl();
       await createHeaderCategory({
         name: formName,
         commissionPercent: parseFloat(formCommission) || 0,
         feesFlatPaise: Math.round(parseFloat(formFees) * 100) || 0,
         status: formStatus,
-        imageUrl: formImage || undefined,
+        imageUrl,
       });
       resetForm();
       setIsAddModalOpen(false);
@@ -86,7 +112,8 @@ const HeaderCategoryManagement = () => {
     setFormCommission(headerItem.commission.replace('%', ''));
     setFormFees(headerItem.fees.replace('₹', ''));
     setFormStatus(headerItem.status === 'Active' ? 'active' : 'inactive');
-    setFormImage(headerItem.image || '');
+    setFormImage(headerItem.imageUrl || '');
+    setFormImageFile(null);
     setIsEditModalOpen(true);
   };
 
@@ -97,12 +124,13 @@ const HeaderCategoryManagement = () => {
 
     try {
       setLoading(true);
+      const imageUrl = await resolveImageUrl();
       await updateHeaderCategory(editingHeaderId, {
         name: formName,
         commissionPercent: parseFloat(formCommission) || 0,
         feesFlatPaise: Math.round(parseFloat(formFees) * 100) || 0,
         status: formStatus,
-        imageUrl: formImage || undefined,
+        imageUrl,
       });
       resetForm();
       setIsEditModalOpen(false);
@@ -136,6 +164,7 @@ const HeaderCategoryManagement = () => {
     setFormFees('0');
     setFormStatus('active');
     setFormImage('');
+    setFormImageFile(null);
     setEditingHeaderId(null);
   };
 
@@ -145,21 +174,9 @@ const HeaderCategoryManagement = () => {
     item.slug.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // Custom icon map for mockup records
-  const renderHeaderIcon = (item) => {
-    if (item.image) {
-      return (
-        <img 
-          src={item.image} 
-          alt={item.name} 
-          className="w-full h-full object-cover rounded-lg" 
-          onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1544816155-12df9643f363?w=80&auto=format&fit=crop&q=60' }}
-        />
-      );
-    }
-    
-    // Renders matching lucide vectors as in user screenshot
-    switch(item.imageType) {
+  // Renders matching lucide vectors as in user screenshot
+  const iconForType = (imageType) => {
+    switch (imageType) {
       case 'all':
         return <ShoppingBag className="text-indigo-600 stroke-[2] w-5 h-5" />;
       case 'grocery':
@@ -176,6 +193,10 @@ const HeaderCategoryManagement = () => {
         return <ShoppingBag className="text-gray-400 stroke-[2] w-5 h-5" />;
     }
   };
+
+  // A failed local file (deleted/moved) falls back to the generic icon
+  // above — never a third-party placeholder image.
+  const renderHeaderIcon = (item) => <HeaderIcon item={item} fallback={iconForType(item.imageType)} />;
 
   return (
     <div className="space-y-6 font-sans antialiased text-gray-800">
@@ -369,19 +390,36 @@ const HeaderCategoryManagement = () => {
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-black text-gray-700 block">Header Image URL</label>
-                <input 
-                  type="text" 
-                  value={formImage}
-                  onChange={(e) => setFormImage(e.target.value)}
-                  placeholder="https://images.unsplash.com/photo-..." 
-                  className="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-2.5 text-xs text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                <label className="text-xs font-black text-gray-700 block">Header Image</label>
+                <input
+                  type="file"
+                  ref={headerFileInputRef}
+                  onChange={(e) => setFormImageFile(e.target.files?.[0] || null)}
+                  accept="image/*"
+                  className="hidden"
                 />
+                <div
+                  onClick={() => headerFileInputRef.current?.click()}
+                  className="border-2 border-dashed border-gray-200 rounded-xl p-4 flex items-center gap-3 bg-gray-50/50 hover:bg-gray-50 transition-colors cursor-pointer select-none"
+                >
+                  {formImageFile ? (
+                    <img src={URL.createObjectURL(formImageFile)} alt="Preview" className="w-12 h-12 object-cover rounded-lg border border-gray-200 shrink-0" />
+                  ) : formImage ? (
+                    <img src={toAbsoluteUrl(formImage)} alt="Current" className="w-12 h-12 object-cover rounded-lg border border-gray-200 shrink-0" />
+                  ) : (
+                    <Upload size={18} className="text-gray-400 shrink-0" />
+                  )}
+                  <span className="text-xs font-bold text-gray-500">
+                    {uploadingImage
+                      ? 'Uploading…'
+                      : formImageFile ? formImageFile.name : formImage ? 'Change image' : 'Click to upload an image'}
+                  </span>
+                </div>
               </div>
 
               {/* Actions */}
               <div className="pt-4 border-t border-gray-150 flex items-center justify-end gap-2.5">
-                <button 
+                <button
                   type="button"
                   onClick={() => setIsAddModalOpen(false)}
                   className="border border-gray-200 hover:bg-gray-50 text-gray-600 font-black text-xs px-5 py-2.5 rounded-xl transition-all"
@@ -480,19 +518,36 @@ const HeaderCategoryManagement = () => {
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-black text-gray-700 block">Header Image URL</label>
-                <input 
-                  type="text" 
-                  value={formImage}
-                  onChange={(e) => setFormImage(e.target.value)}
-                  placeholder="https://images.unsplash.com/photo-..." 
-                  className="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-2.5 text-xs text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                <label className="text-xs font-black text-gray-700 block">Header Image</label>
+                <input
+                  type="file"
+                  ref={headerFileInputRef}
+                  onChange={(e) => setFormImageFile(e.target.files?.[0] || null)}
+                  accept="image/*"
+                  className="hidden"
                 />
+                <div
+                  onClick={() => headerFileInputRef.current?.click()}
+                  className="border-2 border-dashed border-gray-200 rounded-xl p-4 flex items-center gap-3 bg-gray-50/50 hover:bg-gray-50 transition-colors cursor-pointer select-none"
+                >
+                  {formImageFile ? (
+                    <img src={URL.createObjectURL(formImageFile)} alt="Preview" className="w-12 h-12 object-cover rounded-lg border border-gray-200 shrink-0" />
+                  ) : formImage ? (
+                    <img src={toAbsoluteUrl(formImage)} alt="Current" className="w-12 h-12 object-cover rounded-lg border border-gray-200 shrink-0" />
+                  ) : (
+                    <Upload size={18} className="text-gray-400 shrink-0" />
+                  )}
+                  <span className="text-xs font-bold text-gray-500">
+                    {uploadingImage
+                      ? 'Uploading…'
+                      : formImageFile ? formImageFile.name : formImage ? 'Change image' : 'Click to upload an image'}
+                  </span>
+                </div>
               </div>
 
               {/* Actions */}
               <div className="pt-4 border-t border-gray-150 flex items-center justify-end gap-2.5">
-                <button 
+                <button
                   type="button"
                   onClick={() => setIsEditModalOpen(false)}
                   className="border border-gray-200 hover:bg-gray-50 text-gray-600 font-black text-xs px-5 py-2.5 rounded-xl transition-all"
@@ -514,6 +569,22 @@ const HeaderCategoryManagement = () => {
       )}
 
     </div>
+  );
+};
+
+// Module scope so identity stays stable across re-renders. Swaps to the
+// lucide fallback icon on a broken image instead of a third-party
+// placeholder — a deleted/moved local file just shows the generic icon.
+const HeaderIcon = ({ item, fallback }) => {
+  const [broken, setBroken] = useState(false);
+  if (!item.image || broken) return fallback;
+  return (
+    <img
+      src={item.image}
+      alt={item.name}
+      className="w-full h-full object-cover rounded-lg"
+      onError={() => setBroken(true)}
+    />
   );
 };
 

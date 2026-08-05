@@ -9,7 +9,8 @@ import {
   listNotifications,
   markNotificationAsRead,
 } from '../../../services/notificationApi';
-import { getErrorMessage } from '../../../utils/apiHelpers';
+import { listNotices } from '../../../services/schoolApi';
+import { useTeacherSchoolId } from '../../../utils/teacherContext';
 
 const TYPE_MAP = {
   campaign: 'Notice',
@@ -39,6 +40,7 @@ const mapNotification = (n) => {
 
 const TeacherNotifications = () => {
   const navigate = useNavigate();
+  const schoolId = useTeacherSchoolId();
   const [activeFilter, setActiveFilter] = useState('All');
 
   const [notifications, setNotifications] = useState([]);
@@ -59,16 +61,43 @@ const TeacherNotifications = () => {
     setLoading(true);
     setError('');
     try {
-      const res = await listNotifications({ limit: 50 });
-      const items = res?.data || res?.items || [];
-      setNotifications(items.map(mapNotification));
+      const promises = [listNotifications({ limit: 50 })];
+      if (schoolId) {
+        promises.push(listNotices(schoolId, { status: 'published', limit: 50 }));
+      }
+      const results = await Promise.allSettled(promises);
+      
+      const notifRes = results[0]?.status === 'fulfilled' ? results[0].value : null;
+      const noticeRes = results[1]?.status === 'fulfilled' ? results[1].value : null;
+
+      const items = (notifRes?.data || notifRes?.items || []).map(mapNotification);
+
+      if (noticeRes?.data) {
+        noticeRes.data.forEach((notice) => {
+          const created = notice.publishDate ? new Date(notice.publishDate) : new Date();
+          items.push({
+            id: notice._id || notice.id,
+            type: 'Notice',
+            read: true,
+            isNew: false,
+            title: notice.title,
+            description: notice.content,
+            sender: 'School Administration',
+            date: created.toLocaleDateString('en-GB'),
+            time: created.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            hasAttachment: Boolean(notice.attachments?.length),
+          });
+        });
+      }
+
+      setNotifications(items);
     } catch (err) {
       setNotifications([]);
       setError(getErrorMessage(err, 'Unable to load notifications'));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [schoolId]);
 
   useEffect(() => {
     loadNotifications();

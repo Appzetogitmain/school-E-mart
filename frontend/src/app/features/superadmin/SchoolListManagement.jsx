@@ -3,11 +3,13 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import {
   Search, Eye, X, School, MapPin, Mail, User, Check, Ban, RefreshCw, Loader2,
-  GraduationCap, Plus, Phone, Hash, CalendarDays, AlertCircle, Package,
+  GraduationCap, Plus, Phone, Hash, CalendarDays, AlertCircle, Package, Edit, Trash2,
 } from 'lucide-react';
 import {
   listSchools,
   createSchool,
+  updateSchool,
+  deleteSchool,
   approveSchool,
   rejectSchool,
   suspendSchool,
@@ -146,6 +148,11 @@ const SchoolListManagement = () => {
   const [formError, setFormError] = useState('');
   const [saving, setSaving] = useState(false);
 
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingSchool, setEditingSchool] = useState(null);
+  const [editForm, setEditForm] = useState(null);
+  const [editError, setEditError] = useState('');
+
   // Fetched unfiltered so the stat cards count every school. Filtering per tab
   // server-side made each card report only the visible tab's total.
   const loadSchools = useCallback(async () => {
@@ -266,6 +273,89 @@ const SchoolListManagement = () => {
       setFormError(getErrorMessage(err, 'Unable to create school'));
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Only fields that genuinely live on the School document itself — adminName/
+  // adminPhone are the linked school-admin User's own name/phone (joined in by
+  // the list API, not stored on School), so they are intentionally not
+  // editable here; editing them would silently no-op.
+  const openEditModal = (school) => {
+    setEditingSchool(school);
+    setEditError('');
+    setEditForm({
+      name: school.name,
+      principalName: school.principalName,
+      adminEmail: school.adminEmail,
+      phone: school.raw?.phone || '',
+      line1: school.address.line1,
+      line2: school.address.line2,
+      city: school.address.city,
+      state: school.address.state,
+      pinCode: school.address.pinCode,
+      academicYearCurrent: school.academicYear,
+      gradesOffered: school.gradesOffered.join(', '),
+    });
+    setIsEditModalOpen(true);
+  };
+
+  const handleUpdateSchool = async (event) => {
+    event.preventDefault();
+    if (!editingSchool || !editForm) return;
+    const f = editForm;
+
+    if (f.name.trim().length < 2) {
+      setEditError('School name must be at least 2 characters');
+      return;
+    }
+    if (f.pinCode.trim() && !/^\d{6}$/.test(f.pinCode.trim())) {
+      setEditError('PIN code must be exactly 6 digits');
+      return;
+    }
+    setEditError('');
+
+    const payload = {
+      name: f.name.trim(),
+      principalName: f.principalName.trim(),
+      adminEmail: f.adminEmail.trim(),
+      phone: f.phone.trim(),
+      address: {
+        line1: f.line1.trim(),
+        line2: f.line2.trim(),
+        city: f.city.trim(),
+        state: f.state.trim(),
+        pinCode: f.pinCode.trim(),
+      },
+      academicYearCurrent: f.academicYearCurrent.trim(),
+      gradesOffered: f.gradesOffered.split(',').map((g) => g.trim()).filter(Boolean),
+    };
+
+    try {
+      setSaving(true);
+      await updateSchool(editingSchool.mongoId, payload);
+      setIsEditModalOpen(false);
+      setEditingSchool(null);
+      await loadSchools();
+    } catch (err) {
+      setEditError(getErrorMessage(err, 'Unable to update school'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteSchool = async (school) => {
+    if (!confirm(
+      `Permanently delete "${school.name}"?\n\nThis also permanently deletes all of its students, teachers, staff accounts, and kits. Past orders are kept. This cannot be undone.`
+    )) return;
+    setActionId(school.mongoId);
+    try {
+      await deleteSchool(school.mongoId);
+      if (selectedSchool?.mongoId === school.mongoId) setSelectedSchool(null);
+      await loadSchools();
+    } catch (err) {
+      setError(getErrorMessage(err, 'Unable to delete school'));
+    } finally {
+      setActionId(null);
     }
   };
 
@@ -504,6 +594,24 @@ const SchoolListManagement = () => {
                               <RefreshCw size={12} />
                             </button>
                           )}
+
+                          <button
+                            type="button"
+                            onClick={() => openEditModal(school)}
+                            title="Edit school"
+                            className="w-7 h-7 rounded-xl border border-gray-250/60 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50/50 flex items-center justify-center transition-all"
+                          >
+                            <Edit size={12} className="stroke-[2.5]" />
+                          </button>
+                          <button
+                            type="button"
+                            disabled={actionId === school.mongoId}
+                            onClick={() => handleDeleteSchool(school)}
+                            title="Delete school"
+                            className="w-7 h-7 rounded-xl border border-red-200 text-red-500 hover:bg-red-50 flex items-center justify-center transition-all disabled:opacity-50"
+                          >
+                            {actionId === school.mongoId ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} className="stroke-[2.5]" />}
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -773,6 +881,117 @@ const SchoolListManagement = () => {
                   {selectedSchool.statusRaw === 'rejected' ? 'Approve' : 'Reactivate'}
                 </button>
               )}
+              <button
+                type="button"
+                onClick={() => { const s = selectedSchool; setSelectedSchool(null); openEditModal(s); }}
+                className="px-4 py-2 rounded-xl border border-gray-200 bg-white text-gray-700 text-xs font-black hover:bg-gray-50 flex items-center gap-1.5"
+              >
+                <Edit size={12} /> Edit
+              </button>
+              <button
+                type="button"
+                disabled={actionId === selectedSchool.mongoId}
+                onClick={() => handleDeleteSchool(selectedSchool)}
+                className="px-4 py-2 rounded-xl border border-red-200 bg-white text-red-600 text-xs font-black hover:bg-red-50 disabled:opacity-50 flex items-center gap-1.5"
+              >
+                <Trash2 size={12} /> Delete
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {isEditModalOpen && editForm && editingSchool && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl border border-gray-200 shadow-2xl w-full max-w-2xl overflow-hidden animate-slide-up">
+            <div className="p-5 border-b border-gray-150 flex items-center justify-between bg-white px-6">
+              <div>
+                <h3 className="text-base font-black text-[#0B1528]">Edit School</h3>
+                <p className="text-[10px] text-gray-400 font-bold mt-0.5">Ref: {editingSchool.id || '—'}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsEditModalOpen(false)}
+                className="p-1.5 rounded-xl hover:bg-gray-100 text-gray-400 hover:text-gray-900 transition-all border border-gray-100"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {editError && (
+              <div className="mx-6 mt-4 px-4 py-2.5 bg-red-50 border border-red-100 rounded-xl text-xs font-bold text-red-600 flex items-center gap-2">
+                <AlertCircle size={14} />
+                {editError}
+              </div>
+            )}
+
+            <form id="edit-school-form" onSubmit={handleUpdateSchool} className="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Field label="School Name" required>
+                  <input className={inputClass} value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} />
+                </Field>
+                <Field label="Principal Name">
+                  <input className={inputClass} value={editForm.principalName} onChange={(e) => setEditForm({ ...editForm, principalName: e.target.value })} />
+                </Field>
+                <Field label="School Email" hint="Not the admin login email">
+                  <input type="email" className={inputClass} value={editForm.adminEmail} onChange={(e) => setEditForm({ ...editForm, adminEmail: e.target.value })} />
+                </Field>
+                <Field label="School Phone" hint="Not the admin login phone">
+                  <input className={inputClass} value={editForm.phone} onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })} />
+                </Field>
+              </div>
+
+              <div className="border-t border-gray-100 pt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Field label="Address Line 1">
+                  <input className={inputClass} value={editForm.line1} onChange={(e) => setEditForm({ ...editForm, line1: e.target.value })} />
+                </Field>
+                <Field label="Address Line 2">
+                  <input className={inputClass} value={editForm.line2} onChange={(e) => setEditForm({ ...editForm, line2: e.target.value })} />
+                </Field>
+                <Field label="City">
+                  <input className={inputClass} value={editForm.city} onChange={(e) => setEditForm({ ...editForm, city: e.target.value })} />
+                </Field>
+                <Field label="State">
+                  <input className={inputClass} value={editForm.state} onChange={(e) => setEditForm({ ...editForm, state: e.target.value })} />
+                </Field>
+                <Field label="PIN Code" hint="6 digits">
+                  <input
+                    inputMode="numeric"
+                    className={inputClass}
+                    value={editForm.pinCode}
+                    onChange={(e) => setEditForm({ ...editForm, pinCode: e.target.value.replace(/\D/g, '').slice(0, 6) })}
+                  />
+                </Field>
+              </div>
+
+              <div className="border-t border-gray-100 pt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Field label="Academic Year" hint="Format: 2024-25">
+                  <input className={inputClass} value={editForm.academicYearCurrent} onChange={(e) => setEditForm({ ...editForm, academicYearCurrent: e.target.value })} />
+                </Field>
+                <Field label="Grades Offered" hint="Comma separated">
+                  <input className={inputClass} value={editForm.gradesOffered} onChange={(e) => setEditForm({ ...editForm, gradesOffered: e.target.value })} />
+                </Field>
+              </div>
+            </form>
+
+            <div className="p-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setIsEditModalOpen(false)}
+                className="px-4 py-2 rounded-xl border border-gray-200 bg-white text-gray-600 text-xs font-black hover:bg-gray-100"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                form="edit-school-form"
+                disabled={saving}
+                className="px-4 py-2 rounded-xl bg-[#0B1528] text-white text-xs font-black hover:bg-[#16233d] disabled:opacity-50 flex items-center gap-2"
+              >
+                {saving && <Loader2 size={13} className="animate-spin" />}
+                {saving ? 'Saving…' : 'Save Changes'}
+              </button>
             </div>
           </div>
         </div>,

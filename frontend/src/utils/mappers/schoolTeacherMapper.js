@@ -1,4 +1,5 @@
 import { formatOrderDateShort } from './orderMapper';
+import { toAbsoluteUrl } from '../url';
 
 const STATUS_LABELS = {
   pending: 'Pending',
@@ -17,7 +18,7 @@ export const mapTeacherForApproval = (teacher) => ({
     : '—',
   status: STATUS_LABELS[teacher?.approvalStatus] || 'Pending',
   statusRaw: teacher?.approvalStatus || 'pending',
-  avatar: teacher?.avatarUrl || teacher?.user?.avatarUrl || null,
+  avatar: toAbsoluteUrl(teacher?.avatarUrl || teacher?.user?.avatarUrl) || null,
   designation: teacher?.designation || 'Teacher',
   department: teacher?.department || '—',
   qualifications: teacher?.qualification || '—',
