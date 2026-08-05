@@ -23,6 +23,7 @@ import { listOrders } from '../../../services/ordersApi';
 import { useCategoryTree } from '../../../hooks/useCategoryTree';
 import { useProducts } from '../../../hooks/useProducts';
 import { useSchoolId } from '../../../utils/schoolContext';
+import { useChildInfo } from '../../../utils/parentContext';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 
 const SchoolHome = () => {
@@ -36,40 +37,13 @@ const SchoolHome = () => {
   const [isAuthPromptOpen, setIsAuthPromptOpen] = useState(false);
   const [academicYear, setAcademicYear] = useState('Academic Year 2025–26');
 
-  const [schoolInfo, setSchoolInfo] = useState(() => {
-    const saved = localStorage.getItem('childInfo');
-    const parsed = saved ? JSON.parse(saved) : null;
-    return (parsed && parsed.role === 'school') ? parsed : {
-      name: "School Admin",
-      school: "School Management",
-      role: "school",
-      phone: ""
-    };
-  });
-
-  // childInfo is shared with the parent portal — only a school login counts here
-  const isGuest = (() => {
-    try {
-      const raw = localStorage.getItem('childInfo');
-      if (!raw) return true;
-      const parsed = JSON.parse(raw);
-      return Boolean(parsed.role && parsed.role !== 'school');
-    } catch {
-      return true;
-    }
-  })();
-
-  useEffect(() => {
-    const handleUpdate = () => {
-      const saved = localStorage.getItem('childInfo');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed.role === 'school') setSchoolInfo(parsed);
-      }
-    };
-    window.addEventListener('storage', handleUpdate);
-    return () => window.removeEventListener('storage', handleUpdate);
-  }, []);
+  // childInfo is shared with the parent portal — only a school login counts
+  // here. Reactive to login/refresh syncs (see useChildInfo); null means
+  // "not loaded yet", which the header renders as a skeleton, never a
+  // hardcoded placeholder name/logo.
+  const rawChildInfo = useChildInfo();
+  const isGuest = Boolean(rawChildInfo?.role && rawChildInfo.role !== 'school');
+  const schoolInfo = !isGuest && rawChildInfo ? rawChildInfo : null;
 
   const handleScroll = (e) => {
     const scrollPos = e.target.scrollTop;

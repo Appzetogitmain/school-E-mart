@@ -34,6 +34,37 @@ export const activateUser = async (userId) => {
   return unwrapData(response)?.user;
 };
 
+export const updateUser = async (userId, payload) => {
+  const response = await apiClient.patch(`/admin/users/${userId}`, payload);
+  return unwrapData(response)?.user;
+};
+
+export const deleteUser = async (userId, payload = {}) => {
+  const response = await apiClient.delete(`/admin/users/${userId}`, { data: payload });
+  return unwrapData(response);
+};
+
+// Teacher Management (cross-school)
+export const listTeachers = async (params = {}) => {
+  const response = await apiClient.get('/admin/teachers', { params });
+  return extractPaginated(response, 'teachers');
+};
+
+export const getTeacher = async (teacherId) => {
+  const response = await apiClient.get(`/admin/teachers/${teacherId}`);
+  return unwrapData(response)?.teacher;
+};
+
+export const updateTeacher = async (teacherId, payload) => {
+  const response = await apiClient.patch(`/admin/teachers/${teacherId}`, payload);
+  return unwrapData(response)?.teacher;
+};
+
+export const deleteTeacher = async (teacherId) => {
+  const response = await apiClient.delete(`/admin/teachers/${teacherId}`);
+  return unwrapData(response);
+};
+
 export const listVendors = async (params = {}) => {
   const response = await apiClient.get('/admin/vendors', { params });
   return extractPaginated(response, 'vendors');
@@ -103,6 +134,19 @@ export const createSchool = async (payload) => {
 export const updateSchoolCommission = async (schoolId, payload) => {
   const response = await apiClient.patch(`/admin/schools/${schoolId}/commission`, payload);
   return unwrapData(response)?.school;
+};
+
+// General school edit/delete live under the school module's own router
+// (/schools/:schoolId, not /admin/schools/:schoolId) — same apiClient, a
+// different base path than the rest of this section.
+export const updateSchool = async (schoolId, payload) => {
+  const response = await apiClient.patch(`/schools/${schoolId}`, payload);
+  return unwrapData(response)?.school;
+};
+
+export const deleteSchool = async (schoolId) => {
+  const response = await apiClient.delete(`/schools/${schoolId}`);
+  return unwrapData(response);
 };
 
 export const approveSchool = async (schoolId, payload = {}) => {

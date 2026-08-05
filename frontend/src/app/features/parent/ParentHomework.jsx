@@ -15,6 +15,7 @@ import AppHeader from '../../components/AppHeader';
 import ParentHomeworkDetails from './ParentHomeworkDetails';
 import LoginRequired from '../../components/LoginRequired';
 import { fetchParentHomework } from '../../../services/parentApi';
+import { fetchSubmissionAttachment } from '../../../services/lmsApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 import { buildHomeworkStats, mapAssignmentForParentHomework } from '../../../utils/mappers/parentMapper';
 import { getChildInfoFromStorage } from '../../../utils/parentContext';
@@ -53,8 +54,19 @@ const ParentHomework = () => {
     setError('');
     try {
       const rows = await fetchParentHomework(schoolId, childInfo.grade, studentId);
-      const mapped = rows.map(({ assignment, course, submission }) =>
-        mapAssignmentForParentHomework(assignment, course, submission)
+      const mapped = await Promise.all(
+        rows.map(async ({ assignment, course, submission }) => {
+          const item = mapAssignmentForParentHomework(assignment, course, submission);
+          if (item.bannerAttachmentId) {
+            try {
+              const url = await fetchSubmissionAttachment(schoolId, item.bannerAttachmentId);
+              item.image = url;
+            } catch {
+              item.image = null;
+            }
+          }
+          return item;
+        })
       );
       setHomeworkItems(mapped);
       setHomeworkStats(buildHomeworkStats(mapped));
@@ -286,16 +298,20 @@ const ParentHomework = () => {
                 >
                   {/* Body Content Row */}
                   <div className="p-4 flex gap-4">
-                    {/* Thumbnail Image Wrapper */}
-                    <div className="relative w-24 h-24 rounded-xl overflow-hidden bg-gray-50 border border-gray-100/50 shrink-0">
-                      <img 
-                        src={item.image} 
-                        alt={item.subject} 
-                        className="w-full h-full object-cover"
-                        onError={(e) => {
-                          e.target.src = "https://images.unsplash.com/photo-1497633762265-9d179a990aa6?auto=format&fit=crop&w=150&q=80";
-                        }}
-                      />
+                    {/* Thumbnail Image / Subject Icon Wrapper */}
+                    <div className="relative w-24 h-24 rounded-xl overflow-hidden bg-purple-50/60 border border-purple-100/60 shrink-0 flex items-center justify-center">
+                      {item.image ? (
+                        <img 
+                          src={item.image} 
+                          alt={item.subject} 
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex flex-col items-center justify-center text-center p-2">
+                          <BookOpen size={24} className="text-[#5B3FD6] mb-1" />
+                          <span className="text-[9px] font-black text-[#5B3FD6] truncate max-w-[80px]">{item.subject}</span>
+                        </div>
+                      )}
                       {item.isHighPriority && (
                         <span className="absolute top-1.5 left-1.5 px-1.5 py-0.5 bg-black/40 backdrop-blur-md rounded-md text-[8px] font-black text-white uppercase tracking-wider">
                           High Priority

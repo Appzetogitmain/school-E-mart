@@ -1,10 +1,38 @@
 import React from 'react';
 import { Outlet, NavLink, useLocation } from 'react-router-dom';
 import { Home, Users, CheckSquare, BookOpen, FileText } from 'lucide-react';
+import useAuthStore from '../../store/useAuthStore';
+import { getMyProfile } from '../../services/parentApi';
+import { syncChildInfoToStorage } from '../../utils/mappers/userMapper';
 
 const TeacherLayout = () => {
   const location = useLocation();
   const isAuthPage = location.pathname.includes('/school/login') || location.pathname.includes('/school/signup');
+
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+
+  // On app load, rebuild childInfo from the server so the header always
+  // shows the real school name/logo instead of whatever was last cached in
+  // localStorage. Mirrors AppLayout's equivalent refresh for the parent portal.
+  React.useEffect(() => {
+    if (!isAuthenticated) return undefined;
+    let cancelled = false;
+    getMyProfile()
+      .then((data) => {
+        if (cancelled || !data?.user) return;
+        syncChildInfoToStorage({
+          ...data.user,
+          role: data.user.role,
+          childProfile: data.childProfile,
+          profile: data.profile,
+        });
+        window.dispatchEvent(new Event('storage'));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated]);
   const isDetailsPage = 
     location.pathname.includes('/detail/') || 
     location.pathname.includes('/edit-profile') ||

@@ -68,13 +68,20 @@ export const mapAssignmentForParentHomework = (assignment, course, submission = 
   const priority = assignment?.priority || null;
   const maxScore = assignment?.maxScore ?? 100;
 
+  // Resolve banner image: first check if teacher uploaded any image attachment on assignment
+  const firstImageAttachment = (assignment?.attachments || []).find(
+    (att) => String(att?.mime || '').startsWith('image/')
+  );
+  const bannerAttachmentId = firstImageAttachment?._id?.toString?.() || firstImageAttachment?.toString?.() || firstImageAttachment || null;
+
   return {
     id,
     courseId: course?._id?.toString?.() || course?.id,
     subject,
     title: assignment?.title,
     description: assignment?.description || assignment?.instructions || assignment?.title,
-    image: SUBJECT_IMAGES[subject] || '/assets/math_homework.png',
+    image: null,
+    bannerAttachmentId,
     // Reflects what the teacher actually chose, not just how close the due date is.
     isHighPriority: priority === 'High' || status === 'Overdue' || status === 'Due Soon',
     priority,

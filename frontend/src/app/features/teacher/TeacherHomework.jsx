@@ -3,7 +3,7 @@ import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import {
   ArrowLeft, Calendar, Clock, Bookmark, Edit2,
   Tag, Flag, FileText, Paperclip, Info, BookOpen,
-  Trash2, Plus, Save, File, Check, Loader2, Award, Lock
+  Trash2, Plus, Save, File, Check, Loader2, Award, Lock, Image
 } from 'lucide-react';
 import { createAssignment, updateAssignment } from '../../../services/lmsApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
@@ -73,6 +73,11 @@ const TeacherHomework = () => {
 
   // Attachments Mock State (Starts empty)
   const [attachments, setAttachments] = useState([]);
+  
+  // Homework Banner Image State & Ref
+  const bannerInputRef = React.useRef(null);
+  const [bannerFile, setBannerFile] = useState(null);
+  const [bannerPreview, setBannerPreview] = useState('');
 
   const [showToast, setShowToast] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -94,6 +99,26 @@ const TeacherHomework = () => {
   // Handlers
   const handleDeleteAttachment = (id) => {
     setAttachments(prev => prev.filter(att => att.id !== id));
+  };
+
+  const handleBannerSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      setError('Banner must be an image file (JPG, PNG, WEBP, etc.)');
+      return;
+    }
+    setError('');
+    setBannerFile(file);
+    const reader = new FileReader();
+    reader.onload = () => setBannerPreview(reader.result);
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  const handleRemoveBanner = () => {
+    setBannerFile(null);
+    setBannerPreview('');
   };
 
   useEffect(() => {
@@ -197,7 +222,15 @@ const TeacherHomework = () => {
         instructorUserId: authUser?.id,
       });
 
-      const files = await filesToCompressedDataUrls(attachments.map((att) => att.file));
+      const allFilesToUpload = [];
+      if (bannerFile) {
+        allFilesToUpload.push(bannerFile);
+      }
+      attachments.forEach((att) => {
+        if (att.file) allFilesToUpload.push(att.file);
+      });
+
+      const files = await filesToCompressedDataUrls(allFilesToUpload);
 
       await createAssignment(schoolId, course._id || course.id, {
         title: title.trim(),
@@ -556,6 +589,51 @@ const TeacherHomework = () => {
               </>
             )}
           </div>
+        </div>
+
+        {/* 6b. Homework Banner Image Upload */}
+        <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm">
+          <div className="flex items-center gap-3.5 mb-3">
+            <div className="w-10 h-10 rounded-xl bg-purple-50 flex items-center justify-center shrink-0">
+              <Image size={18} className="text-primary" />
+            </div>
+            <div>
+              <span className="text-[10px] font-bold text-gray-400 block leading-none">Homework Banner Image</span>
+              <span className="text-[8px] text-gray-400 mt-1 block">Upload a banner image to display on student/parent portal</span>
+            </div>
+          </div>
+
+          <input
+            ref={bannerInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleBannerSelect}
+          />
+
+          {bannerPreview ? (
+            <div className="relative w-full h-40 rounded-2xl overflow-hidden border border-gray-200 group">
+              <img src={bannerPreview} alt="Homework Banner Preview" className="w-full h-full object-cover" />
+              <button
+                type="button"
+                onClick={handleRemoveBanner}
+                className="absolute top-2.5 right-2.5 w-8 h-8 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-red-600 transition-colors shadow-md"
+                title="Remove Banner"
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => bannerInputRef.current?.click()}
+              className="w-full py-6 border-2 border-dashed border-purple-200 hover:border-primary active:scale-[0.99] transition-all rounded-2xl flex flex-col items-center justify-center gap-2 text-xs font-bold text-primary bg-purple-50/50 hover:bg-purple-50"
+            >
+              <Image size={24} className="text-primary/70" />
+              <span className="font-black text-xs">Upload Banner Image</span>
+              <span className="text-[9px] text-gray-400 font-normal">PNG, JPG, WEBP recommended</span>
+            </button>
+          )}
         </div>
 
         {/* 7. Homework Description */}

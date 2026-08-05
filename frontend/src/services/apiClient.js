@@ -7,10 +7,15 @@ import { PORTAL_LOGIN_PATHS } from '../utils/mappers/userMapper';
 const apiClient = axios.create({
   baseURL: ENV.API_URL,
   withCredentials: true,
+  // Without a timeout, a hung backend/cold DB connection leaves the UI
+  // spinning forever instead of surfacing a retryable error.
+  timeout: 20000,
   headers: {
     'Content-Type': 'application/json',
   },
 });
+
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const getRequestPath = (url = '') => url.split('?')[0];
 
@@ -116,6 +121,22 @@ apiClient.interceptors.response.use(
       } catch {
         redirectToLogin();
       }
+    }
+
+    // A flaky connection (dropped wifi, cold server) never reaches the
+    // server at all — no error.response. Retry idempotent GETs exactly
+    // once after a short delay instead of surfacing a hard failure for a
+    // transient blip.
+    if (
+      !error.response &&
+      originalRequest &&
+      (originalRequest.method || 'get').toLowerCase() === 'get' &&
+      !originalRequest._networkRetry &&
+      ['ECONNABORTED', 'ERR_NETWORK'].includes(error.code)
+    ) {
+      originalRequest._networkRetry = true;
+      await delay(800);
+      return apiClient(originalRequest);
     }
 
     return Promise.reject(error);

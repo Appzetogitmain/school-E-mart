@@ -28,13 +28,20 @@ const SchoolHeader = ({ childInfo, showSearch: propShowSearch }) => {
               <div className="w-10 h-10 bg-white rounded-xl p-1 shadow-lg overflow-hidden flex items-center justify-center">
                 {childInfo?.schoolLogo || childInfo?.photo ? (
                   <img src={childInfo.schoolLogo || childInfo.photo} alt={childInfo?.school || "School Logo"} className="w-full h-full object-cover rounded-lg" />
+                ) : childInfo?.school ? (
+                  // Real identity has loaded, the school just has no logo uploaded —
+                  // an honest "no logo" icon, never a generic brand image standing
+                  // in for a real school's logo.
+                  <div className="w-full h-full rounded-lg bg-primary/10 flex items-center justify-center text-primary">
+                    <Building2 size={18} />
+                  </div>
                 ) : (
-                  <img src="/assets/logo.jpeg" alt="Logo" className="w-full h-full object-contain" />
+                  <div className="w-full h-full rounded-lg bg-white/20 animate-pulse" />
                 )}
               </div>
               <div className="flex flex-col">
                 <h1 className="text-white font-black text-sm tracking-tight leading-none truncate max-w-[200px]">
-                  {childInfo?.school && childInfo.school !== 'School Management' ? childInfo.school : 'SCHOOL E-MART'}
+                  {childInfo?.school || <span className="inline-block h-3 w-24 bg-white/20 rounded animate-pulse" />}
                 </h1>
                 <span className="text-white/50 text-[8px] font-bold tracking-[0.2em] mt-1 uppercase">SCHOOL PORTAL</span>
               </div>

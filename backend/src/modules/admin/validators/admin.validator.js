@@ -31,6 +31,7 @@ const analyticsQuery = paginationQuery.keys({
 const userIdParam = Joi.object({ userId: objectId.required() });
 const vendorIdParam = Joi.object({ vendorId: objectId.required() });
 const schoolIdParam = Joi.object({ schoolId: objectId.required() });
+const teacherIdParam = Joi.object({ teacherId: objectId.required() });
 const pageIdParam = Joi.object({ pageId: objectId.required() });
 const faqIdParam = Joi.object({ faqId: objectId.required() });
 const bannerIdParam = Joi.object({ bannerId: objectId.required() });
@@ -65,6 +66,31 @@ const updateRolesSchema = Joi.object({
 const deleteUserSchema = Joi.object({
   reason: Joi.string().trim().max(500).optional(),
 });
+
+// General profile edit for any user role from the superadmin panel.
+const updateUserSchema = Joi.object({
+  name: Joi.string().trim().min(1).max(120).optional(),
+  email: schemas.email.optional().allow('', null),
+  phone: schemas.indianMobile.optional(),
+}).min(1);
+
+const teacherQuery = paginationQuery.keys({
+  schoolId: objectId.optional(),
+  approvalStatus: Joi.string().valid('pending', 'approved', 'rejected').optional(),
+});
+
+const updateTeacherSchema = Joi.object({
+  user: Joi.object({
+    name: Joi.string().trim().min(1).max(120).optional(),
+    email: schemas.email.optional().allow('', null),
+    phone: schemas.indianMobile.optional(),
+  }).optional(),
+  designation: Joi.string().trim().max(120).optional().allow('', null),
+  department: Joi.string().trim().max(120).optional().allow('', null),
+  qualification: Joi.string().trim().max(200).optional().allow('', null),
+  experienceYears: Joi.number().min(0).max(60).optional(),
+  subjectsTaught: Joi.array().items(Joi.string().trim().max(80)).optional(),
+}).min(1);
 
 const cmsPageSchema = Joi.object({
   title: Joi.string().trim().min(1).max(200).required(),
@@ -366,6 +392,10 @@ module.exports = {
   userIdParam,
   vendorIdParam,
   schoolIdParam,
+  teacherIdParam,
+  teacherQuery,
+  updateTeacherSchema,
+  updateUserSchema,
   pageIdParam,
   faqIdParam,
   bannerIdParam,

@@ -134,6 +134,40 @@ router.delete(
   validateBody(validators.deleteUserSchema),
   adminController.deleteUser
 );
+router.patch(
+  '/users/:userId',
+  ...adminUsersWrite,
+  validateParams(validators.userIdParam),
+  validateBody(validators.updateUserSchema),
+  adminController.updateUser
+);
+
+// Teacher Management
+router.get(
+  '/teachers',
+  ...adminOnly,
+  validateQuery(validators.teacherQuery),
+  adminController.listTeachers
+);
+router.get(
+  '/teachers/:teacherId',
+  ...adminOnly,
+  validateParams(validators.teacherIdParam),
+  adminController.getTeacher
+);
+router.patch(
+  '/teachers/:teacherId',
+  ...adminOnly,
+  validateParams(validators.teacherIdParam),
+  validateBody(validators.updateTeacherSchema),
+  adminController.updateTeacher
+);
+router.delete(
+  '/teachers/:teacherId',
+  ...adminOnly,
+  validateParams(validators.teacherIdParam),
+  adminController.deleteTeacher
+);
 
 // Vendor Approval
 router.get(

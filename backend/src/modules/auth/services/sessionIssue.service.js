@@ -34,56 +34,17 @@ const issueAuthenticatedSession = async (user, requestMeta = {}, auditAction = '
 
   const userDto = mapUserToDto(updatedUser || user, authContext);
 
-  if (user.role === 'parent') {
-    const ParentProfile = require('../../../database/models/ParentProfile');
-    const ChildProfile = require('../../../database/models/ChildProfile');
-    const School = require('../../../database/models/School');
-    const Address = require('../../../database/models/Address');
-
-    const parentProfile = await ParentProfile.findOne({ userId: user._id, 'softDelete.isDeleted': { $ne: true } }).lean();
-    // Respect the parent's last-selected (active) child so login, /auth/me and
-    // the profile switcher all agree on which student leads the UI.
-    const childrenList = await ChildProfile.find({ parentUserId: user._id, 'softDelete.isDeleted': { $ne: true } })
-      .sort({ 'audit.createdAt': 1 })
-      .lean();
-    const child =
-      childrenList.find(
-        (c) => parentProfile?.activeChildId && String(c._id) === String(parentProfile.activeChildId)
-      ) || childrenList[0] || null;
-
-    let defaultAddress = null;
-    if (parentProfile?.defaultAddressId) {
-      defaultAddress = await Address.findById(parentProfile.defaultAddressId).lean();
-    }
-
-    if (child) {
-      const school = child.schoolId ? await School.findById(child.schoolId).lean() : null;
-      userDto.childProfile = {
-        name: child.name,
-        grade: child.grade,
-        schoolId: child.schoolId ? child.schoolId.toString() : 'explore-schools',
-        schoolName: school ? school.name : 'Explore Schools',
-        schoolLogo: school ? school.logoUrl : null,
-        schoolRefNo: child.schoolRefNo || (school ? school.schoolRefNo : null),
-        rollNo: child.rollNo || null,
-        studentId: child.studentId ? child.studentId.toString() : null,
-        photo: child.avatarUrl || null,
-        avatarUrl: child.avatarUrl || null,
-      };
-    }
-
-    if (parentProfile) {
-      userDto.profile = {
-        altPhone: parentProfile.altPhone || null,
-        avatarUrl: parentProfile.avatarUrl || null,
-        referralCode: parentProfile.referralCode || null,
-        address: defaultAddress?.line1 || null,
-        pinCode: defaultAddress?.pinCode || null,
-        city: defaultAddress?.city || null,
-        state: defaultAddress?.state || null,
-        country: defaultAddress?.country || null,
-      };
-    }
+  // Login must return the same real profile (school name/logo, store name,
+  // etc.) that GET /users/me returns — otherwise the client falls back to
+  // stale/placeholder identity until the user happens to hit a page that
+  // re-fetches it. usersService.getProfile() already builds the right shape
+  // per role (including the school/teacher lookups), so reuse it here
+  // instead of maintaining a second, parent-only copy of this logic.
+  if (['parent', 'teacher', 'school', 'vendor'].includes(user.role)) {
+    const usersService = require('../../users/services/users.service');
+    const { profile, childProfile } = await usersService.getProfile(user._id);
+    if (childProfile) userDto.childProfile = childProfile;
+    if (profile) userDto.profile = profile;
   }
 
   return {

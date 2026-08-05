@@ -103,7 +103,8 @@ const SuperAdminLayout = () => {
       icon: School,
       items: [
         { label: 'School List', path: '/superadmin/school-list' },
-        { label: 'School Kits', path: '/superadmin/school-kits' }
+        { label: 'School Kits', path: '/superadmin/school-kits' },
+        { label: 'Teacher List', path: '/superadmin/teacher-list' }
       ]
     },
     {

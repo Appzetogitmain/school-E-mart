@@ -49,5 +49,9 @@ export const mapHeaderCategoryForAdmin = (header) => ({
   status: formatStatus(header?.status),
   order: header?.displayOrder ?? 0,
   icon: header?.iconKey || header?.icon || 'layers',
+  // `imageUrl` is what the record actually holds; `image` is the absolute,
+  // display-ready URL — never write `image` back to the API.
+  imageUrl: header?.imageUrl || '',
+  image: toAbsoluteUrl(header?.imageUrl) || '',
   raw: header,
 });

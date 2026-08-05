@@ -126,30 +126,51 @@ const taxonomyService = {
     return subcategoryRepository.reorder(categoryId, orderedIds);
   },
 
+  // Was 1 + N(headers) + N(categories) sequential-per-parent round-trips.
+  // Batch each level with a single $in query instead, then assemble the
+  // tree in memory — same result, 3 queries total regardless of size.
   async getCategoryTree(status = 'active') {
-    const headers = await headerCategoryRepository.findMany(
-      status ? { status } : {},
-      { sort: { displayOrder: 1 } }
-    );
-    const tree = await Promise.all(
-      headers.map(async (header) => {
-        const categories = await categoryRepository.findMany(
-          { headerId: header._id, ...(status ? { status } : {}) },
+    const statusFilter = status ? { status } : {};
+
+    const headers = await headerCategoryRepository.findMany(statusFilter, {
+      sort: { displayOrder: 1 },
+    });
+
+    const headerIds = headers.map((h) => h._id);
+    const categories = headerIds.length
+      ? await categoryRepository.findMany(
+          { headerId: { $in: headerIds }, ...statusFilter },
           { sort: { displayOrder: 1 } }
-        );
-        const categoriesWithSubs = await Promise.all(
-          categories.map(async (category) => ({
-            ...category,
-            subcategories: await subcategoryRepository.findMany(
-              { categoryId: category._id, ...(status ? { status } : {}) },
-              { sort: { displayOrder: 1 } }
-            ),
-          }))
-        );
-        return { ...header, categories: categoriesWithSubs };
-      })
-    );
-    return tree;
+        )
+      : [];
+
+    const categoryIds = categories.map((c) => c._id);
+    const subcategories = categoryIds.length
+      ? await subcategoryRepository.findMany(
+          { categoryId: { $in: categoryIds }, ...statusFilter },
+          { sort: { displayOrder: 1 } }
+        )
+      : [];
+
+    const subsByCategoryId = new Map();
+    for (const sub of subcategories) {
+      const key = String(sub.categoryId);
+      if (!subsByCategoryId.has(key)) subsByCategoryId.set(key, []);
+      subsByCategoryId.get(key).push(sub);
+    }
+
+    const categoriesByHeaderId = new Map();
+    for (const category of categories) {
+      const key = String(category.headerId);
+      const withSubs = { ...category, subcategories: subsByCategoryId.get(String(category._id)) || [] };
+      if (!categoriesByHeaderId.has(key)) categoriesByHeaderId.set(key, []);
+      categoriesByHeaderId.get(key).push(withSubs);
+    }
+
+    return headers.map((header) => ({
+      ...header,
+      categories: categoriesByHeaderId.get(String(header._id)) || [],
+    }));
   },
 };
 

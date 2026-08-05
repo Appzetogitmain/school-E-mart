@@ -96,12 +96,13 @@ const buildParentNoticeFilter = async (schoolId, userId, studentId) => {
 };
 
 const noticeService = {
-  async createNotice(schoolId, payload) {
+  async createNotice(schoolId, payload, createdBy) {
     const notice = await noticeRepository.create({
       ...payload,
       schoolId,
       status: payload.status || 'draft',
       publishDate: payload.publishDate || new Date(),
+      ...(createdBy ? { 'audit.createdBy': createdBy } : {}),
     });
 
     if (notice.status === 'published') {
@@ -113,10 +114,34 @@ const noticeService = {
 
   async listNotices(req, schoolId, query) {
     const { studentId, ...cleanQuery } = query || {};
-    if ([ROLES.PARENT, 'user', 'parent'].includes(req.auth.role)) {
-      const filter = await buildParentNoticeFilter(schoolId, req.auth.userId, studentId);
+    const role = (req.auth?.role || '').toLowerCase();
+    const userId = req.auth?.userId;
+
+    if ([ROLES.PARENT, 'user', 'parent'].includes(role)) {
+      const filter = await buildParentNoticeFilter(schoolId, userId, studentId);
       const result = await noticeRepository.paginateNotices(filter, cleanQuery);
-      return this.decorateWithAcknowledgement(result, req.auth.userId);
+      return this.decorateWithAcknowledgement(result, userId);
+    }
+
+    if ([ROLES.TEACHER, 'teacher'].includes(role)) {
+      const now = new Date();
+      const nowWithBuffer = new Date(now.getTime() + 5 * 60 * 1000);
+      const filter = {
+        schoolId,
+        $or: [
+          // Notices created by this specific teacher (they can see their draft and sent notices)
+          { 'audit.createdBy': userId },
+          // Notices published by school admin targeted to teachers or all
+          {
+            status: 'published',
+            publishDate: { $lte: nowWithBuffer },
+            $or: [{ expiryDate: null }, { expiryDate: { $gte: now } }],
+            targetAudience: { $in: ['all', 'teachers', 'staff'] }
+          }
+        ]
+      };
+      if (cleanQuery.status) filter.status = cleanQuery.status;
+      return noticeRepository.paginateNotices(filter, cleanQuery);
     }
 
     const filter = { schoolId };
@@ -176,11 +201,14 @@ const noticeService = {
     });
     if (!notice) throw new NotFoundError('Notice not found', 'NOTICE_NOT_FOUND');
 
-    if (req.auth.role === ROLES.PARENT) {
+    const role = (req.auth?.role || '').toLowerCase();
+    const userId = req.auth?.userId;
+
+    if ([ROLES.PARENT, 'user', 'parent'].includes(role)) {
       const studentLookup = require('../../lms/repositories/student.repository');
       const resolved = await studentLookup.resolveStudentForUser(
         schoolId,
-        req.auth.userId,
+        userId,
         req.query.studentId
       );
       if (!resolved?.student || !isNoticeVisibleToParent(notice, resolved.student)) {
@@ -188,31 +216,50 @@ const noticeService = {
       }
     }
 
+    if ([ROLES.TEACHER, 'teacher'].includes(role)) {
+      const isCreator = notice.audit?.createdBy && String(notice.audit.createdBy) === String(userId);
+      const isTargetedToTeacher = ['all', 'teachers', 'staff'].includes(notice.targetAudience) && notice.status === 'published';
+      if (!isCreator && !isTargetedToTeacher) {
+        throw new ForbiddenError('Notice is not available', 'NOTICE_ACCESS_DENIED');
+      }
+    }
+
     return notice;
   },
 
-  async updateNotice(schoolId, noticeId, payload) {
+  async updateNotice(schoolId, noticeId, payload, req) {
     const oldNotice = await noticeRepository.findOne({ _id: noticeId, schoolId });
-    const notice = await noticeRepository.updateById(noticeId, { $set: payload }, { schoolId });
-    if (!notice) throw new NotFoundError('Notice not found', 'NOTICE_NOT_FOUND');
+    if (!oldNotice) throw new NotFoundError('Notice not found', 'NOTICE_NOT_FOUND');
 
+    if (req?.auth?.role && ['teacher', ROLES.TEACHER].includes((req.auth.role).toLowerCase())) {
+      if (String(oldNotice.audit?.createdBy) !== String(req.auth.userId)) {
+        throw new ForbiddenError('Teachers can only edit their own notices', 'NOTICE_EDIT_DENIED');
+      }
+    }
+
+    const notice = await noticeRepository.updateById(noticeId, { $set: payload }, { schoolId });
     if (payload.status === 'published' && oldNotice?.status !== 'published') {
       triggerService.notifySchoolNoticePublished(schoolId, notice);
     }
     return notice;
   },
 
-  async setNoticeStatus(schoolId, noticeId, status) {
-    const notice = await this.updateNotice(schoolId, noticeId, { status });
-    if (status === 'published') {
-      triggerService.notifySchoolNoticePublished(schoolId, notice);
-    }
+  async setNoticeStatus(schoolId, noticeId, status, req) {
+    const notice = await this.updateNotice(schoolId, noticeId, { status }, req);
     return notice;
   },
 
-  async deleteNotice(schoolId, noticeId, deletedBy) {
+  async deleteNotice(schoolId, noticeId, deletedBy, req) {
+    const noticeToDel = await noticeRepository.findOne({ _id: noticeId, schoolId });
+    if (!noticeToDel) throw new NotFoundError('Notice not found', 'NOTICE_NOT_FOUND');
+
+    if (req?.auth?.role && ['teacher', ROLES.TEACHER].includes((req.auth.role).toLowerCase())) {
+      if (String(noticeToDel.audit?.createdBy) !== String(req.auth.userId)) {
+        throw new ForbiddenError('Teachers can only delete their own notices', 'NOTICE_DELETE_DENIED');
+      }
+    }
+
     const notice = await noticeRepository.softDeleteById(noticeId, { deletedBy });
-    if (!notice) throw new NotFoundError('Notice not found', 'NOTICE_NOT_FOUND');
     return notice;
   },
 };

@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft, Camera, User, Mail, Phone,
+  ArrowLeft, Upload, User, Mail, Phone,
   MapPin, Home, Globe, Navigation,
   ShieldCheck, Check, AlertCircle, ImageIcon,
-  Hash, GraduationCap, School
+  Hash, GraduationCap, School, FileText
 } from 'lucide-react';
 import { updateMyProfile } from '../../../services/parentApi';
 import useAuthStore from '../../../store/useAuthStore';
@@ -232,8 +232,9 @@ const EditProfilePage = () => {
             <button 
               onClick={handlePhotoClick}
               className="absolute bottom-0 right-0 w-10 h-10 bg-primary text-white rounded-2xl flex items-center justify-center shadow-lg border-4 border-white active:scale-90 transition-all hover:bg-deep-purple"
+              title="Upload Photo"
             >
-              <Camera size={18} />
+              <Upload size={18} />
             </button>
           </div>
           <div className="text-center">

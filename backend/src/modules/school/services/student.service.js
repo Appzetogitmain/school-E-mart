@@ -94,7 +94,16 @@ const linkParentByPhone = async (schoolId, student, payload, session) => {
       parentProfile = createdProfile[0];
     }
   } else {
-    const refId = generateUserRefId('P');
+    let refId = generateUserRefId('P');
+    let attempts = 0;
+    while (await User.findOne({ refId }).session(session)) {
+      attempts += 1;
+      refId = generateUserRefId('P');
+      if (attempts > 50) {
+        refId = `SEM-P-${Date.now().toString(36).toUpperCase()}`;
+        break;
+      }
+    }
     const pName = payload.parentName || `${payload.name || student.name} Parent`;
     const createdUser = await User.create(
       [
@@ -209,88 +218,112 @@ const studentService = {
   async registerStudent(schoolId, payload) {
     const Student = require('../../../database/models/Student');
 
-    // The (schoolId, schoolRefNo) unique index also covers soft-deleted
-    // students, so both the duplicate check and the sequence generation must
-    // query the raw model rather than the soft-delete-filtered repository
-    let schoolRefNo = payload.schoolRefNo;
-    if (schoolRefNo) {
-      const existing = await Student.findOne({ schoolId, schoolRefNo }).lean();
-      if (existing) throw new ConflictError('Student reference already exists', 'STUDENT_REF_EXISTS');
-    } else {
-      const total = await Student.countDocuments({ schoolId });
-      let sequence = total + 1;
-      schoolRefNo = generateStudentRefNo(schoolId, sequence);
-      // eslint-disable-next-line no-await-in-loop
-      while (await Student.findOne({ schoolId, schoolRefNo }).lean()) {
-        sequence += 1;
+    // Wrap insertion in a retry loop (up to 10 attempts) so even in high concurrency
+    // or race conditions, a collision on auto-generated schoolRefNo automatically retries
+    // with a newly generated sequence number without failing the user's request.
+    const maxAttempts = payload.schoolRefNo ? 1 : 10;
+    let attempt = 0;
+    while (attempt < maxAttempts) {
+      attempt += 1;
+      let schoolRefNo = payload.schoolRefNo;
+      if (schoolRefNo) {
+        // eslint-disable-next-line no-await-in-loop
+        const existing = await Student.findOne({ schoolId, schoolRefNo }).lean();
+        if (existing) throw new ConflictError('Student reference already exists', 'STUDENT_REF_EXISTS');
+      } else {
+        // eslint-disable-next-line no-await-in-loop
+        const total = await Student.countDocuments({ schoolId });
+        let sequence = total + attempt;
         schoolRefNo = generateStudentRefNo(schoolId, sequence);
-      }
-    }
-
-    try {
-      let linkResult;
-      const student = await withTransaction(async (session) => {
-        const created = await studentRepository.create(
-          {
-            schoolId,
-            name: payload.name,
-            schoolRefNo,
-            rollNo: payload.rollNo,
-            classGrade: payload.classGrade,
-            section: payload.section,
-            admissionNo: payload.admissionNo,
-            status: payload.status || 'active',
-            dob: payload.dob,
-            gender: payload.gender,
-            bloodGroup: payload.bloodGroup,
-            motherName: payload.motherName,
-            address: payload.address,
-            admissionDate: payload.admissionDate,
-            previousSchool: payload.previousSchool,
-            parentProfileIds: payload.parentProfileIds || [],
-          },
-          { session }
-        );
-
-        if (payload.parentPhone) {
-          linkResult = await linkParentByPhone(schoolId, created, payload, session);
+        // eslint-disable-next-line no-await-in-loop
+        while (await Student.findOne({ schoolId, schoolRefNo }).lean()) {
+          sequence += 1;
+          schoolRefNo = generateStudentRefNo(schoolId, sequence);
         }
+      }
 
-        if (payload.parentUserId) {
-          const parentProfile = await schoolUserRepository.findParentProfileByUserId(payload.parentUserId);
-          if (parentProfile) {
-            await studentRepository.updateById(
-              created._id,
-              { $addToSet: { parentProfileIds: parentProfile._id } },
-              {},
-              { session }
-            );
+      try {
+        let linkResult;
+        // eslint-disable-next-line no-await-in-loop
+        const student = await withTransaction(async (session) => {
+          const created = await studentRepository.create(
+            {
+              schoolId,
+              name: payload.name,
+              schoolRefNo,
+              rollNo: payload.rollNo,
+              classGrade: payload.classGrade,
+              section: payload.section,
+              admissionNo: payload.admissionNo,
+              status: payload.status || 'active',
+              dob: payload.dob,
+              gender: payload.gender,
+              bloodGroup: payload.bloodGroup,
+              motherName: payload.motherName,
+              address: payload.address,
+              admissionDate: payload.admissionDate,
+              previousSchool: payload.previousSchool,
+              parentProfileIds: payload.parentProfileIds || [],
+            },
+            { session }
+          );
+
+          if (payload.parentPhone) {
+            linkResult = await linkParentByPhone(schoolId, created, payload, session);
           }
-        }
 
-        return created;
-      });
+          if (payload.parentUserId) {
+            const parentProfile = await schoolUserRepository.findParentProfileByUserId(payload.parentUserId);
+            if (parentProfile) {
+              await studentRepository.updateById(
+                created._id,
+                { $addToSet: { parentProfileIds: parentProfile._id } },
+                {},
+                { session }
+              );
+            }
+          }
 
-      sendParentWelcomeEmail(linkResult);
-      return student;
-    } catch (err) {
-      if (err?.code === 11000) {
-        const keyStr = JSON.stringify(err.keyPattern || err.keyValue || err.message || '');
-        if (keyStr.includes('schoolRefNo')) {
-          throw new ConflictError('Student reference already exists', 'STUDENT_REF_EXISTS');
+          return created;
+        });
+
+        sendParentWelcomeEmail(linkResult);
+        return student;
+      } catch (err) {
+        if (err?.code === 11000) {
+          const keyStr = JSON.stringify({
+            keyPattern: err.keyPattern || {},
+            keyValue: err.keyValue || {},
+            message: err.message || '',
+          });
+          // If auto-generated schoolRefNo collided in race condition, retry loop handles it
+          if (keyStr.includes('schoolRefNo') && !payload.schoolRefNo && attempt < maxAttempts) {
+            continue;
+          }
+          if (keyStr.includes('schoolRefNo')) {
+            throw new ConflictError('Student reference already exists', 'STUDENT_REF_EXISTS');
+          }
+          if (keyStr.includes('refId')) {
+            if (attempt < maxAttempts) continue;
+            throw new ConflictError('User reference conflict occurred, please try submitting again', 'USER_REF_EXISTS');
+          }
+          if (keyStr.includes('referralCode')) {
+            if (attempt < maxAttempts) continue;
+            throw new ConflictError('Parent referral code conflict occurred, please try submitting again', 'REFERRAL_CODE_EXISTS');
+          }
+          if (keyStr.includes('phone')) {
+            throw new ConflictError('A non-parent user with this mobile number already exists', 'PHONE_EXISTS');
+          }
+          if (keyStr.includes('email')) {
+            throw new ConflictError('A user with this email address already exists', 'EMAIL_EXISTS');
+          }
+          if (keyStr.includes('userId')) {
+            throw new ConflictError('A profile for this user already exists', 'PROFILE_EXISTS');
+          }
+          throw new ConflictError('A record with this unique identifier already exists', 'DUPLICATE_KEY');
         }
-        if (keyStr.includes('phone')) {
-          throw new ConflictError('A user with this mobile number already exists', 'PHONE_EXISTS');
-        }
-        if (keyStr.includes('email')) {
-          throw new ConflictError('A user with this email address already exists', 'EMAIL_EXISTS');
-        }
-        if (keyStr.includes('userId')) {
-          throw new ConflictError('A profile for this user already exists', 'PROFILE_EXISTS');
-        }
-        throw new ConflictError('A record with this unique identifier already exists', 'DUPLICATE_KEY');
+        throw err;
       }
-      throw err;
     }
   },
 

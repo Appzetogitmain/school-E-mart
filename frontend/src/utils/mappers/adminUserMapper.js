@@ -9,6 +9,15 @@ const formatStatus = (status) => {
   return status || 'Active';
 };
 
+// A parent's own `name` doesn't always identify the row to a school — the
+// linked student does. `children` is attached server-side for parent-role
+// rows only (userManagement.service.js#listUsers, batched, not per-row).
+const formatStudentName = (children) => {
+  if (!Array.isArray(children) || !children.length) return '—';
+  const first = children[0].name || 'Unnamed';
+  return children.length > 1 ? `${first} +${children.length - 1} more` : first;
+};
+
 export const mapAdminUserForList = (user) => ({
   id: user?._id?.toString?.() || user?.id,
   mongoId: user?._id?.toString?.() || user?.id,
@@ -23,5 +32,6 @@ export const mapAdminUserForList = (user) => ({
   totalOrders: 0,
   totalSpent: 0,
   role: user?.role,
+  studentName: user?.role === 'parent' ? formatStudentName(user?.children) : '—',
   raw: user,
 });
