@@ -33,7 +33,7 @@ const KitDetailsPage = () => {
     const checkPurchased = async () => {
       if (isGuest) return;
       try {
-        const { data: ordersData } = await listOrders();
+        const { data: ordersData } = await listOrders({ limit: 100 });
         const validOrders = (ordersData || []).filter((o) => {
           const isCancelled = ['cancelled', 'returned'].includes(o.status || o.orderStatus);
           const isPaid = ['paid', 'authorized'].includes(o.paymentStatus) || o.paymentMethod === 'cod';
@@ -75,7 +75,15 @@ const KitDetailsPage = () => {
           }
         }
 
-        // Step 2: Fallback query listKits for matching kit _id
+        // Step 2: Fallback query getKit with 'all' or listKits for matching kit _id
+        if (!rawKit) {
+          try {
+            rawKit = await getKit('all', kitId);
+          } catch {
+            rawKit = null;
+          }
+        }
+
         if (!rawKit && schoolId) {
           try {
             const listRes = await listKits(schoolId);
@@ -194,36 +202,47 @@ const KitDetailsPage = () => {
     }));
   };
 
-  const { currentTotal, isFullKit } = useMemo(() => {
-    if (!currentKitData) return { currentTotal: 0, isFullKit: false };
-    const selectedItems = currentKitData.items.filter(item => selectedItemIds.includes(item.id));
-    const current = selectedItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-    return {
-      currentTotal: current > 0 ? current : currentKitData.price,
-      isFullKit: selectedItemIds.length === currentKitData.items.length
-    };
-  }, [selectedItemIds, currentKitData]);
+  const [addingToCart, setAddingToCart] = useState(false);
+  const [buyError, setBuyError] = useState('');
 
-  const handleAddToCart = () => {
-    if (!currentKitData) return;
+  const { currentTotal, isFullKit } = useMemo(() => {
+    if (!currentKitData) return { currentTotal: 0, isFullKit: true };
+    return {
+      currentTotal: currentKitData.price,
+      isFullKit: true
+    };
+  }, [currentKitData]);
+
+  const handleAddToCart = async () => {
+    if (!currentKitData || isPurchased || addingToCart) return;
     if (isGuest) {
       setIsAuthPromptOpen(true);
       return;
     }
 
-    const kitCartItem = {
-      id: currentKitData.id,
-      productId: currentKitData.id,
-      kitId: currentKitData.id,
-      name: currentKitData.name,
-      price: currentTotal || currentKitData.price,
-      pricePaise: Math.round((currentTotal || currentKitData.price) * 100),
-      image: currentKitData.image || currentKitData.items?.find((i) => i.image)?.image || '',
-      quantity: 1,
-    };
+    setAddingToCart(true);
+    setBuyError('');
 
-    addToCart(kitCartItem);
-    navigate('/user/checkout');
+    try {
+      const kitCartItem = {
+        id: currentKitData.id,
+        productId: currentKitData.id,
+        kitId: currentKitData.id,
+        name: currentKitData.name,
+        price: currentKitData.price,
+        pricePaise: Math.round(currentKitData.price * 100),
+        image: currentKitData.image || currentKitData.items?.find((i) => i.image)?.image || '',
+        quantity: 1,
+      };
+
+      await addToCart(kitCartItem);
+      navigate('/user/checkout');
+    } catch (err) {
+      const msg = getErrorMessage(err, 'Failed to process kit purchase');
+      setBuyError(msg);
+    } finally {
+      setAddingToCart(false);
+    }
   };
 
   if (loading) {
@@ -347,6 +366,17 @@ const KitDetailsPage = () => {
 
       {/* Floating Action CTA Bar */}
       <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/90 backdrop-blur-xl border-t border-gray-200 z-40">
+        {buyError && (
+          <div className="max-w-md mx-auto mb-3 p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 font-bold text-xs flex items-center justify-between gap-2 shadow-2xs">
+            <div className="flex items-center gap-2">
+              <AlertCircle size={16} className="text-red-500 shrink-0" />
+              <span>{buyError}</span>
+            </div>
+            <button onClick={() => setBuyError('')} className="p-0.5 hover:bg-red-100 rounded-md">
+              <X size={14} />
+            </button>
+          </div>
+        )}
         <div className="max-w-md mx-auto flex items-center justify-between gap-4">
           <div>
             <span className="text-[9px] font-black text-gray-400 uppercase tracking-wider block">Payable Amount</span>
@@ -355,15 +385,22 @@ const KitDetailsPage = () => {
 
           <button
             type="button"
-            disabled={isPurchased}
+            disabled={isPurchased || addingToCart}
             onClick={handleAddToCart}
             className={`px-6 py-3.5 font-black text-xs uppercase tracking-wider rounded-2xl shadow-lg flex items-center gap-2 transition-all active:scale-95 ${
               isPurchased
                 ? 'bg-emerald-600 text-white opacity-90 cursor-not-allowed shadow-emerald-900/10'
+                : addingToCart
+                ? 'bg-[#3b2d7d]/80 text-white cursor-wait'
                 : 'bg-[#3b2d7d] hover:bg-[#2c2060] text-white shadow-purple-950/15'
             }`}
           >
-            {isPurchased ? (
+            {addingToCart ? (
+              <>
+                <Loader2 size={16} className="animate-spin" />
+                <span>Processing…</span>
+              </>
+            ) : isPurchased ? (
               <>
                 <CheckCircle2 size={16} className="stroke-[2.5]" />
                 <span>Already Purchased</span>

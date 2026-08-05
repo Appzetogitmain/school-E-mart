@@ -36,6 +36,21 @@ export const createAssignment = async (schoolId, courseId, payload) => {
   return unwrapData(response)?.assignment;
 };
 
+export const updateAssignment = async (schoolId, courseId, assignmentId, payload) => {
+  const response = await apiClient.patch(
+    lmsPath(schoolId, `/courses/${courseId}/assignments/${assignmentId}`),
+    payload
+  );
+  return unwrapData(response)?.assignment;
+};
+
+export const deleteAssignment = async (schoolId, courseId, assignmentId) => {
+  const response = await apiClient.delete(
+    lmsPath(schoolId, `/courses/${courseId}/assignments/${assignmentId}`)
+  );
+  return unwrapData(response);
+};
+
 export const submitAssignment = async (schoolId, courseId, assignmentId, payload) => {
   const response = await apiClient.post(
     lmsPath(schoolId, `/courses/${courseId}/assignments/${assignmentId}/submissions`),

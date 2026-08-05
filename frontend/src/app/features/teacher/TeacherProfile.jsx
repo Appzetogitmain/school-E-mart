@@ -5,7 +5,7 @@ import {
   Mail, MapPin, Briefcase, Lock, CheckCircle2, ChevronRight,
   Save, X, Loader2, LogOut, Building2
 } from 'lucide-react';
-import { updateTeacher, getSchool } from '../../../services/schoolApi';
+import { updateTeacher, getSchool, uploadSchoolFile } from '../../../services/schoolApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 import { resolveTeacherProfile } from '../../../utils/teacherApiHelpers';
 import { useAuthUser, useTeacherSchoolId } from '../../../utils/teacherContext';
@@ -55,10 +55,14 @@ const TeacherProfile = () => {
 
   // Logout states
   const logout = useAuthStore((state) => state.logout);
+  const setStoredUser = useAuthStore((state) => state.setUser);
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
 
   const [schoolInfo, setSchoolInfo] = useState(null);
+
+  const [pendingAvatarUrl, setPendingAvatarUrl] = useState('');
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -95,9 +99,14 @@ const TeacherProfile = () => {
           profile.joiningDate ? new Date(profile.joiningDate).toISOString().slice(0, 10) : ''
         );
         setEmployeeId(profile._id?.toString?.()?.slice(-8) || '');
-        if (user.name) {
+
+        const existingAvatar = profile.avatarUrl || user.avatarUrl || authUser.avatarUrl || '';
+        if (existingAvatar) {
+          setPendingAvatarUrl(existingAvatar);
+          setAvatar(toAbsoluteUrl(existingAvatar));
+        } else if (user.name || authUser.name) {
           setAvatar(
-            `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=3b2d7d&color=fff`
+            `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name || authUser.name)}&background=3b2d7d&color=fff`
           );
         }
       } catch {
@@ -136,11 +145,23 @@ const TeacherProfile = () => {
         designation: designation.trim() || undefined,
         qualification: qualification.trim() || undefined,
         experienceYears: Number.isFinite(experienceYears) ? experienceYears : undefined,
+        avatarUrl: pendingAvatarUrl || undefined,
         user: {
           name: fullName.trim(),
           phone: phone.trim(),
           email: email.trim(),
+          avatarUrl: pendingAvatarUrl || undefined,
         },
+      });
+
+      // The dashboard (and anywhere else) reads name/email/phone off the
+      // shared auth store, not a fresh fetch — without this, a saved change
+      // only shows up after a full logout/login.
+      setStoredUser({
+        ...authUser,
+        name: fullName.trim(),
+        email: email.trim(),
+        phone: phone.trim(),
       });
 
       triggerToast('Profile Saved Successfully!');
@@ -155,8 +176,6 @@ const TeacherProfile = () => {
   const handleLogout = async () => {
     setLoggingOut(true);
     try {
-      // The store clears the local session even if the API call fails, so this
-      // always ends with the teacher signed out.
       await logout();
       navigate('/school/login', { replace: true });
     } finally {
@@ -171,19 +190,39 @@ const TeacherProfile = () => {
     }
   };
 
-  const handleFileChange = (e) => {
+  const handleFileChange = async (e) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
       if (!file.type.startsWith('image/')) {
         triggerToast('Please select a valid image file');
         return;
       }
+
+      // Preview immediately
       const reader = new FileReader();
       reader.onload = (uploadEvent) => {
         setAvatar(uploadEvent.target.result);
-        triggerToast('Profile Photo Uploaded!');
       };
       reader.readAsDataURL(file);
+
+      // Upload file to backend attachments service
+      setUploadingPhoto(true);
+      try {
+        const attachment = await uploadSchoolFile(schoolId, file, 'profile_avatar');
+        const fileKey = attachment?.storageKey || attachment?.url || attachment?.path || '';
+        const fullUrl = toAbsoluteUrl(fileKey);
+        if (fullUrl) {
+          setAvatar(fullUrl);
+          setPendingAvatarUrl(fileKey);
+          triggerToast('Photo uploaded! Click Save to apply.');
+        } else {
+          triggerToast('Photo selected!');
+        }
+      } catch (err) {
+        triggerToast(getErrorMessage(err, 'Photo preview set, click Save to keep'));
+      } finally {
+        setUploadingPhoto(false);
+      }
     }
   };
 

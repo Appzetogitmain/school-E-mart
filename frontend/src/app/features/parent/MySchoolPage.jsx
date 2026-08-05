@@ -77,7 +77,7 @@ const MySchoolPage = () => {
       // Fetch user's orders to track purchased kits (only non-cancelled, paid/COD orders)
       const purchasedSet = new Set();
       try {
-        const { data: ordersData } = await listOrders();
+        const { data: ordersData } = await listOrders({ limit: 100 });
         const validOrders = (ordersData || []).filter((o) => {
           const isCancelled = ['cancelled', 'returned'].includes(o.status || o.orderStatus);
           const isPaid = ['paid', 'authorized'].includes(o.paymentStatus) || o.paymentMethod === 'cod';

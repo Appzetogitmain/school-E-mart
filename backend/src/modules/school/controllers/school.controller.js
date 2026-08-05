@@ -1,3 +1,4 @@
+const { ForbiddenError } = require('../../../common/errors');
 const { success, created, paginated } = require('../../../common/response');
 const asyncHandler = require('../../../utils/asyncHandler');
 const schoolService = require('../services/school.service');
@@ -67,6 +68,12 @@ const schoolController = {
   }),
 
   updateTeacher: asyncHandler(async (req, res) => {
+    if (req.auth.role === 'teacher') {
+      const myProfile = await teacherService.getTeacherByUserId(req.schoolId, req.auth.userId);
+      if (String(myProfile._id || myProfile.id) !== String(req.params.teacherId)) {
+        throw new ForbiddenError('You can only update your own teacher profile');
+      }
+    }
     const teacher = await teacherService.updateTeacher(req.schoolId, req.params.teacherId, req.body);
     return success(res, { teacher }, 'Teacher updated successfully', undefined, req);
   }),

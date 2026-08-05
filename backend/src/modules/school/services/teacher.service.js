@@ -132,6 +132,10 @@ const teacherService = {
 
     if (user) {
       const userUpdates = { ...user };
+      if (userUpdates.avatarUrl !== undefined) {
+        profileData.avatarUrl = userUpdates.avatarUrl;
+        delete userUpdates.avatarUrl;
+      }
       if (userUpdates.phone) {
         const { normalizePhone } = require('../../../utils');
         const normPhone = normalizePhone(userUpdates.phone);
@@ -153,7 +157,9 @@ const teacherService = {
         }
         userUpdates.email = normEmail;
       }
-      await User.findByIdAndUpdate(profile.userId, { $set: userUpdates }, { runValidators: true });
+      if (Object.keys(userUpdates).length > 0) {
+        await User.findByIdAndUpdate(profile.userId, { $set: userUpdates }, { runValidators: true });
+      }
     }
 
     if (Object.keys(profileData).length > 0) {

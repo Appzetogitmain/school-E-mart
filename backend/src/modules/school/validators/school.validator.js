@@ -77,6 +77,7 @@ const createTeacherSchema = Joi.object({
 });
 
 const updateTeacherSchema = Joi.object({
+  avatarUrl: Joi.string().trim().allow('', null).optional(),
   designation: Joi.string().trim().optional(),
   department: Joi.string().trim().optional(),
   qualification: Joi.string().trim().optional(),
@@ -95,6 +96,7 @@ const updateTeacherSchema = Joi.object({
     name: Joi.string().trim().optional(),
     phone: schemas.indianMobile.optional(),
     email: schemas.email.optional(),
+    avatarUrl: Joi.string().trim().allow('', null).optional(),
   }).optional(),
 });
 

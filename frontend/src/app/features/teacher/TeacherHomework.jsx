@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { 
-  ArrowLeft, Calendar, Clock, Bookmark, Edit2, 
-  Tag, Flag, FileText, Paperclip, Info, BookOpen, 
-  Trash2, Plus, Save, File, Check, Loader2, Award
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
+import {
+  ArrowLeft, Calendar, Clock, Bookmark, Edit2,
+  Tag, Flag, FileText, Paperclip, Info, BookOpen,
+  Trash2, Plus, Save, File, Check, Loader2, Award, Lock
 } from 'lucide-react';
-import { createAssignment } from '../../../services/lmsApi';
-import { listSubjects } from '../../../services/schoolApi';
+import { createAssignment, updateAssignment } from '../../../services/lmsApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 import { parseClassGrade, parseSection } from '../../../utils/mappers/teacherMapper';
 import { ensureCourse } from '../../../utils/teacherApiHelpers';
@@ -14,47 +13,64 @@ import { useAuthUser, useTeacherSchoolId } from '../../../utils/teacherContext';
 import { useTeacherClassOptions } from '../../../hooks/useTeacherClassOptions';
 import { filesToCompressedDataUrls, validateSubmissionFiles } from '../../../utils/fileUpload';
 
+// <input type="date"> wants "yyyy-mm-dd"; assignment dates come back as full ISO strings.
+const toDateInputValue = (value) => {
+  if (!value) return '';
+  const str = String(value);
+  return str.length >= 10 ? str.slice(0, 10) : str;
+};
+
 const TeacherHomework = () => {
   const navigate = useNavigate();
+  const { assignmentId } = useParams();
+  const location = useLocation();
   const schoolId = useTeacherSchoolId();
   const authUser = useAuthUser();
-  const { classLabels, getSections } = useTeacherClassOptions(schoolId);
+  const { classLabels, getSections, getSubjects } = useTeacherClassOptions(schoolId);
   const fileInputRef = React.useRef(null);
 
-  const [selectedClass, setSelectedClass] = useState('');
-  const [selectedSection, setSelectedSection] = useState('');
-  const [subject, setSubject] = useState('');
-  const [subjectsList, setSubjectsList] = useState([]);
-  const [title, setTitle] = useState('');
+  // Editing an existing homework arrives with its data via navigation state
+  // (set by the Manage Homework list) — there is no other way to reach this
+  // route, so a missing payload means a direct/refreshed visit we can't serve.
+  const editingHomework = location.state?.homework || null;
+  const isEdit = Boolean(assignmentId);
+  const editDataMissing = isEdit && !editingHomework;
+
+  const [selectedClass, setSelectedClass] = useState(() => editingHomework?.classGrade || '');
+  const [selectedSection, setSelectedSection] = useState(() => editingHomework?.section || '');
+  const [subject, setSubject] = useState(() => editingHomework?.subject || '');
+  const [title, setTitle] = useState(() => editingHomework?.title || '');
+
+  // Only the subjects this teacher was actually assigned for the selected
+  // class + section — not the school's full subject catalog. Fixed once a
+  // homework already exists; changing subject means a different course.
+  const subjectsList = getSubjects(selectedClass, selectedSection);
 
   useEffect(() => {
-    if (!schoolId) return;
-    listSubjects(schoolId)
-      .then((res) => {
-        const labels = (res.data || []).map((s) => s.label).filter(Boolean);
-        setSubjectsList(labels);
-        if (labels.length > 0) {
-          setSubject((prev) => (prev && labels.includes(prev) ? prev : labels[0]));
-        }
-      })
-      .catch(() => setSubjectsList([]));
-  }, [schoolId]);
+    if (isEdit) return;
+    if (subjectsList.length > 0) {
+      setSubject((prev) => (prev && subjectsList.includes(prev) ? prev : subjectsList[0]));
+    } else {
+      setSubject('');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEdit, selectedClass, selectedSection, subjectsList.join('|')]);
 
-  const [dateAssigned, setDateAssigned] = useState('');
-  const [dueDate, setDueDate] = useState('');
-  
-  const [homeworkType, setHomeworkType] = useState('Written');
-  const [priority, setPriority] = useState('High');
+  const [dateAssigned, setDateAssigned] = useState(() => toDateInputValue(editingHomework?.assignedDate));
+  const [dueDate, setDueDate] = useState(() => toDateInputValue(editingHomework?.dueDate));
+
+  const [homeworkType, setHomeworkType] = useState(() => editingHomework?.homeworkType || 'Written');
+  const [priority, setPriority] = useState(() => editingHomework?.priority || 'High');
   // The score the teacher grades out of. Previously fixed at 100, which made it
   // impossible to set homework marked out of anything else.
-  const [maxScore, setMaxScore] = useState('100');
-  
-  const [description, setDescription] = useState('');
-  const [instructions, setInstructions] = useState('');
-  
-  const [textbook, setTextbook] = useState('');
-  const [chapter, setChapter] = useState('');
-  
+  const [maxScore, setMaxScore] = useState(() => String(editingHomework?.maxScore ?? '100'));
+
+  const [description, setDescription] = useState(() => editingHomework?.description || '');
+  const [instructions, setInstructions] = useState(() => editingHomework?.instructions || '');
+
+  const [textbook, setTextbook] = useState(() => editingHomework?.reference?.textbook || '');
+  const [chapter, setChapter] = useState(() => editingHomework?.reference?.chapter || '');
+
   // Attachments Mock State (Starts empty)
   const [attachments, setAttachments] = useState([]);
 
@@ -81,12 +97,13 @@ const TeacherHomework = () => {
   };
 
   useEffect(() => {
+    if (isEdit) return;
     if (classLabels.length > 0 && !selectedClass) {
       setSelectedClass(classLabels[0]);
       const secs = getSections(classLabels[0]);
       if (secs.length > 0) setSelectedSection(secs[0]);
     }
-  }, [classLabels, getSections, selectedClass]);
+  }, [isEdit, classLabels, getSections, selectedClass]);
 
   const handleAddAttachment = () => {
     fileInputRef.current?.click();
@@ -119,12 +136,17 @@ const TeacherHomework = () => {
 
   const handleAddHomework = async (e) => {
     e.preventDefault();
+    if (editDataMissing) return;
     if (!title.trim()) {
       setError('Please enter a homework title');
       return;
     }
     if (!schoolId) {
       setError('School context is missing. Please log in again.');
+      return;
+    }
+    if (!subject) {
+      setError("You aren't assigned any subject for this class & section.");
       return;
     }
 
@@ -137,6 +159,34 @@ const TeacherHomework = () => {
     setSaving(true);
     setError('');
     try {
+      const reference = {
+        ...(textbook.trim() ? { textbook: textbook.trim() } : {}),
+        ...(chapter.trim() ? { chapter: chapter.trim() } : {}),
+      };
+
+      if (isEdit) {
+        // Class, section and subject pin down which course the homework
+        // belongs to — those are fixed at creation, so only the rest changes.
+        await updateAssignment(schoolId, editingHomework.courseId, assignmentId, {
+          title: title.trim(),
+          description: description.trim() || undefined,
+          instructions: instructions.trim() || undefined,
+          dueDate: dueDate || undefined,
+          assignedDate: dateAssigned || undefined,
+          homeworkType,
+          priority,
+          ...(Object.keys(reference).length ? { reference } : {}),
+          maxScore: parsedMaxScore,
+        });
+
+        setShowToast(true);
+        setTimeout(() => {
+          setShowToast(false);
+          navigate('/school/teacher/homework/manage');
+        }, 1500);
+        return;
+      }
+
       const classGrade = parseClassGrade(selectedClass);
       const section = parseSection(selectedSection);
       const course = await ensureCourse(schoolId, {
@@ -146,11 +196,6 @@ const TeacherHomework = () => {
         instructorName: authUser?.name,
         instructorUserId: authUser?.id,
       });
-
-      const reference = {
-        ...(textbook.trim() ? { textbook: textbook.trim() } : {}),
-        ...(chapter.trim() ? { chapter: chapter.trim() } : {}),
-      };
 
       const files = await filesToCompressedDataUrls(attachments.map((att) => att.file));
 
@@ -176,7 +221,7 @@ const TeacherHomework = () => {
         navigate('/school/teacher/dashboard');
       }, 2000);
     } catch (err) {
-      setError(getErrorMessage(err, 'Unable to add homework'));
+      setError(getErrorMessage(err, isEdit ? 'Unable to update homework' : 'Unable to add homework'));
     } finally {
       setSaving(false);
     }
@@ -192,28 +237,47 @@ const TeacherHomework = () => {
     return `( ${diffDays} DAYS LEFT )`;
   };
 
+  if (editDataMissing) {
+    return (
+      <div className="flex flex-col items-center justify-center bg-gray-50 min-h-screen select-none font-outfit px-6 text-center gap-4">
+        <div className="w-14 h-14 rounded-2xl bg-purple-50 flex items-center justify-center">
+          <BookOpen size={24} className="text-primary" />
+        </div>
+        <p className="text-xs font-bold text-gray-500 max-w-xs">
+          Open this homework from Manage Homework to edit it.
+        </p>
+        <button
+          onClick={() => navigate('/school/teacher/homework/manage')}
+          className="px-6 py-3 bg-primary text-white rounded-2xl text-xs font-black shadow-lg shadow-purple-100"
+        >
+          Go to Manage Homework
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col bg-gray-50 min-h-screen select-none font-outfit animate-in fade-in duration-300 pb-28 relative">
-      
+
       {/* Toast Notification */}
       {showToast && (
         <div className="fixed top-8 left-1/2 transform -translate-x-1/2 z-[100] bg-emerald-600 text-white px-6 py-3.5 rounded-2xl shadow-2xl flex items-center gap-3 animate-in slide-in-from-top-6 duration-300">
           <div className="w-6 h-6 bg-white/20 rounded-full flex items-center justify-center">
             <Check size={14} strokeWidth={3} />
           </div>
-          <span className="text-xs font-black">Homework Added Successfully!</span>
+          <span className="text-xs font-black">{isEdit ? 'Homework Updated Successfully!' : 'Homework Added Successfully!'}</span>
         </div>
       )}
 
       {/* 1. Header Section */}
       <div className="px-6 pt-7 pb-4 bg-white flex items-center border-b border-gray-100 relative z-30">
-        <button 
-          onClick={() => navigate('/school/teacher/dashboard')}
+        <button
+          onClick={() => navigate(isEdit ? '/school/teacher/homework/manage' : '/school/teacher/dashboard')}
           className="w-10 h-10 bg-gray-50 hover:bg-gray-100 active:scale-95 transition-all rounded-full flex items-center justify-center text-deep-purple mr-4"
         >
           <ArrowLeft size={20} strokeWidth={2.5} />
         </button>
-        <h1 className="text-lg font-black text-deep-purple leading-none">Add Homework</h1>
+        <h1 className="text-lg font-black text-deep-purple leading-none">{isEdit ? 'Edit Homework' : 'Add Homework'}</h1>
       </div>
 
       <form onSubmit={handleAddHomework} className="space-y-4 px-6 mt-4 relative z-20">
@@ -228,13 +292,14 @@ const TeacherHomework = () => {
           {/* Class Dropdown */}
           <div className="relative">
             <label className="text-[10px] font-bold text-gray-400 block mb-1">Class</label>
-            <button 
+            <button
               type="button"
+              disabled={isEdit}
               onClick={() => { setIsClassOpen(!isClassOpen); setIsSectionOpen(false); }}
-              className="w-full px-4 py-3.5 bg-white border border-gray-200 hover:border-primary/20 active:bg-gray-50 rounded-2xl text-left flex items-center justify-between shadow-sm transition-all"
+              className={`w-full px-4 py-3.5 bg-white border border-gray-200 rounded-2xl text-left flex items-center justify-between shadow-sm transition-all ${isEdit ? 'opacity-60' : 'hover:border-primary/20 active:bg-gray-50'}`}
             >
               <span className="text-xs font-black text-deep-purple">{selectedClass}</span>
-              <span className="text-gray-400 text-xs">▼</span>
+              {isEdit ? <Lock size={12} className="text-gray-400" /> : <span className="text-gray-400 text-xs">▼</span>}
             </button>
             {isClassOpen && (
               <>
@@ -258,13 +323,14 @@ const TeacherHomework = () => {
           {/* Section Dropdown */}
           <div className="relative">
             <label className="text-[10px] font-bold text-gray-400 block mb-1">Section</label>
-            <button 
+            <button
               type="button"
+              disabled={isEdit}
               onClick={() => { setIsSectionOpen(!isSectionOpen); setIsClassOpen(false); }}
-              className="w-full px-4 py-3.5 bg-white border border-gray-200 hover:border-primary/20 active:bg-gray-50 rounded-2xl text-left flex items-center justify-between shadow-sm transition-all"
+              className={`w-full px-4 py-3.5 bg-white border border-gray-200 rounded-2xl text-left flex items-center justify-between shadow-sm transition-all ${isEdit ? 'opacity-60' : 'hover:border-primary/20 active:bg-gray-50'}`}
             >
               <span className="text-xs font-black text-deep-purple">{selectedSection}</span>
-              <span className="text-gray-400 text-xs">▼</span>
+              {isEdit ? <Lock size={12} className="text-gray-400" /> : <span className="text-gray-400 text-xs">▼</span>}
             </button>
             {isSectionOpen && (
               <>
@@ -294,22 +360,33 @@ const TeacherHomework = () => {
             </div>
             <div className="flex-1">
               <span className="text-[10px] font-bold text-gray-400 block leading-none">Subject *</span>
-              <button 
+              <button
                 type="button"
+                disabled={isEdit}
                 onClick={() => setIsSubjectOpen(!isSubjectOpen)}
                 className="w-full text-left text-xs font-black text-deep-purple mt-1 flex items-center justify-between"
               >
-                <span>{subject}</span>
-                <span className="text-gray-400 text-xs mr-1">▼</span>
+                <span>{subject || 'No subject assigned'}</span>
+                {isEdit ? <Lock size={12} className="text-gray-400 mr-1" /> : <span className="text-gray-400 text-xs mr-1">▼</span>}
               </button>
             </div>
           </div>
-          {isSubjectOpen && (
+          {isEdit && (
+            <span className="text-[9px] font-bold text-gray-400 block mt-1.5 pl-1">
+              Class, section &amp; subject can&apos;t be changed after creation — delete and re-add if needed.
+            </span>
+          )}
+          {!isEdit && isSubjectOpen && (
             <>
               <div className="fixed inset-0 z-40 bg-transparent" onClick={() => setIsSubjectOpen(false)} />
               <div className="absolute left-0 right-0 mt-2 bg-white border border-gray-200 rounded-2xl shadow-2xl z-50 py-1.5 animate-in fade-in slide-in-from-top-2 duration-200">
+                {subjects.length === 0 && (
+                  <span className="block px-4 py-2.5 text-[10px] font-bold text-gray-400">
+                    You aren't assigned any subject for this class &amp; section.
+                  </span>
+                )}
                 {subjects.map(sub => (
-                  <button 
+                  <button
                     key={sub}
                     type="button"
                     onClick={() => { setSubject(sub); setIsSubjectOpen(false); }}
@@ -519,47 +596,55 @@ const TeacherHomework = () => {
             </div>
           </div>
 
-          <div className="flex flex-col gap-2.5">
-            {attachments.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {attachments.map(att => (
-                  <div key={att.id} className="flex items-center justify-between bg-red-50/60 border border-red-100 rounded-xl px-3 py-2 flex-1 min-w-[160px] max-w-[220px]">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <File size={16} className="text-red-500 shrink-0" />
-                      <div className="min-w-0">
-                        <p className="text-[10px] font-black text-deep-purple truncate">{att.name}</p>
-                        <p className="text-[8px] text-gray-400 font-bold leading-none mt-0.5">{att.size}</p>
+          {isEdit ? (
+            <p className="text-[10px] font-bold text-gray-400">
+              {editingHomework?.attachmentsCount > 0
+                ? `${editingHomework.attachmentsCount} attachment(s) on this homework. Attachments can't be changed after creation.`
+                : "No attachments on this homework. Attachments can't be added after creation."}
+            </p>
+          ) : (
+            <div className="flex flex-col gap-2.5">
+              {attachments.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {attachments.map(att => (
+                    <div key={att.id} className="flex items-center justify-between bg-red-50/60 border border-red-100 rounded-xl px-3 py-2 flex-1 min-w-[160px] max-w-[220px]">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <File size={16} className="text-red-500 shrink-0" />
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-black text-deep-purple truncate">{att.name}</p>
+                          <p className="text-[8px] text-gray-400 font-bold leading-none mt-0.5">{att.size}</p>
+                        </div>
                       </div>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteAttachment(att.id)}
+                        className="text-red-400 hover:text-red-600 active:scale-90 transition-all p-1"
+                      >
+                        <Trash2 size={13} />
+                      </button>
                     </div>
-                    <button 
-                      type="button"
-                      onClick={() => handleDeleteAttachment(att.id)}
-                      className="text-red-400 hover:text-red-600 active:scale-90 transition-all p-1"
-                    >
-                      <Trash2 size={13} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-            
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              accept="image/*,application/pdf"
-              className="hidden"
-              onChange={handleAttachmentSelected}
-            />
-            <button
-              type="button"
-              onClick={handleAddAttachment}
-              className="w-32 py-2 border border-dashed border-primary/45 hover:border-primary active:scale-95 transition-all rounded-xl flex items-center justify-center gap-1.5 text-[10px] font-black text-primary bg-primary/5 shadow-sm"
-            >
-              <Plus size={14} strokeWidth={2.5} />
-              <span>Add More</span>
-            </button>
-          </div>
+                  ))}
+                </div>
+              )}
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept="image/*,application/pdf"
+                className="hidden"
+                onChange={handleAttachmentSelected}
+              />
+              <button
+                type="button"
+                onClick={handleAddAttachment}
+                className="w-32 py-2 border border-dashed border-primary/45 hover:border-primary active:scale-95 transition-all rounded-xl flex items-center justify-center gap-1.5 text-[10px] font-black text-primary bg-primary/5 shadow-sm"
+              >
+                <Plus size={14} strokeWidth={2.5} />
+                <span>Add More</span>
+              </button>
+            </div>
+          )}
         </div>
 
         {/* 9. Instructions for Students */}
@@ -635,7 +720,7 @@ const TeacherHomework = () => {
           className="w-full py-4 bg-primary text-white hover:bg-deep-purple active:scale-98 transition-all rounded-[1.8rem] text-sm font-black shadow-lg shadow-purple-100 flex items-center justify-center gap-2 disabled:opacity-60"
         >
           {saving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} strokeWidth={2.5} />}
-          <span>{saving ? 'Saving...' : 'Add Homework'}</span>
+          <span>{saving ? 'Saving...' : isEdit ? 'Save Changes' : 'Add Homework'}</span>
         </button>
       </div>
 

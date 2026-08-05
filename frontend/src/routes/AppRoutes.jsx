@@ -107,6 +107,7 @@ const TeacherManageStudents = React.lazy(() => import('../app/features/teacher/T
 const TeacherProfile = React.lazy(() => import('../app/features/teacher/TeacherProfile'));
 const TeacherNotifications = React.lazy(() => import('../app/features/teacher/TeacherNotifications'));
 const TeacherCheckHomework = React.lazy(() => import('../app/features/teacher/TeacherCheckHomework'));
+const TeacherManageHomework = React.lazy(() => import('../app/features/teacher/TeacherManageHomework'));
 
 // Vendor Panel Components
 const VendorLayout = React.lazy(() => import('../layouts/VendorLayout'));
@@ -379,6 +380,8 @@ const AppRoutes = () => {
             <Route path="students" element={<TeacherManageStudents />} />
             <Route path="attendance" element={<TeacherAttendance />} />
             <Route path="homework" element={<TeacherHomework />} />
+            <Route path="homework/manage" element={<TeacherManageHomework />} />
+            <Route path="homework/:assignmentId/edit" element={<TeacherHomework />} />
             <Route path="homework/check" element={<TeacherCheckHomework />} />
             <Route path="diary" element={<TeacherDiary />} />
             <Route path="send-notice" element={<SchoolSendNotice />} />

@@ -72,7 +72,8 @@ const commissionService = {
     const schoolIds = new Set();
     if (buyerSchoolId) schoolIds.add(buyerSchoolId);
     for (const it of items) {
-      if (it.kitId && it.kitSchoolId) schoolIds.add(String(it.kitSchoolId));
+      const kSchoolId = it.kitSchoolId || it.schoolId;
+      if (it.kitId && kSchoolId) schoolIds.add(String(kSchoolId));
     }
 
     const schools = schoolIds.size
@@ -83,12 +84,13 @@ const commissionService = {
     return items.map((it) => {
       // Kit: platform kit % + the authoring school's kit %.
       if (it.kitId) {
-        const school = it.kitSchoolId ? schoolById.get(String(it.kitSchoolId)) : null;
+        const kSchoolId = it.kitSchoolId || it.schoolId;
+        const school = kSchoolId ? schoolById.get(String(kSchoolId)) : null;
         const { adminPercent, schoolPercent } = this.clampSplit(
           platform.kitPercent,
           num(school?.commission?.kitPercent, 0)
         );
-        return { adminPercent, schoolPercent, schoolId: school ? String(it.kitSchoolId) : null };
+        return { adminPercent, schoolPercent, schoolId: school ? String(kSchoolId) : null };
       }
 
       // Bulk: a school is buying, or the product is tagged for schools → platform only.

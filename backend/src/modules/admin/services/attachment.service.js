@@ -14,6 +14,9 @@ const ALLOWED_PURPOSES = new Set([
   'notice_attachment',
   // Vendor KYC paperwork, uploaded during onboarding.
   'kyc_doc',
+  // Profile photos (teacher/parent/etc.) — was present on the Attachment
+  // model's purpose enum but missing here, so every avatar upload 400'd.
+  'profile_avatar',
 ]);
 
 // Purposes whose bytes live outside the statically-served /uploads dir and are only

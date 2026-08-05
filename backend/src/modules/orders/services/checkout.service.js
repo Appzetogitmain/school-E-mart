@@ -35,7 +35,7 @@ const checkoutService = {
         if (kit) {
           product = {
             _id: kit._id,
-            vendorId: kit.vendorId || kit.schoolId,
+            vendorId: kit.vendorId || null,
             name: kit.name,
             sku: kit.sku || `KIT-${kit._id}`,
             images: [{ alt: kit.imageUrl || '' }],
@@ -100,6 +100,7 @@ const checkoutService = {
         lineTotalPaise: lineSubtotal + taxPaise,
         availableStock: stock,
         kitId: product.kitId || null,
+        kitSchoolId: product.schoolId || null,
         kitCreatedAt: product.kitCreatedAt || null,
         kitItems: product.kitItems || undefined,
         // Drives the commission split: 'users' = retail, 'schools' = bulk.

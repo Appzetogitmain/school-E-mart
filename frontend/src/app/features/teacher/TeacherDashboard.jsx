@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  Bell, GraduationCap, Users, Clock, ArrowRight, 
+  Bell, GraduationCap, Users, Clock, ArrowRight,
   Calendar, BookOpen, FileText, CheckSquare, Plus,
-  ChevronDown, UserCheck, MessageSquare, PlusCircle, FileCheck, Loader2, Building2, Megaphone
+  ChevronDown, UserCheck, MessageSquare, PlusCircle, FileCheck, Loader2, Building2, Megaphone, ClipboardList
 } from 'lucide-react';
 import { getDailyAttendance, listStudents, getSchool } from '../../../services/schoolApi';
 import { listCourses, listAssignments } from '../../../services/lmsApi';
@@ -13,6 +13,7 @@ import { toLocalDateKey } from '../../../utils/date';
 import { useAuthUser, useTeacherSchoolId } from '../../../utils/teacherContext';
 import { useTeacherClassOptions } from '../../../hooks/useTeacherClassOptions';
 import { toAbsoluteUrl } from '../../../utils/url';
+import { resolveTeacherProfile } from '../../../utils/teacherApiHelpers';
 
 const TeacherDashboard = () => {
   const navigate = useNavigate();
@@ -26,27 +27,31 @@ const TeacherDashboard = () => {
   const [schoolInfo, setSchoolInfo] = useState(null);
 
   useEffect(() => {
+    let active = true;
     const name = authUser?.name || authUser?.fullName;
     if (name) {
       const firstName = name.split(' ')[0];
       setTeacherName(`${firstName}`);
     }
     if (authUser?.avatarUrl) {
-      setTeacherAvatar(authUser.avatarUrl);
+      setTeacherAvatar(toAbsoluteUrl(authUser.avatarUrl));
     }
-  }, [authUser]);
 
-  useEffect(() => {
-    let active = true;
     if (schoolId) {
       getSchool(schoolId).then((data) => {
         if (active && data) {
           setSchoolInfo(data);
         }
       }).catch(() => {});
+
+      resolveTeacherProfile(schoolId).then((profile) => {
+        if (active && profile?.avatarUrl) {
+          setTeacherAvatar(toAbsoluteUrl(profile.avatarUrl));
+        }
+      }).catch(() => {});
     }
     return () => { active = false; };
-  }, [schoolId]);
+  }, [schoolId, authUser]);
 
   const { classLabels, getSectionLabels, loading: classesLoading, hasClasses } = useTeacherClassOptions(schoolId);
 
@@ -312,13 +317,19 @@ const TeacherDashboard = () => {
             label="Add Homework" 
             onClick={() => navigate('/school/teacher/homework')}
           />
-          <QuickActionButton 
-            color="bg-rose-50 text-rose-500 hover:bg-rose-100/50" 
-            icon={<FileCheck size={20} />} 
-            label="Check Homework" 
+          <QuickActionButton
+            color="bg-rose-50 text-rose-500 hover:bg-rose-100/50"
+            icon={<FileCheck size={20} />}
+            label="Check Homework"
             onClick={() => navigate('/school/teacher/homework/check')}
           />
-          <QuickActionButton 
+          <QuickActionButton
+            color="bg-teal-50 text-teal-500 hover:bg-teal-100/50"
+            icon={<ClipboardList size={20} />}
+            label="Manage Homework"
+            onClick={() => navigate('/school/teacher/homework/manage')}
+          />
+          <QuickActionButton
             color="bg-indigo-50 text-indigo-500 hover:bg-indigo-100/50" 
             icon={<Megaphone size={20} />} 
             label="Send Notice" 

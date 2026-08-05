@@ -95,7 +95,11 @@ router.get(
 );
 router.patch(
   '/:schoolId/teachers/:teacherId',
-  ...protectedRoute({ roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN], permissions: [PERMISSIONS.TEACHERS_WRITE] }),
+  ...protectedRoute({
+    roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN, ROLES.TEACHER],
+    permissions: [PERMISSIONS.TEACHERS_WRITE, PERMISSIONS.CLASSES_READ],
+    permissionOptions: { mode: 'any' },
+  }),
   resolveSchool(),
   validateParams(validators.teacherIdParam),
   validateBody(validators.updateTeacherSchema),

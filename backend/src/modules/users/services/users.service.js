@@ -191,7 +191,7 @@ const usersService = {
       let savedPhotoUrl = null;
       const rawLogo = payload.photo || payload.logoUrl || payload.logo;
       if (rawLogo) {
-        savedPhotoUrl = saveBase64Image(rawLogo, 'school-logo');
+        savedPhotoUrl = saveBase64Image(rawLogo, 'school-staff-avatar');
         if (savedPhotoUrl && staffProfile) {
           staffProfile.avatarUrl = savedPhotoUrl;
         }

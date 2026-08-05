@@ -61,10 +61,25 @@ export const useTeacherClassOptions = (schoolId) => {
     [getSections]
   );
 
+  // Subjects the teacher was actually assigned for this class+section —
+  // not the school's full subject catalog.
+  const getSubjects = useCallback(
+    (selectedClass, selectedSection) => {
+      const match = rawClasses.find((cls) => parseClassGrade(cls.classGrade) === selectedClass);
+      if (!match || !selectedSection) return [];
+      const rawSection = Object.keys(match.subjectsBySection || {}).find(
+        (section) => String(section).replace(/^section\s*/i, '').trim().toUpperCase() === selectedSection
+      );
+      return rawSection ? match.subjectsBySection[rawSection] || [] : [];
+    },
+    [rawClasses]
+  );
+
   return {
     classLabels,
     getSections,
     getSectionLabels,
+    getSubjects,
     loading,
     error,
     hasClasses: classLabels.length > 0,

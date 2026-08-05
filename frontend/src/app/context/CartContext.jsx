@@ -144,8 +144,9 @@ export const CartProvider = ({ children }) => {
         const audience = getMarketplaceAudience();
         const cart = await cartApi.addCartItem(audience, productToCartPayload(product, 1));
         setCartItems(applyCartResponse(cart));
-      } catch {
+      } catch (err) {
         await syncFromServer();
+        throw err;
       }
       return;
     }

@@ -10,9 +10,17 @@ const buildClassMapFromAssignments = (classAssignments = []) => {
       classGrade: assignment.class,
       sections: [],
       classTeachers: {},
+      // Subjects this teacher is assigned, keyed by section — a teacher can
+      // teach different subjects in different sections of the same class
+      subjectsBySection: {},
     };
     if (assignment.section && !existing.sections.includes(assignment.section)) {
       existing.sections.push(assignment.section);
+    }
+    if (assignment.section) {
+      const subjects = new Set(existing.subjectsBySection[assignment.section] || []);
+      (assignment.subjects || []).forEach((subject) => subjects.add(subject));
+      existing.subjectsBySection[assignment.section] = Array.from(subjects);
     }
     classMap.set(assignment.class, existing);
   });
