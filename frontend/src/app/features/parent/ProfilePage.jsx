@@ -171,47 +171,47 @@ const ProfilePage = () => {
                 </div>
               </div>
             ) : (
-            /* 1. STUDENT CARD — first priority */
-            <div className="bg-gradient-to-br from-deep-purple via-deep-purple to-[#4c489d] rounded-3xl p-6 text-white relative overflow-hidden shadow-xl shadow-purple-900/10">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-8 -mt-8 blur-2xl pointer-events-none"></div>
-              <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/5 rounded-full -ml-8 -mb-8 blur-xl pointer-events-none"></div>
+              /* 1. STUDENT CARD — first priority */
+              <div className="bg-gradient-to-br from-deep-purple via-deep-purple to-[#4c489d] rounded-3xl p-6 text-white relative overflow-hidden shadow-xl shadow-purple-900/10">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-8 -mt-8 blur-2xl pointer-events-none"></div>
+                <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/5 rounded-full -ml-8 -mb-8 blur-xl pointer-events-none"></div>
 
-              <div className="flex items-center gap-5 relative z-10">
-                <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center shadow-lg overflow-hidden border-2 border-white/20 shrink-0">
-                  {childProfile?.photo ? (
-                    <img src={toAbsoluteUrl(childProfile.photo)} alt={studentName} className="w-full h-full object-cover" />
-                  ) : (
-                    <GraduationCap size={34} className="text-deep-purple/60" />
-                  )}
-                </div>
-                <div className="min-w-0">
-                  <span className="inline-block bg-white/15 px-2 py-0.5 rounded-md text-[8px] font-black uppercase tracking-widest text-white/90 mb-1">
-                    Student
-                  </span>
-                  <h2 className="text-lg font-black tracking-tight truncate">{studentName}</h2>
-                  <div className="flex items-center gap-2 mt-1 flex-wrap">
-                    {childProfile?.rollNo && (
-                      <span className="inline-flex items-center gap-1 bg-white/10 px-2 py-0.5 rounded-full text-[10px] font-bold">
-                        <Hash size={10} /> Roll {childProfile.rollNo}
-                      </span>
-                    )}
-                    {studentClass && (
-                      <span className="bg-white/10 px-2 py-0.5 rounded-full text-[10px] font-bold">{studentClass}</span>
+                <div className="flex items-center gap-5 relative z-10">
+                  <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center shadow-lg overflow-hidden border-2 border-white/20 shrink-0">
+                    {childProfile?.photo ? (
+                      <img src={toAbsoluteUrl(childProfile.photo)} alt={studentName} className="w-full h-full object-cover" />
+                    ) : (
+                      <GraduationCap size={34} className="text-deep-purple/60" />
                     )}
                   </div>
-                  {childProfile?.schoolName && (
-                    <p className="text-white/70 text-[11px] font-semibold mt-1.5 truncate flex items-center gap-1.5">
-                      {childProfile?.schoolLogo ? (
-                        <img src={toAbsoluteUrl(childProfile.schoolLogo)} alt="School Logo" className="w-4 h-4 object-cover rounded-full border border-white/20 shrink-0" />
-                      ) : (
-                        <School size={11} className="shrink-0" />
+                  <div className="min-w-0">
+                    <span className="inline-block bg-white/15 px-2 py-0.5 rounded-md text-[8px] font-black uppercase tracking-widest text-white/90 mb-1">
+                      Student
+                    </span>
+                    <h2 className="text-lg font-black tracking-tight truncate">{studentName}</h2>
+                    <div className="flex items-center gap-2 mt-1 flex-wrap">
+                      {childProfile?.rollNo && (
+                        <span className="inline-flex items-center gap-1 bg-white/10 px-2 py-0.5 rounded-full text-[10px] font-bold">
+                          <Hash size={10} /> Roll {childProfile.rollNo}
+                        </span>
                       )}
-                      <span className="truncate">{childProfile.schoolName}</span>
-                    </p>
-                  )}
+                      {studentClass && (
+                        <span className="bg-white/10 px-2 py-0.5 rounded-full text-[10px] font-bold">{studentClass}</span>
+                      )}
+                    </div>
+                    {childProfile?.schoolName && (
+                      <p className="text-white/70 text-[11px] font-semibold mt-1.5 truncate flex items-center gap-1.5">
+                        {childProfile?.schoolLogo ? (
+                          <img src={toAbsoluteUrl(childProfile.schoolLogo)} alt="School Logo" className="w-4 h-4 object-cover rounded-full border border-white/20 shrink-0" />
+                        ) : (
+                          <School size={11} className="shrink-0" />
+                        )}
+                        <span className="truncate">{childProfile.schoolName}</span>
+                      </p>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
             )}
 
             {/* 2. LINKED CHILDREN — switch active student */}
@@ -232,11 +232,10 @@ const ProfilePage = () => {
                         key={child.childProfileId}
                         onClick={() => handleSwitchChild(child)}
                         disabled={busy}
-                        className={`shrink-0 min-w-[130px] text-left rounded-2xl p-3 border transition-all active:scale-[0.98] ${
-                          active
+                        className={`shrink-0 min-w-[130px] text-left rounded-2xl p-3 border transition-all active:scale-[0.98] ${active
                             ? 'bg-[#F4EBFF] border-[#D6BBFB] shadow-sm'
                             : 'bg-white border-gray-100 hover:border-gray-200'
-                        }`}
+                          }`}
                       >
                         <div className="flex items-center justify-between">
                           <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${active ? 'bg-white text-deep-purple' : 'bg-gray-50 text-gray-400'}`}>
@@ -261,52 +260,52 @@ const ProfilePage = () => {
 
             {/* 3. QUICK ACTIONS — on behalf of the student (linked only) */}
             {linked && (
-            <div className="bg-white rounded-3xl p-4 shadow-sm border border-gray-100/50">
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider px-1 mb-3">
-                For {studentName.split(' ')[0]}
-              </p>
-              <div className="grid grid-cols-4 gap-2">
-                {quickActions.map((action) => (
-                  <button
-                    key={action.label}
-                    onClick={() => navigate(action.to)}
-                    className="flex flex-col items-center gap-1.5 py-1.5 active:scale-95 transition-all"
-                  >
-                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${action.color}`}>
-                      {action.icon}
-                    </div>
-                    <span className="text-[10px] font-bold text-gray-600">{action.label}</span>
-                  </button>
-                ))}
+              <div className="bg-white rounded-3xl p-4 shadow-sm border border-gray-100/50">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider px-1 mb-3">
+                  For {studentName.split(' ')[0]}
+                </p>
+                <div className="grid grid-cols-4 gap-2">
+                  {quickActions.map((action) => (
+                    <button
+                      key={action.label}
+                      onClick={() => navigate(action.to)}
+                      className="flex flex-col items-center gap-1.5 py-1.5 active:scale-95 transition-all"
+                    >
+                      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${action.color}`}>
+                        {action.icon}
+                      </div>
+                      <span className="text-[10px] font-bold text-gray-600">{action.label}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
             )}
 
             {/* 4. PARENT CARD — second priority (linked only; unlinked shopper is
                 shown in the header card above) */}
             {linked && (
-            <div className="bg-white rounded-3xl p-4 shadow-sm border border-gray-100/50 flex items-center gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-[#F4EBFF] text-deep-purple flex items-center justify-center shrink-0 overflow-hidden">
-                {(childProfile?.photo || childProfile?.avatarUrl) ? (
-                  <img src={toAbsoluteUrl(childProfile.photo || childProfile.avatarUrl)} alt={studentName} className="w-full h-full object-cover" />
-                ) : (
-                  <User size={22} />
-                )}
+              <div className="bg-white rounded-3xl p-4 shadow-sm border border-gray-100/50 flex items-center gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-[#F4EBFF] text-deep-purple flex items-center justify-center shrink-0 overflow-hidden">
+                  {data?.profile?.avatarUrl ? (
+                    <img src={data.profile.avatarUrl} alt={parentName} className="w-full h-full object-cover" />
+                  ) : (
+                    <User size={22} />
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <span className="text-[9px] font-black uppercase tracking-widest text-green-600 bg-green-50 px-2 py-0.5 rounded-md">
+                    Parent Account
+                  </span>
+                  <h3 className="text-sm font-black text-gray-800 truncate mt-1">{parentName}</h3>
+                  {parent.phone && <p className="text-[11px] font-bold text-gray-400">{parent.phone}</p>}
+                </div>
+                <button
+                  onClick={() => navigate('/user/edit-profile')}
+                  className="w-9 h-9 rounded-xl bg-gray-50 text-deep-purple flex items-center justify-center shrink-0 active:scale-90 transition-all"
+                >
+                  <Edit2 size={16} />
+                </button>
               </div>
-              <div className="min-w-0 flex-1">
-                <span className="text-[9px] font-black uppercase tracking-widest text-green-600 bg-green-50 px-2 py-0.5 rounded-md">
-                  Parent Account
-                </span>
-                <h3 className="text-sm font-black text-gray-800 truncate mt-1">{parentName}</h3>
-                {parent.phone && <p className="text-[11px] font-bold text-gray-400">{parent.phone}</p>}
-              </div>
-              <button
-                onClick={() => navigate('/user/edit-profile')}
-                className="w-9 h-9 rounded-xl bg-gray-50 text-deep-purple flex items-center justify-center shrink-0 active:scale-90 transition-all"
-              >
-                <Edit2 size={16} />
-              </button>
-            </div>
             )}
           </>
         )}
@@ -316,30 +315,29 @@ const ProfilePage = () => {
           {menuItems
             .filter((item) => linked || item.label !== 'My School')
             .map((item, index) => (
-            <button
-              key={index}
-              onClick={() => handleNavigation(item)}
-              className="w-full flex items-center justify-between p-3.5 hover:bg-[#F8F7FF] active:bg-[#F0EEFF] rounded-2xl transition-all group"
-            >
-              <div className="flex items-center gap-4">
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${item.color} group-hover:scale-105 transition-transform duration-300`}>
-                  {item.icon}
+              <button
+                key={index}
+                onClick={() => handleNavigation(item)}
+                className="w-full flex items-center justify-between p-3.5 hover:bg-[#F8F7FF] active:bg-[#F0EEFF] rounded-2xl transition-all group"
+              >
+                <div className="flex items-center gap-4">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${item.color} group-hover:scale-105 transition-transform duration-300`}>
+                    {item.icon}
+                  </div>
+                  <span className="text-sm font-bold text-gray-700">{item.label}</span>
                 </div>
-                <span className="text-sm font-bold text-gray-700">{item.label}</span>
-              </div>
-              <ChevronRight size={18} className="text-gray-300 group-hover:text-primary transition-colors" />
-            </button>
-          ))}
+                <ChevronRight size={18} className="text-gray-300 group-hover:text-primary transition-colors" />
+              </button>
+            ))}
         </div>
 
         {/* Auth Button */}
         <button
           onClick={handleAuthAction}
-          className={`w-full py-4 rounded-2xl text-sm font-black shadow-lg transition-all flex items-center justify-center gap-3 active:scale-95 ${
-            isGuest
+          className={`w-full py-4 rounded-2xl text-sm font-black shadow-lg transition-all flex items-center justify-center gap-3 active:scale-95 ${isGuest
               ? 'bg-primary text-white shadow-primary/10 hover:bg-deep-purple'
               : 'bg-white text-red-500 border border-red-100 shadow-red-100/10 hover:bg-red-50/50'
-          }`}
+            }`}
         >
           <LogOut size={18} />
           {isGuest ? 'Sign In to Account' : 'Sign Out'}

@@ -4,9 +4,9 @@ import {
   ArrowLeft, Search, Filter, ChevronDown, X,
   MoreVertical, RefreshCw, GraduationCap, Users, User,
   Calendar, CheckCircle, AlertCircle, Sparkles, Upload,
-  Download, Award, Shield, MapPin, Phone, Mail, Loader2, UserPlus, Edit2, Trash2, Camera
+  Download, Award, Shield, MapPin, Phone, Mail, Loader2, UserPlus, Edit2
 } from 'lucide-react';
-import { listStudents, registerStudent, updateStudent, deleteStudent, listClasses, updateStudentStatus, getAttendanceHistory, uploadSchoolFile } from '../../../services/schoolApi';
+import { listStudents, registerStudent, updateStudent, listClasses, updateStudentStatus, getAttendanceHistory } from '../../../services/schoolApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 import { mapStudentForList, formatClassLabel, calculateAge } from '../../../utils/mappers/schoolStudentMapper';
 import { useSchoolId } from '../../../utils/schoolContext';
@@ -424,17 +424,17 @@ const SchoolStudentsPage = () => {
   // Filter students based on all states combined
   const filteredStudents = students.filter(s => {
     // 1. Search Query
-    const matchesSearch = s.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          (s.id || '').toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          (s.rollNo || '').includes(searchQuery) ||
-                          (s.parentPhone || '').includes(searchQuery);
-    
+    const matchesSearch = s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (s.id || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (s.rollNo || '').includes(searchQuery) ||
+      (s.parentPhone || '').includes(searchQuery);
+
     // 2. Class Filter
     const matchesClass = selectedClass === 'All Classes' || s.classGrade === selectedClass;
 
     // 3. Section Filter
     const matchesSection = selectedSection === 'All Sections' || s.section === selectedSection;
-    
+
     // 4. Stat Tab Filter (All / Boys / Girls cards)
     let matchesStatTab = true;
     if (activeStatTab === 'Boys') {
@@ -460,11 +460,11 @@ const SchoolStudentsPage = () => {
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-50 pb-24 font-outfit">
-      
+
       {/* Sticky Banner Top Header */}
       <div className="bg-[#3b2d7d] text-white px-6 py-6 sticky top-0 z-50 rounded-b-[2rem] shadow-lg flex items-center justify-between shrink-0">
         <div className="flex items-center gap-4">
-          <button 
+          <button
             type="button"
             onClick={() => navigate('/school/more')}
             className="w-11 h-11 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 active:scale-95 transition-all text-white border border-white/10"
@@ -498,15 +498,14 @@ const SchoolStudentsPage = () => {
       {/* Metrics Row Grid exactly matching the design style */}
       <div className="px-6 pt-6">
         <div className="grid grid-cols-3 gap-3 w-full">
-          
+
           {/* Card 1: Total Students */}
-          <div 
+          <div
             onClick={() => setActiveStatTab('All')}
-            className={`p-3.5 rounded-2xl border text-center cursor-pointer transition-all active:scale-95 ${
-              activeStatTab === 'All' 
-                ? 'bg-purple-50/80 border-[#3b2d7d] text-[#3b2d7d] shadow-sm' 
+            className={`p-3.5 rounded-2xl border text-center cursor-pointer transition-all active:scale-95 ${activeStatTab === 'All'
+                ? 'bg-purple-50/80 border-[#3b2d7d] text-[#3b2d7d] shadow-sm'
                 : 'bg-white border-gray-200/80 text-deep-purple hover:bg-gray-50'
-            }`}
+              }`}
           >
             <div className="w-8 h-8 rounded-full bg-purple-50 text-[#3b2d7d] flex items-center justify-center mx-auto shrink-0 border border-purple-100">
               <Users size={15} />
@@ -516,13 +515,12 @@ const SchoolStudentsPage = () => {
           </div>
 
           {/* Card 2: Boys */}
-          <div 
+          <div
             onClick={() => setActiveStatTab('Boys')}
-            className={`p-3.5 rounded-2xl border text-center cursor-pointer transition-all active:scale-95 ${
-              activeStatTab === 'Boys' 
-                ? 'bg-blue-50/85 border-blue-500 text-blue-700 shadow-sm' 
+            className={`p-3.5 rounded-2xl border text-center cursor-pointer transition-all active:scale-95 ${activeStatTab === 'Boys'
+                ? 'bg-blue-50/85 border-blue-500 text-blue-700 shadow-sm'
                 : 'bg-white border-gray-200/80 text-deep-purple hover:bg-gray-50'
-            }`}
+              }`}
           >
             <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center mx-auto shrink-0 border border-blue-100">
               <User size={15} />
@@ -532,13 +530,12 @@ const SchoolStudentsPage = () => {
           </div>
 
           {/* Card 3: Girls */}
-          <div 
+          <div
             onClick={() => setActiveStatTab('Girls')}
-            className={`p-3.5 rounded-2xl border text-center cursor-pointer transition-all active:scale-95 ${
-              activeStatTab === 'Girls' 
-                ? 'bg-pink-50/85 border-pink-400 text-pink-600 shadow-sm' 
+            className={`p-3.5 rounded-2xl border text-center cursor-pointer transition-all active:scale-95 ${activeStatTab === 'Girls'
+                ? 'bg-pink-50/85 border-pink-400 text-pink-600 shadow-sm'
                 : 'bg-white border-gray-200/80 text-deep-purple hover:bg-gray-50'
-            }`}
+              }`}
           >
             <div className="w-8 h-8 rounded-full bg-pink-50 text-pink-500 flex items-center justify-center mx-auto shrink-0 border border-pink-100">
               <User size={15} />
@@ -552,11 +549,11 @@ const SchoolStudentsPage = () => {
 
       {/* Search & Selection Filter controls wrapper */}
       <div className="px-6 pt-6 space-y-4">
-        
+
         {/* Search bar & filter trigger button */}
         <div className="relative flex items-center w-full">
           <Search size={16} className="absolute left-4.5 text-gray-400" />
-          <input 
+          <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -567,7 +564,7 @@ const SchoolStudentsPage = () => {
 
         {/* Dropdowns lists block */}
         <div className="grid grid-cols-2 gap-3 text-xs">
-          
+
           {/* Dropdown 1: Class */}
           <div className="relative">
             <select
@@ -607,11 +604,11 @@ const SchoolStudentsPage = () => {
         <span className="text-[11px] font-bold text-gray-400">
           Showing 1 – {sortedStudents.length} of {totalCount} students
         </span>
-        
+
         {/* Sort Select options dropdown */}
         <div className="relative flex items-center gap-1.5 text-xs">
           <span className="text-gray-400 font-bold">Sort:</span>
-          <select 
+          <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value)}
             className="bg-transparent border-none font-black text-deep-purple focus:outline-none cursor-pointer pr-5"
@@ -635,23 +632,23 @@ const SchoolStudentsPage = () => {
         )}
 
         {!loading && sortedStudents.map((student) => (
-          <div 
+          <div
             key={student.id}
             onClick={() => setSelectedStudent(student)}
             className="bg-white border border-gray-200/80 rounded-[2rem] p-5 shadow-sm flex items-center justify-between gap-4 relative overflow-hidden cursor-pointer hover:border-purple-200 hover:shadow-md transition-all active:scale-[0.99]"
           >
             <div className="flex items-center gap-4 min-w-0">
               {/* Student avatar */}
-              <img 
+              <img
                 src={student.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(student.name)}&background=3b2d7d&color=fff`}
                 alt={student.name}
                 className="w-16 h-16 rounded-full object-cover border-2 border-purple-100 shadow-inner shrink-0"
               />
-              
+
               {/* Info Detail stack */}
               <div className="min-w-0 space-y-1">
                 <h3 className="text-sm font-black text-deep-purple leading-tight">{student.name}</h3>
-                
+
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] font-bold text-gray-400">
                   <span className="text-[#3b2d7d] font-black">{student.class}</span>
                   <span>•</span>
@@ -726,14 +723,14 @@ const SchoolStudentsPage = () => {
       {selectedStudent && (
         <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm transition-all duration-300 animate-in fade-in">
           <div className="w-full max-w-lg bg-white rounded-[2.2rem] shadow-2xl border border-gray-150 overflow-hidden animate-in zoom-in duration-300 relative flex flex-col max-h-[90vh]">
-            
+
             {/* Modal Header */}
             <div className="bg-gradient-to-r from-[#3b2d7d] to-[#5942bc] text-white px-6 py-5 relative flex items-center justify-between shrink-0">
               <div>
                 <h3 className="text-sm font-black tracking-wider uppercase">Student Profile Card</h3>
                 <span className="text-[10px] text-purple-200 font-bold block mt-0.5">{selectedStudent.class}</span>
               </div>
-              <button 
+              <button
                 onClick={() => setSelectedStudent(null)}
                 className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 active:scale-90 transition-all text-white border border-white/10"
               >
@@ -743,7 +740,7 @@ const SchoolStudentsPage = () => {
 
             {/* Modal Body */}
             <div className="p-6 overflow-y-auto space-y-6 scrollbar-none text-xs">
-              
+
               {/* Profile Card Header */}
               <div className="flex items-center gap-5 bg-purple-50/40 p-4 rounded-3xl border border-purple-150/40">
                 <img
@@ -872,7 +869,7 @@ const SchoolStudentsPage = () => {
 
               {/* Bio Grid */}
               <div className="space-y-4">
-                
+
                 {/* Personal particulars */}
                 <div className="bg-gray-50/50 p-4.5 rounded-2xl border border-gray-150 shadow-inner">
                   <h4 className="text-[9px] text-gray-400 font-black uppercase tracking-wider block font-bold mb-2">Personal Information</h4>
@@ -904,11 +901,10 @@ const SchoolStudentsPage = () => {
                             type="button"
                             onClick={() => !isCurrent && handleStatusChange(selectedStudent, option.value)}
                             disabled={statusSaving || isCurrent}
-                            className={`flex-1 py-2 rounded-xl text-[10px] font-black border transition-all active:scale-[0.98] disabled:opacity-60 ${
-                              isCurrent
+                            className={`flex-1 py-2 rounded-xl text-[10px] font-black border transition-all active:scale-[0.98] disabled:opacity-60 ${isCurrent
                                 ? 'bg-[#3b2d7d] border-[#3b2d7d] text-white'
                                 : 'bg-white border-gray-200 text-deep-purple hover:bg-gray-50'
-                            }`}
+                              }`}
                           >
                             {option.label}
                           </button>
@@ -985,7 +981,7 @@ const SchoolStudentsPage = () => {
                   Delete
                 </button>
               </div>
-              <button 
+              <button
                 onClick={() => setSelectedStudent(null)}
                 className="px-6 py-3 bg-[#3b2d7d] hover:bg-[#5942bc] text-white font-black rounded-2xl text-xs uppercase tracking-wider transition-all active:scale-95 shadow-md flex items-center justify-center gap-1.5"
               >
@@ -1085,7 +1081,7 @@ const SchoolStudentsPage = () => {
                     </span>
                   </div>
                 </div>
-                
+
                 <div>
                   <label className="block text-[11px] font-bold text-gray-700 mb-1">
                     Student Full Name <span className="text-red-500">*</span>

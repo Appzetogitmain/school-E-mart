@@ -264,7 +264,6 @@ const studentService = {
               address: payload.address,
               admissionDate: payload.admissionDate,
               previousSchool: payload.previousSchool,
-              avatarUrl: payload.avatarUrl,
               parentProfileIds: payload.parentProfileIds || [],
             },
             { session }
