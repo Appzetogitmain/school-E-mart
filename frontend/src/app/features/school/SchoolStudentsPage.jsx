@@ -4,7 +4,7 @@ import {
   ArrowLeft, Search, Filter, ChevronDown, X,
   MoreVertical, RefreshCw, GraduationCap, Users, User,
   Calendar, CheckCircle, AlertCircle, Sparkles, Upload,
-  Download, Award, Shield, MapPin, Phone, Mail, Loader2, UserPlus, Edit2, Trash2
+  Download, Award, Shield, MapPin, Phone, Mail, Loader2, UserPlus, Edit2, Trash2, Camera
 } from 'lucide-react';
 import { listStudents, registerStudent, updateStudent, listClasses, updateStudentStatus, getAttendanceHistory } from '../../../services/schoolApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
