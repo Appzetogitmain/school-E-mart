@@ -74,7 +74,7 @@ const SchoolStudentsPage = () => {
     const setForm = isEdit ? setEditForm : setAddForm;
     const setErrorState = isEdit ? setEditError : setAddError;
 
-    // Set immediate local data URL preview for seamless UI responsiveness
+    // Read local file as Data URL immediately so the preview is guaranteed to show
     const reader = new FileReader();
     reader.onload = () => {
       if (reader.result) {
@@ -89,7 +89,12 @@ const SchoolStudentsPage = () => {
       const attachment = await uploadSchoolFile(schoolId, file, 'profile_avatar');
       const storageKey = attachment?.url || attachment?.storageKey || attachment?.path || '';
       if (storageKey) {
-        setForm((prev) => ({ ...prev, avatarUrl: storageKey }));
+        // Keep uploaded remote path for submission
+        setForm((prev) => ({
+          ...prev,
+          avatarUrl: prev.avatarUrl && prev.avatarUrl.startsWith('data:') ? prev.avatarUrl : storageKey,
+          savedAvatarUrl: storageKey,
+        }));
       }
     } catch (err) {
       setErrorState(getErrorMessage(err, 'Failed to upload photo'));
@@ -316,7 +321,7 @@ const SchoolStudentsPage = () => {
         address: editForm.address.trim() || undefined,
         admissionDate: editForm.admissionDate ? new Date(editForm.admissionDate).toISOString() : undefined,
         previousSchool: editForm.previousSchool.trim() || undefined,
-        avatarUrl: editForm.avatarUrl || undefined,
+        avatarUrl: editForm.savedAvatarUrl || editForm.avatarUrl || undefined,
       };
 
       if (editForm.parentPhone && editForm.parentPhone.length === 10) {
@@ -410,7 +415,9 @@ const SchoolStudentsPage = () => {
       if (addForm.admissionDate) payload.admissionDate = addForm.admissionDate;
       if (addForm.previousSchool.trim()) payload.previousSchool = addForm.previousSchool.trim();
       if (addForm.admissionNo.trim()) payload.admissionNo = addForm.admissionNo.trim();
-      if (addForm.avatarUrl) payload.avatarUrl = addForm.avatarUrl;
+      if (addForm.savedAvatarUrl || addForm.avatarUrl) {
+        payload.avatarUrl = addForm.savedAvatarUrl || addForm.avatarUrl;
+      }
 
       await registerStudent(schoolId, payload);
       setAddSuccess(true);

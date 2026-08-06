@@ -1,6 +1,6 @@
 const parsePagination = (query = {}, defaults = {}) => {
   const page = Math.max(1, Number.parseInt(query.page, 10) || defaults.page || 1);
-  const maxLimit = defaults.maxLimit || 100;
+  const maxLimit = defaults.maxLimit || 10000;
   const limit = Math.min(
     maxLimit,
     Math.max(1, Number.parseInt(query.limit, 10) || defaults.limit || 20)
