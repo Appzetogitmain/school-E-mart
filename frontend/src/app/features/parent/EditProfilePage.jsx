@@ -239,7 +239,9 @@ const EditProfilePage = () => {
           </div>
           <div className="text-center">
             <h2 className="text-lg font-black text-deep-purple">{formData.studentName || "New Student"}</h2>
-            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-[0.2em]">Parent Portal Account</p>
+            <p className="text-[10px] text-primary font-black uppercase tracking-[0.15em] bg-purple-50 px-3 py-1 rounded-full inline-block mt-1">
+              Student Profile Picture
+            </p>
           </div>
         </div>
 

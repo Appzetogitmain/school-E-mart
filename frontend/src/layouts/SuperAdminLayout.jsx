@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Layers, Box, Users, MapPin, Ticket, Truck,
   ChevronDown, ChevronRight, Search, Bell, User, LogOut, Menu, X, ShieldAlert,
   ArrowLeftRight, Wallet, TrendingUp, Coins, HelpCircle, ShoppingCart, Clock, CheckCircle,
-  FileText, Flag, XCircle, Package, Home, Store, Image, IndianRupee, Video, GraduationCap, School, Phone
+  FileText, Flag, XCircle, Package, Home, Store, Image, IndianRupee, Video, GraduationCap, School, Phone, MonitorPlay
 } from 'lucide-react';
 import useAuthStore from '../store/useAuthStore';
 
@@ -198,6 +198,12 @@ const SuperAdminLayout = () => {
       label: 'LMS',
       icon: GraduationCap,
       path: '/superadmin/lms'
+    },
+    {
+      type: 'item',
+      label: 'Platform Tutorials',
+      icon: MonitorPlay,
+      path: '/superadmin/tutorials'
     },
     {
       type: 'item',

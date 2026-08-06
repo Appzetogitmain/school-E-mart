@@ -566,6 +566,23 @@ router.delete(
   adminController.deleteReel
 );
 
+// Platform Tutorials ("Learn more about platform")
+router.get('/tutorials', ...adminOnly, validateQuery(validators.paginationQuery), adminController.listTutorials);
+router.post('/tutorials', ...adminOnly, validateBody(validators.tutorialSchema), adminController.createTutorial);
+router.patch(
+  '/tutorials/:tutorialId',
+  ...adminOnly,
+  validateParams(validators.tutorialIdParam),
+  validateBody(validators.updateTutorialSchema),
+  adminController.updateTutorial
+);
+router.delete(
+  '/tutorials/:tutorialId',
+  ...adminOnly,
+  validateParams(validators.tutorialIdParam),
+  adminController.deleteTutorial
+);
+
 // Wallet & Payouts
 router.get('/wallet/overview', ...adminOnly, adminController.getWalletOverview);
 router.get(

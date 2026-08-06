@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, ShieldAlert, Upload, User, Phone,
   Mail, MapPin, Briefcase, Lock, CheckCircle2, ChevronRight,
-  Save, X, Loader2, LogOut, Building2
+  Save, X, Loader2, LogOut, Building2, MonitorPlay
 } from 'lucide-react';
 import { updateTeacher, getSchool, uploadSchoolFile } from '../../../services/schoolApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
@@ -621,6 +621,22 @@ const TeacherProfile = () => {
                   <ChevronRight size={16} className="text-gray-400" />
                 </div>
               </div>
+
+              {/* Row 2b — Learn More About Platform */}
+              <button
+                type="button"
+                onClick={() => navigate('/school/teacher/learn-platform')}
+                className="w-full py-3.5 px-2 flex items-center justify-between border-b border-gray-50 hover:bg-gray-50 active:scale-[0.99] transition-all rounded-xl text-left"
+              >
+                <div className="flex items-center gap-3">
+                  <MonitorPlay size={16} className="text-gray-450 shrink-0" />
+                  <div>
+                    <span className="text-xs font-black text-deep-purple block leading-tight">Learn More About Platform</span>
+                    <span className="text-[9px] text-gray-450 font-bold block mt-0.5">Watch tutorial videos on how the portal works</span>
+                  </div>
+                </div>
+                <ChevronRight size={16} className="text-gray-400" />
+              </button>
 
               {/* Row 3 — Log Out */}
               <button

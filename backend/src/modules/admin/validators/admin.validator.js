@@ -159,6 +159,34 @@ const reelSchema = Joi.object({
 
 const updateReelSchema = reelSchema.fork(['title', 'videoId'], (s) => s.optional());
 
+const tutorialIdParam = Joi.object({ tutorialId: objectId.required() });
+
+const tutorialSchema = Joi.object({
+  title: Joi.string().trim().min(1).max(200).required(),
+  description: Joi.string().trim().max(2000).allow('').optional(),
+  videoId: objectId.required(),
+  thumbnailId: objectId.optional(),
+  durationSec: Joi.number().min(0).optional(),
+  targetAudience: Joi.string().valid('all', 'parent', 'teacher', 'school').default('all'),
+  order: Joi.number().integer().min(0).default(0),
+  status: Joi.string().valid('draft', 'published', 'archived').default('draft'),
+});
+
+// A plain .fork(...).optional() still carries each field's .default(), so an
+// admin patching just `targetAudience` would silently reset `status` back to
+// 'draft' and `order` back to 0 on every omitted field. Drop the defaults
+// entirely for the update schema so PATCH only ever touches what's sent.
+const updateTutorialSchema = Joi.object({
+  title: Joi.string().trim().min(1).max(200).optional(),
+  description: Joi.string().trim().max(2000).allow('').optional(),
+  videoId: objectId.optional(),
+  thumbnailId: objectId.optional(),
+  durationSec: Joi.number().min(0).optional(),
+  targetAudience: Joi.string().valid('all', 'parent', 'teacher', 'school').optional(),
+  order: Joi.number().integer().min(0).optional(),
+  status: Joi.string().valid('draft', 'published', 'archived').optional(),
+});
+
 const sectionSchema = Joi.object({
   title: Joi.string().trim().min(1).max(200).required(),
   type: Joi.string()
@@ -417,6 +445,9 @@ module.exports = {
   updateBannerSchema,
   reelSchema,
   updateReelSchema,
+  tutorialIdParam,
+  tutorialSchema,
+  updateTutorialSchema,
   sectionSchema,
   updateSectionSchema,
   landingContentSchema,

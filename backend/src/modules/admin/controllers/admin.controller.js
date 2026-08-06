@@ -12,6 +12,7 @@ const settingsService = require('../services/settings.service');
 const adminLmsService = require('../services/lms.service');
 const attachmentService = require('../services/attachment.service');
 const reelsService = require('../services/reels.service');
+const tutorialsService = require('../services/tutorials.service');
 const walletService = require('../services/wallet.service');
 const notificationCampaignService = require('../services/notificationCampaign.service');
 const adminProfileService = require('../services/adminProfile.service');
@@ -594,6 +595,27 @@ const adminController = {
   deleteReel: asyncHandler(async (req, res) => {
     await reelsService.deleteReel(req.params.reelId, req.auth.userId);
     return success(res, null, 'Reel deleted', undefined, req);
+  }),
+
+  // Platform Tutorials ("Learn more about platform")
+  listTutorials: asyncHandler(async (req, res) => {
+    const { data, pagination } = await tutorialsService.listTutorials(req.query);
+    return paginated(res, { tutorials: data }, pagination, 'Tutorials fetched', req);
+  }),
+
+  createTutorial: asyncHandler(async (req, res) => {
+    const tutorial = await tutorialsService.createTutorial(req.body);
+    return created(res, { tutorial }, 'Tutorial created', req);
+  }),
+
+  updateTutorial: asyncHandler(async (req, res) => {
+    const tutorial = await tutorialsService.updateTutorial(req.params.tutorialId, req.body);
+    return success(res, { tutorial }, 'Tutorial updated', undefined, req);
+  }),
+
+  deleteTutorial: asyncHandler(async (req, res) => {
+    await tutorialsService.deleteTutorial(req.params.tutorialId, req.auth.userId);
+    return success(res, null, 'Tutorial deleted', undefined, req);
   }),
 
   // Wallet & payouts

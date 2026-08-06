@@ -5,7 +5,7 @@ import {
   ShoppingBag, Search, UserPlus,
   Wallet, Phone, Info, LogOut, ChevronRight,
   GraduationCap, CalendarCheck, BookOpen, FileText, Bell,
-  Hash, Check, Loader2, Users,
+  Hash, Check, Loader2, Users, MonitorPlay,
 } from 'lucide-react';
 import AuthPrompt from '../../components/AuthPrompt';
 import useAuthStore from '../../../store/useAuthStore';
@@ -96,6 +96,7 @@ const ProfilePage = () => {
     { icon: <Search size={20} />, label: 'My Products', to: '/user/products', color: 'text-orange-500 bg-orange-50' },
     { icon: <Wallet size={20} />, label: 'Wallet', to: '/user/wallet', protected: true, color: 'text-[#E04F5F] bg-[#FFF0F2]' },
     { icon: <UserPlus size={20} />, label: 'Refer & Earn', to: '/user/refer', protected: true, color: 'text-amber-500 bg-amber-50' },
+    { icon: <MonitorPlay size={20} />, label: 'Learn More About Platform', to: '/user/learn-platform', protected: true, color: 'text-cyan-600 bg-cyan-50' },
     { icon: <Phone size={20} />, label: 'Contact us', to: '/user/contact', color: 'text-teal-500 bg-teal-50' },
     { icon: <Info size={20} />, label: 'About Us', to: '/user/about', color: 'text-gray-500 bg-gray-50' },
   ];
@@ -286,8 +287,8 @@ const ProfilePage = () => {
             {linked && (
             <div className="bg-white rounded-3xl p-4 shadow-sm border border-gray-100/50 flex items-center gap-4">
               <div className="w-12 h-12 rounded-2xl bg-[#F4EBFF] text-deep-purple flex items-center justify-center shrink-0 overflow-hidden">
-                {data?.profile?.avatarUrl ? (
-                  <img src={toAbsoluteUrl(data.profile.avatarUrl)} alt={parentName} className="w-full h-full object-cover" />
+                {(childProfile?.photo || childProfile?.avatarUrl) ? (
+                  <img src={toAbsoluteUrl(childProfile.photo || childProfile.avatarUrl)} alt={studentName} className="w-full h-full object-cover" />
                 ) : (
                   <User size={22} />
                 )}

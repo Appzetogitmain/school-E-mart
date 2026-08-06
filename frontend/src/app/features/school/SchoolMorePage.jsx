@@ -5,7 +5,7 @@ import {
   ChevronRight, IndianRupee, Megaphone, Package, ShoppingCart,
   Store, Clipboard, Sliders, User, Building, HelpCircle, Key,
   Heart, Search, Wallet, UserPlus, Phone, Info, LogOut, Layers,
-  Loader2, BookOpen
+  Loader2, BookOpen, MonitorPlay
 } from 'lucide-react';
 import AuthPrompt from '../../components/AuthPrompt';
 import useAuthStore from '../../../store/useAuthStore';
@@ -281,6 +281,14 @@ const SchoolMorePage = () => {
     {
       title: 'Help & Support',
       items: [
+        {
+          title: 'Learn More About Platform',
+          desc: 'Watch tutorial videos on how the school portal works',
+          icon: <MonitorPlay className="text-cyan-600 stroke-[2.5]" size={18} />,
+          bg: 'bg-cyan-50',
+          path: '/school/learn-platform',
+          protected: true
+        },
         {
           title: 'Contact Us',
           desc: 'Get in touch with relationship manager',

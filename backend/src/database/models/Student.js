@@ -26,6 +26,7 @@ const studentSchema = new mongoose.Schema({
   address: { type: String },
   admissionDate: { type: Date },
   previousSchool: { type: String },
+  avatarUrl: { type: String },
   parentProfileIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'ParentProfile' }]
 }, { collection: 'students' });
 

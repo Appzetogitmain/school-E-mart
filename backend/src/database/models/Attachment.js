@@ -10,7 +10,8 @@ const attachmentSchema = new mongoose.Schema({
       'profile_avatar', 'product_image', 'kit_image', 'uniform_set_image',
       'homework_attachment', 'submission', 'diary_attachment', 'notice_attachment',
       'return_proof', 'rfq_attachment', 'reel_video', 'reel_thumb',
-      'lms_video', 'lms_thumb', 'banner_image', 'category_image', 'kyc_doc'
+      'lms_video', 'lms_thumb', 'banner_image', 'category_image', 'kyc_doc',
+      'tutorial_video', 'tutorial_thumb'
     ],
     required: true
   },

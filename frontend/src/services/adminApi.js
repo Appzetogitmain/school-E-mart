@@ -248,6 +248,27 @@ export const deleteReel = async (reelId) => {
   return unwrapData(response);
 };
 
+// Platform Tutorials ("Learn more about platform")
+export const listTutorials = async (params = {}) => {
+  const response = await apiClient.get('/admin/tutorials', { params });
+  return extractPaginated(response, 'tutorials');
+};
+
+export const createTutorial = async (payload) => {
+  const response = await apiClient.post('/admin/tutorials', payload);
+  return unwrapData(response)?.tutorial;
+};
+
+export const updateTutorial = async (tutorialId, payload) => {
+  const response = await apiClient.patch(`/admin/tutorials/${tutorialId}`, payload);
+  return unwrapData(response)?.tutorial;
+};
+
+export const deleteTutorial = async (tutorialId) => {
+  const response = await apiClient.delete(`/admin/tutorials/${tutorialId}`);
+  return unwrapData(response);
+};
+
 export const listMasterKitProducts = async (params = {}) => {
   const response = await apiClient.get('/admin/kit-products', { params });
   return extractPaginated(response, 'products');

@@ -4,12 +4,13 @@ import {
   ArrowLeft, Search, Filter, ChevronDown, X,
   MoreVertical, RefreshCw, GraduationCap, Users, User,
   Calendar, CheckCircle, AlertCircle, Sparkles, Upload,
-  Download, Award, Shield, MapPin, Phone, Mail, Loader2, UserPlus, Edit2, Trash2
+  Download, Award, Shield, MapPin, Phone, Mail, Loader2, UserPlus, Edit2, Trash2, Camera
 } from 'lucide-react';
-import { listStudents, registerStudent, updateStudent, deleteStudent, listClasses, updateStudentStatus, getAttendanceHistory } from '../../../services/schoolApi';
+import { listStudents, registerStudent, updateStudent, deleteStudent, listClasses, updateStudentStatus, getAttendanceHistory, uploadSchoolFile } from '../../../services/schoolApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 import { mapStudentForList, formatClassLabel, calculateAge } from '../../../utils/mappers/schoolStudentMapper';
 import { useSchoolId } from '../../../utils/schoolContext';
+import { toAbsoluteUrl } from '../../../utils/url';
 
 const SchoolStudentsPage = () => {
   const navigate = useNavigate();
@@ -41,7 +42,11 @@ const SchoolStudentsPage = () => {
     parentPhone: '',
     parentEmail: '',
     admissionNo: '',
+    avatarUrl: '',
   };
+  const [addUploadingPhoto, setAddUploadingPhoto] = useState(false);
+  const [editUploadingPhoto, setEditUploadingPhoto] = useState(false);
+
   const [showAddModal, setShowAddModal] = useState(false);
   const [addForm, setAddForm] = useState(emptyForm);
   const [addErrors, setAddErrors] = useState({});
@@ -57,6 +62,32 @@ const SchoolStudentsPage = () => {
   const [editSubmitting, setEditSubmitting] = useState(false);
   const [editError, setEditError] = useState('');
   const [editSuccess, setEditSuccess] = useState(false);
+
+  const handleFileUpload = async (file, isEdit = false) => {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      if (isEdit) setEditError('Please select a valid image file');
+      else setAddError('Please select a valid image file');
+      return;
+    }
+    const setUploading = isEdit ? setEditUploadingPhoto : setAddUploadingPhoto;
+    const setForm = isEdit ? setEditForm : setAddForm;
+    const setErrorState = isEdit ? setEditError : setAddError;
+
+    setUploading(true);
+    setErrorState('');
+    try {
+      const attachment = await uploadSchoolFile(schoolId, file, 'profile_avatar');
+      const storageKey = attachment?.storageKey || attachment?.url || attachment?.path || '';
+      if (storageKey) {
+        setForm((prev) => ({ ...prev, avatarUrl: storageKey }));
+      }
+    } catch (err) {
+      setErrorState(getErrorMessage(err, 'Failed to upload photo'));
+    } finally {
+      setUploading(false);
+    }
+  };
 
   // Detailed Attendance state for selected student
   const [studentAttendanceLogs, setStudentAttendanceLogs] = useState([]);
@@ -233,6 +264,7 @@ const SchoolStudentsPage = () => {
       parentPhone: student.parentPhone !== '—' ? student.parentPhone : '',
       parentEmail: student.parentEmail !== '—' ? student.parentEmail : '',
       admissionNo: raw.admissionNo || '',
+      avatarUrl: raw.avatarUrl || '',
     });
     setEditErrors({});
     setEditError('');
@@ -275,6 +307,7 @@ const SchoolStudentsPage = () => {
         address: editForm.address.trim() || undefined,
         admissionDate: editForm.admissionDate ? new Date(editForm.admissionDate).toISOString() : undefined,
         previousSchool: editForm.previousSchool.trim() || undefined,
+        avatarUrl: editForm.avatarUrl || undefined,
       };
 
       if (editForm.parentPhone && editForm.parentPhone.length === 10) {
@@ -368,6 +401,7 @@ const SchoolStudentsPage = () => {
       if (addForm.admissionDate) payload.admissionDate = addForm.admissionDate;
       if (addForm.previousSchool.trim()) payload.previousSchool = addForm.previousSchool.trim();
       if (addForm.admissionNo.trim()) payload.admissionNo = addForm.admissionNo.trim();
+      if (addForm.avatarUrl) payload.avatarUrl = addForm.avatarUrl;
 
       await registerStudent(schoolId, payload);
       setAddSuccess(true);
@@ -1007,6 +1041,50 @@ const SchoolStudentsPage = () => {
                 <span className="text-[10px] font-black text-[#3b2d7d] uppercase tracking-wider block">
                   1. Student Particulars
                 </span>
+
+                {/* Profile Photo Upload Field */}
+                <div className="flex items-center gap-4 bg-white p-3 rounded-xl border border-gray-200">
+                  <div className="relative shrink-0">
+                    <img
+                      src={editForm.avatarUrl ? toAbsoluteUrl(editForm.avatarUrl) : `https://ui-avatars.com/api/?name=${encodeURIComponent(editForm.name || 'Student')}&background=3b2d7d&color=fff`}
+                      alt="Student Profile"
+                      className="w-14 h-14 rounded-full object-cover border-2 border-purple-100 shadow-sm"
+                    />
+                    {editUploadingPhoto && (
+                      <div className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center">
+                        <Loader2 size={16} className="text-white animate-spin" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <label className="block text-[11px] font-bold text-gray-700 mb-1">Profile Photo</label>
+                    <div className="flex items-center gap-2">
+                      <label className="cursor-pointer px-3 py-1.5 bg-purple-50 hover:bg-purple-100 text-[#3b2d7d] border border-purple-200 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5">
+                        <Camera size={13} />
+                        <span>{editUploadingPhoto ? 'Uploading…' : 'Upload Photo'}</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0], true)}
+                          disabled={editUploadingPhoto}
+                          className="hidden"
+                        />
+                      </label>
+                      {editForm.avatarUrl && (
+                        <button
+                          type="button"
+                          onClick={() => handleEditFormChange('avatarUrl', '')}
+                          className="px-2.5 py-1.5 text-red-600 hover:bg-red-50 rounded-lg text-xs font-bold transition-all"
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                    <span className="text-[10px] text-gray-400 font-bold block mt-1">
+                      Allowed JPG, PNG or WEBP (Max 5MB)
+                    </span>
+                  </div>
+                </div>
                 
                 <div>
                   <label className="block text-[11px] font-bold text-gray-700 mb-1">
@@ -1284,6 +1362,50 @@ const SchoolStudentsPage = () => {
                     <span className="w-5 h-5 rounded-lg bg-[#3b2d7d] text-white flex items-center justify-center text-[9px] font-black shrink-0">1</span>
                     <h4 className="text-[10px] text-[#3b2d7d] font-black uppercase tracking-widest">Student Details</h4>
                     <div className="flex-1 h-px bg-purple-100" />
+                  </div>
+
+                  {/* Profile Photo Upload */}
+                  <div className="flex items-center gap-4 bg-purple-50/40 p-3 rounded-2xl border border-purple-100">
+                    <div className="relative shrink-0">
+                      <img
+                        src={addForm.avatarUrl ? toAbsoluteUrl(addForm.avatarUrl) : `https://ui-avatars.com/api/?name=${encodeURIComponent(addForm.name || 'New Student')}&background=3b2d7d&color=fff`}
+                        alt="Student Avatar"
+                        className="w-14 h-14 rounded-full object-cover border-2 border-purple-200 shadow-sm"
+                      />
+                      {addUploadingPhoto && (
+                        <div className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center">
+                          <Loader2 size={16} className="text-white animate-spin" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-1">
+                      <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider block mb-1">Student Profile Picture</label>
+                      <div className="flex items-center gap-2">
+                        <label className="cursor-pointer px-3 py-1.5 bg-white hover:bg-purple-50 text-[#3b2d7d] border border-purple-200 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm">
+                          <Camera size={13} />
+                          <span>{addUploadingPhoto ? 'Uploading…' : 'Upload Photo'}</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0], false)}
+                            disabled={addUploadingPhoto}
+                            className="hidden"
+                          />
+                        </label>
+                        {addForm.avatarUrl && (
+                          <button
+                            type="button"
+                            onClick={() => handleAddFormChange('avatarUrl', '')}
+                            className="px-2.5 py-1.5 text-red-600 hover:bg-red-50 rounded-xl text-xs font-bold transition-all"
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                      <span className="text-[10px] text-gray-400 font-bold block mt-1">
+                        Optional (JPG, PNG or WEBP up to 5MB)
+                      </span>
+                    </div>
                   </div>
 
                   <div>

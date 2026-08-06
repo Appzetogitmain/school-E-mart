@@ -136,6 +136,7 @@ const createStudentSchema = Joi.object({
   address: Joi.string().trim().max(500).optional().allow('', null),
   admissionDate: Joi.date().optional(),
   previousSchool: Joi.string().trim().max(120).optional().allow('', null),
+  avatarUrl: Joi.string().trim().allow('', null).optional(),
   parentUserId: objectId.optional(),
   parentProfileIds: Joi.array().items(objectId).optional(),
   // Parent contact is mandatory at enrollment: the parent's mobile becomes the

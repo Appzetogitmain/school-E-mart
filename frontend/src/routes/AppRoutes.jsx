@@ -60,6 +60,7 @@ const ParentCalendar = React.lazy(() => import('../app/features/parent/ParentCal
 const ParentPhonebook = React.lazy(() => import('../app/features/parent/ParentPhonebook'));
 const ParentReels = React.lazy(() => import('../app/features/parent/ParentReels'));
 const ParentLearningHubAll = React.lazy(() => import('../app/features/parent/ParentLearningHubAll'));
+const LearnPlatformPage = React.lazy(() => import('../app/features/parent/LearnPlatformPage'));
 const SchoolHome = React.lazy(() => import('../app/features/school/SchoolHome'));
 const SchoolGradePage = React.lazy(() => import('../app/features/school/SchoolGradePage'));
 const SchoolCategoryPage = React.lazy(() => import('../app/features/school/SchoolCategoryPage'));
@@ -95,6 +96,7 @@ const SchoolChangePasswordPage = React.lazy(() => import('../app/features/school
 const SchoolAddClass = React.lazy(() => import('../app/features/school/SchoolAddClass'));
 const SchoolTeacherAssignments = React.lazy(() => import('../app/features/school/SchoolTeacherAssignments'));
 const SchoolPhonebookPage = React.lazy(() => import('../app/features/school/SchoolPhonebookPage'));
+const SchoolLearnPlatformPage = React.lazy(() => import('../app/features/school/SchoolLearnPlatformPage'));
 
 
 // Teacher App Components
@@ -108,6 +110,7 @@ const TeacherProfile = React.lazy(() => import('../app/features/teacher/TeacherP
 const TeacherNotifications = React.lazy(() => import('../app/features/teacher/TeacherNotifications'));
 const TeacherCheckHomework = React.lazy(() => import('../app/features/teacher/TeacherCheckHomework'));
 const TeacherManageHomework = React.lazy(() => import('../app/features/teacher/TeacherManageHomework'));
+const TeacherLearnPlatformPage = React.lazy(() => import('../app/features/teacher/TeacherLearnPlatformPage'));
 
 // Vendor Panel Components
 const VendorLayout = React.lazy(() => import('../layouts/VendorLayout'));
@@ -142,6 +145,7 @@ const FAQManagement = React.lazy(() => import('../app/features/superadmin/FAQMan
 const OrdersListManagement = React.lazy(() => import('../app/features/superadmin/OrdersListManagement'));
 const PromoHomeSections = React.lazy(() => import('../app/features/superadmin/PromoHomeSections'));
 const ReelsManagement = React.lazy(() => import('../app/features/superadmin/ReelsManagement'));
+const PlatformTutorialsManagement = React.lazy(() => import('../app/features/superadmin/PlatformTutorialsManagement'));
 const LMSManagement = React.lazy(() => import('../app/features/superadmin/LMSManagement'));
 const PromoHomeBanners = React.lazy(() => import('../app/features/superadmin/PromoHomeBanners'));
 const BillingChargesManagement = React.lazy(() => import('../app/features/superadmin/BillingChargesManagement'));
@@ -242,6 +246,7 @@ const AppRoutes = () => {
           <Route path="orders-returned" element={<div className="p-6 bg-white rounded-3xl border border-gray-200 shadow-sm leading-relaxed"><h1 className="text-xl font-black text-gray-900 font-sans">Returned Items</h1><p className="text-sm text-gray-500 mt-2 font-sans">Process store returns, replacements, and merchant stock corrections.</p></div>} />
           <Route path="promo-home-section" element={<PromoHomeSections />} />
           <Route path="reels" element={<ReelsManagement />} />
+          <Route path="tutorials" element={<PlatformTutorialsManagement />} />
           <Route path="lms" element={<LMSManagement />} />
           <Route path="promo-home-banners" element={<PromoHomeBanners />} />
           <Route path="setting-billing-charges" element={<BillingChargesManagement />} />
@@ -324,6 +329,7 @@ const AppRoutes = () => {
             <Route path="calendar" element={<ParentCalendar />} />
             <Route path="phonebook" element={<ParentPhonebook />} />
             <Route path="profile" element={<ProfilePage />} />
+            <Route path="learn-platform" element={<LearnPlatformPage />} />
           </Route>
         </Route>
 
@@ -371,6 +377,7 @@ const AppRoutes = () => {
             <Route path="checkout" element={<SchoolCheckoutPage />} />
             <Route path="kit/:kitId" element={<SchoolKitDetailsPage />} />
             <Route path="product/:productId" element={<ProductDetailsPage />} />
+            <Route path="learn-platform" element={<SchoolLearnPlatformPage />} />
           </Route>
         </Route>
 
@@ -389,6 +396,7 @@ const AppRoutes = () => {
             <Route path="send-notice" element={<SchoolSendNotice />} />
             <Route path="profile" element={<TeacherProfile />} />
             <Route path="notifications" element={<TeacherNotifications />} />
+            <Route path="learn-platform" element={<TeacherLearnPlatformPage />} />
           </Route>
         </Route>
 

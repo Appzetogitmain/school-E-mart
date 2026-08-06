@@ -267,6 +267,15 @@ const usersService = {
           if (child) {
             child.avatarUrl = savedPhotoUrl;
             await child.save();
+
+            // Synchronize photo to Student model if child is linked to school student record
+            if (child.studentId) {
+              const Student = require('../../../database/models/Student');
+              await Student.updateOne(
+                { _id: child.studentId, 'softDelete.isDeleted': { $ne: true } },
+                { $set: { avatarUrl: savedPhotoUrl } }
+              );
+            }
           }
           if (parentProfile) {
             parentProfile.avatarUrl = savedPhotoUrl;

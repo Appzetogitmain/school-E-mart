@@ -5,10 +5,12 @@ import {
   ChevronDown, Bell, Sparkles, Package,
   Shirt, Book, PenTool, Footprints,
   ArrowRight, Star, ShoppingCart, Filter, Play,
-  Grid, Layout, CheckCircle2, BookOpen, Check
+  Grid, Layout, CheckCircle2, BookOpen, Check, Trophy
 } from 'lucide-react';
 import AppHeader from '../../components/AppHeader';
 import { getAttendanceHistory, fetchParentHomework, listParentNotices } from '../../../services/parentApi';
+import { listKits } from '../../../services/schoolApi';
+import { listOrders } from '../../../services/ordersApi';
 import { toLocalDateKey } from '../../../utils/date';
 import { buildHomeworkStats, mapAssignmentForParentHomework } from '../../../utils/mappers/parentMapper';
 import ProductCard from '../../components/ProductCard';
@@ -68,6 +70,65 @@ const ParentHome = () => {
   const [todayAttendance, setTodayAttendance] = useState(null);
   const [pendingHomeworkCount, setPendingHomeworkCount] = useState(0);
   const [noticeAlerts, setNoticeAlerts] = useState([]);
+  const [kitStats, setKitStats] = useState({ totalKits: 0, purchasedCount: 0, remainingCount: 0, progressPercent: 0 });
+
+  useEffect(() => {
+    const loadKitsReadiness = async () => {
+      const { schoolId } = getResolvedContext();
+      if (!schoolId || schoolId === 'explore-schools' || isGuest) {
+        setKitStats({ totalKits: 0, purchasedCount: 0, remainingCount: 0, progressPercent: 0 });
+        return;
+      }
+      try {
+        const purchasedSet = new Set();
+        try {
+          const { data: ordersData } = await listOrders({ limit: 100 });
+          const validOrders = (ordersData || []).filter((o) => {
+            const isCancelled = ['cancelled', 'returned'].includes(o.status || o.orderStatus);
+            const isPaid = ['paid', 'authorized'].includes(o.paymentStatus) || o.paymentMethod === 'cod';
+            return !isCancelled && isPaid;
+          });
+          validOrders.forEach((order) => {
+            (order.items || []).forEach((item) => {
+              if (item.kitId) purchasedSet.add(String(item.kitId));
+              if (item.productId) purchasedSet.add(String(item.productId));
+            });
+          });
+        } catch {
+          // ignore order fetch error
+        }
+
+        const { data: rawKits } = await listKits(schoolId, { status: 'active', limit: 100 });
+
+        const matchesStudentGrade = (kitClasses, sGrade) => {
+          if (!sGrade || sGrade === 'Select Grade') return true;
+          const kGrade = String(kitClasses || '').toLowerCase().trim();
+          const studentG = String(sGrade).toLowerCase().trim();
+          if (!kGrade || kGrade === 'all' || kGrade === 'all classes') return true;
+          const kitNum = kGrade.match(/\d+/)?.[0];
+          const studentNum = studentG.match(/\d+/)?.[0];
+          if (kitNum && studentNum) return kitNum === studentNum;
+          return kGrade.includes(studentG) || studentG.includes(kGrade);
+        };
+
+        const classKits = (rawKits || []).filter((k) => matchesStudentGrade(k.classGrade, childInfo?.grade));
+        const total = classKits.length;
+        const purchased = classKits.filter((k) => purchasedSet.has(String(k._id)) || purchasedSet.has(String(k.id))).length;
+        const remaining = Math.max(0, total - purchased);
+        const percent = total > 0 ? Math.round((purchased / total) * 100) : 0;
+
+        setKitStats({
+          totalKits: total,
+          purchasedCount: purchased,
+          remainingCount: remaining,
+          progressPercent: percent,
+        });
+      } catch {
+        setKitStats({ totalKits: 0, purchasedCount: 0, remainingCount: 0, progressPercent: 0 });
+      }
+    };
+    loadKitsReadiness();
+  }, [childInfo]);
 
   useEffect(() => {
     const handleUpdate = () => {
@@ -338,6 +399,76 @@ const ParentHome = () => {
                   </p>
                 </button>
               ))}
+            </div>
+          </div>
+        )}
+
+        {/* Gamification Procurement Readiness Card (Matching MySchool page) */}
+        {!isGuest && (
+          <div className="px-6 mt-6">
+            <div className="bg-gradient-to-br from-[#3b2d7d] via-[#4a3a99] to-[#2c2060] rounded-[2.5rem] p-6 sm:p-7 text-white shadow-xl shadow-purple-900/15 relative overflow-hidden">
+              {/* Decorative background blurs */}
+              <div className="absolute -right-10 -bottom-10 w-44 h-44 bg-purple-400/20 rounded-full blur-2xl pointer-events-none" />
+              <div className="absolute right-12 top-0 w-24 h-24 bg-amber-400/15 rounded-full blur-xl pointer-events-none" />
+
+              <div className="relative z-10 space-y-5">
+                {/* Header line */}
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-center gap-3.5">
+                    <div className="w-12 h-12 bg-white/15 rounded-2xl flex items-center justify-center backdrop-blur-md text-amber-300 border border-white/20 shadow-inner shrink-0">
+                      <Trophy size={24} />
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-black text-purple-200 uppercase tracking-widest block">
+                        {childInfo.grade || 'Class Procurement'}
+                      </span>
+                      <h2 className="text-lg font-black tracking-tight text-white leading-none">
+                        Procurement Readiness
+                      </h2>
+                    </div>
+                  </div>
+
+                  {kitStats.totalKits > 0 && kitStats.purchasedCount === kitStats.totalKits && (
+                    <span className="px-3 py-1 bg-emerald-400 text-emerald-950 text-[10px] font-black uppercase tracking-wider rounded-full shadow-md shrink-0 flex items-center gap-1">
+                      <CheckCircle2 size={13} className="stroke-[3]" /> 100% Ready
+                    </span>
+                  )}
+                </div>
+
+                {/* Progress Bar Container */}
+                <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/15 space-y-3">
+                  <div className="flex items-center justify-between text-xs font-bold">
+                    <span className="text-purple-100 flex items-center gap-1.5 font-extrabold">
+                      <Sparkles size={14} className="text-amber-300" />
+                      <span>{kitStats.purchasedCount} of {kitStats.totalKits} Kits Purchased</span>
+                    </span>
+                    <span className="text-amber-300 font-black text-sm">{kitStats.progressPercent}%</span>
+                  </div>
+
+                  {/* Smooth Progress Bar */}
+                  <div className="w-full h-3 bg-black/25 rounded-full overflow-hidden p-0.5 border border-white/10">
+                    <div
+                      className="h-full bg-gradient-to-r from-amber-400 via-amber-300 to-emerald-400 rounded-full transition-all duration-1000 shadow-sm"
+                      style={{ width: `${kitStats.progressPercent}%` }}
+                    />
+                  </div>
+
+                  {/* Gamification Motivation Text */}
+                  <div className="text-[11px] font-bold text-purple-100 flex items-center justify-between pt-0.5">
+                    {kitStats.totalKits === 0 ? (
+                      <span>No procurement kits configured for your school yet.</span>
+                    ) : kitStats.remainingCount > 0 ? (
+                      <span className="leading-snug">
+                        🔥 You have purchased <strong className="text-amber-300 font-black">{kitStats.purchasedCount} kit{kitStats.purchasedCount !== 1 ? 's' : ''}</strong>! Only <strong className="text-amber-300 font-black">{kitStats.remainingCount} left</strong> to complete your child's class setup.
+                      </span>
+                    ) : (
+                      <span className="text-emerald-300 font-black">
+                        🎉 Awesome! All required procurement kits for your child's class have been purchased.
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         )}

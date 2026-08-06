@@ -159,6 +159,7 @@ const linkParentByPhone = async (schoolId, student, payload, session) => {
           schoolRefNo: schoolRefNoVal,
           grade: payload.classGrade || student.classGrade,
           rollNo: payload.rollNo || student.rollNo,
+          avatarUrl: payload.avatarUrl || student.avatarUrl,
           studentId: student._id,
         },
       ],
@@ -263,6 +264,7 @@ const studentService = {
               address: payload.address,
               admissionDate: payload.admissionDate,
               previousSchool: payload.previousSchool,
+              avatarUrl: payload.avatarUrl,
               parentProfileIds: payload.parentProfileIds || [],
             },
             { session }
@@ -394,6 +396,7 @@ const studentService = {
       if (updateFields.dob !== undefined) childSync.dob = updateFields.dob;
       if (updateFields.gender !== undefined) childSync.gender = updateFields.gender;
       if (updateFields.bloodGroup !== undefined) childSync.bloodGroup = updateFields.bloodGroup;
+      if (updateFields.avatarUrl !== undefined) childSync.avatarUrl = updateFields.avatarUrl;
 
       if (Object.keys(childSync).length > 0) {
         await ChildProfile.updateMany(
