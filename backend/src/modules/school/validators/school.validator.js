@@ -3,7 +3,7 @@ const { Joi, schemas } = require('../../../common/validation');
 const objectId = schemas.objectId;
 const paginationQuery = {
   page: Joi.number().integer().min(1).default(1),
-  limit: Joi.number().integer().min(1).max(500).default(20),
+  limit: Joi.number().integer().min(1).max(10000).default(20),
   sort: Joi.string().trim().optional(),
   fields: Joi.string().trim().optional(),
   search: Joi.string().trim().max(120).optional(),

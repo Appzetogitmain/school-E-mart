@@ -74,11 +74,20 @@ const SchoolStudentsPage = () => {
     const setForm = isEdit ? setEditForm : setAddForm;
     const setErrorState = isEdit ? setEditError : setAddError;
 
+    // Set immediate local data URL preview for seamless UI responsiveness
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (reader.result) {
+        setForm((prev) => ({ ...prev, avatarUrl: reader.result }));
+      }
+    };
+    reader.readAsDataURL(file);
+
     setUploading(true);
     setErrorState('');
     try {
       const attachment = await uploadSchoolFile(schoolId, file, 'profile_avatar');
-      const storageKey = attachment?.storageKey || attachment?.url || attachment?.path || '';
+      const storageKey = attachment?.url || attachment?.storageKey || attachment?.path || '';
       if (storageKey) {
         setForm((prev) => ({ ...prev, avatarUrl: storageKey }));
       }
@@ -126,7 +135,7 @@ const SchoolStudentsPage = () => {
     setLoading(true);
     setError('');
     try {
-      const { data } = await listStudents(schoolId, { limit: 500 });
+      const { data } = await listStudents(schoolId, { limit: 10000 });
       setStudents((data || []).map(mapStudentForList));
     } catch (err) {
       setStudents([]);
@@ -602,7 +611,7 @@ const SchoolStudentsPage = () => {
       {/* Row count & Sort header */}
       <div className="px-6 pt-6 flex items-center justify-between">
         <span className="text-[11px] font-bold text-gray-400">
-          Showing 1 – {sortedStudents.length} of {totalCount} students
+          Showing {sortedStudents.length > 0 ? `1 – ${sortedStudents.length}` : '0'} of {totalCount} students
         </span>
 
         {/* Sort Select options dropdown */}
