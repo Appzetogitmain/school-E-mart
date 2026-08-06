@@ -547,7 +547,7 @@ router.get(
   '/:schoolId/vendors',
   ...schoolAdmin,
   resolveSchool(),
-  validateQuery(validators.paginationQuery),
+  validateQuery(validators.vendorDirectoryQuery),
   schoolController.listVendors
 );
 

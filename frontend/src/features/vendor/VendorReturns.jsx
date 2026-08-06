@@ -12,7 +12,6 @@ import {
 } from '../../services/vendorApi';
 import { getErrorMessage } from '../../utils/apiHelpers';
 import {
-  formatReturnStatus,
   getReturnSegmentCounts,
   mapVendorReturnForList,
 } from '../../utils/mappers/vendorReturnMapper';
@@ -129,6 +128,12 @@ const VendorReturns = () => {
           <span>REFRESH</span>
         </button>
       </div>
+
+      {loading && (
+        <div className="flex items-center gap-2 text-xs font-bold text-gray-400">
+          <Loader2 size={14} className="animate-spin" /> Loading return requests…
+        </div>
+      )}
 
       {error && (
         <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
@@ -407,21 +412,27 @@ const VendorReturns = () => {
                 </div>
               </div>
 
-              {/* QC Status Checklist */}
+              {/* QC Status */}
               <div className="space-y-2.5">
                 <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block">Quality Control Inspection</span>
                 <div className="border border-gray-100 rounded-2xl p-4.5 bg-white space-y-4 shadow-sm text-xs font-semibold">
                   <div className="flex items-center justify-between">
-                    <span className="text-gray-500">Inspect tags & stickers</span>
-                    <span className="text-emerald-500 flex items-center gap-1 font-bold">
-                      <Check size={14} /> Passed
-                    </span>
+                    <span className="text-gray-500">Inspection Status</span>
+                    {selectedReturn.qcStatus === 'QC Passed' && (
+                      <span className="text-emerald-500 flex items-center gap-1 font-bold">
+                        <Check size={14} /> Passed
+                      </span>
+                    )}
+                    {selectedReturn.qcStatus === 'QC Failed' && (
+                      <span className="text-rose-500 flex items-center gap-1 font-bold">
+                        <X size={14} /> Failed
+                      </span>
+                    )}
+                    {selectedReturn.qcStatus !== 'QC Passed' && selectedReturn.qcStatus !== 'QC Failed' && (
+                      <span className="text-gray-400 font-bold">Pending return shipment</span>
+                    )}
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-gray-500">Fabric/Item condition check</span>
-                    <span className="text-gray-400 font-bold">Pending return shipment</span>
-                  </div>
-                  
+
                   {/* Action buttons to trigger QC Passed/Failed */}
                   {selectedReturn.statusRaw === 'requested' && (
                     <div className="flex items-center gap-2.5 pt-3 border-t border-gray-50">

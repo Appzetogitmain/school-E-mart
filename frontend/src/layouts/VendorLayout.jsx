@@ -1,12 +1,48 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Outlet, useNavigate, useLocation, Link } from 'react-router-dom';
-import { 
-  LayoutDashboard, ShoppingBag, FileText, Package, BookOpen, 
-  Tag, CreditCard, Wallet, RotateCcw, MessageSquare, Megaphone, 
+import {
+  LayoutDashboard, ShoppingBag, FileText, Package, BookOpen,
+  Tag, CreditCard, Wallet, RotateCcw, MessageSquare, Megaphone,
   BarChart3, Settings, HelpCircle, ChevronDown, ChevronRight, ChevronLeft,
-  Menu, Bell, User, MoreVertical, CheckCircle2, LogOut, X, ShoppingCart
+  Menu, Bell, User, MoreVertical, CheckCircle2, Clock3, ShieldAlert, LogOut, X, ShoppingCart
 } from 'lucide-react';
 import useAuthStore from '../store/useAuthStore';
+import {
+  listNotifications,
+  getUnreadNotificationCount,
+  markNotificationAsRead,
+  markAllNotificationsAsRead,
+} from '../services/notificationApi';
+
+const formatNotificationTime = (value) => {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const diffMs = Date.now() - date.getTime();
+  const minutes = Math.floor(diffMs / 60000);
+  if (minutes < 1) return 'just now';
+  if (minutes < 60) return `${minutes} min${minutes === 1 ? '' : 's'} ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} hr${hours === 1 ? '' : 's'} ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days} day${days === 1 ? '' : 's'} ago`;
+  return date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+};
+
+// The sidebar identity badge must reflect the vendor's real Super Admin
+// approval status — it used to say "Verified Vendor" unconditionally, so a
+// brand-new, not-yet-approved registrant saw themselves as verified with no
+// indication their account was still under review.
+const VENDOR_STATUS_BADGE = {
+  approved: { label: 'Verified Vendor', className: 'text-emerald-400', icon: CheckCircle2, iconClassName: 'fill-emerald-400/20 text-emerald-400' },
+  suspended: { label: 'Account Suspended', className: 'text-red-400', icon: ShieldAlert, iconClassName: 'text-red-400' },
+  pending: { label: 'Pending Approval', className: 'text-amber-400', icon: Clock3, iconClassName: 'text-amber-400' },
+};
+
+const getVendorStatusBadge = (user) => {
+  const status = user?.profile?.approvalStatus;
+  return VENDOR_STATUS_BADGE[status] || VENDOR_STATUS_BADGE.pending;
+};
 
 const VendorLayout = () => {
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -18,6 +54,8 @@ const VendorLayout = () => {
   const { user, logout } = useAuthStore();
   const navigate = useNavigate();
   const location = useLocation();
+  const statusBadge = getVendorStatusBadge(user);
+  const StatusIcon = statusBadge.icon;
 
   const handleLogout = () => {
     logout();
@@ -36,6 +74,61 @@ const VendorLayout = () => {
         .catch(() => setPendingRfqCount(0));
     });
   }, []);
+
+  // Real notifications (RFQ invites, order updates, ...) from the shared
+  // notification feed — this used to be four hardcoded sample entries with
+  // no connection to anything that actually happened on the account.
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [notificationsLoading, setNotificationsLoading] = useState(true);
+
+  const loadNotifications = useCallback(() => {
+    setNotificationsLoading(true);
+    Promise.all([
+      listNotifications({ limit: 6 }).catch(() => ({ data: [] })),
+      getUnreadNotificationCount().catch(() => ({ data: { count: 0 } })),
+    ])
+      .then(([notifResult, countResult]) => {
+        setNotifications(notifResult?.data || []);
+        setUnreadCount(countResult?.data?.count ?? 0);
+      })
+      .finally(() => setNotificationsLoading(false));
+  }, []);
+
+  useEffect(() => {
+    loadNotifications();
+  }, [loadNotifications]);
+
+  const handleOpenNotifications = () => {
+    setNotificationDropdownOpen((prev) => !prev);
+  };
+
+  const handleNotificationClick = async (notification) => {
+    if (!notification.isRead) {
+      try {
+        await markNotificationAsRead(notification._id || notification.id);
+        setNotifications((prev) =>
+          prev.map((n) => ((n._id || n.id) === (notification._id || notification.id) ? { ...n, isRead: true } : n))
+        );
+        setUnreadCount((prev) => Math.max(0, prev - 1));
+      } catch {
+        // Leave it unread client-side if the mark-read call fails — better
+        // than claiming it's read when the server never recorded that.
+      }
+    }
+    setNotificationDropdownOpen(false);
+    if (notification.actionUrl) navigate(notification.actionUrl);
+  };
+
+  const handleMarkAllRead = async () => {
+    try {
+      await markAllNotificationsAsRead();
+      setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+      setUnreadCount(0);
+    } catch {
+      // Ignore — the dropdown just won't reflect it until next load.
+    }
+  };
 
   // Define sidebar menu structure
   const sidebarItems = [
@@ -214,9 +307,9 @@ const VendorLayout = () => {
               {!isCollapsed && (
                 <div className="min-w-0 flex flex-col leading-tight animate-fade-in text-left">
                   <span className="text-sm font-bold text-white truncate">{user?.profile?.storeName || user?.name || 'Vendor Store'}</span>
-                  <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-1 mt-0.5">
-                    <CheckCircle2 size={10} className="fill-emerald-400/20 text-emerald-400" />
-                    Verified Vendor
+                  <span className={`text-[10px] font-semibold flex items-center gap-1 mt-0.5 ${statusBadge.className}`}>
+                    <StatusIcon size={10} className={statusBadge.iconClassName} />
+                    {statusBadge.label}
                   </span>
                 </div>
               )}
@@ -348,9 +441,9 @@ const VendorLayout = () => {
                   </div>
                   <div className="flex flex-col leading-tight text-left">
                     <span className="text-sm font-bold text-white">{user?.profile?.storeName || user?.name || 'Vendor Store'}</span>
-                    <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-1 mt-0.5">
-                      <CheckCircle2 size={10} className="fill-emerald-400/20 text-emerald-400" />
-                      Verified Vendor
+                    <span className={`text-[10px] font-semibold flex items-center gap-1 mt-0.5 ${statusBadge.className}`}>
+                      <StatusIcon size={10} className={statusBadge.iconClassName} />
+                      {statusBadge.label}
                     </span>
                   </div>
                 </div>
@@ -395,38 +488,54 @@ const VendorLayout = () => {
             
             {/* Notification Bell */}
             <div className="relative">
-              <button 
-                onClick={() => setNotificationDropdownOpen(!notificationDropdownOpen)}
+              <button
+                onClick={handleOpenNotifications}
                 className="w-10 h-10 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-100 hover:text-[#5B3FD6] transition-all relative"
               >
                 <Bell size={18} />
-                <span className="absolute top-1.5 right-1.5 w-4 h-4 bg-[#FF4A55] text-white text-[9px] font-black rounded-full flex items-center justify-center border border-white shadow-sm">
-                  4
-                </span>
+                {unreadCount > 0 && (
+                  <span className="absolute top-1.5 right-1.5 min-w-[16px] h-4 px-1 bg-[#FF4A55] text-white text-[9px] font-black rounded-full flex items-center justify-center border border-white shadow-sm">
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </span>
+                )}
               </button>
 
               {notificationDropdownOpen && (
                 <div className="absolute right-0 mt-3 w-80 bg-white rounded-2xl shadow-xl border border-gray-100 p-4 z-50 animate-scale-in">
                   <div className="flex items-center justify-between pb-3 border-b border-gray-100">
                     <span className="font-bold text-sm">Notifications</span>
-                    <span className="text-[10px] text-[#5B3FD6] font-bold cursor-pointer hover:underline">Mark all as read</span>
+                    {notifications.some((n) => !n.isRead) && (
+                      <button
+                        type="button"
+                        onClick={handleMarkAllRead}
+                        className="text-[10px] text-[#5B3FD6] font-bold cursor-pointer hover:underline"
+                      >
+                        Mark all as read
+                      </button>
+                    )}
                   </div>
                   <div className="mt-3 space-y-3 max-h-60 overflow-y-auto">
-                    {[
-                      { title: 'New Quotation Request', desc: 'Gyan Public School requested a quote for 500 Uniforms.', time: '2 mins ago' },
-                      { title: 'Payment Disbursed', desc: '₹45,200 has been credited to your wallet.', time: '1 hr ago' },
-                      { title: 'Order Dispatched', desc: 'Order ORD-2026-0527 has been successfully shipped.', time: '3 hrs ago' },
-                      { title: 'Stock Alert', desc: 'School Bag (Grey) is running low on stock.', time: '1 day ago' }
-                    ].map((notif, idx) => (
-                      <div key={idx} className="flex gap-2.5 text-left text-xs p-2 hover:bg-gray-50 rounded-xl cursor-pointer transition-colors">
-                        <span className="w-1.5 h-1.5 rounded-full bg-[#5B3FD6] mt-1.5 shrink-0"></span>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-bold text-gray-800 truncate">{notif.title}</p>
-                          <p className="text-gray-500 mt-0.5 line-clamp-2 leading-relaxed">{notif.desc}</p>
-                          <span className="text-[9px] text-gray-400 font-medium block mt-1">{notif.time}</span>
-                        </div>
-                      </div>
-                    ))}
+                    {notificationsLoading ? (
+                      <div className="py-6 flex items-center justify-center text-gray-400 text-xs font-bold">Loading…</div>
+                    ) : notifications.length === 0 ? (
+                      <div className="py-6 text-center text-gray-400 text-xs font-bold">No notifications yet.</div>
+                    ) : (
+                      notifications.map((notif) => (
+                        <button
+                          type="button"
+                          key={notif._id || notif.id}
+                          onClick={() => handleNotificationClick(notif)}
+                          className="w-full flex gap-2.5 text-left text-xs p-2 hover:bg-gray-50 rounded-xl cursor-pointer transition-colors"
+                        >
+                          <span className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${notif.isRead ? 'bg-gray-200' : 'bg-[#5B3FD6]'}`}></span>
+                          <div className="flex-1 min-w-0">
+                            <p className={`truncate ${notif.isRead ? 'text-gray-600 font-semibold' : 'text-gray-800 font-bold'}`}>{notif.title}</p>
+                            <p className="text-gray-500 mt-0.5 line-clamp-2 leading-relaxed">{notif.body}</p>
+                            <span className="text-[9px] text-gray-400 font-medium block mt-1">{formatNotificationTime(notif.createdAt)}</span>
+                          </div>
+                        </button>
+                      ))
+                    )}
                   </div>
                 </div>
               )}

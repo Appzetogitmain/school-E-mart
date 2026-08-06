@@ -6,8 +6,8 @@ const { uniqueSlug } = require('../utils/slug');
 const LmsLesson = require('../../../database/models/LmsLesson');
 
 const lessonService = {
-  async createLesson(schoolId, courseId, payload) {
-    await courseService.getCourse(schoolId, courseId);
+  async createLesson(schoolId, courseId, payload, options = {}) {
+    await courseService.getCourse(schoolId, courseId, options);
     if (payload.chapterId) {
       const chapter = await chapterRepository.findOne({ _id: payload.chapterId, courseId, schoolId });
       if (!chapter) throw new NotFoundError('Chapter not found', 'CHAPTER_NOT_FOUND');
@@ -25,8 +25,8 @@ const lessonService = {
     });
   },
 
-  async listLessons(schoolId, courseId, query) {
-    await courseService.getCourse(schoolId, courseId);
+  async listLessons(schoolId, courseId, query, options = {}) {
+    await courseService.getCourse(schoolId, courseId, options);
     const filter = { courseId };
     if (query.chapterId) filter.chapterId = query.chapterId;
     if (query.status) filter.status = query.status;
@@ -34,22 +34,22 @@ const lessonService = {
     return lessonRepository.paginateLessons(filter, query);
   },
 
-  async getLesson(schoolId, courseId, lessonId) {
-    await courseService.getCourse(schoolId, courseId);
+  async getLesson(schoolId, courseId, lessonId, options = {}) {
+    await courseService.getCourse(schoolId, courseId, options);
     const lesson = await lessonRepository.findOne({ _id: lessonId, courseId });
     if (!lesson) throw new NotFoundError('Lesson not found', 'LESSON_NOT_FOUND');
     return lesson;
   },
 
-  async updateLesson(schoolId, courseId, lessonId, payload) {
-    await this.getLesson(schoolId, courseId, lessonId);
+  async updateLesson(schoolId, courseId, lessonId, payload, options = {}) {
+    await this.getLesson(schoolId, courseId, lessonId, options);
     const lesson = await lessonRepository.updateById(lessonId, { $set: payload }, { courseId });
     if (!lesson) throw new NotFoundError('Lesson not found', 'LESSON_NOT_FOUND');
     return lesson;
   },
 
-  async deleteLesson(schoolId, courseId, lessonId, deletedBy) {
-    await this.getLesson(schoolId, courseId, lessonId);
+  async deleteLesson(schoolId, courseId, lessonId, deletedBy, options = {}) {
+    await this.getLesson(schoolId, courseId, lessonId, options);
     const lesson = await lessonRepository.softDeleteById(lessonId, { deletedBy });
     if (!lesson) throw new NotFoundError('Lesson not found', 'LESSON_NOT_FOUND');
     return lesson;

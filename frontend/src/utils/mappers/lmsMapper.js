@@ -6,18 +6,29 @@ const DEFAULT_LESSON_IMAGE =
 const defaultAvatar = (name) =>
   `https://ui-avatars.com/api/?name=${encodeURIComponent(name || 'Teacher')}&background=7F56D9&color=fff`;
 
-export const mapCourseToLesson = (course, progress = 0, lesson = null) => {
+/**
+ * `lessons` is the course's own published lessons (if the caller resolved
+ * them) — the admin console uploads video content as lessons *within* a
+ * course, not onto the course record itself (LmsCourse.videoUrl is normally
+ * never set), so a course card with no lessons attached has no video to
+ * play. Pass the resolved lessons through here rather than relying on
+ * `course.videoUrl` alone.
+ */
+export const mapCourseToLesson = (course, progress = 0, lessons = []) => {
   const gradeClass = course?.gradeClass || '';
   const category = course?.category || 'Course';
   const instructor = course?.instructorName || 'Instructor';
+  const lessonList = Array.isArray(lessons) ? lessons : [lessons].filter(Boolean);
+  const primaryLesson = lessonList[0] || null;
 
   return {
     id: course?._id || course?.id,
-    // These cards render a course, but progress is recorded per lesson, so both
-    // ids have to survive the mapping. lessonId is null for a plain course card
-    // — the caller then resolves the course's lessons before writing progress.
+    // These cards render a course, but progress is recorded per lesson, so all
+    // of the course's lesson ids have to survive the mapping — "Mark Completed"
+    // and the resume bookmark both need them.
     courseId: course?._id || course?.id,
-    lessonId: lesson?._id || lesson?.id || null,
+    lessonId: primaryLesson?._id || primaryLesson?.id || null,
+    lessonIds: lessonList.map((l) => l?._id || l?.id).filter(Boolean),
     title: course?.title || 'Untitled Course',
     subject: course?.subject || category || 'General',
     chapter: gradeClass ? `${gradeClass} • ${category}` : category,
@@ -26,7 +37,8 @@ export const mapCourseToLesson = (course, progress = 0, lesson = null) => {
     image:
       toAbsoluteUrl(course?.thumbnailUrl || course?.thumbnail?.url || course?.imageUrl) ||
       DEFAULT_LESSON_IMAGE,
-    videoUrl: toAbsoluteUrl(course?.videoUrl) || '',
+    videoUrl:
+      toAbsoluteUrl(primaryLesson?.contentHtml || primaryLesson?.videoUrl || course?.videoUrl) || '',
     teacher: instructor,
     teacherImg: course?.instructorAvatarUrl || defaultAvatar(instructor),
     type: course?.contentType || 'Video',

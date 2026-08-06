@@ -17,6 +17,12 @@ const ALLOWED_PURPOSES = new Set([
   // Profile photos (teacher/parent/etc.) — was present on the Attachment
   // model's purpose enum but missing here, so every avatar upload 400'd.
   'profile_avatar',
+  // "Learn more about platform" tutorial videos (admin console).
+  'tutorial_video',
+  'tutorial_thumb',
+  // RFQ uniform-set reference images (design/logo/fabric photos), uploaded
+  // by a school when creating/editing a quotation request.
+  'rfq_attachment',
 ]);
 
 // Purposes whose bytes live outside the statically-served /uploads dir and are only

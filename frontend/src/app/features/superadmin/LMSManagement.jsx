@@ -1,54 +1,61 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import ReactDOM from 'react-dom';
-import { 
-  GraduationCap, Film, Plus, Edit3, Trash2, BookOpen, Clock, Play, X, ChevronRight, CheckCircle, Info, Upload, Image as ImageIcon, User, Award, Tag, Loader2
+import {
+  GraduationCap, Film, Plus, Edit3, Trash2, BookOpen, Clock, Play, X, ChevronRight, CheckCircle, Info, Upload, Image as ImageIcon, User, Award, Tag, Loader2, ArrowLeft, Video, Settings
 } from 'lucide-react';
 import {
   listPlatformCourses,
   createPlatformCourse,
   updatePlatformCourse,
   deletePlatformCourse,
-  uploadAdminFile,
-  uploadAdminMedia,
+  listPlatformLessons,
+  createPlatformLesson,
+  updatePlatformLesson,
+  deletePlatformLesson,
+  listLmsSubjects,
+  createLmsSubject,
+  deleteLmsSubject,
+  listLmsGrades,
+  createLmsGrade,
+  deleteLmsGrade,
+  listLmsGradeSuggestions,
+  uploadAdminMediaWithProgress,
 } from '../../../services/adminApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 import { mapPlatformCourseForAdmin, mapAdminCourseToPayload } from '../../../utils/mappers/adminLmsMapper';
 import useAuthReady from '../../../hooks/useAuthReady';
+import { toAbsoluteUrl } from '../../../utils/url';
 
-const uploadLmsFile = async (file, purpose, useMedia = false) => {
+// A course can target every grade at once rather than one specific class —
+// this is a picker-only sentinel, never stored as a deletable grade option.
+const ALL_GRADES = 'All Grades';
+
+const uploadLmsFileWithProgress = async (file, purpose, onProgress) => {
   const formData = new FormData();
   formData.append('file', file);
   formData.append('purpose', purpose);
-  const attachment = useMedia
-    ? await uploadAdminMedia(formData)
-    : await uploadAdminFile(formData);
+  const attachment = await uploadAdminMediaWithProgress(formData, onProgress);
   return attachment?.url || attachment?.storageKey || '';
 };
 
-const resolveMediaUrl = async (preview, file, label, urlInput = '', existingUrl = '') => {
+const resolveCoverUrl = async (preview, file, urlInput = '', existingUrl = '') => {
   const normalizedInput = urlInput?.trim();
   if (normalizedInput) {
     if (!/^https?:\/\//i.test(normalizedInput)) {
-      throw new Error(
-        `Please provide a valid ${label === 'cover' ? 'cover image' : 'video'} URL starting with http:// or https://`
-      );
+      throw new Error('Please provide a valid cover image URL starting with http:// or https://');
     }
     return normalizedInput;
   }
-
-  if (
-    preview?.startsWith('http://') ||
-    preview?.startsWith('https://') ||
-    preview?.startsWith('/uploads/')
-  ) {
+  if (preview?.startsWith('http://') || preview?.startsWith('https://') || preview?.startsWith('/uploads/')) {
     return preview;
   }
-
   if (file) {
-    const purpose = label === 'video' ? 'lms_video' : 'lms_thumb';
-    return uploadLmsFile(file, purpose, label === 'video');
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('purpose', 'lms_thumb');
+    const attachment = await uploadAdminMediaWithProgress(formData);
+    return attachment?.url || attachment?.storageKey || '';
   }
-
   return existingUrl || '';
 };
 
@@ -59,37 +66,65 @@ const LMSManagement = () => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  // Subjects & Grades options
-  const subjects = ['Science', 'Mathematics', 'English', 'Geography', 'Art & Craft', 'History'];
-  const grades = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6', 'Grade 7', 'Grade 8'];
+  // Subjects and Grades are both dynamic, admin-managed lists (not
+  // hardcoded) — see the "Manage Subjects" / "Manage Grades" modals further
+  // down. Grades differ, since every school defines its own grade/class
+  // names — the modal surfaces the real ones in use across schools to add
+  // from, instead of the admin guessing labels that may not match anyone.
+  const [subjects, setSubjects] = useState([]);
+  const [subjectsLoading, setSubjectsLoading] = useState(true);
+  const [isSubjectManagerOpen, setIsSubjectManagerOpen] = useState(false);
+  const [newSubjectLabel, setNewSubjectLabel] = useState('');
+  const [savingSubject, setSavingSubject] = useState(false);
+  const [deletingSubjectId, setDeletingSubjectId] = useState(null);
+  const [subjectManagerError, setSubjectManagerError] = useState('');
 
-  // Form input states
-  const [isEditing, setIsEditing] = useState(false);
-  const [editId, setEditId] = useState(null);
+  const [grades, setGrades] = useState([]);
+  const [gradesLoading, setGradesLoading] = useState(true);
+  const [gradeSuggestions, setGradeSuggestions] = useState([]);
+  const [isGradeManagerOpen, setIsGradeManagerOpen] = useState(false);
+  const [newGradeLabel, setNewGradeLabel] = useState('');
+  const [savingGrade, setSavingGrade] = useState(false);
+  const [deletingGradeId, setDeletingGradeId] = useState(null);
+  const [gradeManagerError, setGradeManagerError] = useState('');
 
-  // Text Fields
+  // Course Form input states
+  const [isEditingCourse, setIsEditingCourse] = useState(false);
+  const [editCourseId, setEditCourseId] = useState(null);
+
   const [courseTitle, setCourseTitle] = useState('');
-  const [subject, setSubject] = useState('Science');
-  const [gradeClass, setGradeClass] = useState('Grade 5');
+  const [subject, setSubject] = useState('');
+  const [gradeClass, setGradeClass] = useState(ALL_GRADES);
   const [instructor, setInstructor] = useState('');
   const [concepts, setConcepts] = useState('');
   const [duration, setDuration] = useState('');
   const [isActive, setIsActive] = useState(true);
-  const [videoUrlInput, setVideoUrlInput] = useState('');
   const [thumbnailUrlInput, setThumbnailUrlInput] = useState('');
 
-  // File Upload states (handles both raw files and local object previews)
-  const [videoFile, setVideoFile] = useState(null);
-  const [videoPreview, setVideoPreview] = useState('');
   const [coverFile, setCoverFile] = useState(null);
   const [coverPreview, setCoverPreview] = useState('');
-
-  // Refs for hidden inputs
-  const videoInputRef = useRef(null);
   const coverInputRef = useRef(null);
 
-  // Playing Video Modal Portal state
-  const [playingCourse, setPlayingCourse] = useState(null);
+  // Lesson Management view state
+  const [selectedCourseForLessons, setSelectedCourseForLessons] = useState(null);
+  const [lessons, setLessons] = useState([]);
+  const [lessonsLoading, setLessonsLoading] = useState(false);
+
+  // Add / Edit Lesson form state inside course
+  const [isEditingLesson, setIsEditingLesson] = useState(false);
+  const [editLessonId, setEditLessonId] = useState(null);
+  const [lessonTitle, setLessonTitle] = useState('');
+  const [lessonDescription, setLessonDescription] = useState('');
+  const [lessonVideoUrlInput, setLessonVideoUrlInput] = useState('');
+  const [lessonVideoFile, setLessonVideoFile] = useState(null);
+  const [lessonVideoPreview, setLessonVideoPreview] = useState('');
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [isUploadingVideo, setIsUploadingVideo] = useState(false);
+  const lessonVideoInputRef = useRef(null);
+
+  // Video Playing Modal state
+  const [playingVideoUrl, setPlayingVideoUrl] = useState(null);
+  const [playingVideoTitle, setPlayingVideoTitle] = useState('');
 
   const loadCourses = useCallback(async () => {
     setLoading(true);
@@ -110,13 +145,151 @@ const LMSManagement = () => {
     loadCourses();
   }, [authReady, loadCourses]);
 
-  // Handlers
-  const handleVideoFileChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      setVideoFile(file);
-      setVideoPreview(URL.createObjectURL(file));
+  const loadSubjects = useCallback(async () => {
+    setSubjectsLoading(true);
+    try {
+      const data = await listLmsSubjects();
+      setSubjects(data || []);
+      // Default the course form to the first available subject once loaded,
+      // but never override a value the admin (or an edit-in-progress) already set.
+      setSubject((prev) => prev || data?.[0]?.label || '');
+    } catch {
+      setSubjects([]);
+    } finally {
+      setSubjectsLoading(false);
     }
+  }, []);
+
+  useEffect(() => {
+    if (!authReady) return;
+    loadSubjects();
+  }, [authReady, loadSubjects]);
+
+  const handleAddSubject = async (e) => {
+    e.preventDefault();
+    const label = newSubjectLabel.trim();
+    if (!label) return;
+
+    setSubjectManagerError('');
+    setSavingSubject(true);
+    try {
+      const created = await createLmsSubject({ label });
+      setSubjects((prev) => [...prev, created].sort((a, b) => a.displayOrder - b.displayOrder || a.label.localeCompare(b.label)));
+      setNewSubjectLabel('');
+      // A freshly-added subject is almost certainly the one about to be used.
+      setSubject(created.label);
+    } catch (err) {
+      setSubjectManagerError(getErrorMessage(err, 'Unable to add subject'));
+    } finally {
+      setSavingSubject(false);
+    }
+  };
+
+  const handleDeleteSubject = async (subjectToDelete) => {
+    if (!window.confirm(`Delete the "${subjectToDelete.label}" subject?`)) return;
+    setSubjectManagerError('');
+    setDeletingSubjectId(subjectToDelete._id);
+    try {
+      await deleteLmsSubject(subjectToDelete._id);
+      setSubjects((prev) => prev.filter((s) => s._id !== subjectToDelete._id));
+      if (subject === subjectToDelete.label) {
+        setSubject('');
+      }
+    } catch (err) {
+      // e.g. "3 courses still use this subject" — surfaced from the backend guard.
+      setSubjectManagerError(getErrorMessage(err, 'Unable to delete subject'));
+    } finally {
+      setDeletingSubjectId(null);
+    }
+  };
+
+  const loadGrades = useCallback(async () => {
+    setGradesLoading(true);
+    try {
+      const data = await listLmsGrades();
+      setGrades(data || []);
+    } catch {
+      setGrades([]);
+    } finally {
+      setGradesLoading(false);
+    }
+  }, []);
+
+  const loadGradeSuggestions = useCallback(async () => {
+    try {
+      const data = await listLmsGradeSuggestions();
+      setGradeSuggestions(data || []);
+    } catch {
+      setGradeSuggestions([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!authReady) return;
+    loadGrades();
+    loadGradeSuggestions();
+  }, [authReady, loadGrades, loadGradeSuggestions]);
+
+  const addGrade = async (label) => {
+    const trimmed = label.trim();
+    if (!trimmed) return;
+
+    setGradeManagerError('');
+    setSavingGrade(true);
+    try {
+      const created = await createLmsGrade({ label: trimmed });
+      setGrades((prev) => [...prev, created].sort((a, b) => a.displayOrder - b.displayOrder || a.label.localeCompare(b.label)));
+      setGradeSuggestions((prev) => prev.filter((s) => s.toLowerCase() !== trimmed.toLowerCase()));
+      setNewGradeLabel('');
+      setGradeClass(created.label);
+    } catch (err) {
+      setGradeManagerError(getErrorMessage(err, 'Unable to add grade'));
+    } finally {
+      setSavingGrade(false);
+    }
+  };
+
+  const handleAddGrade = (e) => {
+    e.preventDefault();
+    addGrade(newGradeLabel);
+  };
+
+  const handleDeleteGrade = async (gradeToDelete) => {
+    if (!window.confirm(`Delete the "${gradeToDelete.label}" grade?`)) return;
+    setGradeManagerError('');
+    setDeletingGradeId(gradeToDelete._id);
+    try {
+      await deleteLmsGrade(gradeToDelete._id);
+      setGrades((prev) => prev.filter((g) => g._id !== gradeToDelete._id));
+      setGradeSuggestions((prev) => [...prev, gradeToDelete.label].sort((a, b) => a.localeCompare(b)));
+      if (gradeClass === gradeToDelete.label) {
+        setGradeClass(ALL_GRADES);
+      }
+    } catch (err) {
+      // e.g. "3 courses still use this grade" — surfaced from the backend guard.
+      setGradeManagerError(getErrorMessage(err, 'Unable to delete grade'));
+    } finally {
+      setDeletingGradeId(null);
+    }
+  };
+
+  const loadLessonsForCourse = useCallback(async (courseId) => {
+    setLessonsLoading(true);
+    try {
+      const { data } = await listPlatformLessons(courseId, { limit: 100 });
+      setLessons(data || []);
+    } catch (err) {
+      setLessons([]);
+      console.error('Failed to load lessons:', err);
+    } finally {
+      setLessonsLoading(false);
+    }
+  }, []);
+
+  const openLessonsManager = (course) => {
+    setSelectedCourseForLessons(course);
+    resetLessonForm();
+    loadLessonsForCourse(course.id);
   };
 
   const handleCoverFileChange = (e) => {
@@ -127,42 +300,30 @@ const LMSManagement = () => {
     }
   };
 
-  const handleSubmit = async (e) => {
+  const handleLessonVideoFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setLessonVideoFile(file);
+      setLessonVideoPreview(URL.createObjectURL(file));
+    }
+  };
+
+  const handleCourseSubmit = async (e) => {
     e.preventDefault();
-    if (!courseTitle.trim() || !instructor.trim() || !concepts.trim()) {
-      alert('Please fill out Course Title, Instructor, and Key Concepts.');
-      return;
-    }
-
-    if (!videoUrlInput.trim() && !videoFile && !videoPreview) {
-      alert('Please upload a lecture video or provide a video URL.');
-      return;
-    }
-
-    if (!thumbnailUrlInput.trim() && !coverPreview) {
-      alert('Please upload a course cover image or provide a cover image URL.');
+    if (!courseTitle.trim() || !instructor.trim()) {
+      alert('Please fill out Course Title and Instructor Name.');
       return;
     }
 
     setSaving(true);
     try {
-      const existingCourse = isEditing ? courses.find((c) => c.id === editId) : null;
-      const [resolvedVideoUrl, resolvedCoverUrl] = await Promise.all([
-        resolveMediaUrl(
-          videoPreview,
-          videoFile,
-          'video',
-          videoUrlInput,
-          existingCourse?.videoUrl
-        ),
-        resolveMediaUrl(
-          coverPreview,
-          coverFile,
-          'cover',
-          thumbnailUrlInput,
-          existingCourse?.thumbnailUrl
-        ),
-      ]);
+      const existingCourse = isEditingCourse ? courses.find((c) => c.id === editCourseId) : null;
+      const resolvedCoverUrl = await resolveCoverUrl(
+        coverPreview,
+        coverFile,
+        thumbnailUrlInput,
+        existingCourse?.thumbnailUrl
+      );
 
       const payload = mapAdminCourseToPayload({
         title: courseTitle,
@@ -171,23 +332,22 @@ const LMSManagement = () => {
         instructor,
         concepts,
         duration,
-        videoUrl: resolvedVideoUrl,
         thumbnailUrl: resolvedCoverUrl,
         isActive,
       });
 
-      if (isEditing) {
-        const updated = await updatePlatformCourse(editId, payload);
+      if (isEditingCourse) {
+        const updated = await updatePlatformCourse(editCourseId, payload);
         setCourses((prev) =>
-          prev.map((c) => (c.id === editId ? mapPlatformCourseForAdmin(updated) : c))
+          prev.map((c) => (c.id === editCourseId ? mapPlatformCourseForAdmin(updated) : c))
         );
         alert('LMS course updated successfully!');
-        resetForm();
+        resetCourseForm();
       } else {
         const created = await createPlatformCourse(payload);
         setCourses((prev) => [mapPlatformCourseForAdmin(created), ...prev]);
-        alert('LMS course lecture successfully published to the Student Learning Hub!');
-        resetForm();
+        alert('LMS course created successfully! Now add video lessons to this course.');
+        resetCourseForm();
       }
     } catch (err) {
       alert(getErrorMessage(err, 'Unable to save LMS course'));
@@ -196,9 +356,9 @@ const LMSManagement = () => {
     }
   };
 
-  const handleEdit = (course) => {
-    setIsEditing(true);
-    setEditId(course.id);
+  const handleEditCourse = (course) => {
+    setIsEditingCourse(true);
+    setEditCourseId(course.id);
     setCourseTitle(course.title);
     setSubject(course.subject);
     setGradeClass(course.gradeClass);
@@ -206,123 +366,154 @@ const LMSManagement = () => {
     setConcepts(course.concepts);
     setDuration(course.duration);
     setIsActive(course.status === 'Active');
-    setVideoUrlInput(course.videoUrl?.startsWith('http') ? course.videoUrl : '');
     setThumbnailUrlInput(course.thumbnailUrl?.startsWith('http') ? course.thumbnailUrl : '');
-
-    // Populate previews
-    setVideoPreview(course.videoUrl || '');
     setCoverPreview(course.thumbnailUrl || '');
   };
 
-  const handleDelete = async (id) => {
+  const handleDeleteCourse = async (id) => {
     if (!window.confirm('Are you sure you want to delete this LMS course?')) return;
-
     try {
       await deletePlatformCourse(id);
       setCourses((prev) => prev.filter((c) => c.id !== id));
+      if (selectedCourseForLessons?.id === id) {
+        setSelectedCourseForLessons(null);
+      }
     } catch (err) {
       alert(getErrorMessage(err, 'Unable to delete LMS course'));
     }
   };
 
-  const resetForm = () => {
-    setIsEditing(false);
-    setEditId(null);
+  const resetCourseForm = () => {
+    setIsEditingCourse(false);
+    setEditCourseId(null);
     setCourseTitle('');
-    setSubject('Science');
-    setGradeClass('Grade 5');
+    setSubject(subjects[0]?.label || '');
+    setGradeClass(ALL_GRADES);
     setInstructor('');
     setConcepts('');
     setDuration('');
     setIsActive(true);
-    setVideoUrlInput('');
     setThumbnailUrlInput('');
-
-    // Reset upload previews
-    setVideoFile(null);
-    setVideoPreview('');
     setCoverFile(null);
     setCoverPreview('');
+  };
+
+  const handleLessonSubmit = async (e) => {
+    e.preventDefault();
+    if (!selectedCourseForLessons) return;
+    if (!lessonTitle.trim()) {
+      alert('Please enter a lesson title');
+      return;
+    }
+
+    if (!lessonVideoUrlInput.trim() && !lessonVideoFile && !lessonVideoPreview) {
+      alert('Please upload a video file or provide a video URL');
+      return;
+    }
+
+    setIsUploadingVideo(true);
+    setUploadProgress(0);
+
+    try {
+      let videoUrl = lessonVideoUrlInput.trim();
+      if (lessonVideoFile) {
+        videoUrl = await uploadLmsFileWithProgress(
+          lessonVideoFile,
+          'lms_video',
+          (percent) => setUploadProgress(percent)
+        );
+      }
+
+      const payload = {
+        title: lessonTitle.trim(),
+        description: lessonDescription.trim(),
+        contentHtml: videoUrl,
+        lessonType: 'video',
+        visibility: 'visible',
+        status: 'published',
+      };
+
+      if (isEditingLesson) {
+        const updated = await updatePlatformLesson(selectedCourseForLessons.id, editLessonId, payload);
+        setLessons((prev) => prev.map((l) => (l._id === editLessonId ? updated : l)));
+        alert('Video lesson updated successfully!');
+      } else {
+        const created = await createPlatformLesson(selectedCourseForLessons.id, payload);
+        setLessons((prev) => [...prev, created]);
+        alert('Video lesson added successfully!');
+      }
+
+      resetLessonForm();
+    } catch (err) {
+      alert(getErrorMessage(err, 'Failed to save lesson'));
+    } finally {
+      setIsUploadingVideo(false);
+      setUploadProgress(0);
+    }
+  };
+
+  const handleEditLesson = (lesson) => {
+    setIsEditingLesson(true);
+    setEditLessonId(lesson._id);
+    setLessonTitle(lesson.title || '');
+    setLessonDescription(lesson.description || '');
+    const vUrl = lesson.contentHtml || lesson.videoUrl || '';
+    setLessonVideoUrlInput(vUrl.startsWith('http') ? vUrl : '');
+    setLessonVideoPreview(vUrl ? toAbsoluteUrl(vUrl) : '');
+  };
+
+  const handleDeleteLesson = async (lessonId) => {
+    if (!window.confirm('Delete this video lesson?')) return;
+    try {
+      await deletePlatformLesson(selectedCourseForLessons.id, lessonId);
+      setLessons((prev) => prev.filter((l) => l._id !== lessonId));
+    } catch (err) {
+      alert(getErrorMessage(err, 'Failed to delete lesson'));
+    }
+  };
+
+  const resetLessonForm = () => {
+    setIsEditingLesson(false);
+    setEditLessonId(null);
+    setLessonTitle('');
+    setLessonDescription('');
+    setLessonVideoUrlInput('');
+    setLessonVideoFile(null);
+    setLessonVideoPreview('');
+    setUploadProgress(0);
   };
 
   return (
     <div className="space-y-6 font-sans antialiased text-gray-800">
       
-      {/* HEADER SECTION */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 select-none pb-2 border-b border-gray-200">
-        <div className="text-left">
+      {/* HEADER BAR */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white rounded-3xl p-6 border border-gray-200/80 shadow-xs">
+        <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-xl font-black text-[#0B1528] tracking-tight">LMS (Learning Management)</h1>
-            <span className="bg-indigo-50 text-indigo-600 border border-indigo-100 text-[8px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full">
-              STUDENT HUB
+            <span className="bg-indigo-50 text-indigo-600 p-2 rounded-xl">
+              <GraduationCap size={20} />
             </span>
+            <h1 className="text-xl font-black text-[#0B1528] tracking-tight">LMS (Learning Management System)</h1>
           </div>
-          <p className="text-xs text-gray-400 font-bold mt-1.5">Manage learning modules, upload class syllabus lectures, register instructors, and detail curriculum concepts.</p>
-        </div>
-
-        {/* Breadcrumb right align */}
-        <div className="text-xs text-gray-400 font-bold flex items-center gap-1.5 self-start sm:self-auto bg-gray-50 px-3 py-1.5 rounded-xl border border-gray-200/50">
-          <span className="hover:text-gray-600 cursor-pointer">Home</span>
-          <ChevronRight size={10} className="text-gray-300" />
-          <span className="text-gray-700">LMS</span>
-        </div>
-      </div>
-
-      {/* KPI METRICS OVERVIEW ROW */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 select-none text-left">
-        <div className="bg-white border border-gray-200 rounded-3xl p-5 shadow-xs flex items-center justify-between">
-          <div>
-            <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Active Lectures</span>
-            <h2 className="text-2xl font-black text-[#0B1528] mt-1 tabular-nums">
-              {courses.filter(c => c.status === 'Active').length}
-            </h2>
-          </div>
-          <div className="bg-indigo-50 text-indigo-600 p-3 rounded-2xl">
-            <GraduationCap size={20} className="stroke-[2.5]" />
-          </div>
-        </div>
-
-        <div className="bg-white border border-gray-200 rounded-3xl p-5 shadow-xs flex items-center justify-between">
-          <div>
-            <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Students Enrolled</span>
-            <h2 className="text-2xl font-black text-[#0B1528] mt-1 tabular-nums">
-              {courses.reduce((acc, c) => acc + c.studentsEnrolled, 0).toLocaleString()}
-            </h2>
-          </div>
-          <div className="bg-sky-50 text-sky-600 p-3 rounded-2xl">
-            <BookOpen size={20} className="stroke-[2.5]" />
-          </div>
-        </div>
-
-        <div className="bg-white border border-gray-200 rounded-3xl p-5 shadow-xs flex items-center justify-between">
-          <div>
-            <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Avg Course Progress</span>
-            <h2 className="text-2xl font-black text-[#0B1528] mt-1 tabular-nums">
-              74.2%
-            </h2>
-          </div>
-          <div className="bg-emerald-50 text-emerald-600 p-3 rounded-2xl">
-            <Award size={20} className="stroke-[2.5]" />
-          </div>
+          <p className="text-xs text-gray-500 font-bold mt-1">Create courses, manage video lectures, and publish directly to the Student/Parent Learning Hub</p>
         </div>
       </div>
 
       {/* TWO COLUMN GRID PANELS */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         
-        {/* LEFT COLUMN: ADD/EDIT LMS COURSE FORM */}
+        {/* LEFT COLUMN: CREATE / EDIT COURSE FORM */}
         <div className="lg:col-span-5 bg-white rounded-3xl border border-gray-200/80 p-6 space-y-6 text-left shadow-xs">
           
           <div className="flex items-center justify-between border-b border-gray-100 pb-3 select-none">
             <h3 className="text-sm font-black text-[#0B1528] uppercase tracking-wider">
-              {isEditing ? 'Edit LMS Course' : 'Create LMS Lecture'}
+              {isEditingCourse ? 'Edit Course Details' : 'Create New Course'}
             </h3>
             <GraduationCap size={16} className="text-indigo-600" />
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4 text-xs font-bold text-gray-700">
+          <form onSubmit={handleCourseSubmit} className="space-y-4 text-xs font-bold text-gray-700">
             
-            {/* Course Title */}
             <div className="space-y-1.5">
               <label className="block text-gray-400 uppercase tracking-wide text-[9px] font-black">Course Title *</label>
               <input
@@ -335,35 +526,67 @@ const LMSManagement = () => {
               />
             </div>
 
-            {/* Subject Selector */}
-            <div className="space-y-1.5">
-              <label className="block text-gray-400 uppercase tracking-wide text-[9px] font-black select-none">Subject *</label>
-              <select
-                value={subject}
-                onChange={(e) => setSubject(e.target.value)}
-                className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-500/25 font-bold cursor-pointer"
-              >
-                {subjects.map((s, idx) => (
-                  <option key={idx} value={s}>{s}</option>
-                ))}
-              </select>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="block text-gray-400 uppercase tracking-wide text-[9px] font-black select-none">Subject *</label>
+                  <button
+                    type="button"
+                    onClick={() => setIsSubjectManagerOpen(true)}
+                    className="flex items-center gap-1 text-indigo-600 hover:text-indigo-800 text-[9px] font-black uppercase tracking-wide"
+                    title="Add or remove subjects"
+                  >
+                    <Settings size={10} /> Manage
+                  </button>
+                </div>
+                <select
+                  value={subject}
+                  onChange={(e) => setSubject(e.target.value)}
+                  disabled={subjectsLoading}
+                  className="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-500/25 font-bold cursor-pointer disabled:opacity-60"
+                >
+                  {subjectsLoading ? (
+                    <option value="">Loading…</option>
+                  ) : subjects.length === 0 ? (
+                    <option value="">No subjects yet — click Manage</option>
+                  ) : (
+                    subjects.map((s) => (
+                      <option key={s._id} value={s.label}>{s.label}</option>
+                    ))
+                  )}
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="block text-gray-400 uppercase tracking-wide text-[9px] font-black select-none">Target Grade *</label>
+                  <button
+                    type="button"
+                    onClick={() => setIsGradeManagerOpen(true)}
+                    className="flex items-center gap-1 text-indigo-600 hover:text-indigo-800 text-[9px] font-black uppercase tracking-wide"
+                    title="Add or remove grades"
+                  >
+                    <Settings size={10} /> Manage
+                  </button>
+                </div>
+                <select
+                  value={gradeClass}
+                  onChange={(e) => setGradeClass(e.target.value)}
+                  disabled={gradesLoading}
+                  className="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-500/25 font-bold cursor-pointer disabled:opacity-60"
+                >
+                  <option value={ALL_GRADES}>{ALL_GRADES}</option>
+                  {gradesLoading ? (
+                    <option value="" disabled>Loading…</option>
+                  ) : (
+                    grades.map((g) => (
+                      <option key={g._id} value={g.label}>{g.label}</option>
+                    ))
+                  )}
+                </select>
+              </div>
             </div>
 
-            {/* Class / Grade Target */}
-            <div className="space-y-1.5">
-              <label className="block text-gray-400 uppercase tracking-wide text-[9px] font-black select-none">Target Class / Grade *</label>
-              <select
-                value={gradeClass}
-                onChange={(e) => setGradeClass(e.target.value)}
-                className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-500/25 font-bold cursor-pointer"
-              >
-                {grades.map((g, idx) => (
-                  <option key={idx} value={g}>{g}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Instructor */}
             <div className="space-y-1.5">
               <label className="block text-gray-400 uppercase tracking-wide text-[9px] font-black">Instructor Name *</label>
               <input
@@ -376,80 +599,29 @@ const LMSManagement = () => {
               />
             </div>
 
-            {/* Course Duration */}
             <div className="space-y-1.5">
-              <label className="block text-gray-400 uppercase tracking-wide text-[9px] font-black">Lecture Duration (e.g. 45 Mins)</label>
+              <label className="block text-gray-400 uppercase tracking-wide text-[9px] font-black">Overall Course Duration</label>
               <input
                 type="text"
-                placeholder="e.g. 45 Mins"
+                placeholder="e.g. 4 Hours (12 Lessons)"
                 value={duration}
                 onChange={(e) => setDuration(e.target.value)}
                 className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-500/25 font-bold"
               />
             </div>
 
-            {/* Key Concepts description */}
             <div className="space-y-1.5">
-              <label className="block text-gray-400 uppercase tracking-wide text-[9px] font-black">Key Concepts Description *</label>
+              <label className="block text-gray-400 uppercase tracking-wide text-[9px] font-black">Key Concepts Description</label>
               <textarea
-                required
-                rows={4}
-                placeholder="e.g. Understanding solar cells; Photovoltaic circuits; Slices wholes; ground filtration..."
+                rows={3}
+                placeholder="e.g. Understanding solar cells; Photovoltaic circuits; Slices wholes..."
                 value={concepts}
                 onChange={(e) => setConcepts(e.target.value)}
                 className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-500/25 font-bold leading-relaxed resize-none"
               />
-              <span className="block text-[8px] text-gray-400 font-medium">Please separate distinct syllabus key concepts with semicolons (;) to format them inside the user player dashboard!</span>
             </div>
 
-            {/* VIDEO FILE UPLOAD ZONE */}
-            <div className="space-y-1.5">
-              <label className="block text-gray-400 uppercase tracking-wide text-[9px] font-black select-none">Lecture Video File *</label>
-              <input
-                type="file"
-                ref={videoInputRef}
-                accept="video/*"
-                onChange={handleVideoFileChange}
-                className="hidden"
-              />
-
-              <div 
-                onClick={() => videoInputRef.current?.click()}
-                className={`border-2 border-dashed rounded-2xl p-5 text-center cursor-pointer transition-all hover:bg-gray-50/70 bg-white ${
-                  videoPreview ? 'border-emerald-200 bg-emerald-50/20' : 'border-gray-250'
-                }`}
-              >
-                <div className="flex flex-col items-center gap-1.5 select-none">
-                  {videoPreview ? (
-                    <>
-                      <CheckCircle size={24} className="text-emerald-500" />
-                      <span className="text-emerald-700 font-extrabold text-[10px] uppercase tracking-wide">Lecture Video Loaded!</span>
-                      <span className="text-[8px] text-gray-400 truncate max-w-[200px]">
-                        {videoFile ? videoFile.name : 'Attached video preset'}
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <Upload size={24} className="text-gray-400" />
-                      <span className="text-gray-700 font-black">Choose lecture video file</span>
-                      <span className="text-[8px] text-gray-400">mp4 or mov formats supported</span>
-                    </>
-                  )}
-                </div>
-              </div>
-              <input
-                type="url"
-                placeholder="Video URL (optional) — https://example.com/lecture.mp4"
-                value={videoUrlInput}
-                onChange={(e) => setVideoUrlInput(e.target.value)}
-                className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-500/25 font-bold text-[11px]"
-              />
-              <span className="block text-[8px] text-gray-400 font-medium">
-                Upload a video file or paste a hosted video link to save the lecture.
-              </span>
-            </div>
-
-            {/* THUMBNAIL COVER IMAGE FILE UPLOAD ZONE */}
+            {/* THUMBNAIL COVER IMAGE */}
             <div className="space-y-1.5">
               <label className="block text-gray-400 uppercase tracking-wide text-[9px] font-black select-none">Course Cover Image *</label>
               <input
@@ -459,10 +631,9 @@ const LMSManagement = () => {
                 onChange={handleCoverFileChange}
                 className="hidden"
               />
-
               <div 
                 onClick={() => coverInputRef.current?.click()}
-                className={`border-2 border-dashed rounded-2xl p-5 text-center cursor-pointer transition-all hover:bg-gray-50/70 bg-white ${
+                className={`border-2 border-dashed rounded-2xl p-4 text-center cursor-pointer transition-all hover:bg-gray-50/70 bg-white ${
                   coverPreview ? 'border-emerald-200 bg-emerald-50/20' : 'border-gray-250'
                 }`}
               >
@@ -470,37 +641,32 @@ const LMSManagement = () => {
                   {coverPreview ? (
                     <div className="flex items-center gap-3 text-left">
                       <img 
-                        src={coverPreview} 
+                        src={coverPreview.startsWith('blob:') || coverPreview.startsWith('data:') ? coverPreview : toAbsoluteUrl(coverPreview)} 
                         alt="lms cover preview" 
                         className="w-10 h-10 object-cover rounded-lg border border-emerald-100"
                       />
                       <div>
-                        <span className="block text-emerald-700 font-extrabold text-[10px] uppercase tracking-wide">Cover Loaded!</span>
-                        <span className="block text-[8px] text-gray-400 truncate max-w-[150px]">
-                          {coverFile ? coverFile.name : 'Sample cover preview set'}
-                        </span>
+                        <span className="block text-emerald-700 font-extrabold text-[10px] uppercase tracking-wide">Cover Image Set!</span>
+                        <span className="block text-[8px] text-gray-400">Click to replace photo</span>
                       </div>
                     </div>
                   ) : (
                     <>
-                      <ImageIcon size={24} className="text-gray-400" />
-                      <span className="text-gray-700 font-black">Choose course cover image</span>
-                      <span className="text-[8px] text-gray-400">Accepts png or jpeg</span>
+                      <ImageIcon size={20} className="text-gray-400" />
+                      <span className="text-gray-700 font-black">Choose course cover photo</span>
                     </>
                   )}
                 </div>
               </div>
               <input
                 type="url"
-                placeholder="Cover image URL (optional) — https://example.com/cover.jpg"
+                placeholder="Or paste image URL (https://...)"
                 value={thumbnailUrlInput}
                 onChange={(e) => setThumbnailUrlInput(e.target.value)}
-                className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-500/25 font-bold text-[11px]"
+                className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500/25 font-bold text-[11px]"
               />
-              <span className="block text-[8px] text-gray-400 font-medium">
-                Use a URL or upload a cover image file.
-              </span>
             </div>
+
             <label className="flex items-center gap-2.5 cursor-pointer text-xs select-none pt-1">
               <input
                 type="checkbox"
@@ -508,156 +674,366 @@ const LMSManagement = () => {
                 onChange={(e) => setIsActive(e.target.checked)}
                 className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4 cursor-pointer"
               />
-              <span>Active (Publish on Student Learning Hub)</span>
+              <span>Published (Visible on Student Learning Hub)</span>
             </label>
 
-            {/* Form actions */}
-            <div className="pt-4 space-y-2 select-none">
+            <div className="pt-2 space-y-2 select-none">
               <button
                 type="submit"
                 disabled={saving}
                 className="w-full flex items-center justify-center gap-2 bg-[#0B1528] hover:bg-[#15253F] disabled:opacity-60 text-white text-xs font-black uppercase tracking-wider py-3 rounded-xl transition-all shadow-xs"
               >
                 {saving ? <Loader2 size={14} className="animate-spin" /> : null}
-                <span>{isEditing ? 'Update Lecture Details' : 'Upload Lecture'}</span>
+                <span>{isEditingCourse ? 'Update Course Details' : 'Create Course'}</span>
               </button>
 
-              <button
-                type="button"
-                onClick={resetForm}
-                className="w-full flex items-center justify-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-600 text-xs font-black uppercase tracking-wider py-2.5 rounded-xl transition-all"
-              >
-                Cancel / Reset
-              </button>
+              {isEditingCourse && (
+                <button
+                  type="button"
+                  onClick={resetCourseForm}
+                  className="w-full flex items-center justify-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-600 text-xs font-black uppercase tracking-wider py-2.5 rounded-xl transition-all"
+                >
+                  Cancel Edit
+                </button>
+              )}
             </div>
 
           </form>
 
         </div>
 
-        {/* RIGHT COLUMN: LMS COURSES CATALOG */}
-        <div className="lg:col-span-7 bg-white rounded-3xl border border-gray-200/80 p-6 space-y-6 text-left shadow-xs">
-          
-          <h3 className="text-sm font-black text-[#0B1528] uppercase tracking-wider border-b border-gray-100 pb-3 select-none">
-            Learning Catalog Directory
-          </h3>
+        {/* RIGHT COLUMN: LMS COURSES CATALOG & LESSONS MANAGER */}
+        <div className="lg:col-span-7 space-y-6">
 
-          {(!authReady || loading) ? (
-            <div className="flex justify-center py-16">
-              <Loader2 size={28} className="animate-spin text-indigo-600" />
+          {/* COURSE LIST DIRECTORY */}
+          <div className="bg-white rounded-3xl border border-gray-200/80 p-6 space-y-6 text-left shadow-xs">
+            
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3 select-none">
+              <h3 className="text-sm font-black text-[#0B1528] uppercase tracking-wider">
+                Platform Courses Directory
+              </h3>
+              <span className="text-xs font-bold text-gray-400">{courses.length} Courses</span>
             </div>
-          ) : error ? (
-            <p className="text-sm text-red-500 text-center py-8">{error}</p>
-          ) : courses.length === 0 ? (
-            <p className="text-sm text-gray-400 text-center py-8">No platform lectures yet. Create one using the form.</p>
-          ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-            {courses.map((c) => (
-              <div 
-                key={c.id}
-                className="bg-white border border-gray-200 rounded-3xl overflow-hidden shadow-xs hover:shadow-md hover:border-indigo-150 transition-all flex flex-col group"
-              >
-                
-                {/* Course Cover preview with glowing Play */}
-                <div className="relative aspect-video w-full bg-slate-900 overflow-hidden cursor-pointer select-none">
-                  <img
-                    src={c.thumbnailUrl}
-                    alt={c.title}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 opacity-90"
+
+            {(!authReady || loading) ? (
+              <div className="flex justify-center py-16">
+                <Loader2 size={28} className="animate-spin text-indigo-600" />
+              </div>
+            ) : error ? (
+              <p className="text-sm text-red-500 text-center py-8">{error}</p>
+            ) : courses.length === 0 ? (
+              <p className="text-sm text-gray-400 text-center py-8">No platform courses yet. Create one using the form.</p>
+            ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              {courses.map((c) => (
+                <div 
+                  key={c.id}
+                  className={`bg-white border rounded-3xl overflow-hidden shadow-xs hover:shadow-md transition-all flex flex-col group ${
+                    selectedCourseForLessons?.id === c.id ? 'border-indigo-500 ring-2 ring-indigo-500/20' : 'border-gray-200 hover:border-indigo-150'
+                  }`}
+                >
+                  
+                  {/* Cover preview */}
+                  <div className="relative aspect-video w-full bg-slate-900 overflow-hidden cursor-pointer select-none">
+                    <img
+                      src={c.thumbnailUrl ? toAbsoluteUrl(c.thumbnailUrl) : 'https://images.unsplash.com/photo-1503676260728-1c00da094a0b?auto=format&fit=crop&w=600&q=80'}
+                      alt={c.title}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 opacity-90"
+                    />
+
+                    <div className="absolute inset-0 bg-black/35 transition-opacity group-hover:bg-black/45" />
+
+                    {/* Subject and Class badges */}
+                    <div className="absolute top-3 left-3 flex gap-1.5">
+                      <span className="bg-indigo-600 text-white text-[8px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border border-white/10">
+                        {c.subject}
+                      </span>
+                      <span className="bg-sky-600 text-white text-[8px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border border-white/10">
+                        {c.gradeClass}
+                      </span>
+                    </div>
+
+                    <span className={`absolute top-3 right-3 px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider border ${
+                      c.status === 'Active' 
+                        ? 'bg-emerald-500 text-white border-emerald-400 shadow-sm' 
+                        : 'bg-yellow-500 text-white border-yellow-400 shadow-sm'
+                    }`}>
+                      {c.status}
+                    </span>
+                  </div>
+
+                  {/* Course Info */}
+                  <div className="p-4 flex-1 flex flex-col justify-between text-left space-y-3">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-1.5 text-[9px] font-bold text-gray-400">
+                        <Clock size={11} className="text-gray-300" />
+                        <span>{c.duration || 'Flexible duration'}</span>
+                      </div>
+
+                      <h4 className="text-xs font-black text-gray-900 leading-snug line-clamp-2 select-text">
+                        {c.title}
+                      </h4>
+
+                      <div className="flex items-center gap-1 text-[9px] text-gray-500 font-semibold pt-0.5">
+                        <User size={10} className="text-gray-300" />
+                        <span>Instructor: <span className="text-gray-800 font-bold select-text">{c.instructor}</span></span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Actions bottom footer */}
+                  <div className="p-3 bg-gray-50 border-t border-gray-100 flex items-center justify-between select-none gap-2">
+                    
+                    <button
+                      type="button"
+                      onClick={() => openLessonsManager(c)}
+                      className="flex-1 flex items-center justify-center gap-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3 py-2 rounded-xl text-xs font-black transition-colors"
+                    >
+                      <Film size={13} />
+                      <span>Manage Videos</span>
+                    </button>
+
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => handleEditCourse(c)}
+                        className="bg-white hover:bg-indigo-50 border border-gray-200 text-gray-700 hover:text-indigo-600 p-2 rounded-xl shadow-xs transition-colors"
+                        title="Edit Course"
+                      >
+                        <Edit3 size={11} className="stroke-[2.5]" />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteCourse(c.id)}
+                        className="bg-white hover:bg-rose-50 border border-gray-200 text-gray-700 hover:text-rose-600 p-2 rounded-xl shadow-xs transition-colors"
+                        title="Delete Course"
+                      >
+                        <Trash2 size={11} className="stroke-[2.5]" />
+                      </button>
+                    </div>
+
+                  </div>
+
+                </div>
+              ))}
+            </div>
+            )}
+
+          </div>
+
+          {/* MANAGING LESSONS & UPLOADING VIDEOS PANEL FOR SELECTED COURSE */}
+          {selectedCourseForLessons && (
+            <div className="bg-white rounded-3xl border border-indigo-200 p-6 space-y-6 text-left shadow-lg animate-in fade-in">
+              
+              <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                <div className="flex items-center gap-2">
+                  <span className="bg-indigo-600 text-white p-1.5 rounded-lg">
+                    <Film size={16} />
+                  </span>
+                  <div>
+                    <h3 className="text-sm font-black text-[#0B1528] uppercase tracking-wider">
+                      Video Lessons: {selectedCourseForLessons.title}
+                    </h3>
+                    <span className="text-[10px] text-gray-400 font-bold block">
+                      {selectedCourseForLessons.subject} • {selectedCourseForLessons.gradeClass}
+                    </span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedCourseForLessons(null)}
+                  className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-all"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              {/* Add / Edit Video Lesson Form */}
+              <form onSubmit={handleLessonSubmit} className="bg-purple-50/40 p-4 rounded-2xl border border-purple-100 space-y-4 text-xs font-bold text-gray-700">
+                <span className="text-[10px] font-black uppercase text-[#3b2d7d] tracking-wider block">
+                  {isEditingLesson ? 'Edit Video Lesson' : '+ Add New Video Lesson'}
+                </span>
+
+                <div className="space-y-1">
+                  <label className="block text-gray-500 text-[10px]">Lesson Title *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Chapter 1: Introduction to Photovoltaic Circuits"
+                    value={lessonTitle}
+                    onChange={(e) => setLessonTitle(e.target.value)}
+                    className="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-2 focus:outline-none focus:border-indigo-500 font-bold text-xs"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block text-gray-500 text-[10px]">Lesson Description (Optional)</label>
+                  <input
+                    type="text"
+                    placeholder="Brief summary of what this video lesson covers"
+                    value={lessonDescription}
+                    onChange={(e) => setLessonDescription(e.target.value)}
+                    className="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-2 focus:outline-none focus:border-indigo-500 font-bold text-xs"
+                  />
+                </div>
+
+                {/* UPLOAD VIDEO ZONE WITH REAL-TIME PROGRESS BAR */}
+                <div className="space-y-2">
+                  <label className="block text-gray-500 text-[10px]">Upload Video File (MP4/MOV) *</label>
+                  <input
+                    type="file"
+                    ref={lessonVideoInputRef}
+                    accept="video/*"
+                    onChange={handleLessonVideoFileChange}
+                    className="hidden"
                   />
 
-                  {/* Dimming */}
-                  <div className="absolute inset-0 bg-black/35 transition-opacity group-hover:bg-black/45" />
-
-                  {/* Play Overlay */}
                   <div 
-                    onClick={() => setPlayingCourse(c)}
-                    className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white/95 text-black hover:bg-indigo-600 hover:text-white p-3.5 rounded-full shadow-lg transition-all scale-95 group-hover:scale-110"
+                    onClick={() => lessonVideoInputRef.current?.click()}
+                    className={`border-2 border-dashed rounded-2xl p-4 text-center cursor-pointer transition-all hover:bg-white bg-white/80 ${
+                      lessonVideoPreview ? 'border-emerald-300 bg-emerald-50/20' : 'border-purple-200'
+                    }`}
                   >
-                    <Play size={16} className="fill-current stroke-none ml-0.5" />
-                  </div>
-
-                  {/* Subject and Class label badges overlay */}
-                  <div className="absolute top-3 left-3 flex gap-1.5">
-                    <span className="bg-indigo-600 text-white text-[8px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border border-white/10">
-                      {c.subject}
-                    </span>
-                    <span className="bg-sky-600 text-white text-[8px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border border-white/10">
-                      {c.gradeClass}
-                    </span>
-                  </div>
-
-                  {/* Enrolled overlay bottom right */}
-                  <div className="absolute bottom-3 right-3 bg-black/60 border border-white/10 rounded-lg px-2 py-0.5 text-[8px] font-black text-gray-300">
-                    👥 {c.studentsEnrolled.toLocaleString()}
-                  </div>
-                </div>
-
-                {/* Course Metadata details */}
-                <div className="p-4 flex-1 flex flex-col justify-between text-left space-y-3">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-1.5 text-[9px] font-bold text-gray-400">
-                      <Clock size={11} className="text-gray-300" />
-                      <span>{c.duration} Duration</span>
-                    </div>
-
-                    <h4 className="text-xs font-black text-gray-900 leading-snug line-clamp-2 select-text">
-                      {c.title}
-                    </h4>
-
-                    <div className="flex items-center gap-1 text-[9px] text-gray-500 font-semibold pt-1">
-                      <User size={10} className="text-gray-300" />
-                      <span>Instructor: <span className="text-gray-800 font-bold select-text">{c.instructor}</span></span>
+                    <div className="flex flex-col items-center gap-1 select-none">
+                      {lessonVideoPreview ? (
+                        <>
+                          <CheckCircle size={20} className="text-emerald-500" />
+                          <span className="text-emerald-800 font-extrabold text-xs">Video Selected!</span>
+                          <span className="text-[10px] text-gray-400 truncate max-w-[250px]">
+                            {lessonVideoFile ? lessonVideoFile.name : 'Attached Video File'}
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <Upload size={20} className="text-purple-600" />
+                          <span className="text-purple-900 font-black text-xs">Click to select MP4/MOV video</span>
+                          <span className="text-[9px] text-gray-400">Direct file upload to server</span>
+                        </>
+                      )}
                     </div>
                   </div>
 
-                  {/* Bullet outline preview snippet */}
-                  <div className="bg-gray-50 rounded-xl p-2.5 border border-gray-150/50">
-                    <span className="block text-[8px] font-black uppercase text-gray-400 tracking-wider mb-1 select-none">Concepts Snippet</span>
-                    <p className="text-[9px] text-gray-400 font-semibold leading-relaxed line-clamp-2 select-text">
-                      {c.concepts}
-                    </p>
-                  </div>
+                  {/* REALTIME UPLOAD PROGRESS BAR */}
+                  {isUploadingVideo && (
+                    <div className="space-y-1.5 bg-white p-3 rounded-xl border border-indigo-100">
+                      <div className="flex items-center justify-between text-xs font-black text-indigo-900">
+                        <span>Uploading Video File...</span>
+                        <span>{uploadProgress}%</span>
+                      </div>
+                      <div className="w-full bg-gray-150 h-2.5 rounded-full overflow-hidden">
+                        <div 
+                          className="bg-gradient-to-r from-indigo-500 to-purple-600 h-full transition-all duration-200 rounded-full"
+                          style={{ width: `${uploadProgress}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
 
+                  <div className="pt-1">
+                    <input
+                      type="url"
+                      placeholder="Or paste external Hosted Video URL (https://...)"
+                      value={lessonVideoUrlInput}
+                      onChange={(e) => setLessonVideoUrlInput(e.target.value)}
+                      className="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-2 focus:outline-none focus:border-indigo-500 font-bold text-xs"
+                    />
+                  </div>
                 </div>
 
-                {/* Actions bottom footer */}
-                <div className="p-3 bg-gray-50 border-t border-gray-100 flex items-center justify-between select-none">
-                  
-                  {/* Status Badges */}
-                  <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider border ${
-                    c.status === 'Active' 
-                      ? 'bg-emerald-50 text-emerald-700 border-emerald-100' 
-                      : 'bg-yellow-50 text-yellow-700 border-yellow-100'
-                  }`}>
-                    {c.status}
-                  </span>
-
-                  <div className="flex items-center gap-1.5">
+                <div className="flex items-center justify-end gap-2 pt-1">
+                  {isEditingLesson && (
                     <button
                       type="button"
-                      onClick={() => handleEdit(c)}
-                      className="bg-white hover:bg-indigo-50 border border-gray-200 text-gray-700 hover:text-indigo-600 p-2 rounded-xl shadow-xs transition-colors"
-                      title="Edit"
+                      onClick={resetLessonForm}
+                      className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold rounded-xl text-xs"
                     >
-                      <Edit3 size={11} className="stroke-[2.5]" />
+                      Cancel
                     </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handleDelete(c.id)}
-                      className="bg-white hover:bg-rose-50 border border-gray-200 text-gray-700 hover:text-rose-600 p-2 rounded-xl shadow-xs transition-colors"
-                      title="Delete"
-                    >
-                      <Trash2 size={11} className="stroke-[2.5]" />
-                    </button>
-                  </div>
-
+                  )}
+                  <button
+                    type="submit"
+                    disabled={isUploadingVideo}
+                    className="px-5 py-2 bg-[#3b2d7d] hover:bg-[#5942bc] text-white font-black rounded-xl text-xs uppercase tracking-wider shadow-md disabled:opacity-60 flex items-center gap-1.5"
+                  >
+                    {isUploadingVideo && <Loader2 size={13} className="animate-spin" />}
+                    <span>{isEditingLesson ? 'Update Lesson' : 'Save & Publish Video Lesson'}</span>
+                  </button>
                 </div>
+              </form>
 
+              {/* LIST OF LESSONS IN COURSE */}
+              <div className="space-y-3">
+                <h4 className="text-xs font-black text-gray-700 uppercase tracking-wider">
+                  Lessons List ({lessons.length})
+                </h4>
+
+                {lessonsLoading ? (
+                  <div className="flex justify-center py-6">
+                    <Loader2 size={22} className="animate-spin text-indigo-600" />
+                  </div>
+                ) : lessons.length === 0 ? (
+                  <p className="text-xs text-gray-400 py-4 text-center">No video lessons uploaded yet. Add the first lesson above.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {lessons.map((lesson, index) => {
+                      const vUrl = lesson.contentHtml || lesson.videoUrl || '';
+                      return (
+                        <div 
+                          key={lesson._id}
+                          className="bg-white border border-gray-200 p-3.5 rounded-2xl flex items-center justify-between gap-3 shadow-xs hover:border-indigo-200 transition-all"
+                        >
+                          <div className="flex items-center gap-3">
+                            <span className="w-7 h-7 rounded-xl bg-purple-50 text-[#3b2d7d] font-black text-xs flex items-center justify-center shrink-0 border border-purple-100">
+                              {index + 1}
+                            </span>
+                            <div>
+                              <h5 className="text-xs font-black text-gray-900 leading-tight">{lesson.title}</h5>
+                              {lesson.description && (
+                                <span className="text-[10px] text-gray-400 font-bold block mt-0.5">{lesson.description}</span>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            {vUrl && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setPlayingVideoUrl(toAbsoluteUrl(vUrl));
+                                  setPlayingVideoTitle(lesson.title);
+                                }}
+                                className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-black text-[11px] rounded-xl flex items-center gap-1 transition-colors"
+                              >
+                                <Play size={12} className="fill-current stroke-none" />
+                                <span>Preview</span>
+                              </button>
+                            )}
+
+                            <button
+                              type="button"
+                              onClick={() => handleEditLesson(lesson)}
+                              className="p-1.5 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                            >
+                              <Edit3 size={12} />
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteLesson(lesson._id)}
+                              className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
-            ))}
-          </div>
+
+            </div>
           )}
 
         </div>
@@ -665,95 +1041,209 @@ const LMSManagement = () => {
       </div>
 
       {/* FLOATING LMS VIDEO PLAYER OVERLAY MODAL */}
-      {playingCourse && ReactDOM.createPortal(
+      {playingVideoUrl && ReactDOM.createPortal(
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-fade-in select-none">
-          
-          <div className="bg-[#0B1528] w-full max-w-[680px] rounded-3xl border border-white/10 shadow-2xl overflow-hidden flex flex-col md:flex-row">
+          <div className="bg-[#0B1528] w-full max-w-[720px] rounded-3xl border border-white/10 shadow-2xl overflow-hidden flex flex-col">
             
-            {/* Left Column: Educational video canvas */}
-            <div className="relative md:w-3/5 aspect-video md:aspect-auto bg-black flex flex-col justify-center">
+            <div className="p-4 bg-[#141B2D] text-white flex items-center justify-between border-b border-white/10">
+              <h4 className="text-xs font-black tracking-wide truncate">{playingVideoTitle || 'Video Preview'}</h4>
+              <button
+                type="button"
+                onClick={() => setPlayingVideoUrl(null)}
+                className="bg-white/10 hover:bg-white/20 text-white p-1.5 rounded-full transition-colors cursor-pointer"
+              >
+                <X size={14} />
+              </button>
+            </div>
+
+            <div className="aspect-video w-full bg-black flex items-center justify-center">
               <video
-                src={playingCourse.videoUrl}
+                src={playingVideoUrl}
                 className="w-full h-full object-contain"
                 controls
                 autoPlay
-                loop
                 playsInline
               />
-
-              <div className="absolute top-4 left-4">
-                <span className="bg-indigo-600 text-white text-[8px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full shadow">
-                  🎓 {playingCourse.subject}
-                </span>
-              </div>
-            </div>
-
-            {/* Right Column: Key Syllabus Concepts & details */}
-            <div className="md:w-2/5 p-6 text-white text-left flex flex-col justify-between space-y-4 bg-[#141B2D]">
-              
-              {/* Header block */}
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <span className="bg-sky-500/25 border border-sky-400/25 text-sky-300 text-[8px] font-black uppercase tracking-wider px-2 py-0.5 rounded">
-                    {playingCourse.gradeClass}
-                  </span>
-                  
-                  {/* Close button */}
-                  <button
-                    type="button"
-                    onClick={() => setPlayingCourse(null)}
-                    className="bg-white/10 hover:bg-white/20 text-white p-1.5 rounded-full transition-colors cursor-pointer"
-                  >
-                    <X size={14} />
-                  </button>
-                </div>
-
-                <h4 className="text-sm font-black leading-snug tracking-tight text-white select-text">
-                  {playingCourse.title}
-                </h4>
-
-                <div className="flex items-center gap-1.5 text-[9px] text-gray-400 font-bold select-none">
-                  <User size={11} className="text-gray-500" />
-                  <span>Instructor: <span className="text-gray-200 select-text">{playingCourse.instructor}</span></span>
-                </div>
-              </div>
-
-              {/* key Syllabus concepts outline (custom bullet render splits semicolons) */}
-              <div className="flex-1 bg-black/20 border border-white/5 rounded-2xl p-4 overflow-y-auto max-h-[180px] space-y-2">
-                <span className="block text-[8px] font-black text-indigo-400 uppercase tracking-widest mb-1.5 select-none">
-                  📚 Key Concepts covered
-                </span>
-                
-                <ul className="space-y-2 text-[10px] text-gray-300 font-semibold leading-relaxed">
-                  {playingCourse.concepts.split(';').map((bullet, idx) => {
-                    const cleanText = bullet.trim();
-                    if (!cleanText) return null;
-                    return (
-                      <li key={idx} className="flex items-start gap-2 select-text">
-                        <span className="text-indigo-400 mt-0.5">●</span>
-                        <span>{cleanText}</span>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-
-              {/* Footer specs */}
-              <div className="flex items-center justify-between text-[9px] text-gray-400 font-bold pt-3 border-t border-white/5 select-none">
-                <span className="flex items-center gap-1">
-                  <Clock size={11} className="text-gray-500" />
-                  Duration: {playingCourse.duration}
-                </span>
-
-                <span className="flex items-center gap-1">
-                  👥 {playingCourse.studentsEnrolled.toLocaleString()} enrolled
-                </span>
-              </div>
-
             </div>
 
           </div>
+        </div>,
+        document.body
+      )}
 
+      {/* MANAGE SUBJECTS MODAL */}
+      {isSubjectManagerOpen && ReactDOM.createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white w-full max-w-sm rounded-3xl border border-gray-200 shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+
+            <div className="p-5 bg-[#0B1528] text-white flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-2">
+                <Tag size={15} />
+                <h4 className="text-sm font-black tracking-wide">Manage Subjects</h4>
+              </div>
+              <button
+                type="button"
+                onClick={() => { setIsSubjectManagerOpen(false); setSubjectManagerError(''); setNewSubjectLabel(''); }}
+                className="bg-white/10 hover:bg-white/20 text-white p-1.5 rounded-full transition-colors cursor-pointer"
+              >
+                <X size={14} />
+              </button>
+            </div>
+
+            <form onSubmit={handleAddSubject} className="p-4 border-b border-gray-100 flex items-center gap-2 shrink-0">
+              <input
+                type="text"
+                placeholder="e.g. Computer Science"
+                value={newSubjectLabel}
+                onChange={(e) => setNewSubjectLabel(e.target.value)}
+                className="flex-1 bg-white border border-gray-200 rounded-xl px-3.5 py-2.5 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/25"
+              />
+              <button
+                type="submit"
+                disabled={savingSubject || !newSubjectLabel.trim()}
+                className="flex items-center gap-1 bg-[#0B1528] hover:bg-[#15253F] disabled:opacity-50 text-white text-[10px] font-black uppercase tracking-wider px-3.5 py-2.5 rounded-xl transition-all shrink-0"
+              >
+                {savingSubject ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
+                Add
+              </button>
+            </form>
+
+            {subjectManagerError && (
+              <p className="px-4 pt-3 text-[10px] font-bold text-red-600">{subjectManagerError}</p>
+            )}
+
+            <div className="p-4 space-y-2 overflow-y-auto">
+              {subjectsLoading ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 size={20} className="animate-spin text-indigo-600" />
+                </div>
+              ) : subjects.length === 0 ? (
+                <p className="text-xs text-gray-400 text-center py-6">No subjects yet — add the first one above.</p>
+              ) : (
+                subjects.map((s) => (
+                  <div
+                    key={s._id}
+                    className="flex items-center justify-between gap-3 bg-gray-50 border border-gray-100 rounded-xl px-3.5 py-2.5"
+                  >
+                    <span className="text-xs font-bold text-gray-800">{s.label}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteSubject(s)}
+                      disabled={deletingSubjectId === s._id}
+                      className="text-gray-400 hover:text-red-600 disabled:opacity-50 transition-colors"
+                      title={`Delete "${s.label}"`}
+                    >
+                      {deletingSubjectId === s._id ? (
+                        <Loader2 size={13} className="animate-spin" />
+                      ) : (
+                        <Trash2 size={13} />
+                      )}
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* MANAGE GRADES MODAL */}
+      {isGradeManagerOpen && ReactDOM.createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white w-full max-w-sm rounded-3xl border border-gray-200 shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+
+            <div className="p-5 bg-[#0B1528] text-white flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-2">
+                <GraduationCap size={15} />
+                <h4 className="text-sm font-black tracking-wide">Manage Grades</h4>
+              </div>
+              <button
+                type="button"
+                onClick={() => { setIsGradeManagerOpen(false); setGradeManagerError(''); setNewGradeLabel(''); }}
+                className="bg-white/10 hover:bg-white/20 text-white p-1.5 rounded-full transition-colors cursor-pointer"
+              >
+                <X size={14} />
+              </button>
+            </div>
+
+            <form onSubmit={handleAddGrade} className="p-4 border-b border-gray-100 flex items-center gap-2 shrink-0">
+              <input
+                type="text"
+                placeholder="e.g. Class 9 or Nursery"
+                value={newGradeLabel}
+                onChange={(e) => setNewGradeLabel(e.target.value)}
+                className="flex-1 bg-white border border-gray-200 rounded-xl px-3.5 py-2.5 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/25"
+              />
+              <button
+                type="submit"
+                disabled={savingGrade || !newGradeLabel.trim()}
+                className="flex items-center gap-1 bg-[#0B1528] hover:bg-[#15253F] disabled:opacity-50 text-white text-[10px] font-black uppercase tracking-wider px-3.5 py-2.5 rounded-xl transition-all shrink-0"
+              >
+                {savingGrade ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
+                Add
+              </button>
+            </form>
+
+            {gradeManagerError && (
+              <p className="px-4 pt-3 text-[10px] font-bold text-red-600">{gradeManagerError}</p>
+            )}
+
+            {/* Real grade/class names schools actually use — every school
+                names its own grades, so this beats the admin guessing. */}
+            {gradeSuggestions.length > 0 && (
+              <div className="px-4 pt-3 space-y-2">
+                <span className="text-[9px] font-black text-gray-400 uppercase tracking-wider">Suggested from schools</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {gradeSuggestions.map((label) => (
+                    <button
+                      key={label}
+                      type="button"
+                      onClick={() => addGrade(label)}
+                      disabled={savingGrade}
+                      className="flex items-center gap-1 bg-indigo-50 hover:bg-indigo-100 disabled:opacity-50 text-indigo-700 text-[10px] font-black px-2.5 py-1.5 rounded-lg transition-colors"
+                    >
+                      <Plus size={9} /> {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="p-4 space-y-2 overflow-y-auto">
+              {gradesLoading ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 size={20} className="animate-spin text-indigo-600" />
+                </div>
+              ) : grades.length === 0 ? (
+                <p className="text-xs text-gray-400 text-center py-6">No grades yet — add the first one above.</p>
+              ) : (
+                grades.map((g) => (
+                  <div
+                    key={g._id}
+                    className="flex items-center justify-between gap-3 bg-gray-50 border border-gray-100 rounded-xl px-3.5 py-2.5"
+                  >
+                    <span className="text-xs font-bold text-gray-800">{g.label}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteGrade(g)}
+                      disabled={deletingGradeId === g._id}
+                      className="text-gray-400 hover:text-red-600 disabled:opacity-50 transition-colors"
+                      title={`Delete "${g.label}"`}
+                    >
+                      {deletingGradeId === g._id ? (
+                        <Loader2 size={13} className="animate-spin" />
+                      ) : (
+                        <Trash2 size={13} />
+                      )}
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+
+          </div>
         </div>,
         document.body
       )}

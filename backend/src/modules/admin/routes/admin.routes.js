@@ -548,6 +548,56 @@ router.patch(
   validateBody(lmsValidators.courseStatusSchema),
   adminController.setPlatformCourseStatus
 );
+router.get(
+  '/lms/courses/:courseId/lessons',
+  ...adminOnly,
+  validateParams(validators.courseIdParam),
+  validateQuery(lmsValidators.paginationQuery),
+  adminController.listPlatformLessons
+);
+router.post(
+  '/lms/courses/:courseId/lessons',
+  ...adminOnly,
+  validateParams(validators.courseIdParam),
+  validateBody(lmsValidators.createLessonSchema),
+  adminController.createPlatformLesson
+);
+router.patch(
+  '/lms/courses/:courseId/lessons/:lessonId',
+  ...adminOnly,
+  validateParams(lmsValidators.lessonIdParam),
+  validateBody(lmsValidators.updateLessonSchema),
+  adminController.updatePlatformLesson
+);
+router.delete(
+  '/lms/courses/:courseId/lessons/:lessonId',
+  ...adminOnly,
+  validateParams(lmsValidators.lessonIdParam),
+  adminController.deletePlatformLesson
+);
+
+// LMS course subjects — dynamic picker options, not hardcoded on the client
+router.get('/lms/subjects', ...adminOnly, adminController.listLmsSubjects);
+router.post('/lms/subjects', ...adminOnly, validateBody(validators.lmsSubjectSchema), adminController.createLmsSubject);
+router.delete(
+  '/lms/subjects/:subjectId',
+  ...adminOnly,
+  validateParams(validators.lmsSubjectIdParam),
+  adminController.deleteLmsSubject
+);
+
+// LMS course target grades — dynamic picker options, not hardcoded on the
+// client; schools each define their own grade/class names, so the admin
+// picks from real ones in use (see the suggestions endpoint) or adds new.
+router.get('/lms/grades', ...adminOnly, adminController.listLmsGrades);
+router.get('/lms/grades/suggestions', ...adminOnly, adminController.listLmsGradeSuggestions);
+router.post('/lms/grades', ...adminOnly, validateBody(validators.lmsGradeSchema), adminController.createLmsGrade);
+router.delete(
+  '/lms/grades/:gradeId',
+  ...adminOnly,
+  validateParams(validators.lmsGradeIdParam),
+  adminController.deleteLmsGrade
+);
 
 // Platform Reels
 router.get('/reels', ...adminOnly, validateQuery(validators.paginationQuery), adminController.listReels);

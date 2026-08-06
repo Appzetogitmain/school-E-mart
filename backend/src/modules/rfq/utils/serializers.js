@@ -57,7 +57,28 @@ const serializeQuote = (quote, vendor = null) => {
   };
 };
 
-const serializeRfq = (rfq, { school = null, quotes = [], vendorQuote = null } = {}) => {
+/**
+ * Reference-image attachment ids live nested inside `meta.uniformSets[].images[]`
+ * (school-authored, not part of the Joi-validated top level) plus the flat
+ * `attachments` array. Resolve them all to displayable URLs in one pass so
+ * neither the school (resuming a draft) nor an invited vendor sees a dead id.
+ */
+const withResolvedImageUrls = (meta, attachmentUrlMap) => {
+  if (!meta?.uniformSets?.length || !attachmentUrlMap) return meta;
+
+  return {
+    ...meta,
+    uniformSets: meta.uniformSets.map((set) => ({
+      ...set,
+      images: (set.images || []).map((img) => ({
+        ...img,
+        url: img.attachmentId ? attachmentUrlMap.get(String(img.attachmentId)) || null : null,
+      })),
+    })),
+  };
+};
+
+const serializeRfq = (rfq, { school = null, quotes = [], vendorQuote = null, attachmentUrlMap = null } = {}) => {
   if (!rfq) return null;
 
   const schoolName = school?.name || 'School';
@@ -84,7 +105,10 @@ const serializeRfq = (rfq, { school = null, quotes = [], vendorQuote = null } = 
     invitedVendorIds: rfq.invitedVendorIds || [],
     invitedCount,
     quoteCount,
-    meta: rfq.meta || null,
+    meta: withResolvedImageUrls(rfq.meta, attachmentUrlMap),
+    attachmentUrls: attachmentUrlMap
+      ? (rfq.attachments || []).map((id) => attachmentUrlMap.get(String(id))).filter(Boolean)
+      : [],
     publishedAt: formatDate(rfq.publishedAt),
     awardedVendorId: rfq.awardedVendorId || null,
     awardedQuoteId: rfq.awardedQuoteId || null,

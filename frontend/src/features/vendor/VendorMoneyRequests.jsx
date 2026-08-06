@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   CreditCard, ArrowUpRight, Search, Clock, HelpCircle, X, Check,
   TrendingUp, AlertCircle, Sparkles, Building, Landmark, Compass, DollarSign, Loader2
@@ -7,12 +8,14 @@ import {
   getVendorEarningsSummary,
   listVendorPayoutRequests,
   requestVendorPayout,
+  getVendorProfile,
 } from '../../services/vendorApi';
 import { getErrorMessage } from '../../utils/apiHelpers';
 import { mapVendorEarningsToWallet } from '../../utils/mappers/vendorSettlementMapper';
 import { paiseToRupees } from '../../utils/mappers/orderMapper';
 
 const VendorMoneyRequests = () => {
+  const navigate = useNavigate();
   const [showDrawer, setShowDrawer] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
@@ -23,12 +26,13 @@ const VendorMoneyRequests = () => {
   const [pendingBal, setPendingBal] = useState(0);
   const [lastWithdrawalBal, setLastWithdrawalBal] = useState(0);
   const [requests, setRequests] = useState([]);
+  // The vendor's own registered bank account — shown read-only in the payout
+  // drawer. This used to be a hardcoded "HDFC Bank / Acct Ending In **** 4859"
+  // shown to every vendor regardless of whose account it actually was.
+  const [vendorBank, setVendorBank] = useState(null);
 
   // Form State inside Payout Drawer
   const [reqAmount, setReqAmount] = useState('');
-  const [reqMethod, setReqMethod] = useState('Bank Transfer');
-  const [reqBankName, setReqBankName] = useState('HDFC Bank');
-  const [reqAccount, setReqAccount] = useState('******4092');
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState(false);
 
@@ -36,16 +40,20 @@ const VendorMoneyRequests = () => {
     setLoading(true);
     setError('');
     try {
-      const [summary, payouts] = await Promise.all([
+      const [summary, payouts, profile] = await Promise.all([
         getVendorEarningsSummary(),
         listVendorPayoutRequests({ limit: 50 }),
+        getVendorProfile().catch(() => null),
       ]);
       const wallet = mapVendorEarningsToWallet(summary);
       setAvailableBal(wallet.availableBal);
       setOnHoldBal(wallet.onHoldBal);
       setPendingBal(wallet.pendingBal);
-      setRequests((payouts.data || []).map((item) => ({
+      setVendorBank(profile?.bank || null);
+
+      const mappedRequests = (payouts.data || []).map((item) => ({
         id: item._id?.toString?.()?.slice(-8)?.toUpperCase() || 'PAYOUT',
+        createdAt: item.audit?.createdAt || null,
         date: item.audit?.createdAt
           ? new Date(item.audit.createdAt).toISOString().split('T')[0]
           : '—',
@@ -53,7 +61,14 @@ const VendorMoneyRequests = () => {
         status: item.status || 'pending',
         method: 'Bank Transfer',
         details: item.bankDetailsSnapshot?.bankName || 'Registered bank account',
-      })));
+      }));
+      setRequests(mappedRequests);
+
+      // Most recently completed payout — actually sent to the bank, not just requested.
+      const lastCompleted = mappedRequests
+        .filter((r) => r.status === 'completed' && r.createdAt)
+        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0];
+      setLastWithdrawalBal(lastCompleted?.amount || 0);
     } catch (err) {
       setError(getErrorMessage(err, 'Unable to load wallet data'));
     } finally {
@@ -70,6 +85,11 @@ const VendorMoneyRequests = () => {
   const handleSubmitRequest = async (e) => {
     e.preventDefault();
     setErrorMsg('');
+
+    if (!vendorBank?.accountNumberMasked) {
+      setErrorMsg('Add a bank account in your profile before requesting a payout');
+      return;
+    }
 
     const rupees = Number(reqAmount);
     if (!rupees || rupees <= 0) {
@@ -132,6 +152,16 @@ const VendorMoneyRequests = () => {
           </button>
         </div>
       </div>
+
+      {loading && (
+        <div className="flex items-center gap-2 text-gray-400 text-sm">
+          <Loader2 size={16} className="animate-spin" /> Loading wallet…
+        </div>
+      )}
+
+      {error && (
+        <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">{error}</div>
+      )}
 
       {/* 2. Balance Metric Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -246,9 +276,17 @@ const VendorMoneyRequests = () => {
             <tbody className="divide-y divide-gray-50 text-xs font-semibold text-gray-700">
               {filteredRequests.length > 0 ? (
                 filteredRequests.map((req) => {
-                  let statusStyle = "bg-amber-50 text-amber-600 border-amber-100";
-                  if (req.status === 'Approved') statusStyle = "bg-emerald-50 text-emerald-600 border-emerald-100";
-                  else if (req.status === 'Rejected') statusStyle = "bg-rose-50 text-rose-600 border-rose-100";
+                  // Backend statuses are 'pending' | 'processing' | 'completed' | 'failed' | 'rejected' —
+                  // comparing against 'Approved'/'Rejected' here never matched, so every
+                  // payout's badge silently fell through to the same amber "pending" look.
+                  const STATUS_STYLES = {
+                    pending: { label: 'Pending', className: 'bg-amber-50 text-amber-600 border-amber-100' },
+                    processing: { label: 'Processing', className: 'bg-blue-50 text-blue-600 border-blue-100' },
+                    completed: { label: 'Completed', className: 'bg-emerald-50 text-emerald-600 border-emerald-100' },
+                    failed: { label: 'Failed', className: 'bg-rose-50 text-rose-600 border-rose-100' },
+                    rejected: { label: 'Rejected', className: 'bg-rose-50 text-rose-600 border-rose-100' },
+                  };
+                  const statusMeta = STATUS_STYLES[req.status] || STATUS_STYLES.pending;
 
                   return (
                     <tr key={req.id} className="hover:bg-gray-50/50 transition-colors">
@@ -260,8 +298,8 @@ const VendorMoneyRequests = () => {
                         ₹{req.amount.toLocaleString('en-IN')}
                       </td>
                       <td className="px-6 py-4">
-                        <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase border tracking-wider ${statusStyle}`}>
-                          {req.status}
+                        <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase border tracking-wider ${statusMeta.className}`}>
+                          {statusMeta.label}
                         </span>
                       </td>
                       <td className="px-6 py-4 text-gray-500 font-medium">
@@ -330,21 +368,41 @@ const VendorMoneyRequests = () => {
                 </div>
               </div>
 
-              {/* TRANSFER DESTINATION info box */}
+              {/* TRANSFER DESTINATION info box — the vendor's own registered bank account */}
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider block">Transfer Destination</label>
-                <div className="rounded-[1.25rem] border border-gray-200 p-4 flex items-center justify-between bg-white hover:bg-gray-50/30 transition-all cursor-pointer">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-gray-50 border border-gray-100 rounded-xl flex items-center justify-center text-gray-700 shrink-0">
-                      <Building size={18} />
-                    </div>
-                    <div>
-                      <p className="font-black text-xs text-gray-900 uppercase tracking-wide">HDFC Bank</p>
-                      <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider mt-0.5">Acct Ending In **** 4859</p>
+                {vendorBank?.accountNumberMasked ? (
+                  <div className="rounded-[1.25rem] border border-gray-200 p-4 flex items-center justify-between bg-white">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-gray-50 border border-gray-100 rounded-xl flex items-center justify-center text-gray-700 shrink-0">
+                        <Building size={18} />
+                      </div>
+                      <div>
+                        <p className="font-black text-xs text-gray-900 uppercase tracking-wide">{vendorBank.bankName || 'Bank account on file'}</p>
+                        <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider mt-0.5">
+                          Acct Ending In **** {vendorBank.accountNumberMasked.slice(-4)}
+                        </p>
+                      </div>
                     </div>
                   </div>
-                  <ArrowUpRight size={16} className="text-gray-400" />
-                </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => navigate('/vendor/profile')}
+                    className="w-full rounded-[1.25rem] border border-amber-200 bg-amber-50/60 p-4 flex items-center justify-between hover:bg-amber-50 transition-all cursor-pointer text-left"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-amber-100 border border-amber-200 rounded-xl flex items-center justify-center text-amber-700 shrink-0">
+                        <Building size={18} />
+                      </div>
+                      <div>
+                        <p className="font-black text-xs text-amber-900 uppercase tracking-wide">No bank account on file</p>
+                        <p className="text-[9px] text-amber-700 font-bold uppercase tracking-wider mt-0.5">Tap to add one in your profile</p>
+                      </div>
+                    </div>
+                    <ArrowUpRight size={16} className="text-amber-600" />
+                  </button>
+                )}
               </div>
 
               {/* Error messages inside modal */}
@@ -367,9 +425,11 @@ const VendorMoneyRequests = () => {
               <div className="space-y-2 pt-2">
                 <button
                   type="submit"
-                  className="w-full py-4.5 bg-[#0E0E2C] hover:opacity-95 text-white font-black rounded-2xl text-xs uppercase tracking-widest transition-all shadow-lg shadow-gray-200 cursor-pointer text-center"
+                  disabled={submitting}
+                  className="w-full py-4.5 bg-[#0E0E2C] hover:opacity-95 text-white font-black rounded-2xl text-xs uppercase tracking-widest transition-all shadow-lg shadow-gray-200 cursor-pointer text-center disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
-                  Submit Request
+                  {submitting && <Loader2 size={14} className="animate-spin" />}
+                  {submitting ? 'Submitting…' : 'Submit Request'}
                 </button>
                 <button
                   type="button"

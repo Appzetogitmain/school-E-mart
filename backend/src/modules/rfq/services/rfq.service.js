@@ -9,10 +9,12 @@ const Rfq = require('../../../database/models/Rfq');
 const Quote = require('../../../database/models/Quote');
 const School = require('../../../database/models/School');
 const VendorProfile = require('../../../database/models/VendorProfile');
+const Attachment = require('../../../database/models/Attachment');
 const rfqRepository = require('../repositories/rfq.repository');
 const quoteRepository = require('../repositories/quote.repository');
 const { generateRfqNumber } = require('../utils/rfqNumber');
 const { serializeRfq, serializeQuote, buildUniformItems, toObjectId } = require('../utils/serializers');
+const { triggerService } = require('../../../services/notification');
 
 const assertVendorInvited = (rfq, vendorId) => {
   const invited = (rfq.invitedVendorIds || []).some((id) => String(id) === String(vendorId));
@@ -41,6 +43,37 @@ const loadRfqForVendor = async (rfqId, vendorId) => {
   if (!rfq) throw new NotFoundError('RFQ not found', 'RFQ_NOT_FOUND');
   assertVendorInvited(rfq, vendorId);
   return rfq;
+};
+
+/** Every reference-image attachment id a uniform-set request carries — used both to persist the RFQ's flat `attachments` list and to resolve display URLs. */
+const deriveAttachmentIds = (uniformSets = []) => {
+  const ids = [];
+  uniformSets.forEach((set) => {
+    (set.images || []).forEach((img) => {
+      const id = toObjectId(img.attachmentId);
+      if (id) ids.push(id);
+    });
+  });
+  return ids;
+};
+
+/** One batched lookup covering every reference-image id across one or many RFQs, so list views don't issue a query per row. */
+const buildAttachmentUrlMap = async (rfqOrRfqs) => {
+  const list = Array.isArray(rfqOrRfqs) ? rfqOrRfqs : [rfqOrRfqs];
+  const ids = new Set();
+  list.forEach((rfq) => {
+    (rfq?.attachments || []).forEach((id) => ids.add(String(id)));
+    (rfq?.meta?.uniformSets || []).forEach((set) => {
+      (set.images || []).forEach((img) => {
+        if (img.attachmentId) ids.add(String(img.attachmentId));
+      });
+    });
+  });
+
+  if (!ids.size) return new Map();
+
+  const docs = await Attachment.find({ _id: { $in: [...ids] } }).select('storageKey').lean();
+  return new Map(docs.map((doc) => [String(doc._id), doc.storageKey]));
 };
 
 const enrichQuotesWithVendors = async (quotes = []) => {
@@ -107,6 +140,7 @@ const rfqService = {
       targetDeliveryDate: payload.requiredDate || null,
       quotationDeadline: payload.quotationDeadline || null,
       invitedVendorIds,
+      attachments: deriveAttachmentIds(payload.uniformSets || []),
       status,
       publishedAt: status === 'open' ? new Date() : null,
       meta: {
@@ -115,11 +149,20 @@ const rfqService = {
       },
     });
 
+    if (status === 'open' && invitedVendorIds.length) {
+      triggerService.notifyRfqPublished(rfq, invitedVendorIds);
+    }
+
     const school = await loadSchool(schoolId);
-    return serializeRfq(rfq, { school });
+    const attachmentUrlMap = await buildAttachmentUrlMap(rfq);
+    return serializeRfq(rfq, { school, attachmentUrlMap });
   },
 
   async updateRfq(schoolId, rfqId, payload) {
+    // Needed to tell newly-invited vendors from ones already notified on a
+    // previous save, and to detect the draft → open transition.
+    const existing = await loadRfqForSchool(schoolId, rfqId);
+
     const isDraft = payload.status === 'draft';
     const items = buildUniformItems(payload.uniformSets || []);
 
@@ -168,6 +211,7 @@ const rfqService = {
     if (payload.uniformSets) {
       updateData['meta.uniformSets'] = payload.uniformSets;
       updateData.items = items.length ? items : [{ name: payload.title || 'Uniform Request', quantity: 1, uom: 'sets' }];
+      updateData.attachments = deriveAttachmentIds(payload.uniformSets);
     }
     if (payload.status === 'open') {
       updateData.publishedAt = new Date();
@@ -183,8 +227,28 @@ const rfqService = {
     );
     if (!rfq) throw new NotFoundError('RFQ not found', 'RFQ_NOT_FOUND');
 
+    // 'reviewing' is still a live, vendor-facing RFQ (submitQuote moves it
+    // there as soon as the first quote lands) — a vendor added at that point
+    // must be told just as much as one added while still 'open'.
+    const isLiveNow = ['open', 'reviewing'].includes(rfq.status);
+    if (isLiveNow) {
+      const wasLiveBefore = ['open', 'reviewing', 'awarded', 'closed'].includes(existing.status);
+      const currentInvitedIds = (rfq.invitedVendorIds || []).map(String);
+      const priorInvitedIds = new Set((existing.invitedVendorIds || []).map(String));
+      // First time going live, every invited vendor is new; once already
+      // live, only notify vendors added since the last save — the rest were
+      // already told.
+      const newlyInvitedIds = wasLiveBefore
+        ? currentInvitedIds.filter((id) => !priorInvitedIds.has(id))
+        : currentInvitedIds;
+      if (newlyInvitedIds.length) {
+        triggerService.notifyRfqPublished(rfq, newlyInvitedIds);
+      }
+    }
+
     const school = await loadSchool(schoolId);
-    return serializeRfq(rfq, { school });
+    const attachmentUrlMap = await buildAttachmentUrlMap(rfq);
+    return serializeRfq(rfq, { school, attachmentUrlMap });
   },
 
   async listSchoolRfqs(schoolId, query = {}) {
@@ -193,6 +257,7 @@ const rfqService = {
 
     const { data, pagination } = await rfqRepository.paginateRfqs(filter, query);
     const school = await loadSchool(schoolId);
+    const attachmentUrlMap = await buildAttachmentUrlMap(data);
 
     const rfqIds = data.map((r) => r._id);
     const quoteCounts = await Quote.aggregate([
@@ -205,6 +270,7 @@ const rfqService = {
       serializeRfq(rfq, {
         school,
         quotes: [],
+        attachmentUrlMap,
       })
     ).map((rfq, idx) => ({
       ...rfq,
@@ -219,8 +285,9 @@ const rfqService = {
     const school = await loadSchool(schoolId);
     const quotes = await quoteRepository.findByRfq(rfqId);
     const enriched = await enrichQuotesWithVendors(quotes);
+    const attachmentUrlMap = await buildAttachmentUrlMap(rfq);
 
-    return serializeRfq(rfq, { school, quotes: enriched });
+    return serializeRfq(rfq, { school, quotes: enriched, attachmentUrlMap });
   },
 
   /**
@@ -280,11 +347,12 @@ const rfqService = {
 
     const schoolMap = new Map(schools.map((s) => [String(s._id), s]));
     const quoteMap = new Map(vendorQuotes.map((q) => [String(q.rfqId), q]));
+    const attachmentUrlMap = await buildAttachmentUrlMap(data);
 
     const serialized = data.map((rfq) => {
       const school = schoolMap.get(String(rfq.schoolId));
       const vendorQuote = quoteMap.get(String(rfq._id)) || null;
-      return serializeRfq(rfq, { school, vendorQuote });
+      return serializeRfq(rfq, { school, vendorQuote, attachmentUrlMap });
     });
 
     return { data: serialized, pagination };
@@ -294,8 +362,9 @@ const rfqService = {
     const rfq = await loadRfqForVendor(rfqId, vendorId);
     const school = await loadSchool(rfq.schoolId);
     const vendorQuote = await quoteRepository.findByRfqAndVendor(rfqId, vendorId);
+    const attachmentUrlMap = await buildAttachmentUrlMap(rfq);
 
-    return serializeRfq(rfq, { school, vendorQuote });
+    return serializeRfq(rfq, { school, vendorQuote, attachmentUrlMap });
   },
 
   async submitQuote(vendorId, rfqId, payload) {
@@ -361,6 +430,7 @@ const rfqService = {
     }
 
     const vendor = await VendorProfile.findById(vendorId).lean();
+    triggerService.notifyQuoteSubmitted(rfq.schoolId, rfq, vendor?.storeName);
     return serializeQuote(quote, vendor);
   },
 
@@ -373,6 +443,15 @@ const rfqService = {
 
     const quote = await quoteRepository.findOne({ _id: quoteId, rfqId });
     if (!quote) throw new NotFoundError('Quote not found', 'QUOTE_NOT_FOUND');
+
+    const otherQuotes = await Quote.find({
+      rfqId,
+      _id: { $ne: quoteId },
+      'softDelete.isDeleted': { $ne: true },
+    })
+      .select('vendorId')
+      .lean();
+    const rejectedVendorIds = otherQuotes.map((q) => q.vendorId);
 
     const session = await mongoose.startSession();
     try {
@@ -406,11 +485,15 @@ const rfqService = {
     }
 
     const updatedRfq = await loadRfqForSchool(schoolId, rfqId);
+    triggerService.notifyQuoteAwarded(updatedRfq, quote.vendorId);
+    triggerService.notifyQuoteRejected(updatedRfq, rejectedVendorIds);
+
     const school = await loadSchool(schoolId);
     const quotes = await quoteRepository.findByRfq(rfqId);
     const enriched = await enrichQuotesWithVendors(quotes);
+    const attachmentUrlMap = await buildAttachmentUrlMap(updatedRfq);
 
-    return serializeRfq(updatedRfq, { school, quotes: enriched });
+    return serializeRfq(updatedRfq, { school, quotes: enriched, attachmentUrlMap });
   },
 };
 

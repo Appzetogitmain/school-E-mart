@@ -51,14 +51,32 @@ const ParentLearningHubAll = () => {
 
       try {
         const [{ data: courses }, resume] = await Promise.all([
-          listCourses(schoolId, { limit: 50, status: 'published' }),
+          listCourses(schoolId, { limit: 100, status: 'published' }),
           getResumeBookmark(schoolId).catch(() => null),
         ]);
 
         if (cancelled) return;
 
         const published = (courses || []).filter((c) => c.status === 'published' || !c.status);
-        const featured = published.map((course) => mapCourseToLesson(course));
+        // A course's actual video lives in its lessons, not on the course
+        // record itself — resolve them so each card has real content to play.
+        const featured = await Promise.all(
+          published.map(async (course) => {
+            const courseId = course._id || course.id;
+            try {
+              const { data: courseLessons } = await listLessons(schoolId, courseId, {
+                limit: 50,
+                status: 'published',
+              });
+              return mapCourseToLesson(course, 0, courseLessons || []);
+            } catch {
+              return mapCourseToLesson(course, 0, []);
+            }
+          })
+        );
+
+        if (cancelled) return;
+
         const continueLesson = mapResumeToContinueLesson(resume) || (featured[0] ? { ...featured[0] } : null);
 
         setLessons({ continue: continueLesson, featured });
@@ -148,9 +166,9 @@ const ParentLearningHubAll = () => {
     setSavingProgress(true);
     setProgressError('');
     try {
-      let lessonIds = video.lessonId ? [video.lessonId] : [];
+      let lessonIds = video.lessonIds?.length ? video.lessonIds : (video.lessonId ? [video.lessonId] : []);
       if (!lessonIds.length) {
-        const courseLessons = await listLessons(schoolId, courseId);
+        const { data: courseLessons } = await listLessons(schoolId, courseId);
         lessonIds = (courseLessons || []).map((l) => l?._id || l?.id).filter(Boolean);
       }
       if (!lessonIds.length) {

@@ -315,7 +315,7 @@ const SchoolQuotationsPage = () => {
 
             <h3 className="text-base font-black text-deep-purple block mt-4 leading-tight">Contract Awarded</h3>
             <p className="text-xs text-gray-400 font-bold block mt-2 px-1">
-              {quoteSuccessMsg} Purchase orders and service-level contract notifications have been triggered automatically.
+              {quoteSuccessMsg} The winning vendor has been notified, and the other bidders have been informed their quote wasn't selected.
             </p>
 
             <button 

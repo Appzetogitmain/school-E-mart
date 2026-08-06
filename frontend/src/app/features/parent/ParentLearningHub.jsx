@@ -43,14 +43,32 @@ const ParentLearningHub = () => {
 
       try {
         const [{ data: courses }, resume] = await Promise.all([
-          listCourses(schoolId, { limit: 20, status: 'published' }),
+          listCourses(schoolId, { limit: 50, status: 'published' }),
           getResumeBookmark(schoolId).catch(() => null),
         ]);
 
         if (cancelled) return;
 
         const published = (courses || []).filter((c) => c.status === 'published' || !c.status);
-        const featured = published.map((course) => mapCourseToLesson(course));
+        // A course's actual video lives in its lessons, not on the course
+        // record itself — resolve them so each card has real content to play.
+        const featured = await Promise.all(
+          published.map(async (course) => {
+            const courseId = course._id || course.id;
+            try {
+              const { data: courseLessons } = await listLessons(schoolId, courseId, {
+                limit: 50,
+                status: 'published',
+              });
+              return mapCourseToLesson(course, 0, courseLessons || []);
+            } catch {
+              return mapCourseToLesson(course, 0, []);
+            }
+          })
+        );
+
+        if (cancelled) return;
+
         const continueLesson = mapResumeToContinueLesson(resume) || (featured[0] ? { ...featured[0] } : null);
 
         setLessons({ continue: continueLesson, featured });
@@ -110,6 +128,7 @@ const ParentLearningHub = () => {
    * watching") has its lessons resolved first, and all of them are completed.
    */
   const handleMarkCompleted = async (video) => {
+    const childInfo = getChildInfoFromStorage();
     const schoolId = childInfo?.schoolId;
     const courseId = video?.courseId || video?.id;
     if (!schoolId || !courseId) return;
@@ -117,10 +136,10 @@ const ParentLearningHub = () => {
     setSavingProgress(true);
     setProgressError('');
     try {
-      let lessonIds = video.lessonId ? [video.lessonId] : [];
+      let lessonIds = video.lessonIds?.length ? video.lessonIds : (video.lessonId ? [video.lessonId] : []);
       if (!lessonIds.length) {
-        const lessons = await listLessons(schoolId, courseId);
-        lessonIds = (lessons || []).map((l) => l?._id || l?.id).filter(Boolean);
+        const { data: courseLessons } = await listLessons(schoolId, courseId);
+        lessonIds = (courseLessons || []).map((l) => l?._id || l?.id).filter(Boolean);
       }
       if (!lessonIds.length) {
         throw new Error('This course has no lessons to complete yet.');

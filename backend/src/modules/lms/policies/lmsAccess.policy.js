@@ -97,10 +97,31 @@ const normalizeGrade = (value) =>
  * the enrollment on first access so homework doesn't 403 for a whole class that was
  * never explicitly enrolled.
  */
+const isUniversalGradeTarget = (gradeClass) =>
+  !gradeClass || gradeClass.trim().toLowerCase() === 'all grades';
+
 const autoEnrollForClassCourse = async (schoolId, courseId, student, userId) => {
-  const course = await courseRepository.findOne({ _id: courseId, schoolId });
-  if (!course?.gradeClass) return null;
-  if (normalizeGrade(course.gradeClass) !== normalizeGrade(student.classGrade)) return null;
+  let course = await courseRepository.findOne({ _id: courseId, schoolId });
+  let isPlatformCourse = false;
+  if (!course) {
+    // Platform-wide courses (schoolId: null) aren't tied to any one school's
+    // class roster, so the student was never going to be "in the class" the
+    // way school-authored coursework works. Auto-enroll on grade targeting
+    // instead: "All Grades" (or no target set) matches every student, a
+    // specific grade matches only that grade's students.
+    course = await courseRepository.findOne({ _id: courseId, schoolId: null });
+    isPlatformCourse = true;
+  }
+  if (!course) return null;
+
+  if (isPlatformCourse) {
+    if (!isUniversalGradeTarget(course.gradeClass) && normalizeGrade(course.gradeClass) !== normalizeGrade(student.classGrade)) {
+      return null;
+    }
+  } else {
+    if (!course.gradeClass) return null;
+    if (normalizeGrade(course.gradeClass) !== normalizeGrade(student.classGrade)) return null;
+  }
 
   try {
     return await enrollmentRepository.create({

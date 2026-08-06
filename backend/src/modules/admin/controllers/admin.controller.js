@@ -10,9 +10,11 @@ const reportsService = require('../services/reports.service');
 const cmsService = require('../services/cms.service');
 const settingsService = require('../services/settings.service');
 const adminLmsService = require('../services/lms.service');
+const lmsSubjectsService = require('../services/lmsSubjects.service');
 const attachmentService = require('../services/attachment.service');
 const reelsService = require('../services/reels.service');
 const tutorialsService = require('../services/tutorials.service');
+const lmsGradesService = require('../services/lmsGrades.service');
 const walletService = require('../services/wallet.service');
 const notificationCampaignService = require('../services/notificationCampaign.service');
 const adminProfileService = require('../services/adminProfile.service');
@@ -564,6 +566,63 @@ const adminController = {
   setPlatformCourseStatus: asyncHandler(async (req, res) => {
     const course = await adminLmsService.setPlatformCourseStatus(req.params.courseId, req.body.status);
     return success(res, { course }, 'Platform course status updated', undefined, req);
+  }),
+
+  listPlatformLessons: asyncHandler(async (req, res) => {
+    const { data, pagination } = await adminLmsService.listPlatformLessons(req.params.courseId, req.query);
+    return paginated(res, { lessons: data }, pagination, 'Platform lessons fetched', req);
+  }),
+
+  createPlatformLesson: asyncHandler(async (req, res) => {
+    const lesson = await adminLmsService.createPlatformLesson(req.params.courseId, req.body);
+    return created(res, { lesson }, 'Platform lesson created', req);
+  }),
+
+  updatePlatformLesson: asyncHandler(async (req, res) => {
+    const lesson = await adminLmsService.updatePlatformLesson(req.params.courseId, req.params.lessonId, req.body);
+    return success(res, { lesson }, 'Platform lesson updated', undefined, req);
+  }),
+
+  deletePlatformLesson: asyncHandler(async (req, res) => {
+    await adminLmsService.deletePlatformLesson(req.params.courseId, req.params.lessonId, req.auth.userId);
+    return success(res, null, 'Platform lesson deleted', undefined, req);
+  }),
+
+  // LMS course subjects (dynamic picker — add/remove options courses are tagged with)
+  listLmsSubjects: asyncHandler(async (req, res) => {
+    const subjects = await lmsSubjectsService.listSubjects();
+    return success(res, { subjects }, 'Subjects fetched', undefined, req);
+  }),
+
+  createLmsSubject: asyncHandler(async (req, res) => {
+    const subject = await lmsSubjectsService.createSubject(req.body);
+    return created(res, { subject }, 'Subject created', req);
+  }),
+
+  deleteLmsSubject: asyncHandler(async (req, res) => {
+    await lmsSubjectsService.deleteSubject(req.params.subjectId);
+    return success(res, null, 'Subject deleted', undefined, req);
+  }),
+
+  // LMS course target grades (dynamic picker — add/remove options courses are tagged with)
+  listLmsGrades: asyncHandler(async (req, res) => {
+    const grades = await lmsGradesService.listGrades();
+    return success(res, { grades }, 'Grades fetched', undefined, req);
+  }),
+
+  createLmsGrade: asyncHandler(async (req, res) => {
+    const grade = await lmsGradesService.createGrade(req.body);
+    return created(res, { grade }, 'Grade created', req);
+  }),
+
+  deleteLmsGrade: asyncHandler(async (req, res) => {
+    await lmsGradesService.deleteGrade(req.params.gradeId);
+    return success(res, null, 'Grade deleted', undefined, req);
+  }),
+
+  listLmsGradeSuggestions: asyncHandler(async (req, res) => {
+    const suggestions = await lmsGradesService.listSchoolGradeSuggestions();
+    return success(res, { suggestions }, 'Grade suggestions fetched', undefined, req);
   }),
 
   uploadAttachment: asyncHandler(async (req, res) => {

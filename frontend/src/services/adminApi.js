@@ -352,6 +352,76 @@ export const setPlatformCourseStatus = async (courseId, status) => {
   return unwrapData(response)?.course;
 };
 
+export const listPlatformLessons = async (courseId, params = {}) => {
+  const response = await apiClient.get(`/admin/lms/courses/${courseId}/lessons`, { params });
+  return extractPaginated(response, 'lessons');
+};
+
+export const createPlatformLesson = async (courseId, payload) => {
+  const response = await apiClient.post(`/admin/lms/courses/${courseId}/lessons`, payload);
+  return unwrapData(response)?.lesson;
+};
+
+export const updatePlatformLesson = async (courseId, lessonId, payload) => {
+  const response = await apiClient.patch(`/admin/lms/courses/${courseId}/lessons/${lessonId}`, payload);
+  return unwrapData(response)?.lesson;
+};
+
+export const deletePlatformLesson = async (courseId, lessonId) => {
+  const response = await apiClient.delete(`/admin/lms/courses/${courseId}/lessons/${lessonId}`);
+  return unwrapData(response);
+};
+
+// LMS course subjects — dynamic picker, not a hardcoded list on the client
+export const listLmsSubjects = async () => {
+  const response = await apiClient.get('/admin/lms/subjects');
+  return unwrapData(response)?.subjects || [];
+};
+
+export const createLmsSubject = async (payload) => {
+  const response = await apiClient.post('/admin/lms/subjects', payload);
+  return unwrapData(response)?.subject;
+};
+
+export const deleteLmsSubject = async (subjectId) => {
+  const response = await apiClient.delete(`/admin/lms/subjects/${subjectId}`);
+  return unwrapData(response);
+};
+
+// LMS course target grades — dynamic picker, not a hardcoded list on the client
+export const listLmsGrades = async () => {
+  const response = await apiClient.get('/admin/lms/grades');
+  return unwrapData(response)?.grades || [];
+};
+
+export const listLmsGradeSuggestions = async () => {
+  const response = await apiClient.get('/admin/lms/grades/suggestions');
+  return unwrapData(response)?.suggestions || [];
+};
+
+export const createLmsGrade = async (payload) => {
+  const response = await apiClient.post('/admin/lms/grades', payload);
+  return unwrapData(response)?.grade;
+};
+
+export const deleteLmsGrade = async (gradeId) => {
+  const response = await apiClient.delete(`/admin/lms/grades/${gradeId}`);
+  return unwrapData(response);
+};
+
+export const uploadAdminMediaWithProgress = async (formData, onProgress) => {
+  const response = await apiClient.post('/admin/uploads/media', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    onUploadProgress: (progressEvent) => {
+      if (progressEvent.total && onProgress) {
+        const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+        onProgress(percentCompleted);
+      }
+    },
+  });
+  return unwrapData(response)?.attachment;
+};
+
 // Wallet & payouts
 export const getWalletOverview = async () => {
   const response = await apiClient.get('/admin/wallet/overview');

@@ -5,7 +5,7 @@ import {
   ChevronRight, ArrowUpDown, ChevronDown, Check, X, ShieldAlert,
   ArrowUpRight, RefreshCw, Edit3, Loader2
 } from 'lucide-react';
-import { listVendorProducts, updateVendorInventory } from '../../services/vendorApi';
+import { listVendorProducts, updateVendorInventory, updateVendorProduct } from '../../services/vendorApi';
 import { getErrorMessage } from '../../utils/apiHelpers';
 import { mapVendorProductForStock } from '../../utils/mappers/vendorProductMapper';
 
@@ -59,6 +59,10 @@ const VendorStock = () => {
       await updateVendorInventory(selectedProduct.id, {
         stock: parseInt(adjustStockVal, 10) || 0,
       });
+      const newPricePaise = Math.round(Number(adjustPriceVal) * 100);
+      if (newPricePaise > 0 && newPricePaise !== selectedProduct.pricePaise) {
+        await updateVendorProduct(selectedProduct.id, { pricePaise: newPricePaise });
+      }
       await loadProducts();
       setAdjustSuccess(true);
       setTimeout(() => {
@@ -124,6 +128,17 @@ const VendorStock = () => {
           <p className="text-xs font-semibold text-gray-400 mt-1">Monitor stock levels, manage restocks, and track movements.</p>
         </div>
       </div>
+
+      {loading && (
+        <div className="flex items-center gap-2 text-xs font-bold text-gray-400">
+          <Loader2 size={14} className="animate-spin" /> Loading inventory…
+        </div>
+      )}
+      {error && !selectedProduct && (
+        <div className="rounded-xl border border-red-100 bg-red-50 text-red-600 text-xs font-bold px-4 py-3">
+          {error}
+        </div>
+      )}
 
       {/* 2. Top Metrics Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -412,11 +427,19 @@ const VendorStock = () => {
                     />
                   </div>
 
-                  <button 
+                  {error && (
+                    <div className="rounded-xl border border-red-100 bg-red-50 text-red-600 text-[10px] font-bold px-3.5 py-2.5">
+                      {error}
+                    </div>
+                  )}
+
+                  <button
                     type="submit"
-                    className="w-full py-3 bg-[#5B3FD6] hover:bg-[#492eb3] text-white font-extrabold rounded-xl text-xs uppercase tracking-wider transition-all shadow-md shadow-purple-100 mt-2 cursor-pointer"
+                    disabled={saving}
+                    className="w-full py-3 bg-[#5B3FD6] hover:bg-[#492eb3] text-white font-extrabold rounded-xl text-xs uppercase tracking-wider transition-all shadow-md shadow-purple-100 mt-2 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                   >
-                    Apply Adjustment
+                    {saving && <Loader2 size={14} className="animate-spin" />}
+                    {saving ? 'Saving…' : 'Apply Adjustment'}
                   </button>
 
                 </form>

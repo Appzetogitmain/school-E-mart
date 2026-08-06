@@ -114,8 +114,12 @@ const authService = {
     // needs it — reusing usersService.getProfile(), the same builder that
     // already backs GET /users/me, instead of a second parent-only copy of
     // this logic that left teacher/school with no real data.
+    // 'vendor' was missing here, so a vendor's approvalStatus/verifiedBadge
+    // (correctly present right after login) vanished from `user.profile` on
+    // the very next token refresh or app load — anything gating on it
+    // (e.g. the sidebar's verified/pending badge) lost the real status.
     const obj = typeof user.toObject === 'function' ? user.toObject() : { ...user };
-    if (['parent', 'user', 'teacher', 'school'].includes(obj.role)) {
+    if (['parent', 'user', 'teacher', 'school', 'vendor'].includes(obj.role)) {
       const usersService = require('../../users/services/users.service');
       const { profile, childProfile } = await usersService.getProfile(userId);
       obj.childProfile = childProfile;

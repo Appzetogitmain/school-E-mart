@@ -242,6 +242,21 @@ export const listVendors = async (schoolId, params = {}) => {
   return extractPaginated(response, 'vendors');
 };
 
+/**
+ * Resolve a specific set of vendors by id, regardless of the browsing list's
+ * page or search term. Used to rehydrate an RFQ's previously-invited vendors
+ * when resuming a draft, so one doesn't silently disappear just because it
+ * isn't on the first page of the vendor directory.
+ */
+export const getVendorsByIds = async (schoolId, ids = []) => {
+  const uniqueIds = [...new Set(ids.filter(Boolean))];
+  if (!uniqueIds.length) return { data: [], pagination: null };
+  const response = await apiClient.get(schoolPath(schoolId, '/vendors'), {
+    params: { ids: uniqueIds.join(','), limit: uniqueIds.length },
+  });
+  return extractPaginated(response, 'vendors');
+};
+
 // Events
 export const createEvent = async (schoolId, payload) => {
   const response = await apiClient.post(schoolPath(schoolId, '/events'), payload);

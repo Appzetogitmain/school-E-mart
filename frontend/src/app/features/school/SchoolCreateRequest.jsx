@@ -7,12 +7,13 @@ import {
   Upload, Image as ImageIcon, Search, Star,
   ShieldCheck, Loader2
 } from 'lucide-react';
-import { listVendors } from '../../../services/schoolApi';
+import { listVendors, getVendorsByIds, uploadSchoolFile } from '../../../services/schoolApi';
 import { createRfq, getSchoolRfq, updateRfq } from '../../../services/rfqApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 import { mapSchoolVendorForInvite } from '../../../utils/mappers/schoolVendorMapper';
 import { buildCreateRfqPayload } from '../../../utils/mappers/rfqMapper';
 import { useSchoolId } from '../../../utils/schoolContext';
+import { toAbsoluteUrl } from '../../../utils/url';
 
 const SchoolCreateRequest = () => {
   const navigate = useNavigate();
@@ -95,14 +96,39 @@ const SchoolCreateRequest = () => {
             setDeadlineDate(rfq.quotationDeadline.slice(0, 10));
           }
           if (rfq.meta?.uniformSets) {
-            setUniformSets(rfq.meta.uniformSets);
+            // The server's uniformSetSchema doesn't persist a client-side
+            // `id` field (it's stripped on save), so every resumed set would
+            // otherwise come back as `id: undefined` — colliding React keys
+            // and making Edit/Remove act on every set at once. Re-assign
+            // stable sequential ids on hydration; handleAddSet's
+            // max(ids)+1 stays collision-free against these.
+            setUniformSets(rfq.meta.uniformSets.map((set, idx) => ({ ...set, id: idx + 1 })));
           }
-          if (rfq.invitedVendorIds) {
-            setVendors((rfq.invitedVendorIds || []).map(vendor => ({
-              id: typeof vendor === 'object' ? vendor._id || vendor.id : vendor,
-              name: typeof vendor === 'object' ? vendor.name || vendor.brand : 'Vendor',
-              selected: true,
-            })));
+          const invitedIds = (rfq.invitedVendorIds || [])
+            .map((vendor) => (typeof vendor === 'object' ? String(vendor._id || vendor.id) : String(vendor)))
+            .filter(Boolean);
+
+          if (invitedIds.length) {
+            // Resolve the real vendor records (name, rating, etc.) by id —
+            // independent of whatever page/search the "Invite Vendors" step's
+            // browsing list happens to load — so a previously-invited vendor
+            // is never silently dropped or shown as a generic stub. Merged by
+            // id (hydrated entries always win as checked) rather than a plain
+            // replace, so this stays correct even if the step-3 vendor
+            // directory has already started loading (e.g. the school jumped
+            // straight to the "Vendors" step via the stepper).
+            const applyHydratedVendors = (hydrated) => {
+              const hydratedIds = new Set(hydrated.map((v) => v.id));
+              setVendors((prev) => [...hydrated, ...prev.filter((v) => !hydratedIds.has(v.id))]);
+            };
+            try {
+              const { data } = await getVendorsByIds(schoolId, invitedIds);
+              applyHydratedVendors((data || []).map((v) => ({ ...mapSchoolVendorForInvite(v), checked: true })));
+            } catch {
+              // Fall back to stub entries so the vendor count/ids are at
+              // least preserved even if the lookup call itself fails.
+              applyHydratedVendors(invitedIds.map((id) => ({ id, name: 'Vendor', checked: true, logoBg: 'bg-gray-100 text-gray-600', logo: 'VN' })));
+            }
           }
         }
       } catch (err) {
@@ -194,10 +220,19 @@ const SchoolCreateRequest = () => {
 
   const mergeVendorList = (existing, incoming) => {
     const checkedMap = new Map(existing.map((vendor) => [vendor.id, vendor.checked]));
-    return incoming.map((vendor) => ({
+    const merged = incoming.map((vendor) => ({
       ...vendor,
       checked: checkedMap.get(vendor.id) ?? vendor.checked,
     }));
+
+    // A vendor the school already checked (invited on a resumed draft, or
+    // checked before typing a search term / turning the page) must not
+    // silently drop out of the list just because this fetch's page/search
+    // doesn't happen to include them again — that would un-invite them
+    // without the school ever noticing.
+    const incomingIds = new Set(incoming.map((vendor) => vendor.id));
+    const preserved = existing.filter((vendor) => vendor.checked && !incomingIds.has(vendor.id));
+    return [...merged, ...preserved];
   };
 
   const loadVendors = useCallback(async ({ page = 1, append = false, search = '' } = {}) => {
@@ -354,25 +389,45 @@ const SchoolCreateRequest = () => {
     }));
   };
 
-  const handleImageUpload = (setId, imageLabel, file) => {
+  const updateSetImage = (setId, imageLabel, patch) => {
+    setUniformSets((prev) => prev.map((set) => {
+      if (set.id !== setId) return set;
+      return {
+        ...set,
+        images: set.images.map((img) => (img.label === imageLabel ? { ...img, ...patch } : img)),
+      };
+    }));
+  };
+
+  const handleImageUpload = async (setId, imageLabel, file) => {
     if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file');
+      return;
+    }
+    if (!schoolId) {
+      alert('School context is missing. Please log in again.');
+      return;
+    }
+
+    // Instant local preview while the real upload runs in the background.
     const reader = new FileReader();
     reader.onloadend = () => {
-      setUniformSets(uniformSets.map(set => {
-        if (set.id === setId) {
-          return {
-            ...set,
-            images: set.images.map(img => 
-              img.label === imageLabel 
-                ? { ...img, file: file, preview: reader.result } 
-                : img
-            )
-          };
-        }
-        return set;
-      }));
+      updateSetImage(setId, imageLabel, { preview: reader.result, uploading: true, uploadError: false });
     };
     reader.readAsDataURL(file);
+
+    try {
+      const attachment = await uploadSchoolFile(schoolId, file, 'rfq_attachment');
+      updateSetImage(setId, imageLabel, {
+        attachmentId: attachment?._id || attachment?.id,
+        uploading: false,
+        uploadError: false,
+      });
+    } catch (err) {
+      updateSetImage(setId, imageLabel, { uploading: false, uploadError: true });
+      alert(getErrorMessage(err, `Unable to upload "${imageLabel}" — please try again.`));
+    }
   };
 
   const handleEditSetName = (setId) => {
@@ -998,26 +1053,41 @@ const SchoolCreateRequest = () => {
                 <div className="grid grid-cols-2 xs:grid-cols-3 gap-3">
                   {set.images.map((img, imgIndex) => {
                     const fileInputId = `file-input-${set.id}-${imgIndex}`;
+                    const previewSrc = img.preview || (img.url ? toAbsoluteUrl(img.url) : null);
                     return (
-                      <label 
+                      <label
                         key={imgIndex}
                         htmlFor={fileInputId}
-                        className="border border-dashed border-gray-200 rounded-2xl p-3 flex flex-col items-center justify-center gap-2 hover:bg-gray-50/50 cursor-pointer group transition-colors text-center aspect-square relative overflow-hidden"
+                        className={`border border-dashed rounded-2xl p-3 flex flex-col items-center justify-center gap-2 hover:bg-gray-50/50 cursor-pointer group transition-colors text-center aspect-square relative overflow-hidden ${
+                          img.uploadError ? 'border-red-300' : 'border-gray-200'
+                        }`}
                       >
-                        <input 
+                        <input
                           type="file"
                           id={fileInputId}
                           accept="image/*"
                           className="hidden"
                           onChange={(e) => handleImageUpload(set.id, img.label, e.target.files[0])}
                         />
-                        {img.preview ? (
+                        {previewSrc ? (
                           <>
-                            <img src={img.preview} alt={img.label} className="absolute inset-0 w-full h-full object-cover rounded-2xl" />
-                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1.5 text-white">
-                              <Upload size={14} />
-                              <span className="text-[9px] font-black uppercase tracking-wider">Replace</span>
-                            </div>
+                            <img src={previewSrc} alt={img.label} className="absolute inset-0 w-full h-full object-cover rounded-2xl" />
+                            {img.uploading ? (
+                              <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center gap-1.5 text-white">
+                                <Loader2 size={16} className="animate-spin" />
+                                <span className="text-[8px] font-black uppercase tracking-wider">Uploading…</span>
+                              </div>
+                            ) : (
+                              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1.5 text-white">
+                                <Upload size={14} />
+                                <span className="text-[9px] font-black uppercase tracking-wider">Replace</span>
+                              </div>
+                            )}
+                            {img.uploadError && (
+                              <span className="absolute bottom-1 inset-x-1 bg-red-500 text-white text-[7px] font-black uppercase tracking-wider rounded-md py-0.5">
+                                Upload failed — tap to retry
+                              </span>
+                            )}
                           </>
                         ) : (
                           <>

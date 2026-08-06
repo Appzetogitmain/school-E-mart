@@ -37,6 +37,18 @@ const faqIdParam = Joi.object({ faqId: objectId.required() });
 const bannerIdParam = Joi.object({ bannerId: objectId.required() });
 const sectionIdParam = Joi.object({ sectionId: objectId.required() });
 const courseIdParam = Joi.object({ courseId: objectId.required() });
+
+const lmsSubjectIdParam = Joi.object({ subjectId: objectId.required() });
+const lmsSubjectSchema = Joi.object({
+  label: Joi.string().trim().min(1).max(60).required(),
+  displayOrder: Joi.number().integer().min(0).optional(),
+});
+
+const lmsGradeIdParam = Joi.object({ gradeId: objectId.required() });
+const lmsGradeSchema = Joi.object({
+  label: Joi.string().trim().min(1).max(60).required(),
+  displayOrder: Joi.number().integer().min(0).optional(),
+});
 const settingsSectionParam = Joi.object({
   section: Joi.string()
     .valid('general', 'marketplace', 'orders', 'school', 'security', 'billing')
@@ -430,6 +442,10 @@ module.exports = {
   reelIdParam,
   sectionIdParam,
   courseIdParam,
+  lmsSubjectIdParam,
+  lmsSubjectSchema,
+  lmsGradeIdParam,
+  lmsGradeSchema,
   settingsSectionParam,
   landingSlugParam,
   recentQuery,

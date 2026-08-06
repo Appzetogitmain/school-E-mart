@@ -147,11 +147,36 @@ export const mapVendorRfqForList = (rfq) => {
       qty: item.quantity,
       estPrice: 0,
     })),
+    // Reference images the school attached per uniform set (design/logo/fabric
+    // photos) — flattened so the vendor's bid drawer can show a simple gallery.
+    referenceImages: (rfq.meta?.uniformSets || []).flatMap((set) =>
+      (set.images || [])
+        .filter((img) => img.url)
+        .map((img) => ({ setName: set.name, label: img.label, url: img.url }))
+    ),
     vendorQuote: rfq.vendorQuote,
     ...statusMeta,
     raw: rfq,
   };
 };
+
+// Strip the wizard's local-only fields (raw File objects, base64 previews,
+// upload-in-progress flags) down to what the server actually stores — just
+// the label and the uploaded attachment's id. An image still mid-upload (or
+// one that failed) has no attachmentId yet and is dropped rather than sent
+// as a dead placeholder.
+const serializeUniformSets = (uniformSets = []) =>
+  uniformSets.map((set) => ({
+    id: set.id,
+    name: set.name,
+    type: set.type,
+    boysQty: set.boysQty,
+    girlsQty: set.girlsQty,
+    components: set.components,
+    images: (set.images || [])
+      .filter((img) => img.attachmentId)
+      .map((img) => ({ label: img.label, attachmentId: img.attachmentId })),
+  }));
 
 export const buildCreateRfqPayload = ({
   requestTitle,
@@ -174,7 +199,7 @@ export const buildCreateRfqPayload = ({
   totalStudents: totalStudents || undefined,
   specialInstructions: specialInstructions || undefined,
   additionalNotes: additionalNotes || undefined,
-  uniformSets,
+  uniformSets: serializeUniformSets(uniformSets),
   invitedVendorIds: vendors.filter((v) => v.checked).map((v) => v.id),
   status,
 });

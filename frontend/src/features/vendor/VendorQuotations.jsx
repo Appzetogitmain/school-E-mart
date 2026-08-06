@@ -1,13 +1,14 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { 
-  FileText, Award, XCircle, Search, SlidersHorizontal, ArrowUpDown, 
-  ChevronRight, HelpCircle, Trophy, FileCheck, FileClock, 
+import {
+  FileText, Award, XCircle, Search, SlidersHorizontal, ArrowUpDown,
+  ChevronRight, HelpCircle, Trophy, FileCheck, FileClock,
   MapPin, Clock, Calendar, CheckCircle2, ChevronLeft, Building2,
-  AlertCircle
+  AlertCircle, Image as ImageIcon
 } from 'lucide-react';
 import { listVendorRfqs, submitVendorQuote } from '../../services/rfqApi';
 import { getErrorMessage } from '../../utils/apiHelpers';
 import { mapVendorRfqForList } from '../../utils/mappers/rfqMapper';
+import { toAbsoluteUrl } from '../../utils/url';
 
 const VendorQuotations = () => {
   // States
@@ -463,6 +464,36 @@ const VendorQuotations = () => {
                   ))}
                 </div>
               </div>
+
+              {/* Reference Images (design/logo/fabric photos the school attached) */}
+              {selectedRfq.referenceImages?.length > 0 && (
+                <div className="space-y-3">
+                  <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
+                    <ImageIcon size={12} className="text-[#5B3FD6]" /> Reference Images
+                  </span>
+                  <div className="grid grid-cols-3 gap-2.5">
+                    {selectedRfq.referenceImages.map((img, idx) => (
+                      <a
+                        key={idx}
+                        href={toAbsoluteUrl(img.url)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="group relative aspect-square rounded-xl overflow-hidden border border-gray-100 bg-gray-50 shadow-sm"
+                        title={`${img.setName} — ${img.label}`}
+                      >
+                        <img
+                          src={toAbsoluteUrl(img.url)}
+                          alt={img.label}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                        />
+                        <span className="absolute bottom-0 inset-x-0 bg-black/60 text-white text-[7px] font-bold px-1.5 py-1 truncate">
+                          {img.label}
+                        </span>
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Responder Bid Form (Available for Pending RFQs) */}
               {selectedRfq.status === 'Pending' && !bidSubmitted && (

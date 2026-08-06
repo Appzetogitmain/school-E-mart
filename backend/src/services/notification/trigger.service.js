@@ -96,6 +96,18 @@ const getParentUserIdsForClasses = async (schoolId, targets = []) => {
   return parentUserIdsForStudents(students.map((s) => s._id));
 };
 
+const getSchoolStaffUserIds = async (schoolId) => {
+  const User = require('../../database/models/User');
+  const users = await User.find({
+    role: 'school',
+    tenantSchoolId: schoolId,
+    'softDelete.isDeleted': { $ne: true },
+  })
+    .select('_id')
+    .lean();
+  return users.map((u) => String(u._id));
+};
+
 const getSchoolParentUserIds = async (schoolId, notice) => {
   if (notice?.targetAudience === 'specific_classes' && notice.targetClasses?.length) {
     return getParentUserIdsForClasses(schoolId, notice.targetClasses);
@@ -451,6 +463,96 @@ const triggerService = {
           route: orderRoute(order),
           entityId: String(order._id),
           status: status || '',
+        },
+      });
+    });
+  },
+
+  /** A quotation request goes live for one or more vendors — first publish, or new vendors added later. */
+  notifyRfqPublished(rfq, vendorIds = []) {
+    notifySafe(async () => {
+      if (!vendorIds.length) return;
+      const vendorUserIds = await getVendorUserIds(vendorIds);
+      if (!vendorUserIds.length) return;
+
+      await notificationService.sendToUsers(vendorUserIds, {
+        type: 'rfq_update',
+        notification: {
+          title: 'New Quotation Request',
+          body: `${rfq.title} — a school has invited you to submit a quote.`,
+        },
+        data: {
+          type: 'rfq_invited',
+          route: '/vendor/quotations',
+          entityId: String(rfq._id),
+          rfqNumber: rfq.rfqNumber,
+        },
+      });
+    });
+  },
+
+  /** A vendor submitted (priced) a quote — let the school know a response is waiting. */
+  notifyQuoteSubmitted(schoolId, rfq, vendorName) {
+    notifySafe(async () => {
+      const schoolUserIds = await getSchoolStaffUserIds(schoolId);
+      if (!schoolUserIds.length) return;
+
+      await notificationService.sendToUsers(schoolUserIds, {
+        type: 'rfq_update',
+        notification: {
+          title: 'New Quote Received',
+          body: `${vendorName || 'A vendor'} submitted a quote for "${rfq.title}".`,
+        },
+        data: {
+          type: 'rfq_quote_submitted',
+          route: '/school/quotations',
+          entityId: String(rfq._id),
+          rfqNumber: rfq.rfqNumber,
+        },
+      });
+    });
+  },
+
+  /** The school awarded the contract to a vendor's quote. */
+  notifyQuoteAwarded(rfq, winningVendorId) {
+    notifySafe(async () => {
+      const vendorUserIds = await getVendorUserIds([winningVendorId]);
+      if (!vendorUserIds.length) return;
+
+      await notificationService.sendToUsers(vendorUserIds, {
+        type: 'rfq_update',
+        notification: {
+          title: 'Contract Awarded 🎉',
+          body: `You've been awarded the contract for "${rfq.title}".`,
+        },
+        data: {
+          type: 'rfq_awarded',
+          route: '/vendor/quotations',
+          entityId: String(rfq._id),
+          rfqNumber: rfq.rfqNumber,
+        },
+      });
+    });
+  },
+
+  /** Every other vendor who quoted lost this RFQ once one of them was awarded. */
+  notifyQuoteRejected(rfq, rejectedVendorIds = []) {
+    notifySafe(async () => {
+      if (!rejectedVendorIds.length) return;
+      const vendorUserIds = await getVendorUserIds(rejectedVendorIds);
+      if (!vendorUserIds.length) return;
+
+      await notificationService.sendToUsers(vendorUserIds, {
+        type: 'rfq_update',
+        notification: {
+          title: 'Quotation Not Selected',
+          body: `Your quote for "${rfq.title}" was not selected this time.`,
+        },
+        data: {
+          type: 'rfq_rejected',
+          route: '/vendor/quotations',
+          entityId: String(rfq._id),
+          rfqNumber: rfq.rfqNumber,
         },
       });
     });

@@ -9,6 +9,14 @@ const paginationQuery = {
   search: Joi.string().trim().max(120).optional(),
 };
 
+// School's vendor directory (used to invite vendors to an RFQ). `ids` lets the
+// RFQ create/edit screen resolve a specific set of previously-invited vendors
+// by id, independent of whatever page/search the browsing list is on.
+const vendorDirectoryQuery = Joi.object({
+  ...paginationQuery,
+  ids: Joi.string().trim().max(4000).optional(),
+});
+
 const schoolIdParam = Joi.object({ schoolId: Joi.string().trim().required() });
 const classGradeParam = schoolIdParam.keys({ classGrade: Joi.string().trim().required() });
 const sectionParam = classGradeParam.keys({ section: Joi.string().trim().required() });
@@ -330,6 +338,7 @@ const schoolPayoutSchema = Joi.object({
 
 module.exports = {
   paginationQuery: Joi.object(paginationQuery),
+  vendorDirectoryQuery,
   schoolBankSchema,
   schoolPayoutSchema,
   schoolIdParam,

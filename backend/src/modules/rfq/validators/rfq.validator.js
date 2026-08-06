@@ -1,5 +1,10 @@
 const { Joi, schemas } = require('../../../common/validation');
 
+const uniformSetImageSchema = Joi.object({
+  label: Joi.string().trim().max(120).required(),
+  attachmentId: schemas.objectId.optional(),
+});
+
 const uniformSetSchema = Joi.object({
   name: Joi.string().trim().max(120).required(),
   type: Joi.string().trim().max(60).optional(),
@@ -14,6 +19,7 @@ const uniformSetSchema = Joi.object({
       })
     )
     .optional(),
+  images: Joi.array().items(uniformSetImageSchema).optional(),
 });
 
 const createRfqSchema = Joi.object({

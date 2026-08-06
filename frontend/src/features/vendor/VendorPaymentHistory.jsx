@@ -14,9 +14,10 @@ const VendorPaymentHistory = () => {
   const [activeTab, setActiveTab] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [showExportModal, setShowExportModal] = useState(false);
-  const [exportFormat, setExportFormat] = useState('PDF');
+  const [exportFormat, setExportFormat] = useState('CSV');
   const [exportRange, setExportRange] = useState('30days');
   const [exportSuccess, setExportSuccess] = useState(false);
+  const [exportError, setExportError] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -61,9 +62,48 @@ const VendorPaymentHistory = () => {
     });
   }, [transactions, activeTab, searchQuery]);
 
-  // Export handling
+  // Export handling — generates a real CSV from the already-loaded ledger.
+  // PDF isn't implemented on the backend (no statement/export endpoint
+  // exists), so it's blocked here rather than faking a success message.
   const handleExportStatements = (e) => {
     e.preventDefault();
+    if (exportFormat === 'PDF') {
+      setExportError('PDF export is not available yet. Please choose CSV.');
+      return;
+    }
+    setExportError('');
+
+    const rangeDays = exportRange === '30days' ? 30 : exportRange === '90days' ? 90 : 365;
+    const cutoff = new Date(Date.now() - rangeDays * 24 * 60 * 60 * 1000);
+    const rows = transactions.filter((txn) => {
+      const created = txn.raw?.audit?.createdAt ? new Date(txn.raw.audit.createdAt) : null;
+      return !created || created >= cutoff;
+    });
+
+    const header = ['Transaction ID', 'Date', 'Description', 'Reference', 'Type', 'Status', 'Amount (INR)'];
+    const escapeCsv = (val) => `"${String(val ?? '').replace(/"/g, '""')}"`;
+    const csvLines = [
+      header.join(','),
+      ...rows.map((txn) => [
+        escapeCsv(txn.id),
+        escapeCsv(txn.date),
+        escapeCsv(txn.customer),
+        escapeCsv(txn.ref),
+        escapeCsv(txn.type),
+        escapeCsv(txn.status),
+        txn.amount,
+      ].join(',')),
+    ];
+    const blob = new Blob([csvLines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `payment-statement-${exportRange}-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
     setExportSuccess(true);
     setTimeout(() => {
       setExportSuccess(false);
@@ -94,6 +134,17 @@ const VendorPaymentHistory = () => {
           </button>
         </div>
       </div>
+
+      {loading && (
+        <div className="flex items-center gap-2 text-xs font-bold text-gray-400">
+          <Loader2 size={14} className="animate-spin" /> Loading transaction ledger…
+        </div>
+      )}
+      {error && (
+        <div className="rounded-xl border border-red-100 bg-red-50 text-red-600 text-xs font-bold px-4 py-3">
+          {error}
+        </div>
+      )}
 
       {/* 2. Top Metrics Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -301,7 +352,7 @@ const VendorPaymentHistory = () => {
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider block">Statement Format</label>
                 <div className="grid grid-cols-2 gap-3">
                   {[
-                    { key: 'PDF', label: 'Adobe PDF (.pdf)' },
+                    { key: 'PDF', label: 'Adobe PDF (.pdf)', unavailable: true },
                     { key: 'CSV', label: 'Excel Sheet (.csv)' }
                   ].map((format) => {
                     const isSelected = exportFormat === format.key;
@@ -310,18 +361,30 @@ const VendorPaymentHistory = () => {
                         key={format.key}
                         type="button"
                         onClick={() => setExportFormat(format.key)}
-                        className={`py-3 px-3 rounded-xl border text-[10px] font-extrabold uppercase tracking-wider text-center cursor-pointer transition-all ${
-                          isSelected 
-                            ? 'bg-[#0E0E2C] border-[#0E0E2C] text-white shadow-sm' 
+                        title={format.unavailable ? 'PDF export is not available yet' : undefined}
+                        className={`py-3 px-3 rounded-xl border text-[10px] font-extrabold uppercase tracking-wider text-center cursor-pointer transition-all relative ${
+                          isSelected
+                            ? 'bg-[#0E0E2C] border-[#0E0E2C] text-white shadow-sm'
                             : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'
-                        }`}
+                        } ${format.unavailable ? 'opacity-60' : ''}`}
                       >
                         {format.label}
+                        {format.unavailable && (
+                          <span className="block text-[8px] font-bold normal-case tracking-normal mt-0.5 opacity-80">Coming soon</span>
+                        )}
                       </button>
                     );
                   })}
                 </div>
               </div>
+
+              {/* Error Notification */}
+              {exportError && (
+                <div className="p-3.5 bg-amber-50 border border-amber-100 rounded-2xl flex items-center gap-2.5 text-xs text-amber-800 font-extrabold uppercase tracking-wider">
+                  <X size={14} className="text-amber-500 shrink-0" />
+                  <span>{exportError}</span>
+                </div>
+              )}
 
               {/* Success Notification */}
               {exportSuccess && (
