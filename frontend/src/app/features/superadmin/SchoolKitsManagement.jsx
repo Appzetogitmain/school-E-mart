@@ -277,6 +277,21 @@ const SchoolKitsManagement = () => {
               <option value="draft">Draft Only</option>
             </select>
           </div>
+
+          {/* Show Entries */}
+          <div>
+            <select
+              value={showCount}
+              onChange={(e) => setShowCount(parseInt(e.target.value, 10))}
+              className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-xs text-gray-700 font-bold focus:outline-none focus:ring-2 focus:ring-[#3b2d7d]/20"
+            >
+              <option value={10}>Show 10</option>
+              <option value={25}>Show 25</option>
+              <option value={50}>Show 50</option>
+              <option value={100}>Show 100</option>
+              <option value={10000}>Show All</option>
+            </select>
+          </div>
         </div>
       </div>
 

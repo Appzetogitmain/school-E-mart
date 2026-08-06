@@ -11,12 +11,18 @@ const subjectService = {
   },
 
   async createSubject(schoolId, payload) {
-    const existing = await lookupRepository.findByTypeAndCode('subject', payload.code, String(schoolId));
-    if (existing) throw new ConflictError('Subject code already exists', 'SUBJECT_EXISTS');
+    let code = payload.code;
+    let existing = await lookupRepository.findByTypeAndCode('subject', code, String(schoolId));
+    if (existing) {
+      if (existing.label.toLowerCase() === payload.label.toLowerCase()) {
+        return existing;
+      }
+      code = `${payload.code}_${Date.now().toString().slice(-4)}`;
+    }
 
     return lookupRepository.create({
       type: 'subject',
-      code: payload.code,
+      code,
       label: payload.label,
       group: String(schoolId),
       displayOrder: payload.displayOrder || 0,

@@ -470,7 +470,11 @@ const VendorListManagement = () => {
             onChange={(e) => setShowCount(parseInt(e.target.value, 10))}
             className="bg-white border border-gray-200 rounded-xl px-3 py-1.5 text-xs font-extrabold text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer"
           >
-            {[5, 10, 25, 50].map((n) => <option key={n} value={n}>{n}</option>)}
+            {[5, 10, 25, 50, 100, 10000].map((n) => (
+              <option key={n} value={n}>
+                {n === 10000 ? 'All' : n}
+              </option>
+            ))}
           </select>
           <span className="text-xs font-bold text-gray-400">
             of {filteredVendors.length} entries

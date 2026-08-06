@@ -143,8 +143,8 @@ const CheckoutPage = () => {
   const handlingCharge = totals.handlingCharge || 0;
   const platformFee = totals.platformFee || 0;
 
-  // Delivery charge: 0 (FREE) for School Address delivery; Admin-defined fee for Home delivery
-  const deliveryCharge = deliveryType === 'school' ? 0 : (totals.deliveryCharge ?? 0);
+  // Delivery charge computed dynamically by backend checkout summary (respecting Admin settings & free delivery rules)
+  const deliveryCharge = totals.deliveryCharge ?? 0;
   const grandTotal = totals.grandTotal || subtotal + handlingCharge + platformFee + deliveryCharge;
 
   // Wallet deduction calculation
@@ -296,8 +296,8 @@ const CheckoutPage = () => {
                   <div className="w-9 h-9 rounded-xl bg-purple-100 text-[#3b2d7d] flex items-center justify-center font-bold">
                     <Building2 size={18} />
                   </div>
-                  <span className="px-2.5 py-0.5 bg-emerald-500 text-white rounded-full text-[9px] font-black uppercase tracking-wider">
-                    FREE (₹0)
+                  <span className="px-2.5 py-0.5 bg-purple-100 text-purple-800 rounded-full text-[9px] font-black uppercase tracking-wider">
+                    {deliveryType === 'school' && deliveryCharge === 0 ? 'FREE (₹0)' : deliveryCharge > 0 ? `+ ₹${deliveryCharge}` : 'FREE (₹0)'}
                   </span>
                 </div>
                 <h3 className="text-xs font-black text-gray-900 leading-tight">School Address</h3>
@@ -537,8 +537,8 @@ const CheckoutPage = () => {
 
             <div className="flex justify-between items-center">
               <span>Delivery Fee</span>
-              <span className={`font-black ${deliveryType === 'school' ? 'text-emerald-600' : 'text-gray-900'}`}>
-                {deliveryType === 'school' ? 'FREE (₹0)' : `₹${deliveryCharge}`}
+              <span className={`font-black ${deliveryCharge === 0 ? 'text-emerald-600' : 'text-gray-900'}`}>
+                {deliveryCharge === 0 ? 'FREE (₹0)' : `₹${deliveryCharge}`}
               </span>
             </div>
 

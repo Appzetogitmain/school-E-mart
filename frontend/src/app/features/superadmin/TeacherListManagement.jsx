@@ -25,6 +25,8 @@ const TeacherListManagement = () => {
   const [schoolFilter, setSchoolFilter] = useState('all');
   const [showCount, setShowCount] = useState(10);
 
+  const [currentPage, setCurrentPage] = useState(1);
+
   const [teachers, setTeachers] = useState([]);
   const [schools, setSchools] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -41,7 +43,7 @@ const TeacherListManagement = () => {
     setLoading(true);
     setError('');
     try {
-      const { data } = await listTeachers({ limit: 200 });
+      const { data } = await listTeachers({ limit: 100 });
       setTeachers((data || []).map(mapTeacherForAdmin));
     } catch (err) {
       setTeachers([]);
@@ -53,7 +55,7 @@ const TeacherListManagement = () => {
 
   useEffect(() => {
     loadTeachers();
-    listSchools({ limit: 500 })
+    listSchools({ limit: 100 })
       .then(({ data }) => setSchools(data || []))
       .catch(() => setSchools([]));
   }, [loadTeachers]);
@@ -153,7 +155,11 @@ const TeacherListManagement = () => {
     const matchesSchool = schoolFilter === 'all' || t.schoolId === schoolFilter;
     return matchesSearch && matchesSchool;
   });
-  const visibleTeachers = filteredTeachers.slice(0, showCount);
+  const totalPages = Math.ceil(filteredTeachers.length / showCount) || 1;
+  const visibleTeachers = filteredTeachers.slice(
+    (currentPage - 1) * showCount,
+    currentPage * showCount
+  );
 
   const field = (form, setForm, key) => ({
     value: form[key],
@@ -202,7 +208,11 @@ const TeacherListManagement = () => {
             onChange={(e) => setShowCount(parseInt(e.target.value, 10))}
             className="bg-white border border-gray-200 rounded-xl px-3 py-1.5 text-xs font-extrabold text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer"
           >
-            {[10, 25, 50, 100].map((n) => <option key={n} value={n}>{n}</option>)}
+            {[10, 25, 50, 100, 10000].map((n) => (
+              <option key={n} value={n}>
+                {n === 10000 ? 'All' : n}
+              </option>
+            ))}
           </select>
           <span className="text-xs font-bold text-gray-400">of {filteredTeachers.length} entries</span>
 
@@ -361,6 +371,44 @@ const TeacherListManagement = () => {
             </tbody>
           </table>
         </div>
+
+        {/* PAGINATION CONTROLS */}
+        {filteredTeachers.length > 0 && (
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-4 pt-4 border-t border-gray-100 select-none">
+            <span className="text-xs font-bold text-gray-400">
+              Showing {Math.min((currentPage - 1) * showCount + 1, filteredTeachers.length)} to {Math.min(currentPage * showCount, filteredTeachers.length)} of {filteredTeachers.length} entries
+            </span>
+
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="px-3 py-1.5 rounded-xl border border-gray-200 text-xs font-bold text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+              >
+                Previous
+              </button>
+              {Array.from({ length: totalPages }, (_, i) => i + 1).slice(
+                Math.max(0, currentPage - 3),
+                Math.min(totalPages, currentPage + 2)
+              ).map((page) => (
+                <button
+                  key={page}
+                  onClick={() => setCurrentPage(page)}
+                  className={`w-8 h-8 rounded-xl text-xs font-black transition-all ${currentPage === page ? 'bg-[#0B1528] text-white shadow-xs' : 'border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                >
+                  {page}
+                </button>
+              ))}
+              <button
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage >= totalPages}
+                className="px-3 py-1.5 rounded-xl border border-gray-200 text-xs font-bold text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* EDIT TEACHER MODAL */}

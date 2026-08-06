@@ -18,7 +18,7 @@ const { issueAuthenticatedSession } = require('./sessionIssue.service');
 const { ROLES } = roles;
 
 const OTP_PURPOSE_CONFIG = {
-  login_parent: { length: 4, requiresUser: false, role: ROLES.PARENT },
+  login_parent: { length: 4, requiresUser: true, role: ROLES.PARENT },
   signup_parent: { length: 4, requiresUser: false, role: ROLES.PARENT },
   web_register: { length: 6, requiresUser: false, role: ROLES.PARENT },
   password_reset: { length: 6, requiresUser: true, role: null },
@@ -83,8 +83,10 @@ const otpService = {
           correlationId: requestMeta.requestId || null,
           after: { phone: normalizedPhone, purpose, reason: 'user_not_found' },
         });
-        await store.set(cooldownKey, String(Date.now()), cooldownTtlSeconds());
-        return { sent: true, expiresIn: Math.floor(env.OTP_EXPIRY_MS / 1000) };
+        throw new NotFoundError(
+          'Mobile number not registered. Please contact your school administration to add your student profile.',
+          'ACCOUNT_NOT_FOUND'
+        );
       }
     }
 
@@ -205,6 +207,12 @@ const otpService = {
 
     let user = await userRepository.findByPhoneAndRole(normalizedPhone, ROLES.PARENT);
     if (!user) {
+      if (purpose === 'login_parent') {
+        throw new NotFoundError(
+          'Mobile number not registered. Please contact your school administration to add your account.',
+          'ACCOUNT_NOT_FOUND'
+        );
+      }
       const User = require('../../../database/models/User');
       const ParentProfile = require('../../../database/models/ParentProfile');
       const { generateUserRefId } = require('../../school/utils/refId');

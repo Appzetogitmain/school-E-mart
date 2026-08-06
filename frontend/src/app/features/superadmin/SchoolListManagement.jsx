@@ -443,6 +443,7 @@ const SchoolListManagement = () => {
             <option value={10}>10</option>
             <option value={25}>25</option>
             <option value={100}>100</option>
+            <option value={10000}>All</option>
           </select>
           <span className="text-xs font-bold text-gray-400">entries</span>
         </div>

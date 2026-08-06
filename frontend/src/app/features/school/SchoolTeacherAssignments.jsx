@@ -151,8 +151,10 @@ const SchoolTeacherAssignments = () => {
       return;
     }
     setAddingSubject(true);
+    setModalError('');
     try {
-      const code = label.toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 30);
+      const baseCode = label.toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 20);
+      const code = `${baseCode}_${Date.now().toString().slice(-4)}`;
       await createSubject(schoolId, { code, label });
       setSubjects((prev) => [...prev, { code, label }]);
       toggleSubject(label);
