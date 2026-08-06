@@ -6,7 +6,7 @@ import {
   Calendar, CheckCircle, AlertCircle, Sparkles, Upload,
   Download, Award, Shield, MapPin, Phone, Mail, Loader2, UserPlus, Edit2, Trash2, Camera
 } from 'lucide-react';
-import { listStudents, registerStudent, updateStudent, listClasses, updateStudentStatus, getAttendanceHistory } from '../../../services/schoolApi';
+import { listStudents, registerStudent, updateStudent, listClasses, updateStudentStatus, getAttendanceHistory, uploadSchoolFile } from '../../../services/schoolApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 import { mapStudentForList, formatClassLabel, calculateAge } from '../../../utils/mappers/schoolStudentMapper';
 import { useSchoolId } from '../../../utils/schoolContext';
