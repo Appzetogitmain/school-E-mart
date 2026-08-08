@@ -51,7 +51,7 @@ const lmsGradeSchema = Joi.object({
 });
 const settingsSectionParam = Joi.object({
   section: Joi.string()
-    .valid('general', 'marketplace', 'orders', 'school', 'security', 'billing')
+    .valid('general', 'marketplace', 'orders', 'school', 'security', 'billing', 'contact')
     .required(),
 });
 const landingSlugParam = Joi.object({
@@ -303,12 +303,19 @@ const securitySettingsSchema = Joi.object({
 const billingSettingsSchema = Joi.object({
   platformFeePaise: Joi.number().integer().min(0).optional(),
   freeDeliveryThresholdPaise: Joi.number().integer().min(0).optional(),
-  pricingMode: Joi.string().valid('fixed', 'distance').optional(),
   fixedDeliveryChargePaise: Joi.number().integer().min(0).optional(),
-  baseChargePaise: Joi.number().integer().min(0).optional(),
-  baseDistanceKm: Joi.number().min(0).optional(),
-  extraKmChargePaise: Joi.number().integer().min(0).optional(),
-  riderCommissionPercent: Joi.number().min(0).max(100).optional(),
+  schoolDeliveryFreeDays: Joi.number().integer().min(0).optional(),
+  schoolDeliveryChargePaise: Joi.number().integer().min(0).optional(),
+});
+
+const contactSettingsSchema = Joi.object({
+  phone: Joi.string().trim().allow('', null).optional(),
+  email: Joi.string().trim().allow('', null).optional(),
+  address: Joi.string().trim().allow('', null).optional(),
+  workingHours: Joi.string().trim().allow('', null).optional(),
+  whatsapp: Joi.string().trim().allow('', null).optional(),
+  bulkPhone: Joi.string().trim().allow('', null).optional(),
+  bulkEmail: Joi.string().trim().allow('', null).optional(),
 });
 
 const settingsBodyBySection = {
@@ -318,6 +325,7 @@ const settingsBodyBySection = {
   school: schoolSettingsSchema,
   security: securitySettingsSchema,
   billing: billingSettingsSchema,
+  contact: contactSettingsSchema,
 };
 
 const payoutIdParam = Joi.object({ payoutId: objectId.required() });

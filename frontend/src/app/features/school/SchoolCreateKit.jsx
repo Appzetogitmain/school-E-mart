@@ -1004,7 +1004,7 @@ const SchoolCreateKit = () => {
             <div className="pt-6 border-t border-gray-200 flex items-center justify-end gap-4">
               <button
                 type="button"
-                onClick={() => navigate('/school/kits')}
+                onClick={handleBackToKits}
                 className="px-6 py-3.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs rounded-xl transition-all"
               >
                 Cancel

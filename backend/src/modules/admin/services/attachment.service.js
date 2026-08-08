@@ -10,7 +10,10 @@ const ALLOWED_PURPOSES = new Set([
   'lms_thumb',
   'product_image',
   'category_image',
+  'header_image',
+  'header_icon',
   'kit_image',
+  'kit_product_template',
   'notice_attachment',
   // Vendor KYC paperwork, uploaded during onboarding.
   'kyc_doc',

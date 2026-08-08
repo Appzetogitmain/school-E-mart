@@ -78,7 +78,11 @@ const writeDataUri = (value, { dir, prefix, maxBytes }) => {
  * Returns null when the input is not a data URI we accept.
  */
 const saveBase64File = (value, prefix = 'file', { maxBytes = DEFAULT_MAX_BYTES } = {}) => {
-  if (typeof value === 'string' && value.startsWith('/uploads/')) return value;
+  if (typeof value === 'string') {
+    if (value.startsWith('/uploads/')) return value;
+    const matchUploads = value.match(/(\/uploads\/[^\s?#]+)/);
+    if (matchUploads) return matchUploads[1];
+  }
 
   const result = writeDataUri(value, { dir: UPLOADS_DIR, prefix, maxBytes });
   return result.error ? null : `/uploads/${result.storageKey}`;

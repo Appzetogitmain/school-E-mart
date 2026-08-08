@@ -113,13 +113,18 @@ const SchoolStudentsPage = () => {
   const [deleteError, setDeleteError] = useState('');
 
   const handleDeleteStudent = async () => {
-    if (!studentToDelete?.mongoId || !schoolId) return;
+    const targetId = studentToDelete?.mongoId || studentToDelete?._id || studentToDelete?.id;
+    if (!targetId || !schoolId) return;
     setDeleteSubmitting(true);
     setDeleteError('');
     try {
-      await deleteStudent(schoolId, studentToDelete.mongoId);
+      await deleteStudent(schoolId, targetId);
       setStudentToDelete(null);
-      if (selectedStudent?.mongoId === studentToDelete.mongoId) {
+      if (
+        selectedStudent?.mongoId === targetId ||
+        selectedStudent?._id === targetId ||
+        selectedStudent?.id === targetId
+      ) {
         setSelectedStudent(null);
       }
       await loadStudents();

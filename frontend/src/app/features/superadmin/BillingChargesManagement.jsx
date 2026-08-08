@@ -93,12 +93,9 @@ const BillingChargesManagement = () => {
     setIsSaving(true);
     setLoadError('');
     try {
-      // Only the fields this simplified page controls. pricingMode stays 'fixed'
-      // so checkout always applies the flat delivery charge below.
       await updateBillingConfig({
         platformFeePaise: rupeesToPaise(platformFee),
         freeDeliveryThresholdPaise: rupeesToPaise(freeDeliveryThreshold),
-        pricingMode: 'fixed',
         fixedDeliveryChargePaise: rupeesToPaise(deliveryCharge),
         schoolDeliveryFreeDays: Number(schoolFreeDays) || 7,
         schoolDeliveryChargePaise: rupeesToPaise(schoolDeliveryCharge),

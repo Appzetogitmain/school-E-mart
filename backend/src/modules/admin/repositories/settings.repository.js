@@ -37,14 +37,9 @@ const settingsRepository = {
         _id: SETTINGS_ID,
         platformFeePaise: 1000,
         freeDeliveryThresholdPaise: 50000,
-        pricingMode: 'fixed',
         fixedDeliveryChargePaise: 4900,
         schoolDeliveryFreeDays: 7,
         schoolDeliveryChargePaise: 4900,
-        baseChargePaise: 4900,
-        baseDistanceKm: 5,
-        extraKmChargePaise: 1000,
-        riderCommissionPercent: 10,
         updatedBy: SETTINGS_AUDIT_ENTITY_ID,
       });
       return config.toObject();

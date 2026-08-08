@@ -144,12 +144,13 @@ const TeacherManageStudents = () => {
   };
 
   const handleDeleteStudent = async (id) => {
-    const student = students.find((s) => s.id === id);
-    if (!student?.mongoId || !schoolId) return;
+    const student = students.find((s) => s.id === id || s.mongoId === id || s._id === id);
+    const targetId = student?.mongoId || student?._id || id;
+    if (!targetId || !schoolId) return;
 
     setActiveActionsMenu(null);
     try {
-      await deleteStudent(schoolId, student.mongoId);
+      await deleteStudent(schoolId, targetId);
       triggerToast('Student Removed Successfully!');
       await loadStudents();
     } catch (err) {

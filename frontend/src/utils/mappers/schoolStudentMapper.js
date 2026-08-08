@@ -42,6 +42,7 @@ export const calculateAge = (dob) => {
 export const mapStudentForList = (student) => ({
   id: student?.schoolRefNo || student?._id?.toString?.(),
   mongoId: student?._id?.toString?.() || student?.id,
+  _id: student?._id?.toString?.() || student?.mongoId || student?.id,
   name: student?.name,
   class: `${formatClassLabel(student?.classGrade)}${student?.section ? `-${student.section}` : ''}`,
   classGrade: student?.classGrade,

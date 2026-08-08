@@ -83,10 +83,23 @@ const parentContactsQuery = Joi.object({
 });
 
 const kitItemSchema = Joi.object({
-  productId: objectId.required(),
-  qty: Joi.number().integer().min(1).required(),
+  masterProductId: objectId.optional().allow(null),
+  productId: objectId.optional().allow(null),
+  name: Joi.string().trim().optional().allow('', null),
+  category: Joi.string().trim().optional().allow('', null),
+  subcategory: Joi.string().trim().optional().allow('', null),
+  imageUrl: Joi.string().trim().optional().allow('', null),
+  qty: Joi.number().integer().min(1).default(1),
   optional: Joi.boolean().optional(),
-});
+  attributes: Joi.object({
+    color: Joi.string().trim().optional().allow('', null),
+    sizes: Joi.array().items(Joi.string().trim()).optional(),
+    gender: Joi.string().trim().optional().allow('', null),
+    publisher: Joi.string().trim().optional().allow('', null),
+    subject: Joi.string().trim().optional().allow('', null),
+    packDetails: Joi.string().trim().optional().allow('', null),
+  }).unknown(true).optional(),
+}).unknown(true);
 
 const createKitSchema = Joi.object({
   name: Joi.string().trim().min(2).max(150).required(),
@@ -97,6 +110,7 @@ const createKitSchema = Joi.object({
   category: Joi.string().trim().max(60).optional().allow('', null),
   description: Joi.string().trim().max(2000).optional().allow('', null),
   imageId: objectId.optional().allow(null),
+  imageUrl: Joi.string().trim().optional().allow('', null),
   items: Joi.array().items(kitItemSchema).min(1).required(),
   addOns: Joi.array().items(kitItemSchema).optional(),
   pricePaise: Joi.number().integer().min(0).optional(),
@@ -114,11 +128,15 @@ const updateKitSchema = Joi.object({
   category: Joi.string().trim().max(60).optional().allow('', null),
   description: Joi.string().trim().max(2000).optional().allow('', null),
   imageId: objectId.optional().allow(null),
+  imageUrl: Joi.string().trim().optional().allow('', null),
   items: Joi.array().items(kitItemSchema).min(1).optional(),
   addOns: Joi.array().items(kitItemSchema).optional(),
   pricePaise: Joi.number().integer().min(0).optional(),
   mrpPaise: Joi.number().integer().min(0).optional(),
   status: Joi.string().valid('active', 'draft').optional(),
+  showOnApp: Joi.boolean().optional(),
+  availableOnline: Joi.boolean().optional(),
+  allowPreorders: Joi.boolean().optional(),
   flags: Joi.object({
     showOnApp: Joi.boolean().optional(),
     availableOnline: Joi.boolean().optional(),

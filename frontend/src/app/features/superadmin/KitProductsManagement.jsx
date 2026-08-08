@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { 
   listMasterKitProducts, createMasterKitProduct, 
-  updateMasterKitProduct, deleteMasterKitProduct, uploadAdminMedia 
+  updateMasterKitProduct, deleteMasterKitProduct, uploadAdminFile, uploadAdminMedia 
 } from '../../../services/adminApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 import { toAbsoluteUrl } from '../../../utils/url';
@@ -114,16 +114,19 @@ const KitProductsManagement = () => {
     try {
       const data = new FormData();
       data.append('file', file);
-      data.append('purpose', 'kit_product_template');
-      const attachment = await uploadAdminMedia(data);
+      data.append('purpose', 'kit_image');
+      let attachment;
+      try {
+        attachment = await uploadAdminFile(data);
+      } catch (_err) {
+        // Fall back to uploadAdminMedia if needed
+        data.set('purpose', 'kit_product_template');
+        attachment = await uploadAdminMedia(data);
+      }
       const url = attachment?.url || (attachment?.storageKey ? (attachment.storageKey.startsWith('/uploads/') ? attachment.storageKey : `/uploads/${attachment.storageKey}`) : null);
       if (!url) throw new Error('Upload did not return a file URL');
       setFormData((prev) => ({ ...prev, imageUrl: url }));
     } catch (err) {
-      // Every product image must live under the server's uploads folder —
-      // never fall back to embedding the raw file as base64 in the DB.
-      // Surface the failure so the admin can retry instead of silently
-      // getting a third-party-free but un-uploaded, unreliable image.
       setFormError(getErrorMessage(err, 'Image upload failed — please try again'));
     } finally {
       setUploadingImage(false);

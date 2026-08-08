@@ -19,7 +19,7 @@ const GuestCheckoutGate = ({ onDone, onCancel }) => {
   if (isAuthenticated) return null;
 
   const [step, setStep] = useState('details'); // 'details' | 'otp'
-  const [form, setForm] = useState({ name: '', phone: '', address: '', city: '', pinCode: '' });
+  const [form, setForm] = useState({ name: '', phone: '', address: '', city: '', state: '', pinCode: '' });
   const [otp, setOtp] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -30,7 +30,7 @@ const GuestCheckoutGate = ({ onDone, onCancel }) => {
     setError('');
     if (!form.name.trim()) return setError('Please enter your name');
     if (!/^[6-9]\d{9}$/.test(form.phone)) return setError('Enter a valid 10-digit mobile number');
-    if (!form.address.trim() || !form.city.trim() || !form.pinCode.trim()) {
+    if (!form.address.trim() || !form.city.trim() || !form.state.trim() || !form.pinCode.trim()) {
       return setError('Please enter your full delivery address');
     }
     setBusy(true);
@@ -56,6 +56,7 @@ const GuestCheckoutGate = ({ onDone, onCancel }) => {
       await updateMyProfile({
         address: form.address.trim(),
         city: form.city.trim(),
+        state: form.state.trim(),
         pinCode: form.pinCode.trim(),
       });
       await refreshUser();
@@ -72,6 +73,7 @@ const GuestCheckoutGate = ({ onDone, onCancel }) => {
             phone: form.phone,
             address: form.address.trim(),
             city: form.city.trim(),
+            state: form.state.trim(),
             pinCode: form.pinCode.trim(),
           })
         );
@@ -121,8 +123,9 @@ const GuestCheckoutGate = ({ onDone, onCancel }) => {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <input className="w-full py-3.5 px-4 bg-gray-50 border-2 border-gray-100 rounded-2xl text-sm font-bold text-deep-purple outline-none focus:border-primary/30" placeholder="City" value={form.city} onChange={(e) => set('city', e.target.value)} />
-                <input className="w-full py-3.5 px-4 bg-gray-50 border-2 border-gray-100 rounded-2xl text-sm font-bold text-deep-purple outline-none focus:border-primary/30" placeholder="Pin code" inputMode="numeric" value={form.pinCode} onChange={(e) => set('pinCode', e.target.value.replace(/\D/g, '').slice(0, 6))} />
+                <input className="w-full py-3.5 px-4 bg-gray-50 border-2 border-gray-100 rounded-2xl text-sm font-bold text-deep-purple outline-none focus:border-primary/30" placeholder="State" value={form.state} onChange={(e) => set('state', e.target.value)} />
               </div>
+              <input className="w-full py-3.5 px-4 bg-gray-50 border-2 border-gray-100 rounded-2xl text-sm font-bold text-deep-purple outline-none focus:border-primary/30" placeholder="Pin code" inputMode="numeric" value={form.pinCode} onChange={(e) => set('pinCode', e.target.value.replace(/\D/g, '').slice(0, 6))} />
             </div>
 
             {error && <p className="text-[11px] text-rose-500 font-bold mt-3">{error}</p>}

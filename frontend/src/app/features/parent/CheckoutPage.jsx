@@ -92,7 +92,11 @@ const CheckoutPage = () => {
     setAddress(toAddress(info));
   }, [isAuthenticated]);
 
-  const addressSource = useMemo(
+  // Two independent address shapes — one per delivery destination — so each
+  // option card below can show its OWN real delivery charge. Previously both
+  // cards shared a single summary fetched for whichever type was selected, so
+  // toggling to Home and back made the School card display Home's charge.
+  const homeAddressSource = useMemo(
     () => ({
       name: address.name,
       phone: address.phone,
@@ -101,23 +105,52 @@ const CheckoutPage = () => {
       city: address.city,
       state: address.state,
       pinCode: address.pinCode,
-      addressType: deliveryType === 'school' ? 'school' : 'home',
+      addressType: 'home',
     }),
-    [address, deliveryType]
+    [address]
   );
 
-  const schoolIdForPickup =
-    deliveryType === 'school' ? childInfo.schoolId || null : null;
+  const schoolAddressSource = useMemo(
+    () => ({
+      name: address.name,
+      phone: address.phone,
+      line1: childInfo.school || 'School Address',
+      address: childInfo.school || 'School Address',
+      city: address.city,
+      state: address.state,
+      pinCode: address.pinCode,
+      addressType: 'school',
+    }),
+    [address, childInfo]
+  );
 
-  const { summary, loading: summaryLoading, error: summaryError, totals, buildPayload } =
-    useCheckoutSummary({
-      deliveryType,
-      paymentMethod,
-      addressSource,
-      schoolIdForPickup,
-      audience: 'parent',
-      enabled: isAuthenticated && cartItems.length > 0,
-    });
+  const schoolIdForPickup = childInfo.schoolId || null;
+
+  const homeCheckout = useCheckoutSummary({
+    deliveryType: 'home',
+    paymentMethod,
+    addressSource: homeAddressSource,
+    schoolIdForPickup: null,
+    audience: 'parent',
+    enabled: isAuthenticated && cartItems.length > 0,
+  });
+
+  const schoolCheckout = useCheckoutSummary({
+    deliveryType: 'school',
+    paymentMethod,
+    addressSource: schoolAddressSource,
+    schoolIdForPickup,
+    audience: 'parent',
+    enabled: isAuthenticated && cartItems.length > 0,
+  });
+
+  // Bill breakdown / order placement always uses whichever destination is
+  // currently selected; the badges below read straight from each hook so
+  // both stay accurate regardless of selection.
+  const activeCheckout = deliveryType === 'school' ? schoolCheckout : homeCheckout;
+  const { summary, loading: summaryLoading, error: summaryError, totals, buildPayload } = activeCheckout;
+  const homeDeliveryCharge = homeCheckout.totals.deliveryCharge ?? 0;
+  const schoolDeliveryCharge = schoolCheckout.totals.deliveryCharge ?? 0;
 
   // Block COD automatically when school address delivery is selected
   useEffect(() => {
@@ -297,7 +330,7 @@ const CheckoutPage = () => {
                     <Building2 size={18} />
                   </div>
                   <span className="px-2.5 py-0.5 bg-purple-100 text-purple-800 rounded-full text-[9px] font-black uppercase tracking-wider">
-                    {deliveryType === 'school' && deliveryCharge === 0 ? 'FREE (₹0)' : deliveryCharge > 0 ? `+ ₹${deliveryCharge}` : 'FREE (₹0)'}
+                    {schoolDeliveryCharge > 0 ? `+ ₹${schoolDeliveryCharge}` : 'FREE (₹0)'}
                   </span>
                 </div>
                 <h3 className="text-xs font-black text-gray-900 leading-tight">School Address</h3>
@@ -332,7 +365,7 @@ const CheckoutPage = () => {
                     <Truck size={18} />
                   </div>
                   <span className="px-2.5 py-0.5 bg-amber-50 text-amber-800 border border-amber-200 rounded-full text-[9px] font-black uppercase tracking-wider">
-                    {deliveryCharge > 0 ? `+ ₹${deliveryCharge}` : 'Delivery Charge'}
+                    {homeDeliveryCharge > 0 ? `+ ₹${homeDeliveryCharge}` : 'FREE (₹0)'}
                   </span>
                 </div>
                 <h3 className="text-xs font-black text-gray-900 leading-tight">Home Address</h3>
@@ -649,15 +682,26 @@ const CheckoutPage = () => {
                 </div>
 
                 <div>
-                  <label className="block text-gray-700 mb-1">Pincode</label>
+                  <label className="block text-gray-700 mb-1">State</label>
                   <input
                     type="text"
                     required
-                    value={editAddressForm.pinCode}
-                    onChange={(e) => setEditAddressForm((p) => ({ ...p, pinCode: e.target.value }))}
+                    value={editAddressForm.state}
+                    onChange={(e) => setEditAddressForm((p) => ({ ...p, state: e.target.value }))}
                     className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 focus:outline-none focus:border-[#3b2d7d]"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-gray-700 mb-1">Pincode</label>
+                <input
+                  type="text"
+                  required
+                  value={editAddressForm.pinCode}
+                  onChange={(e) => setEditAddressForm((p) => ({ ...p, pinCode: e.target.value }))}
+                  className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 focus:outline-none focus:border-[#3b2d7d]"
+                />
               </div>
 
               <div className="pt-3 border-t border-gray-150 flex items-center justify-end gap-3">
@@ -681,7 +725,7 @@ const CheckoutPage = () => {
       )}
 
       <GuestCheckoutGate
-        onSuccess={() => {
+        onDone={() => {
           const info = readChildInfo();
           setChildInfo(info);
           setAddress(toAddress(info));

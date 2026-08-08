@@ -14,7 +14,6 @@ const DEFAULT_HANDLING_CHARGE_PAISE = 0;
 
 const toNumber = (value) => {
   if (value == null) return 0;
-  // Decimal128 (baseDistanceKm etc.) stringifies cleanly; Number() handles the rest.
   return Number(value.toString());
 };
 

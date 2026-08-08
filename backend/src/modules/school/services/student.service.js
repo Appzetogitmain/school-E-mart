@@ -438,9 +438,52 @@ const studentService = {
   },
 
   async deleteStudent(schoolId, studentId, deletedBy) {
-    const student = await studentRepository.softDeleteById(studentId, { deletedBy });
-    if (!student) throw new NotFoundError('Student not found', 'STUDENT_NOT_FOUND');
-    return student;
+    const mongoose = require('mongoose');
+    let student = null;
+
+    if (mongoose.Types.ObjectId.isValid(studentId)) {
+      student = await studentRepository.findOne({ _id: studentId, schoolId });
+    }
+
+    if (!student) {
+      student = await studentRepository.findOne({ schoolRefNo: studentId, schoolId });
+    }
+
+    if (!student) {
+      throw new NotFoundError('Student not found', 'STUDENT_NOT_FOUND');
+    }
+
+    const originalRefNo = student.schoolRefNo;
+    const deletedRefNo = `${originalRefNo}_deleted_${Date.now()}`;
+
+    const Student = require('../../../database/models/Student');
+    const updatedStudent = await Student.findOneAndUpdate(
+      { _id: student._id, schoolId, 'softDelete.isDeleted': { $ne: true } },
+      {
+        $set: {
+          schoolRefNo: deletedRefNo,
+          'softDelete.isDeleted': true,
+          'softDelete.deletedAt': new Date(),
+          'softDelete.deletedBy': mongoose.Types.ObjectId.isValid(deletedBy) ? deletedBy : null,
+          'softDelete.originalRefId': originalRefNo,
+        },
+      },
+      { new: true }
+    ).lean();
+
+    const ChildProfile = require('../../../database/models/ChildProfile');
+    await ChildProfile.updateMany(
+      { studentId: student._id, 'softDelete.isDeleted': { $ne: true } },
+      {
+        $set: {
+          'softDelete.isDeleted': true,
+          'softDelete.deletedAt': new Date(),
+          'softDelete.deletedBy': mongoose.Types.ObjectId.isValid(deletedBy) ? deletedBy : null,
+        },
+      }
+    );
+
+    return updatedStudent || student;
   },
 };
 

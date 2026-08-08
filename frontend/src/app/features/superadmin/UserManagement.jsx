@@ -21,7 +21,7 @@ const UserManagement = () => {
     setLoading(true);
     setError('');
     try {
-      const { data } = await listUsers({ limit: 100, role: 'parent' });
+      const { data } = await listUsers({ limit: 10000, role: 'parent' });
       setUsers((data || []).map(mapAdminUserForList));
     } catch (err) {
       setUsers([]);
@@ -38,6 +38,7 @@ const UserManagement = () => {
   // Search and entry count states
   const [searchQuery, setSearchQuery] = useState('');
   const [showCount, setShowCount] = useState('10');
+  const [currentPage, setCurrentPage] = useState(1);
   
   // Selected user for wallet adjustments
   const [selectedUser, setSelectedUser] = useState(null);
@@ -162,6 +163,10 @@ const UserManagement = () => {
     );
   });
 
+  const pageSize = parseInt(showCount, 10) || 10;
+  const totalPages = Math.ceil(filteredUsers.length / pageSize) || 1;
+  const paginatedUsers = filteredUsers.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
   // Calculate platform metrics
   const totalWalletSum = users.reduce((acc, curr) => acc + curr.walletAmt, 0);
   const totalSpentSum = users.reduce((acc, curr) => acc + curr.totalSpent, 0);
@@ -261,7 +266,10 @@ const UserManagement = () => {
               <span>Show</span>
               <select
                 value={showCount}
-                onChange={(e) => setShowCount(e.target.value)}
+                onChange={(e) => {
+                  setShowCount(e.target.value);
+                  setCurrentPage(1);
+                }}
                 className="bg-white border border-gray-200 rounded-xl px-2 py-1.5 focus:outline-none cursor-pointer font-bold"
               >
                 <option value="10">10</option>
@@ -279,7 +287,10 @@ const UserManagement = () => {
                 type="text"
                 placeholder="Search users..."
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setCurrentPage(1);
+                }}
                 className="bg-white border border-gray-200 rounded-xl pl-9 pr-4 py-1.5 w-[200px] focus:outline-none focus:ring-2 focus:ring-indigo-500/25"
               />
               <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
@@ -314,14 +325,15 @@ const UserManagement = () => {
                   </td>
                 </tr>
               ) : (
-                filteredUsers.slice(0, parseInt(showCount)).map((u, idx) => {
+                paginatedUsers.map((u, idx) => {
                   const isActive = u.status === 'Active';
+                  const srNo = (currentPage - 1) * pageSize + idx + 1;
                   return (
                     <tr key={u.id} className="hover:bg-gray-50/50 transition-colors">
                       
                       {/* Sr No */}
                       <td className="px-5 py-4 text-center text-gray-400 font-extrabold tabular-nums select-none">
-                        {idx + 1}
+                        {srNo}
                       </td>
 
                       {/* Name */}
@@ -423,6 +435,47 @@ const UserManagement = () => {
             </tbody>
           </table>
         </div>
+
+        {/* PAGINATION CONTROLS FOOTER */}
+        {filteredUsers.length > 0 && (
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-4 pt-4 border-t border-gray-100 select-none">
+            <span className="text-xs font-bold text-gray-400">
+              Showing {Math.min((currentPage - 1) * pageSize + 1, filteredUsers.length)} to {Math.min(currentPage * pageSize, filteredUsers.length)} of {filteredUsers.length} entries
+            </span>
+
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="px-3 py-1.5 rounded-xl border border-gray-200 text-xs font-bold text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+              >
+                Previous
+              </button>
+              {Array.from({ length: totalPages }, (_, i) => i + 1).slice(
+                Math.max(0, currentPage - 3),
+                Math.min(totalPages, currentPage + 2)
+              ).map((page) => (
+                <button
+                  type="button"
+                  key={page}
+                  onClick={() => setCurrentPage(page)}
+                  className={`w-8 h-8 rounded-xl text-xs font-black transition-all ${currentPage === page ? 'bg-[#0B1528] text-white shadow-xs' : 'border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                >
+                  {page}
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage >= totalPages}
+                className="px-3 py-1.5 rounded-xl border border-gray-200 text-xs font-bold text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
 
       </div>
 

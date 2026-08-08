@@ -577,6 +577,11 @@ const HeaderCategoryManagement = () => {
 // placeholder — a deleted/moved local file just shows the generic icon.
 const HeaderIcon = ({ item, fallback }) => {
   const [broken, setBroken] = useState(false);
+
+  useEffect(() => {
+    setBroken(false);
+  }, [item.image]);
+
   if (!item.image || broken) return fallback;
   return (
     <img
