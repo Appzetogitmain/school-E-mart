@@ -4,7 +4,7 @@ const { SETTINGS_AUDIT_ENTITY_ID } = require('../repositories/settings.repositor
 const auditRepository = require('../../auth/repositories/audit.repository');
 const { runAtomic } = require('../../orders/utils/atomic');
 
-const VALID_SECTIONS = ['general', 'marketplace', 'orders', 'school', 'security', 'billing', 'contact'];
+const VALID_SECTIONS = ['general', 'marketplace', 'orders', 'school', 'security', 'billing', 'contact', 'lms'];
 
 const DEFAULT_CONTACT_SETTINGS = {
   phone: '+91 98765 43210',
@@ -14,6 +14,10 @@ const DEFAULT_CONTACT_SETTINGS = {
   whatsapp: '+91 98765 43210',
   bulkPhone: '+91 99999 88888',
   bulkEmail: 'schools@schoolemart.com',
+};
+
+const DEFAULT_LMS_SETTINGS = {
+  maxVideoSizeMB: 500,
 };
 
 const settingsService = {
@@ -35,6 +39,9 @@ const settingsService = {
     const settings = await settingsRepository.getPlatformSettings();
     if (section === 'contact') {
       return { ...DEFAULT_CONTACT_SETTINGS, ...(settings.contact || {}) };
+    }
+    if (section === 'lms') {
+      return { ...DEFAULT_LMS_SETTINGS, ...(settings.lms || {}) };
     }
     return settings[section] || {};
   },

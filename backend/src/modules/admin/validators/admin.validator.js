@@ -37,6 +37,7 @@ const faqIdParam = Joi.object({ faqId: objectId.required() });
 const bannerIdParam = Joi.object({ bannerId: objectId.required() });
 const sectionIdParam = Joi.object({ sectionId: objectId.required() });
 const courseIdParam = Joi.object({ courseId: objectId.required() });
+const lessonIdParam = courseIdParam.keys({ lessonId: objectId.required() });
 
 const lmsSubjectIdParam = Joi.object({ subjectId: objectId.required() });
 const lmsSubjectSchema = Joi.object({
@@ -318,6 +319,10 @@ const contactSettingsSchema = Joi.object({
   bulkEmail: Joi.string().trim().allow('', null).optional(),
 });
 
+const lmsSettingsSchema = Joi.object({
+  maxVideoSizeMB: Joi.number().integer().min(10).max(5000).optional(),
+});
+
 const settingsBodyBySection = {
   general: generalSettingsSchema,
   marketplace: marketplaceSettingsSchema,
@@ -326,6 +331,7 @@ const settingsBodyBySection = {
   security: securitySettingsSchema,
   billing: billingSettingsSchema,
   contact: contactSettingsSchema,
+  lms: lmsSettingsSchema,
 };
 
 const payoutIdParam = Joi.object({ payoutId: objectId.required() });
@@ -450,6 +456,7 @@ module.exports = {
   reelIdParam,
   sectionIdParam,
   courseIdParam,
+  lessonIdParam,
   lmsSubjectIdParam,
   lmsSubjectSchema,
   lmsGradeIdParam,

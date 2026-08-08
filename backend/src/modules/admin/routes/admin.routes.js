@@ -565,14 +565,14 @@ router.post(
 router.patch(
   '/lms/courses/:courseId/lessons/:lessonId',
   ...adminOnly,
-  validateParams(lmsValidators.lessonIdParam),
+  validateParams(validators.lessonIdParam),
   validateBody(lmsValidators.updateLessonSchema),
   adminController.updatePlatformLesson
 );
 router.delete(
   '/lms/courses/:courseId/lessons/:lessonId',
   ...adminOnly,
-  validateParams(lmsValidators.lessonIdParam),
+  validateParams(validators.lessonIdParam),
   adminController.deletePlatformLesson
 );
 

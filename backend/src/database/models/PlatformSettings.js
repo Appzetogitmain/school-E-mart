@@ -66,6 +66,9 @@ const platformSettingsSchema = new mongoose.Schema(
       bulkPhone: { type: String },
       bulkEmail: { type: String },
     },
+    lms: {
+      maxVideoSizeMB: { type: Number, default: 500, min: 10, max: 5000 },
+    },
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     updatedAt: { type: Date, default: Date.now },
   },

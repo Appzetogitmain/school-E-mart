@@ -481,3 +481,14 @@ export const updateAdminProfile = async (payload) => {
   const response = await apiClient.put('/admin/profile', payload);
   return unwrapData(response)?.profile;
 };
+
+// Platform LMS Settings (Video upload size limits)
+export const getLmsSettings = async () => {
+  const response = await apiClient.get('/admin/settings/lms');
+  return unwrapData(response)?.section || { maxVideoSizeMB: 500 };
+};
+
+export const updateLmsSettings = async (payload) => {
+  const response = await apiClient.put('/admin/settings/lms', payload);
+  return unwrapData(response)?.section || payload;
+};

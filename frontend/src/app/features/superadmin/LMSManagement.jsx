@@ -20,6 +20,8 @@ import {
   deleteLmsGrade,
   listLmsGradeSuggestions,
   uploadAdminMediaWithProgress,
+  getLmsSettings,
+  updateLmsSettings,
 } from '../../../services/adminApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 import { mapPlatformCourseForAdmin, mapAdminCourseToPayload } from '../../../utils/mappers/adminLmsMapper';
@@ -122,9 +124,74 @@ const LMSManagement = () => {
   const [isUploadingVideo, setIsUploadingVideo] = useState(false);
   const lessonVideoInputRef = useRef(null);
 
+  // LMS Settings (Video upload size limit)
+  const [lmsSettings, setLmsSettings] = useState({ maxVideoSizeMB: 500 });
+  const [isLimitModalOpen, setIsLimitModalOpen] = useState(false);
+  const [newLimitMB, setNewLimitMB] = useState(500);
+  const [savingLimit, setSavingLimit] = useState(false);
+
   // Video Playing Modal state
   const [playingVideoUrl, setPlayingVideoUrl] = useState(null);
   const [playingVideoTitle, setPlayingVideoTitle] = useState('');
+
+  const loadLmsSettings = useCallback(async () => {
+    try {
+      const res = await getLmsSettings();
+      if (res?.maxVideoSizeMB) {
+        setLmsSettings(res);
+        setNewLimitMB(res.maxVideoSizeMB);
+      }
+    } catch {
+      // Fall back to 500MB default
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!authReady) return;
+    loadLmsSettings();
+  }, [authReady, loadLmsSettings]);
+
+  const handleUpdateLmsLimit = async (e) => {
+    e.preventDefault();
+    const mb = Number(newLimitMB);
+    if (!mb || mb < 10 || mb > 5000) {
+      alert('Please enter a valid video size limit between 10 MB and 5000 MB');
+      return;
+    }
+
+    setSavingLimit(true);
+    try {
+      const updated = await updateLmsSettings({ maxVideoSizeMB: mb });
+      setLmsSettings(updated);
+      setIsLimitModalOpen(false);
+      alert(`Video size limit updated successfully to ${mb} MB!`);
+    } catch (err) {
+      alert(getErrorMessage(err, 'Failed to update video limit'));
+    } finally {
+      setSavingLimit(false);
+    }
+  };
+
+  const handleLessonVideoFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const maxMb = lmsSettings.maxVideoSizeMB || 500;
+    const maxBytes = maxMb * 1024 * 1024;
+
+    if (file.size > maxBytes) {
+      const selectedMb = (file.size / (1024 * 1024)).toFixed(1);
+      alert(
+        `File Size Limit Exceeded!\n\nThe selected video file "${file.name}" is ${selectedMb} MB, which exceeds the current limit of ${maxMb} MB.\n\nPlease select a smaller file or click "Configure Limit" to increase the maximum allowed size.`
+      );
+      e.target.value = '';
+      return;
+    }
+
+    setLessonVideoFile(file);
+    setLessonVideoUrlInput('');
+    setLessonVideoPreview(URL.createObjectURL(file));
+  };
 
   const loadCourses = useCallback(async () => {
     setLoading(true);
@@ -300,13 +367,7 @@ const LMSManagement = () => {
     }
   };
 
-  const handleLessonVideoFileChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      setLessonVideoFile(file);
-      setLessonVideoPreview(URL.createObjectURL(file));
-    }
-  };
+
 
   const handleCourseSubmit = async (e) => {
     e.preventDefault();
@@ -463,10 +524,14 @@ const LMSManagement = () => {
   };
 
   const handleDeleteLesson = async (lessonId) => {
-    if (!window.confirm('Delete this video lesson?')) return;
+    if (!window.confirm('Are you sure you want to delete this video lesson?')) return;
     try {
       await deletePlatformLesson(selectedCourseForLessons.id, lessonId);
-      setLessons((prev) => prev.filter((l) => l._id !== lessonId));
+      setLessons((prev) => prev.filter((l) => (l._id || l.id) !== lessonId));
+      if (editLessonId === lessonId) {
+        resetLessonForm();
+      }
+      alert('Video lesson deleted successfully!');
     } catch (err) {
       alert(getErrorMessage(err, 'Failed to delete lesson'));
     }
@@ -497,6 +562,18 @@ const LMSManagement = () => {
           </div>
           <p className="text-xs text-gray-500 font-bold mt-1">Create courses, manage video lectures, and publish directly to the Student/Parent Learning Hub</p>
         </div>
+
+        <button
+          type="button"
+          onClick={() => {
+            setNewLimitMB(lmsSettings.maxVideoSizeMB || 500);
+            setIsLimitModalOpen(true);
+          }}
+          className="px-4 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-2xl font-black text-xs flex items-center gap-2 border border-indigo-200/60 shadow-xs transition-colors shrink-0 cursor-pointer"
+        >
+          <Settings size={15} className="text-indigo-600" />
+          <span>Video Upload Limit: <strong className="text-indigo-900 font-extrabold">{lmsSettings.maxVideoSizeMB || 500} MB</strong></span>
+        </button>
       </div>
 
       {/* TWO COLUMN GRID PANELS */}
@@ -880,7 +957,24 @@ const LMSManagement = () => {
 
                 {/* UPLOAD VIDEO ZONE WITH REAL-TIME PROGRESS BAR */}
                 <div className="space-y-2">
-                  <label className="block text-gray-500 text-[10px]">Upload Video File (MP4/MOV) *</label>
+                  <div className="flex items-center justify-between text-[10px]">
+                    <span className="text-gray-500 font-bold">Upload Video File (MP4/MOV) *</span>
+                    <span className="flex items-center gap-1 text-purple-700 font-extrabold bg-purple-100/70 px-2 py-0.5 rounded-md border border-purple-200/50">
+                      <span>Max limit: {lmsSettings.maxVideoSizeMB || 500} MB</span>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setNewLimitMB(lmsSettings.maxVideoSizeMB || 500);
+                          setIsLimitModalOpen(true);
+                        }}
+                        className="underline text-indigo-700 hover:text-indigo-900 ml-1 font-black cursor-pointer"
+                      >
+                        Change
+                      </button>
+                    </span>
+                  </div>
+
                   <input
                     type="file"
                     ref={lessonVideoInputRef}
@@ -897,18 +991,40 @@ const LMSManagement = () => {
                   >
                     <div className="flex flex-col items-center gap-1 select-none">
                       {lessonVideoPreview ? (
-                        <>
-                          <CheckCircle size={20} className="text-emerald-500" />
-                          <span className="text-emerald-800 font-extrabold text-xs">Video Selected!</span>
-                          <span className="text-[10px] text-gray-400 truncate max-w-[250px]">
-                            {lessonVideoFile ? lessonVideoFile.name : 'Attached Video File'}
-                          </span>
-                        </>
+                        <div className="flex items-center justify-between w-full px-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <CheckCircle size={20} className="text-emerald-500 shrink-0" />
+                            <div className="flex flex-col text-left min-w-0">
+                              <span className="text-emerald-800 font-extrabold text-xs">Video Attached!</span>
+                              <span className="text-[10px] text-gray-400 truncate max-w-[200px]">
+                                {lessonVideoFile ? lessonVideoFile.name : 'Uploaded Server Video'}
+                              </span>
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setLessonVideoFile(null);
+                              setLessonVideoPreview('');
+                              setLessonVideoUrlInput('');
+                              if (lessonVideoInputRef.current) lessonVideoInputRef.current.value = '';
+                            }}
+                            className="px-2.5 py-1 bg-red-100 hover:bg-red-200 text-red-600 rounded-xl font-bold text-xs transition-colors shrink-0 flex items-center gap-1 cursor-pointer"
+                            title="Remove attached video"
+                          >
+                            <Trash2 size={13} />
+                            <span>Remove Video</span>
+                          </button>
+                        </div>
                       ) : (
                         <>
                           <Upload size={20} className="text-purple-600" />
                           <span className="text-purple-900 font-black text-xs">Click to select MP4/MOV video</span>
-                          <span className="text-[9px] text-gray-400">Direct file upload to server</span>
+                          <span className="text-[9px] text-gray-500 font-bold">
+                            Max Allowed Size: <strong className="text-purple-700 font-extrabold">{lmsSettings.maxVideoSizeMB || 500} MB</strong> (Server Stream Direct)
+                          </span>
                         </>
                       )}
                     </div>
@@ -1242,6 +1358,96 @@ const LMSManagement = () => {
                 ))
               )}
             </div>
+
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* CONFIGURE VIDEO UPLOAD LIMIT MODAL */}
+      {isLimitModalOpen && ReactDOM.createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in select-none">
+          <div className="bg-white w-full max-w-md rounded-3xl border border-gray-200 shadow-2xl overflow-hidden flex flex-col">
+
+            <div className="p-5 bg-[#0B1528] text-white flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-2">
+                <Settings size={16} className="text-indigo-400" />
+                <h4 className="text-sm font-black tracking-wide">Configure Video Upload Limit</h4>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsLimitModalOpen(false)}
+                className="bg-white/10 hover:bg-white/20 text-white p-1.5 rounded-full transition-colors cursor-pointer"
+              >
+                <X size={14} />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateLmsLimit} className="p-6 space-y-5 text-xs font-bold text-gray-700">
+              <p className="text-gray-500 leading-relaxed">
+                Set the maximum video file size limit allowed for LMS video lesson uploads. Admin can adjust this limit anytime as needed.
+              </p>
+
+              {/* QUICK PRESET CHIPS */}
+              <div className="space-y-2">
+                <label className="block text-gray-400 uppercase tracking-wide text-[9px] font-black">Quick Presets</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[100, 250, 500, 1000, 2000, 5000].map((mb) => (
+                    <button
+                      key={mb}
+                      type="button"
+                      onClick={() => setNewLimitMB(mb)}
+                      className={`py-2 px-3 rounded-xl border text-xs font-extrabold transition-all cursor-pointer ${
+                        Number(newLimitMB) === mb
+                          ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                          : 'bg-gray-50 hover:bg-gray-100 text-gray-700 border-gray-200'
+                      }`}
+                    >
+                      {mb >= 1000 ? `${mb / 1000} GB (${mb}MB)` : `${mb} MB`}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* CUSTOM MB INPUT */}
+              <div className="space-y-1.5">
+                <label className="block text-gray-400 uppercase tracking-wide text-[9px] font-black">Maximum Limit (MB) *</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={10}
+                    max={5000}
+                    required
+                    value={newLimitMB}
+                    onChange={(e) => setNewLimitMB(e.target.value)}
+                    className="flex-1 bg-white border border-gray-200 rounded-xl px-3.5 py-2.5 text-xs font-black focus:outline-none focus:ring-2 focus:ring-indigo-500/25"
+                    placeholder="e.g. 500"
+                  />
+                  <span className="text-gray-500 font-extrabold">MB</span>
+                </div>
+                <span className="text-[10px] text-gray-400 block font-normal">
+                  Minimum: 10 MB, Maximum: 5000 MB (5 GB)
+                </span>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setIsLimitModalOpen(false)}
+                  className="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-extrabold rounded-xl text-xs"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingLimit}
+                  className="px-5 py-2.5 bg-[#0B1528] hover:bg-[#1a2942] text-white font-black rounded-xl text-xs uppercase tracking-wider shadow-md disabled:opacity-60 flex items-center gap-1.5 cursor-pointer"
+                >
+                  {savingLimit && <Loader2 size={13} className="animate-spin" />}
+                  <span>Save Limit</span>
+                </button>
+              </div>
+            </form>
 
           </div>
         </div>,
