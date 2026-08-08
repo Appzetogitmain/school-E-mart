@@ -75,10 +75,6 @@ const assertTeacherCourseAccess = async (req, course) => {
     throw new ForbiddenError('Teacher profile not found', 'TEACHER_PROFILE_NOT_FOUND');
   }
 
-  if (course.instructorUserId && String(course.instructorUserId) !== String(req.auth.userId)) {
-    throw new ForbiddenError('You can only manage your assigned courses', 'COURSE_ACCESS_DENIED');
-  }
-
   req.teacherProfile = profile;
 };
 
