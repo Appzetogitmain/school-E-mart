@@ -49,8 +49,10 @@ export const mapHeaderCategoryForAdmin = (header) => ({
   status: formatStatus(header?.status),
   order: header?.displayOrder ?? 0,
   icon: header?.iconKey || header?.icon || 'layers',
-  // `imageUrl` is what the record actually holds; `image` is the absolute,
-  // display-ready URL — never write `image` back to the API.
+  commissionPercent: header?.commissionPercent ?? 0,
+  commission: `${header?.commissionPercent ?? 0}%`,
+  feesFlatPaise: header?.feesFlatPaise ?? 0,
+  fees: `₹${((header?.feesFlatPaise ?? 0) / 100).toFixed(2)}`,
   imageUrl: header?.imageUrl || '',
   image: toAbsoluteUrl(header?.imageUrl) || '',
   raw: header,

@@ -339,9 +339,9 @@ const rejectPayoutSchema = Joi.object({
 });
 
 const walletQuery = paginationQuery.keys({
-  vendorId: objectId.optional(),
+  vendorId: Joi.alternatives().try(objectId, Joi.string().valid('All', 'all', '')).optional(),
   transactionType: Joi.string()
-    .valid('order_credit', 'commission_deduction', 'payout_debit', 'adjustment', 'refund_debit')
+    .valid('order_credit', 'commission_deduction', 'payout_debit', 'adjustment', 'refund_debit', 'All', 'all', '')
     .optional(),
 });
 

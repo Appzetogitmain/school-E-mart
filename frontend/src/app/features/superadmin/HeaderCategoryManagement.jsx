@@ -106,11 +106,19 @@ const HeaderCategoryManagement = () => {
 
   // Open Edit pre-populating attributes
   const openEditModal = (headerItem) => {
-    setEditingHeaderId(headerItem.id);
-    setFormName(headerItem.name);
-    setFormSlug(headerItem.slug);
-    setFormCommission(headerItem.commission.replace('%', ''));
-    setFormFees(headerItem.fees.replace('₹', ''));
+    setEditingHeaderId(headerItem.id || headerItem.mongoId);
+    setFormName(headerItem.name || '');
+    setFormSlug(headerItem.slug || '');
+    setFormCommission(
+      typeof headerItem.commission === 'string'
+        ? headerItem.commission.replace('%', '')
+        : String(headerItem.commissionPercent ?? 0)
+    );
+    setFormFees(
+      typeof headerItem.fees === 'string'
+        ? headerItem.fees.replace('₹', '')
+        : String((headerItem.feesFlatPaise ?? 0) / 100)
+    );
     setFormStatus(headerItem.status === 'Active' ? 'active' : 'inactive');
     setFormImage(headerItem.imageUrl || '');
     setFormImageFile(null);
@@ -126,7 +134,8 @@ const HeaderCategoryManagement = () => {
       setLoading(true);
       const imageUrl = await resolveImageUrl();
       await updateHeaderCategory(editingHeaderId, {
-        name: formName,
+        name: formName.trim(),
+        slug: formSlug.trim() || undefined,
         commissionPercent: parseFloat(formCommission) || 0,
         feesFlatPaise: Math.round(parseFloat(formFees) * 100) || 0,
         status: formStatus,

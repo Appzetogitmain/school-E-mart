@@ -7,6 +7,8 @@ const School = require('../../../database/models/School');
 const { executePaginatedQuery } = require('../../../repositories');
 const { NotFoundError, BadRequestError } = require('../../../common/errors');
 
+const isValidObjectId = (id) => id && mongoose.Types.ObjectId.isValid(String(id));
+
 const buildStatusFilter = (query = {}) => {
   const filter = { 'softDelete.isDeleted': { $ne: true } };
   if (query.status) {
@@ -18,8 +20,8 @@ const buildStatusFilter = (query = {}) => {
 // Resolve the payee for each row — a vendor or a school — so the admin list can
 // name who is withdrawing regardless of owner type.
 const attachOwners = async (rows = []) => {
-  const vendorIds = [...new Set(rows.map((row) => String(row.vendorId)).filter(Boolean))];
-  const schoolIds = [...new Set(rows.map((row) => String(row.schoolId)).filter(Boolean))];
+  const vendorIds = [...new Set(rows.map((row) => row.vendorId).filter(isValidObjectId).map((id) => String(id)))];
+  const schoolIds = [...new Set(rows.map((row) => row.schoolId).filter(isValidObjectId).map((id) => String(id)))];
 
   const [vendors, schools] = await Promise.all([
     vendorIds.length
@@ -38,8 +40,8 @@ const attachOwners = async (rows = []) => {
   const schoolMap = new Map(schools.map((s) => [String(s._id), s]));
 
   return rows.map((row) => {
-    const vendor = vendorMap.get(String(row.vendorId)) || null;
-    const school = schoolMap.get(String(row.schoolId)) || null;
+    const vendor = row.vendorId ? vendorMap.get(String(row.vendorId)) || null : null;
+    const school = row.schoolId ? schoolMap.get(String(row.schoolId)) || null : null;
     return {
       ...row,
       vendor,
@@ -53,9 +55,13 @@ const attachOwners = async (rows = []) => {
 
 const adminWalletService = {
   async listPayoutRequests(query = {}) {
+    const filter = buildStatusFilter(query);
+    if (query.vendorId && isValidObjectId(query.vendorId)) {
+      filter.vendorId = query.vendorId;
+    }
     const { data, pagination } = await executePaginatedQuery(
       PayoutRequest,
-      buildStatusFilter(query),
+      filter,
       query,
       { defaultSort: '-audit.createdAt' }
     );
@@ -64,8 +70,12 @@ const adminWalletService = {
 
   async listVendorTransactions(query = {}) {
     const filter = {};
-    if (query.vendorId) filter.vendorId = query.vendorId;
-    if (query.transactionType) filter.transactionType = query.transactionType;
+    if (query.vendorId && isValidObjectId(query.vendorId)) {
+      filter.vendorId = query.vendorId;
+    }
+    if (query.transactionType && !['All', 'all'].includes(query.transactionType)) {
+      filter.transactionType = query.transactionType;
+    }
 
     const { data, pagination } = await executePaginatedQuery(VendorLedger, filter, query, {
       defaultSort: '-audit.createdAt',
