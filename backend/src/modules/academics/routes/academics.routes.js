@@ -9,20 +9,30 @@ const { resolveSchool } = require('../../school/middlewares/resolveSchool');
 
 const router = express.Router({ mergeParams: true });
 
-// Parents/teachers/school read; school admin writes. Mirrors the notices guards.
+// Parents/teachers/school read; school admin writes.
 const schoolRead = protectedRoute({
-  roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN, ROLES.TEACHER, ROLES.PARENT, ROLES.USER, ROLES.VENDOR],
+  roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN, ROLES.TEACHER, ROLES.PARENT, ROLES.VENDOR],
 });
-const schoolManage = protectedRoute({
+const eventsManage = protectedRoute({
   roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN],
-  permissions: [PERMISSIONS.NOTICES_SEND],
+  permissions: [PERMISSIONS.EVENTS_MANAGE],
+  tenant: { requireTenantId: false },
+});
+const phonebookManage = protectedRoute({
+  roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN],
+  permissions: [PERMISSIONS.PHONEBOOK_MANAGE],
+  tenant: { requireTenantId: false },
+});
+const kitsManage = protectedRoute({
+  roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN],
+  permissions: [PERMISSIONS.KITS_MANAGE],
   tenant: { requireTenantId: false },
 });
 
 // Events
 router.post(
   '/:schoolId/events',
-  ...schoolManage,
+  ...eventsManage,
   resolveSchool(),
   validateParams(validators.schoolIdParam),
   validateBody(validators.createEventSchema),
@@ -45,7 +55,7 @@ router.get(
 );
 router.patch(
   '/:schoolId/events/:eventId',
-  ...schoolManage,
+  ...eventsManage,
   resolveSchool(),
   validateParams(validators.eventIdParam),
   validateBody(validators.updateEventSchema),
@@ -53,7 +63,7 @@ router.patch(
 );
 router.delete(
   '/:schoolId/events/:eventId',
-  ...schoolManage,
+  ...eventsManage,
   resolveSchool(),
   validateParams(validators.eventIdParam),
   academicsController.deleteEvent
@@ -80,7 +90,7 @@ router.get(
 );
 router.post(
   '/:schoolId/phonebook',
-  ...schoolManage,
+  ...phonebookManage,
   resolveSchool(),
   validateParams(validators.schoolIdParam),
   validateBody(validators.phonebookEntrySchema),
@@ -88,7 +98,7 @@ router.post(
 );
 router.patch(
   '/:schoolId/phonebook/:entryId',
-  ...schoolManage,
+  ...phonebookManage,
   resolveSchool(),
   validateParams(validators.entryIdParam),
   validateBody(validators.updatePhonebookSchema),
@@ -96,7 +106,7 @@ router.patch(
 );
 router.delete(
   '/:schoolId/phonebook/:entryId',
-  ...schoolManage,
+  ...phonebookManage,
   resolveSchool(),
   validateParams(validators.entryIdParam),
   academicsController.deletePhonebookEntry
@@ -112,21 +122,21 @@ router.get(
 );
 router.post(
   '/:schoolId/kit-categories',
-  ...schoolManage,
+  ...kitsManage,
   resolveSchool(),
   validateParams(validators.schoolIdParam),
   academicsController.createKitCategory
 );
 router.delete(
   '/:schoolId/kit-categories/:categoryId',
-  ...schoolManage,
+  ...kitsManage,
   resolveSchool(),
   academicsController.deleteKitCategory
 );
 
 router.post(
   '/:schoolId/kits',
-  ...schoolManage,
+  ...kitsManage,
   resolveSchool(),
   validateParams(validators.schoolIdParam),
   validateBody(validators.createKitSchema),
@@ -149,7 +159,7 @@ router.get(
 );
 router.patch(
   '/:schoolId/kits/:kitId',
-  ...schoolManage,
+  ...kitsManage,
   resolveSchool(),
   validateParams(validators.kitIdParam),
   validateBody(validators.updateKitSchema),
@@ -157,7 +167,7 @@ router.patch(
 );
 router.delete(
   '/:schoolId/kits/:kitId',
-  ...schoolManage,
+  ...kitsManage,
   resolveSchool(),
   validateParams(validators.kitIdParam),
   academicsController.deleteKit

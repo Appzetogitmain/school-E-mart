@@ -300,4 +300,74 @@ describe('homework flow: assign -> submit -> grade -> return', () => {
     expect(String(context.assignment._id)).toBe(String(assignment._id));
     expect(String(context.attachment._id)).toBe(String(attachment._id));
   });
+
+  describe('homework banner image', () => {
+    test('is stored separately from the reference attachments, never mixed in', async () => {
+      const assignment = await createHomework({
+        files: [PNG_DATA_URI],
+        bannerFile: PNG_DATA_URI,
+      });
+
+      // One reference attachment, one banner — the banner must not inflate the
+      // attachments list a parent sees as downloadable reference files.
+      expect(assignment.attachments).toHaveLength(1);
+      expect(assignment.bannerAttachmentId).toBeTruthy();
+      expect(String(assignment.bannerAttachmentId)).not.toBe(String(assignment.attachments[0]));
+
+      const bannerAttachment = await Attachment.findById(assignment.bannerAttachmentId).lean();
+      expect(bannerAttachment.purpose).toBe('homework_attachment');
+
+      // The parent-facing feed must resolve the banner as its own field too, not fold
+      // it into the attachments array.
+      const feed = await assignmentService.getStudentHomeworkFeed(schoolId, studentA);
+      expect(feed[0].assignment.attachments).toHaveLength(1);
+      expect(String(feed[0].assignment.bannerAttachmentId._id)).toBe(String(bannerAttachment._id));
+
+      // And it must resolve through the same authorized attachment-context lookup as
+      // any other homework attachment.
+      const context = await assignmentService.getAttachmentContext(schoolId, bannerAttachment._id);
+      expect(context.isHomeworkAttachment).toBe(true);
+      expect(String(context.assignment._id)).toBe(String(assignment._id));
+    });
+
+    test('editing without touching the banner leaves it exactly as it was', async () => {
+      const assignment = await createHomework({ bannerFile: PNG_DATA_URI });
+      const originalBannerId = String(assignment.bannerAttachmentId);
+
+      const updated = await assignmentService.updateAssignment(schoolId, course._id, assignment._id, {
+        title: 'Fractions Worksheet (revised)',
+      });
+
+      expect(String(updated.bannerAttachmentId)).toBe(originalBannerId);
+    });
+
+    test('a new bannerFile on update replaces the old banner', async () => {
+      const assignment = await createHomework({ bannerFile: PNG_DATA_URI });
+      const originalBannerId = String(assignment.bannerAttachmentId);
+
+      const updated = await assignmentService.updateAssignment(schoolId, course._id, assignment._id, {
+        bannerFile: PNG_DATA_URI,
+      });
+
+      expect(updated.bannerAttachmentId).toBeTruthy();
+      expect(String(updated.bannerAttachmentId)).not.toBe(originalBannerId);
+    });
+
+    test('removeBanner clears it', async () => {
+      const assignment = await createHomework({ bannerFile: PNG_DATA_URI });
+      expect(assignment.bannerAttachmentId).toBeTruthy();
+
+      const updated = await assignmentService.updateAssignment(schoolId, course._id, assignment._id, {
+        removeBanner: true,
+      });
+
+      expect(updated.bannerAttachmentId).toBeNull();
+    });
+
+    test('homework created without a banner has none, and attachments are unaffected', async () => {
+      const assignment = await createHomework({ files: [PNG_DATA_URI] });
+      expect(assignment.bannerAttachmentId).toBeFalsy();
+      expect(assignment.attachments).toHaveLength(1);
+    });
+  });
 });

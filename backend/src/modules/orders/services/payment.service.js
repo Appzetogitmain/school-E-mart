@@ -66,14 +66,25 @@ const paymentService = {
 
   async confirmPayment(
     orderId,
-    { razorpayPaymentId, razorpayOrderId, razorpaySignature, session = null } = {}
+    { paymentId, razorpayPaymentId, razorpayOrderId, razorpaySignature, session = null } = {}
   ) {
     const opts = session ? { session } : {};
     // Within an active transaction (e.g. COD confirmation right after order
     // creation), the payment was just inserted in this same session — a
     // session-less read would miss it under snapshot isolation and 404 here.
-    const payment = await paymentRepository.findByOrderId(orderId, opts);
+    //
+    // `findByOrderId` is a bare findOne({orderId}) — fine while an order only
+    // ever has one Payment, but an RFQ order gets a second one for the
+    // remainder after the advance is captured. Callers that know exactly
+    // which payment they mean (advance vs remainder) pass paymentId to
+    // target it directly instead of relying on find-the-only-one-for-order.
+    const payment = paymentId
+      ? await paymentRepository.findById(paymentId, {}, opts)
+      : await paymentRepository.findByOrderId(orderId, opts);
     if (!payment) throw new NotFoundError('Payment not found', 'PAYMENT_NOT_FOUND');
+    if (String(payment.orderId) !== String(orderId)) {
+      throw new BadRequestError('Payment does not belong to this order', null, 'PAYMENT_ORDER_MISMATCH');
+    }
     if (payment.status === 'captured') return payment;
 
     let gatewayPaymentId;

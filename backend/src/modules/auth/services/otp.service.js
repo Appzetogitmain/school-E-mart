@@ -5,6 +5,7 @@ const {
   UnauthorizedError,
   TooManyRequestsError,
   NotFoundError,
+  BadRequestError,
 } = require('../../../common/errors');
 const { generateOtp, hashOtp, normalizePhone } = require('../../../utils');
 const { messages, roles } = require('../../../constants');
@@ -30,6 +31,9 @@ const cooldownTtlSeconds = () => Math.max(1, Math.ceil(env.OTP_RESEND_COOLDOWN_M
 const otpService = {
   async requestOtp({ phone, purpose }, requestMeta = {}) {
     const normalizedPhone = normalizePhone(phone);
+    if (!normalizedPhone) {
+      throw new BadRequestError('Please enter a valid 10-digit mobile number', null, 'INVALID_PHONE_NUMBER');
+    }
     const config = OTP_PURPOSE_CONFIG[purpose];
     if (!config) {
       throw new UnauthorizedError(messages.AUTH.OTP_INVALID, 'INVALID_OTP_PURPOSE');
@@ -128,6 +132,9 @@ const otpService = {
 
   async verifyOtp({ phone, otp, purpose }, requestMeta = {}, { issueSession = false } = {}) {
     const normalizedPhone = normalizePhone(phone);
+    if (!normalizedPhone) {
+      throw new BadRequestError('Please enter a valid 10-digit mobile number', null, 'INVALID_PHONE_NUMBER');
+    }
     const config = OTP_PURPOSE_CONFIG[purpose];
     if (!config) {
       throw new UnauthorizedError(messages.AUTH.OTP_INVALID, 'INVALID_OTP_PURPOSE');

@@ -444,8 +444,30 @@ const schoolController = {
   }),
 
   awardRfqQuote: asyncHandler(async (req, res) => {
-    const rfq = await rfqService.awardQuote(req.schoolId, req.params.rfqId, req.params.quoteId);
+    const rfq = await rfqService.awardQuote(req.schoolId, req.params.rfqId, req.params.quoteId, {
+      userId: req.auth.userId,
+    });
     return success(res, { rfq }, 'Contract awarded successfully', undefined, req);
+  }),
+
+  initiateRfqAdvancePayment: asyncHandler(async (req, res) => {
+    const result = await rfqService.initiateAdvancePayment(req.schoolId, req.params.orderId);
+    return success(res, result, 'Advance payment initiated', undefined, req);
+  }),
+
+  confirmRfqAdvancePayment: asyncHandler(async (req, res) => {
+    const result = await rfqService.confirmAdvancePayment(req.schoolId, req.params.orderId, req.body);
+    return success(res, result, 'Advance payment confirmed', undefined, req);
+  }),
+
+  initiateRfqRemainderPayment: asyncHandler(async (req, res) => {
+    const result = await rfqService.initiateRemainderPayment(req.schoolId, req.params.orderId);
+    return success(res, result, 'Remaining balance payment initiated', undefined, req);
+  }),
+
+  confirmRfqRemainderPayment: asyncHandler(async (req, res) => {
+    const result = await rfqService.confirmRemainderPayment(req.schoolId, req.params.orderId, req.body);
+    return success(res, result, 'Remaining balance payment confirmed', undefined, req);
   }),
 
   listParents: asyncHandler(async (req, res) => {

@@ -25,6 +25,12 @@ const PERMISSIONS = {
   NOTICES_SEND: 'notices.send',
   DIARY_READ: 'diary.read',
   DIARY_WRITE: 'diary.write',
+  // Kits, events and phonebook entries used to be gated on NOTICES_SEND — coupling
+  // three unrelated capabilities to "can send notices". A staff account scoped to
+  // just one of these could not be expressed at all.
+  KITS_MANAGE: 'kits.manage',
+  EVENTS_MANAGE: 'events.manage',
+  PHONEBOOK_MANAGE: 'phonebook.manage',
   ORDERS_READ: 'orders.read',
   ORDERS_WRITE: 'orders.write',
   CATALOG_READ: 'catalog.read',
@@ -58,6 +64,9 @@ const ROLE_DEFAULT_PERMISSIONS = {
     PERMISSIONS.ORDERS_READ,
     PERMISSIONS.ORDERS_WRITE,
     PERMISSIONS.CATALOG_READ,
+    PERMISSIONS.KITS_MANAGE,
+    PERMISSIONS.EVENTS_MANAGE,
+    PERMISSIONS.PHONEBOOK_MANAGE,
   ],
   teacher: [
     PERMISSIONS.STUDENTS_READ,

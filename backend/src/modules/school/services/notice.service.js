@@ -97,19 +97,46 @@ const buildParentNoticeFilter = async (schoolId, userId, studentId) => {
 
 const noticeService = {
   async createNotice(schoolId, payload, createdBy) {
+    const publishDate = payload.publishDate ? new Date(payload.publishDate) : new Date();
+    const isNowOrPast = publishDate.getTime() <= Date.now() + 5000;
+
     const notice = await noticeRepository.create({
       ...payload,
       schoolId,
       status: payload.status || 'draft',
-      publishDate: payload.publishDate || new Date(),
+      publishDate,
+      isNotified: payload.status === 'published' && isNowOrPast,
       ...(createdBy ? { 'audit.createdBy': createdBy } : {}),
     });
 
-    if (notice.status === 'published') {
+    if (notice.status === 'published' && isNowOrPast) {
       triggerService.notifySchoolNoticePublished(schoolId, notice);
     }
 
     return notice;
+  },
+
+  async processScheduledNotices() {
+    const Notice = require('../../../database/models/Notice');
+    const now = new Date();
+    const dueNotices = await Notice.find({
+      status: 'published',
+      isNotified: { $ne: true },
+      publishDate: { $lte: now },
+      'softDelete.isDeleted': { $ne: true }
+    });
+
+    if (!dueNotices.length) return;
+
+    for (const notice of dueNotices) {
+      try {
+        await triggerService.notifySchoolNoticePublished(notice.schoolId, notice);
+        notice.isNotified = true;
+        await notice.save();
+      } catch (err) {
+        console.error(`Failed to dispatch scheduled notice ${notice._id}:`, err);
+      }
+    }
   },
 
   async listNotices(req, schoolId, query) {

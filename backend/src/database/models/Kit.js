@@ -56,4 +56,19 @@ kitSchema.index({ vendorId: 1 });
 kitSchema.index({ name: 'text' });
 kitSchema.index({ 'softDelete.isDeleted': 1, 'audit.updatedAt': -1 });
 
-module.exports = mongoose.model('Kit', kitSchema);
+const KitModel = mongoose.model('Kit', kitSchema);
+
+// A kit is only safe to add to a cart or turn into an order line item when the
+// school has actually published it, it hasn't been removed, and a vendor is
+// assigned to fulfil it. `Kit.findById()` on its own does not check any of that —
+// it would happily return a draft, a soft-deleted kit, or one with no vendor.
+// Any lookup that feeds a purchase (as opposed to school/admin management, which
+// legitimately needs to see drafts) must go through this filter.
+KitModel.purchasableFilter = (id) => ({
+  _id: id,
+  status: 'active',
+  vendorId: { $ne: null },
+  'softDelete.isDeleted': { $ne: true },
+});
+
+module.exports = KitModel;

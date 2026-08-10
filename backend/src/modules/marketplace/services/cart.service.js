@@ -45,7 +45,7 @@ const cartService = {
         productRepository.findPublishedFilter({ _id: item.productId })
       );
       if (!product) {
-        const kit = await Kit.findById(item.productId).lean();
+        const kit = await Kit.findOne(Kit.purchasableFilter(item.productId)).lean();
         if (kit) {
           const kitImg =
             kit.imageUrl ||
@@ -92,7 +92,7 @@ const cartService = {
     );
     let isKit = false;
     if (!product) {
-      const kit = await Kit.findById(payload.productId).lean();
+      const kit = await Kit.findOne(Kit.purchasableFilter(payload.productId)).lean();
       if (kit) {
         isKit = true;
         const kitImg =

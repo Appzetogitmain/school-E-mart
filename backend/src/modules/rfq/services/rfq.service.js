@@ -10,11 +10,17 @@ const Quote = require('../../../database/models/Quote');
 const School = require('../../../database/models/School');
 const VendorProfile = require('../../../database/models/VendorProfile');
 const Attachment = require('../../../database/models/Attachment');
+const Order = require('../../../database/models/Order');
 const rfqRepository = require('../repositories/rfq.repository');
 const quoteRepository = require('../repositories/quote.repository');
-const { generateRfqNumber } = require('../utils/rfqNumber');
+const rfqNumberUtil = require('../utils/rfqNumber');
 const { serializeRfq, serializeQuote, buildUniformItems, toObjectId } = require('../utils/serializers');
 const { triggerService } = require('../../../services/notification');
+const { generateOrderNumber } = require('../../orders/utils/orderNumber');
+const { runAtomic } = require('../../orders/utils/atomic');
+const paymentService = require('../../orders/services/payment.service');
+const paymentRepository = require('../../orders/repositories/payment.repository');
+const config = require('../../../config');
 
 const assertVendorInvited = (rfq, vendorId) => {
   const invited = (rfq.invitedVendorIds || []).some((id) => String(id) === String(vendorId));
@@ -38,9 +44,56 @@ const loadRfqForSchool = async (schoolId, rfqId) => {
   return rfq;
 };
 
-const loadRfqForVendor = async (rfqId, vendorId) => {
+/**
+ * Loads an RFQ-awarded order scoped to the requesting school. Ownership is
+ * proven via the Rfq (schoolId + orderId), not Order.userId — the same trust
+ * boundary every other RFQ endpoint already uses, so a school can't reach an
+ * order that isn't theirs just by guessing an id.
+ */
+const loadRfqOrderForSchool = async (schoolId, orderId) => {
+  const rfq = await Rfq.findOne({ orderId, schoolId }).lean();
+  if (!rfq) throw new NotFoundError('Order not found', 'ORDER_NOT_FOUND');
+
+  const order = await Order.findOne({ _id: orderId, 'softDelete.isDeleted': { $ne: true } });
+  if (!order || !order.rfqAdvance) throw new NotFoundError('Order not found', 'ORDER_NOT_FOUND');
+
+  return { rfq, order };
+};
+
+/** Mirrors orders.controller.js's createOrder checkout shape so the frontend's
+ *  existing openRazorpayCheckout() helper works unmodified for advance/remainder
+ *  payments too. Null for anything the gateway itself already settled (e.g. a
+ *  zero-amount advance, captured with no gateway round-trip). */
+const buildCheckout = (payment) => {
+  if (!payment || payment.gateway !== 'razorpay') return null;
+  return {
+    keyId: config.env.RAZORPAY_KEY_ID || process.env.RAZORPAY_KEY_ID,
+    razorpayOrderId: payment.gatewayOrderId,
+    amountPaise: payment.amountPaise,
+    currency: payment.currency || 'INR',
+  };
+};
+
+/**
+ * `allowExistingQuote` covers a vendor the school later removed from
+ * `invitedVendorIds` — editing the invite list must not also retroactively cut
+ * off a vendor's visibility into a quote they already put real work into
+ * submitting. It must never loosen who can submit a *new* quote, only who can
+ * view an RFQ they already responded to.
+ */
+const loadRfqForVendor = async (rfqId, vendorId, { allowExistingQuote = false } = {}) => {
   const rfq = await rfqRepository.findOne({ _id: rfqId });
   if (!rfq) throw new NotFoundError('RFQ not found', 'RFQ_NOT_FOUND');
+
+  if (allowExistingQuote) {
+    const invited = (rfq.invitedVendorIds || []).some((id) => String(id) === String(vendorId));
+    if (!invited) {
+      const hasQuote = await quoteRepository.findByRfqAndVendor(rfqId, vendorId);
+      if (!hasQuote) assertVendorInvited(rfq, vendorId); // throws — neither invited nor quoted
+    }
+    return rfq;
+  }
+
   assertVendorInvited(rfq, vendorId);
   return rfq;
 };
@@ -118,7 +171,6 @@ const rfqService = {
     }
 
     const status = payload.status === 'draft' ? 'draft' : 'open';
-    const rfqNumber = await generateRfqNumber();
 
     const descriptionParts = [
       payload.specialInstructions,
@@ -127,9 +179,8 @@ const rfqService = {
       payload.classes?.length ? `Classes: ${payload.classes.join(', ')}` : null,
     ].filter(Boolean);
 
-    const rfq = await rfqRepository.create({
+    const docWithoutNumber = {
       schoolId,
-      rfqNumber,
       title: payload.title,
       category: 'uniform',
       description: descriptionParts.join('\n') || payload.title,
@@ -147,7 +198,24 @@ const rfqService = {
         uniformSets: payload.uniformSets || [],
         additionalNotes: payload.additionalNotes || '',
       },
-    });
+    };
+
+    // generateRfqNumber() reads-then-computes-next with no atomic reservation, so
+    // two requests racing (a double-click, two staff at the same school) can both
+    // read the same "latest" number and collide on the unique index. Regenerate
+    // and retry rather than surfacing a raw duplicate-key error.
+    const MAX_NUMBER_ATTEMPTS = 3;
+    let rfq;
+    for (let attempt = 1; attempt <= MAX_NUMBER_ATTEMPTS; attempt += 1) {
+      const rfqNumber = await rfqNumberUtil.generateRfqNumber();
+      try {
+        rfq = await rfqRepository.create({ ...docWithoutNumber, rfqNumber });
+        break;
+      } catch (error) {
+        const isDuplicateRfqNumber = error?.code === 11000 && error?.keyPattern?.rfqNumber;
+        if (!isDuplicateRfqNumber || attempt === MAX_NUMBER_ATTEMPTS) throw error;
+      }
+    }
 
     if (status === 'open' && invitedVendorIds.length) {
       triggerService.notifyRfqPublished(rfq, invitedVendorIds);
@@ -163,10 +231,38 @@ const rfqService = {
     // previous save, and to detect the draft → open transition.
     const existing = await loadRfqForSchool(schoolId, rfqId);
 
+    if (payload.status === 'cancelled' && !['open', 'reviewing'].includes(existing.status)) {
+      throw new BadRequestError(
+        `Only a request that is open or under review can be cancelled — this one is "${existing.status}".`,
+        null,
+        'RFQ_CANNOT_CANCEL'
+      );
+    }
+
     const isDraft = payload.status === 'draft';
     const items = buildUniformItems(payload.uniformSets || []);
 
-    if (!isDraft && payload.uniformSets && !items.length) {
+    // A quote's items[].rfqItemIndex is a positional index into rfq.items,
+    // fixed at the moment the vendor submitted. Letting the school add, remove,
+    // or reorder uniform sets after that would silently point existing quotes'
+    // line items at the wrong (or a nonexistent) uniform set.
+    if (payload.uniformSets) {
+      const quoteCount = await Quote.countDocuments({ rfqId, 'softDelete.isDeleted': { $ne: true } });
+      if (quoteCount > 0) {
+        throw new BadRequestError(
+          'This request already has vendor quotes, so its items can no longer be changed. Cancel it and create a new request instead.',
+          null,
+          'RFQ_HAS_QUOTES'
+        );
+      }
+    }
+
+    // Falls back to what's already stored so this check can't be bypassed by
+    // simply leaving `uniformSets` out of a save that flips status to 'open'.
+    const effectiveItems = payload.uniformSets !== undefined
+      ? items
+      : buildUniformItems(existing.meta?.uniformSets || []);
+    if (!isDraft && !effectiveItems.length) {
       throw new BadRequestError('At least one uniform set with quantity is required', null, 'RFQ_ITEMS_REQUIRED');
     }
 
@@ -246,6 +342,10 @@ const rfqService = {
       }
     }
 
+    if (rfq.status === 'cancelled' && existing.status !== 'cancelled') {
+      triggerService.notifyRfqCancelled(rfq, (rfq.invitedVendorIds || []).map(String));
+    }
+
     const school = await loadSchool(schoolId);
     const attachmentUrlMap = await buildAttachmentUrlMap(rfq);
     return serializeRfq(rfq, { school, attachmentUrlMap });
@@ -266,11 +366,23 @@ const rfqService = {
     ]);
     const countMap = new Map(quoteCounts.map((c) => [String(c._id), c.count]));
 
+    // Batched, not per-row: one query covers every awarded RFQ's order so the
+    // list view can show payment status (and prompt "pay advance"/"pay
+    // remainder") without a click into each one.
+    const orderIds = data.map((r) => r.orderId).filter(Boolean);
+    const orders = orderIds.length
+      ? await Order.find({ _id: { $in: orderIds } })
+          .select('orderNumber orderStatus paymentStatus totalPaise rfqAdvance')
+          .lean()
+      : [];
+    const orderMap = new Map(orders.map((o) => [String(o._id), o]));
+
     const serialized = data.map((rfq) =>
       serializeRfq(rfq, {
         school,
         quotes: [],
         attachmentUrlMap,
+        order: rfq.orderId ? orderMap.get(String(rfq.orderId)) : null,
       })
     ).map((rfq, idx) => ({
       ...rfq,
@@ -286,8 +398,9 @@ const rfqService = {
     const quotes = await quoteRepository.findByRfq(rfqId);
     const enriched = await enrichQuotesWithVendors(quotes);
     const attachmentUrlMap = await buildAttachmentUrlMap(rfq);
+    const order = rfq.orderId ? await Order.findById(rfq.orderId).lean() : null;
 
-    return serializeRfq(rfq, { school, quotes: enriched, attachmentUrlMap });
+    return serializeRfq(rfq, { school, quotes: enriched, attachmentUrlMap, order });
   },
 
   /**
@@ -326,9 +439,16 @@ const rfqService = {
   },
 
   async listVendorRfqs(vendorId, query = {}) {
+    // A vendor who already quoted must still be able to find this RFQ in their
+    // list even if the school later edited the invite list and removed them —
+    // matches getVendorRfq's allowExistingQuote. 'cancelled' is included too, so
+    // a vendor sees why an RFQ they were tracking disappeared instead of it just
+    // vanishing with no explanation.
+    const quotedRfqIds = await Quote.find({ vendorId, 'softDelete.isDeleted': { $ne: true } }).distinct('rfqId');
+
     const filter = {
-      invitedVendorIds: vendorId,
-      status: { $in: ['open', 'reviewing', 'awarded', 'closed'] },
+      $or: [{ invitedVendorIds: vendorId }, { _id: { $in: quotedRfqIds } }],
+      status: { $in: ['open', 'reviewing', 'awarded', 'closed', 'cancelled'] },
     };
 
     const { data, pagination } = await rfqRepository.paginateRfqs(filter, query);
@@ -359,7 +479,7 @@ const rfqService = {
   },
 
   async getVendorRfq(vendorId, rfqId) {
-    const rfq = await loadRfqForVendor(rfqId, vendorId);
+    const rfq = await loadRfqForVendor(rfqId, vendorId, { allowExistingQuote: true });
     const school = await loadSchool(rfq.schoolId);
     const vendorQuote = await quoteRepository.findByRfqAndVendor(rfqId, vendorId);
     const attachmentUrlMap = await buildAttachmentUrlMap(rfq);
@@ -411,6 +531,9 @@ const rfqService = {
         ? new Date(rfq.quotationDeadline)
         : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
+    const advancePercent = Number(payload.advancePercent) || 0;
+    const advanceAmountPaise = Math.round(totalPaise * (advancePercent / 100));
+
     const quote = await quoteRepository.create({
       rfqId,
       vendorId,
@@ -418,6 +541,8 @@ const rfqService = {
       subtotalPaise,
       taxPaise,
       totalPaise,
+      advancePercent,
+      advanceAmountPaise,
       termsAndConditions: payload.termsAndConditions || payload.remarks || '',
       deliveryTimeline: payload.deliveryTimeline || '',
       validUntil,
@@ -434,7 +559,19 @@ const rfqService = {
     return serializeQuote(quote, vendor);
   },
 
-  async awardQuote(schoolId, rfqId, quoteId) {
+  /**
+   * Awards a quote and, in the same breath, creates the Order the school will
+   * pay the vendor's advance against — per the product decision that award
+   * flows straight into "now go pay the advance", not a separate manual step.
+   * The order starts at paymentStatus 'pending' with no Payment attached yet;
+   * initiateAdvancePayment/confirmAdvancePayment (below) drive it to
+   * 'partially_paid' once the gateway actually captures the advance.
+   */
+  async awardQuote(schoolId, rfqId, quoteId, actor = {}) {
+    if (!actor.userId) {
+      throw new BadRequestError('Awarding a quote requires an authenticated actor', null, 'ACTOR_REQUIRED');
+    }
+
     const rfq = await loadRfqForSchool(schoolId, rfqId);
 
     if (!['open', 'reviewing'].includes(rfq.status)) {
@@ -443,6 +580,15 @@ const rfqService = {
 
     const quote = await quoteRepository.findOne({ _id: quoteId, rfqId });
     if (!quote) throw new NotFoundError('Quote not found', 'QUOTE_NOT_FOUND');
+
+    const school = await loadSchool(schoolId);
+    if (!school.address?.line1 || !school.address?.city || !school.address?.pinCode) {
+      throw new BadRequestError(
+        "This school's address is incomplete, so an order can't be created for delivery. Update the school profile first.",
+        null,
+        'SCHOOL_ADDRESS_INCOMPLETE'
+      );
+    }
 
     const otherQuotes = await Quote.find({
       rfqId,
@@ -453,47 +599,260 @@ const rfqService = {
       .lean();
     const rejectedVendorIds = otherQuotes.map((q) => q.vendorId);
 
-    const session = await mongoose.startSession();
-    try {
-      await session.withTransaction(async () => {
-        await Quote.updateMany(
-          { rfqId, _id: { $ne: quoteId }, 'softDelete.isDeleted': { $ne: true } },
-          { $set: { status: 'rejected' } },
-          { session }
-        );
+    const remainderPaise = Math.max(0, quote.totalPaise - quote.advanceAmountPaise);
+    const orderNumber = generateOrderNumber();
 
-        await Quote.updateOne(
-          { _id: quoteId },
-          { $set: { status: 'accepted' } },
-          { session }
-        );
+    const order = await runAtomic(async (session) => {
+      const opts = session ? { session } : {};
 
-        await Rfq.updateOne(
-          { _id: rfqId },
-          {
-            $set: {
-              status: 'awarded',
-              awardedVendorId: quote.vendorId,
-              awardedQuoteId: quoteId,
-            },
-          },
-          { session }
-        );
+      await Quote.updateMany(
+        { rfqId, _id: { $ne: quoteId }, 'softDelete.isDeleted': { $ne: true } },
+        { $set: { status: 'rejected' } },
+        opts
+      );
+
+      await Quote.updateOne(
+        { _id: quoteId },
+        { $set: { status: 'accepted' } },
+        opts
+      );
+
+      const items = quote.items.map((item) => {
+        const rfqItem = rfq.items[item.rfqItemIndex] || {};
+        const quantity = rfqItem.quantity || 1;
+        const lineSubtotalPaise = item.unitPricePaise * quantity;
+        return {
+          // No real Product backs an RFQ line item — reusing the quote's own
+          // _id here mirrors the existing kit-order convention (see Kit
+          // checkout) of aliasing productId to whatever real document the
+          // line actually traces back to.
+          productId: quote._id,
+          vendorId: quote.vendorId,
+          rfqId: rfq._id,
+          quoteId: quote._id,
+          name: rfqItem.name || rfq.title,
+          sku: `RFQ-${rfq.rfqNumber}-${item.rfqItemIndex}`,
+          pricePaise: item.unitPricePaise,
+          mrpPaise: item.unitPricePaise,
+          quantity,
+          taxRatePercent: item.taxRatePercent,
+          taxPaise: Math.max(0, item.lineTotalPaise - lineSubtotalPaise),
+          lineTotalPaise: item.lineTotalPaise,
+          fulfilmentStatus: 'placed',
+        };
       });
-    } finally {
-      await session.endSession();
-    }
+
+      const [createdOrder] = await Order.create(
+        [
+          {
+            orderNumber,
+            userId: actor.userId,
+            audience: 'school',
+            items,
+            vendorIds: [quote.vendorId],
+            subtotalPaise: quote.subtotalPaise,
+            taxPaise: quote.taxPaise,
+            discountPaise: 0,
+            platformFeePaise: 0,
+            deliveryChargePaise: 0,
+            handlingChargePaise: 0,
+            totalPaise: quote.totalPaise,
+            walletAmountPaise: 0,
+            address: {
+              name: school.name,
+              phone: school.phone || '',
+              line1: school.address.line1,
+              line2: school.address.line2 || '',
+              city: school.address.city,
+              state: school.address.state || '',
+              country: school.address.country || 'India',
+              pinCode: school.address.pinCode,
+            },
+            deliveryType: 'home',
+            paymentMethod: 'online',
+            paymentStatus: 'pending',
+            rfqAdvance: {
+              advancePaise: quote.advanceAmountPaise,
+              remainderPaise,
+            },
+            orderStatus: 'placed',
+            statusHistory: [
+              {
+                status: 'placed',
+                at: new Date(),
+                note: `Order created from awarded quotation for RFQ ${rfq.rfqNumber}`,
+                byUserId: actor.userId,
+              },
+            ],
+            placedAt: new Date(),
+          },
+        ],
+        opts
+      );
+
+      await Rfq.updateOne(
+        { _id: rfqId },
+        {
+          $set: {
+            status: 'awarded',
+            awardedVendorId: quote.vendorId,
+            awardedQuoteId: quoteId,
+            orderId: createdOrder._id,
+          },
+        },
+        opts
+      );
+
+      return createdOrder;
+    });
 
     const updatedRfq = await loadRfqForSchool(schoolId, rfqId);
     triggerService.notifyQuoteAwarded(updatedRfq, quote.vendorId);
     triggerService.notifyQuoteRejected(updatedRfq, rejectedVendorIds);
 
-    const school = await loadSchool(schoolId);
     const quotes = await quoteRepository.findByRfq(rfqId);
     const enriched = await enrichQuotesWithVendors(quotes);
     const attachmentUrlMap = await buildAttachmentUrlMap(updatedRfq);
 
-    return serializeRfq(updatedRfq, { school, quotes: enriched, attachmentUrlMap });
+    return serializeRfq(updatedRfq, { school, quotes: enriched, attachmentUrlMap, order });
+  },
+
+  /** Creates (or re-fetches, if already initiated) the gateway payment for the
+   *  advance on an awarded RFQ order. Kept separate from awardQuote so the
+   *  school lands on an order/payment screen first — awarding itself never
+   *  blocks on the gateway being reachable. */
+  async initiateAdvancePayment(schoolId, orderId) {
+    const { order } = await loadRfqOrderForSchool(schoolId, orderId);
+
+    // rfqAdvance.advancePaymentId is set the moment a payment is first created
+    // for this order — paymentStatus alone can't tell "already initiated"
+    // from "not yet started", since a not-yet-captured advance leaves it at
+    // 'pending' too. (order.paymentId isn't reliable here — it's overwritten
+    // once a remainder payment is later created for the same order.)
+    if (order.paymentStatus !== 'pending' || order.rfqAdvance.advancePaymentId) {
+      throw new ConflictError('The advance for this order has already been initiated or paid', 'ADVANCE_ALREADY_INITIATED');
+    }
+
+    const payment = await paymentService.createPaymentForOrder(order, {
+      method: 'upi',
+      amountPaise: order.rfqAdvance.advancePaise,
+    });
+    await Order.updateOne(
+      { _id: orderId },
+      { $set: { paymentId: payment._id, 'rfqAdvance.advancePaymentId': payment._id } }
+    );
+
+    // A 0%-advance quote settles instantly — createPaymentForOrder captures a
+    // zero-charge payment with no gateway round-trip — so reflect that now
+    // rather than stranding the school on a "pay advance" screen with
+    // nothing left to pay.
+    if (payment.status === 'captured') {
+      await Order.updateOne({ _id: orderId }, { $set: { paymentStatus: 'partially_paid' } });
+    }
+
+    return { payment, checkout: buildCheckout(payment) };
+  },
+
+  /** Confirms the advance payment after the gateway checkout completes.
+   *  Idempotent: re-confirming an already-captured advance just returns it. */
+  async confirmAdvancePayment(schoolId, orderId, payload = {}) {
+    const { order } = await loadRfqOrderForSchool(schoolId, orderId);
+
+    if (order.paymentStatus !== 'pending') {
+      // Once a remainder payment can also exist for this order, findOne-by-
+      // orderId is ambiguous between the two Payment docs — advancePaymentId
+      // is the reliable pointer to specifically the advance payment.
+      const payment = order.rfqAdvance.advancePaymentId
+        ? await paymentRepository.findById(order.rfqAdvance.advancePaymentId)
+        : null;
+      return { payment, order };
+    }
+    if (!order.rfqAdvance.advancePaymentId) {
+      throw new BadRequestError('Advance payment has not been initiated yet', null, 'ADVANCE_NOT_INITIATED');
+    }
+
+    const payment = await paymentService.confirmPayment(orderId, {
+      paymentId: order.rfqAdvance.advancePaymentId,
+      ...payload,
+    });
+    const updatedOrder = await Order.findByIdAndUpdate(
+      orderId,
+      { $set: { paymentStatus: 'partially_paid' } },
+      { new: true }
+    ).lean();
+
+    triggerService.notifyRfqAdvancePaid(updatedOrder);
+    return { payment, order: updatedOrder };
+  },
+
+  /** Creates the gateway payment for whatever's left of the order total once
+   *  the advance is captured. Available any time after the advance — there's
+   *  no gate tied to delivery status. */
+  async initiateRemainderPayment(schoolId, orderId) {
+    const { order } = await loadRfqOrderForSchool(schoolId, orderId);
+
+    if (order.paymentStatus === 'paid') {
+      throw new ConflictError('This order is already fully paid', 'ORDER_ALREADY_PAID');
+    }
+    if (order.paymentStatus !== 'partially_paid') {
+      throw new BadRequestError('Pay the advance before paying the remaining balance', null, 'ADVANCE_NOT_PAID');
+    }
+    // Mirrors initiateAdvancePayment's guard: paymentStatus alone can't tell
+    // "already initiated, not yet captured" from "never started" — without
+    // this, a second click before the first checkout completes would create
+    // a second remainder Payment and silently orphan the first.
+    if (order.rfqAdvance.remainderPaymentId) {
+      throw new ConflictError('The remaining balance payment has already been initiated', 'REMAINDER_ALREADY_INITIATED');
+    }
+
+    const payment = await paymentService.createPaymentForOrder(order, {
+      method: 'upi',
+      amountPaise: order.rfqAdvance.remainderPaise,
+    });
+    await Order.updateOne(
+      { _id: orderId },
+      { $set: { paymentId: payment._id, 'rfqAdvance.remainderPaymentId': payment._id } }
+    );
+
+    if (payment.status === 'captured') {
+      await Order.updateOne(
+        { _id: orderId },
+        { $set: { paymentStatus: 'paid', 'rfqAdvance.remainderPaidAt': new Date() } }
+      );
+    }
+
+    return { payment, checkout: buildCheckout(payment) };
+  },
+
+  /** Confirms the remainder payment after the gateway checkout completes,
+   *  settling the order. Idempotent, matching confirmAdvancePayment. */
+  async confirmRemainderPayment(schoolId, orderId, payload = {}) {
+    const { order } = await loadRfqOrderForSchool(schoolId, orderId);
+
+    if (order.paymentStatus === 'paid') {
+      // Same ambiguity as confirmAdvancePayment's idempotent branch —
+      // remainderPaymentId is the reliable pointer to this specific payment.
+      const payment = order.rfqAdvance.remainderPaymentId
+        ? await paymentRepository.findById(order.rfqAdvance.remainderPaymentId)
+        : null;
+      return { payment, order };
+    }
+    if (!order.rfqAdvance.remainderPaymentId) {
+      throw new BadRequestError('The remaining balance payment has not been initiated yet', null, 'REMAINDER_NOT_INITIATED');
+    }
+
+    const payment = await paymentService.confirmPayment(orderId, {
+      paymentId: order.rfqAdvance.remainderPaymentId,
+      ...payload,
+    });
+    const updatedOrder = await Order.findByIdAndUpdate(
+      orderId,
+      { $set: { paymentStatus: 'paid', 'rfqAdvance.remainderPaidAt': new Date() } },
+      { new: true }
+    ).lean();
+
+    triggerService.notifyRfqRemainderPaid(updatedOrder);
+    return { payment, order: updatedOrder };
   },
 };
 

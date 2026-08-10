@@ -14,7 +14,10 @@ class AssignmentRepository extends BaseRepository {
   paginateAssignments(filter, queryString, options = {}) {
     return executePaginatedQuery(LmsAssignment, this.mergeFilter(filter), queryString, {
       defaultSort: '-dueDate',
-      populate: { path: 'attachments', select: ATTACHMENT_FIELDS },
+      populate: [
+        { path: 'attachments', select: ATTACHMENT_FIELDS },
+        { path: 'bannerAttachmentId', select: ATTACHMENT_FIELDS },
+      ],
       ...options,
     });
   }
@@ -22,12 +25,14 @@ class AssignmentRepository extends BaseRepository {
   findOnePopulated(filter) {
     return LmsAssignment.findOne(this.mergeFilter(filter))
       .populate('attachments', ATTACHMENT_FIELDS)
+      .populate('bannerAttachmentId', ATTACHMENT_FIELDS)
       .lean();
   }
 
   findManyPopulated(filter) {
     return LmsAssignment.find(this.mergeFilter(filter))
       .populate('attachments', ATTACHMENT_FIELDS)
+      .populate('bannerAttachmentId', ATTACHMENT_FIELDS)
       .lean();
   }
 }

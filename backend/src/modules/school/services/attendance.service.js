@@ -112,6 +112,10 @@ const attendanceService = {
       })
     );
 
+    // Trigger push notifications for marked students (Absent, Present, Late, etc.)
+    const { triggerService } = require('../../../services/notification');
+    triggerService.notifyAttendanceMarked(schoolId, applicable, studentsById, date);
+
     return { records: saved, skipped };
   },
 
@@ -122,6 +126,16 @@ const attendanceService = {
     );
 
     if (!updated) throw new NotFoundError('Attendance record not found', 'ATTENDANCE_NOT_FOUND');
+
+    if (payload.status) {
+      const student = await studentRepository.findById(updated.studentId);
+      if (student) {
+        const studentsById = new Map([[String(student._id), student]]);
+        const { triggerService } = require('../../../services/notification');
+        triggerService.notifyAttendanceMarked(schoolId, [{ studentId: updated.studentId, status: payload.status }], studentsById, updated.date);
+      }
+    }
+
     return updated;
   },
 

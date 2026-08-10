@@ -23,7 +23,8 @@ const noticeSchema = new mongoose.Schema({
     enum: ['draft', 'published', 'archived'],
     required: true,
     default: 'draft'
-  }
+  },
+  isNotified: { type: Boolean, default: false }
 }, { collection: 'notices' });
 
 // Plugins
@@ -32,6 +33,7 @@ noticeSchema.plugin(softDeletePlugin);
 
 // Indexes
 noticeSchema.index({ schoolId: 1, status: 1, publishDate: -1 });
+noticeSchema.index({ status: 1, isNotified: 1, publishDate: 1 });
 // Soft delete compound index
 noticeSchema.index({ 'softDelete.isDeleted': 1, 'audit.updatedAt': -1 });
 

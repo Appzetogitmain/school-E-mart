@@ -23,6 +23,10 @@ const orderSchema = new mongoose.Schema({
     // school commission) and the kit itself. Left empty for ordinary products.
     schoolId: { type: mongoose.Schema.Types.ObjectId, ref: 'School' },
     kitId: { type: mongoose.Schema.Types.ObjectId, ref: 'Kit' },
+    // Set only for RFQ-awarded line items: traces the order back to the request
+    // the school sent and the specific vendor quote that was accepted for it.
+    rfqId: { type: mongoose.Schema.Types.ObjectId, ref: 'Rfq' },
+    quoteId: { type: mongoose.Schema.Types.ObjectId, ref: 'Quote' },
     // Snapshot of the kit's individual contents at order time, so the vendor has
     // a pick list even if the kit definition changes or items are later edited.
     kitItems: [{
@@ -79,11 +83,30 @@ const orderSchema = new mongoose.Schema({
   },
   paymentStatus: {
     type: String,
-    enum: ['pending', 'authorized', 'paid', 'failed', 'refunded', 'partially_refunded'],
+    // 'partially_paid': only the RFQ advance has been captured so far — the
+    // remainder is still owed and collected later via a second payment.
+    enum: ['pending', 'authorized', 'paid', 'partially_paid', 'failed', 'refunded', 'partially_refunded'],
     required: true,
     default: 'pending'
   },
   paymentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Payment' },
+  // Set only on orders created from an awarded RFQ quote. advancePaise is the
+  // vendor-defined up-front amount (snapshotted from the quote); remainderPaise
+  // is what's left of totalPaise after the advance. remainderPaymentId points at
+  // the second Payment document once the balance has been paid — paymentId above
+  // always continues to reference whichever payment was most recently made.
+  rfqAdvance: {
+    advancePaise: { type: Number, min: 0 },
+    remainderPaise: { type: Number, min: 0 },
+    // Both set once their respective payment is first created, and never
+    // overwritten after — unlike paymentId above (which always points at
+    // whichever payment was most recently made), these stay the reliable way
+    // to look up "the advance payment" specifically once a remainder payment
+    // also exists for the same order.
+    advancePaymentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Payment' },
+    remainderPaymentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Payment' },
+    remainderPaidAt: { type: Date }
+  },
   orderStatus: {
     type: String,
     enum: ['placed', 'accepted', 'processed', 'packed', 'shipped', 'out_for_delivery', 'delivered', 'cancelled', 'returned'],

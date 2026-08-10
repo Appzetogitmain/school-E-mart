@@ -30,7 +30,10 @@ const checkoutService = {
         productRepository.findPublishedFilter({ _id: item.productId })
       );
       if (!product) {
-        const kit = await Kit.findById(item.productId).lean();
+        // Cart validation already re-checks this, but checkout must not trust that
+        // nothing changed between "added to cart" and "placing the order" — a kit
+        // can go from active to draft/deleted/vendor-less in between.
+        const kit = await Kit.findOne(Kit.purchasableFilter(item.productId)).lean();
         if (kit) {
           product = {
             _id: kit._id,

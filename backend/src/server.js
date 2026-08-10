@@ -14,6 +14,7 @@ const logger = require('./common/logger');
 
 let server;
 let outboxWorkerTimer;
+let scheduledNoticeWorkerTimer;
 let isShuttingDown = false;
 
 const shutdown = async (signal, exitCode = 0) => {
@@ -32,6 +33,7 @@ const shutdown = async (signal, exitCode = 0) => {
   try {
     stopOutboxWorker(outboxWorkerTimer);
     stopDeliveryWorkers();
+    if (scheduledNoticeWorkerTimer) clearInterval(scheduledNoticeWorkerTimer);
 
     if (server) {
       await new Promise((resolve, reject) => {
@@ -96,6 +98,14 @@ const bootstrap = async () => {
   }
 
   registerDeliveryWorkers();
+
+  // Scheduled notice background worker (polls every 60s)
+  const noticeService = require('./modules/school/services/notice.service');
+  scheduledNoticeWorkerTimer = setInterval(() => {
+    noticeService.processScheduledNotices().catch((err) => {
+      logger.error('Scheduled notice processing failed', { message: err.message });
+    });
+  }, 60000);
 
   server = await startServer();
 };

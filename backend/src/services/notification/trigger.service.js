@@ -154,6 +154,7 @@ const HOMEWORK_PARENT_ROUTE = '/parent/homework';
 const triggerService = {
   notifyOrderPlaced(order) {
     notifySafe(async () => {
+      // 1. Notify Buyer
       await notificationService.sendToUser(order.userId, {
         type: 'order_update',
         notification: {
@@ -168,20 +169,43 @@ const triggerService = {
         },
       });
 
+      // 2. Notify Vendor(s)
       const vendorUserIds = await getVendorUserIds(order.vendorIds || []);
-      await notificationService.sendToUsers(vendorUserIds, {
-        type: 'order_update',
-        notification: {
-          title: 'New Order',
-          body: `New order #${order.orderNumber} received.`,
-        },
-        data: {
-          type: 'order_new',
-          route: vendorOrderRoute(order._id),
-          entityId: String(order._id),
-          orderNumber: order.orderNumber,
-        },
-      });
+      if (vendorUserIds.length) {
+        await notificationService.sendToUsers(vendorUserIds, {
+          type: 'order_update',
+          notification: {
+            title: 'New Order Received',
+            body: `New order #${order.orderNumber} received.`,
+          },
+          data: {
+            type: 'order_new',
+            route: vendorOrderRoute(order._id),
+            entityId: String(order._id),
+            orderNumber: order.orderNumber,
+          },
+        });
+      }
+
+      // 3. If School Bulk Order, Notify School Admin / Staff
+      if (order.audience === 'school' && order.schoolId) {
+        const schoolStaffUserIds = await getSchoolStaffUserIds(order.schoolId);
+        if (schoolStaffUserIds.length) {
+          await notificationService.sendToUsers(schoolStaffUserIds, {
+            type: 'order_update',
+            notification: {
+              title: 'School Bulk Order Placed',
+              body: `Bulk order #${order.orderNumber} has been placed for your school.`,
+            },
+            data: {
+              type: 'school_order_placed',
+              route: `/school/orders/${order._id}`,
+              entityId: String(order._id),
+              orderNumber: order.orderNumber,
+            },
+          });
+        }
+      }
     });
   },
 
@@ -318,10 +342,22 @@ const triggerService = {
 
   notifySchoolNoticePublished(schoolId, notice) {
     notifySafe(async () => {
-      const parentUserIds = await getSchoolParentUserIds(schoolId, notice);
-      if (!parentUserIds.length) return;
+      let recipientUserIds = [];
 
-      await notificationService.sendToUsers(parentUserIds, {
+      const audience = notice?.targetAudience;
+      if (audience === 'teachers' || audience === 'staff') {
+        recipientUserIds = await getSchoolStaffUserIds(schoolId);
+      } else if (audience === 'all') {
+        const parents = await getSchoolParentUserIds(schoolId, notice);
+        const staff = await getSchoolStaffUserIds(schoolId);
+        recipientUserIds = [...new Set([...parents, ...staff])];
+      } else {
+        recipientUserIds = await getSchoolParentUserIds(schoolId, notice);
+      }
+
+      if (!recipientUserIds.length) return;
+
+      await notificationService.sendToUsers(recipientUserIds, {
         type: 'school_notice',
         notification: {
           title: notice.title || 'School Notice',
@@ -329,7 +365,7 @@ const triggerService = {
         },
         data: {
           type: 'school_notice',
-          route: '/user/notifications',
+          route: '/school/parent/notices',
           entityId: String(notice._id),
           schoolId: String(schoolId),
         },
@@ -346,13 +382,28 @@ const triggerService = {
       const parentUserIds = await getParentUserIdsForClasses(schoolId, [
         { classGrade, sections: assignment.section ? [assignment.section] : [] },
       ]);
-      if (!parentUserIds.length) return;
+
+      // Resolve student user accounts for this class/section as well
+      const Student = require('../../database/models/Student');
+      const studentFilter = {
+        schoolId,
+        status: 'active',
+        'softDelete.isDeleted': { $ne: true },
+      };
+      if (classGrade) studentFilter.classGrade = classGrade;
+      if (assignment.section) studentFilter.section = assignment.section;
+
+      const students = await Student.find(studentFilter).select('userId').lean();
+      const studentUserIds = students.map((s) => String(s.userId)).filter(Boolean);
+
+      const recipientUserIds = [...new Set([...parentUserIds, ...studentUserIds])];
+      if (!recipientUserIds.length) return;
 
       const subject = course?.subject || 'Homework';
-      await notificationService.sendToUsers(parentUserIds, {
+      await notificationService.sendToUsers(recipientUserIds, {
         type: 'homework',
         notification: {
-          title: `New ${subject} homework`,
+          title: `New ${subject} Homework`,
           body: assignment.title || 'New homework has been assigned.',
         },
         data: {
@@ -558,6 +609,76 @@ const triggerService = {
     });
   },
 
+  /** The school cancelled a live RFQ — every invited vendor stops seeing it as
+   *  something to act on, so anyone mid-quote needs to be told why it vanished. */
+  notifyRfqCancelled(rfq, vendorIds = []) {
+    notifySafe(async () => {
+      if (!vendorIds.length) return;
+      const vendorUserIds = await getVendorUserIds(vendorIds);
+      if (!vendorUserIds.length) return;
+
+      await notificationService.sendToUsers(vendorUserIds, {
+        type: 'rfq_update',
+        notification: {
+          title: 'Quotation Request Cancelled',
+          body: `"${rfq.title}" was cancelled by the school and is no longer accepting quotes.`,
+        },
+        data: {
+          type: 'rfq_cancelled',
+          route: '/vendor/quotations',
+          entityId: String(rfq._id),
+          rfqNumber: rfq.rfqNumber,
+        },
+      });
+    });
+  },
+
+  /** The school captured the RFQ advance — the awarded vendor can start work. */
+  notifyRfqAdvancePaid(order) {
+    notifySafe(async () => {
+      const vendorIds = order.vendorIds || [];
+      if (!vendorIds.length) return;
+      const vendorUserIds = await getVendorUserIds(vendorIds);
+      if (!vendorUserIds.length) return;
+
+      await notificationService.sendToUsers(vendorUserIds, {
+        type: 'order_update',
+        notification: {
+          title: 'Advance Payment Received',
+          body: `The advance for order #${order.orderNumber} has been paid. You can start fulfilling it.`,
+        },
+        data: {
+          type: 'rfq_advance_paid',
+          route: vendorOrderRoute(order._id),
+          entityId: String(order._id),
+        },
+      });
+    });
+  },
+
+  /** The school paid off the remaining balance on an RFQ order — it's now fully settled. */
+  notifyRfqRemainderPaid(order) {
+    notifySafe(async () => {
+      const vendorIds = order.vendorIds || [];
+      if (!vendorIds.length) return;
+      const vendorUserIds = await getVendorUserIds(vendorIds);
+      if (!vendorUserIds.length) return;
+
+      await notificationService.sendToUsers(vendorUserIds, {
+        type: 'order_update',
+        notification: {
+          title: 'Order Fully Paid',
+          body: `The remaining balance for order #${order.orderNumber} has been paid — it's now fully settled.`,
+        },
+        data: {
+          type: 'rfq_remainder_paid',
+          route: vendorOrderRoute(order._id),
+          entityId: String(order._id),
+        },
+      });
+    });
+  },
+
   notifyRefundUpdate(order, status) {
     notifySafe(async () => {
       await notificationService.sendToUser(order.userId, {
@@ -573,6 +694,60 @@ const triggerService = {
           status,
         },
       });
+    });
+  },
+
+  notifyAttendanceMarked(schoolId, attendanceRecords, studentsById, dateStr) {
+    notifySafe(async () => {
+      if (!attendanceRecords?.length || !studentsById) return;
+
+      const dateFormatted = dateStr ? new Date(dateStr).toLocaleDateString('en-IN', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+      }) : 'Today';
+
+      for (const record of attendanceRecords) {
+        const student = studentsById.get(String(record.studentId));
+        if (!student) continue;
+
+        const parentUserIds = await parentUserIdsForStudents([record.studentId]);
+        const recipientUserIds = [...new Set([...parentUserIds, ...(student.userId ? [String(student.userId)] : [])])];
+        if (!recipientUserIds.length) continue;
+
+        const studentName = student.name || 'Student';
+        const statusRaw = (record.status || 'marked').toLowerCase();
+        const statusUpper = statusRaw.toUpperCase();
+
+        let title = `Attendance Alert: ${statusUpper}`;
+        let body = `${studentName} has been marked ${statusUpper} for ${dateFormatted}.`;
+
+        if (statusRaw === 'absent') {
+          title = `⚠️ Attendance Alert: ABSENT`;
+          body = `${studentName} has been marked ABSENT for ${dateFormatted}.`;
+        } else if (statusRaw === 'present') {
+          title = `✅ Attendance Update: PRESENT`;
+          body = `${studentName} has been marked PRESENT for ${dateFormatted}.`;
+        } else if (statusRaw === 'late') {
+          title = `⏰ Attendance Alert: LATE`;
+          body = `${studentName} has been marked LATE for ${dateFormatted}.`;
+        }
+
+        await notificationService.sendToUsers(recipientUserIds, {
+          type: 'attendance',
+          notification: {
+            title,
+            body,
+          },
+          data: {
+            type: 'attendance_marked',
+            status: statusRaw,
+            studentId: String(record.studentId),
+            schoolId: String(schoolId),
+            route: '/school/parent/attendance',
+          },
+        });
+      }
     });
   },
 };

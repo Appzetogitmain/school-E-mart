@@ -1,8 +1,16 @@
 const asyncHandler = require('../../../utils/asyncHandler');
 const { success, created, paginated } = require('../../../common/response');
+const { ROLES } = require('../../../constants/roles');
 const eventsService = require('../services/events.service');
 const phonebookService = require('../services/phonebook.service');
 const kitsService = require('../services/kits.service');
+
+// Only the roles that can actually manage kits get to see drafts. Everyone else
+// (parents, teachers, vendors) must only ever be served published kits — a
+// client-supplied `status` query param must not be able to override that, and
+// neither should knowing/guessing a kit's id.
+const KIT_MANAGE_ROLES = [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN];
+const kitViewOptions = (req) => ({ requireActive: !KIT_MANAGE_ROLES.includes(req.auth?.role) });
 
 const academicsController = {
   // Events
@@ -82,12 +90,12 @@ const academicsController = {
   }),
 
   listKits: asyncHandler(async (req, res) => {
-    const { data, pagination } = await kitsService.listKits(req.params.schoolId, req.query);
+    const { data, pagination } = await kitsService.listKits(req.params.schoolId, req.query, kitViewOptions(req));
     return paginated(res, { kits: data }, pagination, 'Kits fetched', req);
   }),
 
   getKit: asyncHandler(async (req, res) => {
-    const kit = await kitsService.getKit(req.params.schoolId, req.params.kitId);
+    const kit = await kitsService.getKit(req.params.schoolId, req.params.kitId, kitViewOptions(req));
     return success(res, { kit }, 'Kit fetched', undefined, req);
   }),
 

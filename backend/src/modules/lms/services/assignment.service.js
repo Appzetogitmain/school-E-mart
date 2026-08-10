@@ -36,7 +36,7 @@ const assignmentService = {
       assignedByName = user?.name || null;
     }
 
-    const { files, ...assignmentData } = payload;
+    const { files, bannerFile, removeBanner, ...assignmentData } = payload;
     const hasFiles = Boolean(files?.length);
     const attachments = hasFiles
       ? await attachmentService.createManyFromBase64({
@@ -46,6 +46,19 @@ const assignmentService = {
           prefix: 'homework',
         })
       : [];
+
+    // The banner is stored the same way as any other homework attachment — same purpose,
+    // same private stream — but as its own field, never mixed into `attachments`.
+    let bannerAttachmentId = null;
+    if (bannerFile) {
+      const [banner] = await attachmentService.createManyFromBase64({
+        ownerUserId: assignedByUserId || actor.userId,
+        purpose: 'homework_attachment',
+        files: [bannerFile],
+        prefix: 'homework-banner',
+      });
+      bannerAttachmentId = banner?._id || null;
+    }
 
     const assignment = await assignmentRepository.create({
       ...assignmentData,
@@ -59,6 +72,7 @@ const assignmentService = {
       assignedByName,
       status: payload.status || 'draft',
       attachments: attachments.map((a) => a._id),
+      bannerAttachmentId,
     });
 
     if (assignment.status === 'published') {
@@ -85,7 +99,7 @@ const assignmentService = {
   async updateAssignment(schoolId, courseId, assignmentId, payload) {
     const before = await this.getAssignment(schoolId, courseId, assignmentId);
 
-    const { files, ...updateData } = payload;
+    const { files, bannerFile, removeBanner, ...updateData } = payload;
     let attachments = before.attachments || [];
     if (files) {
       const newAttachments = await attachmentService.createManyFromBase64({
@@ -97,9 +111,24 @@ const assignmentService = {
       attachments = newAttachments.map((a) => a._id);
     }
 
+    // A new banner replaces the old one; an explicit removal clears it; otherwise the
+    // existing banner (if any) is left untouched.
+    let bannerAttachmentId = before.bannerAttachmentId || null;
+    if (bannerFile) {
+      const [banner] = await attachmentService.createManyFromBase64({
+        ownerUserId: before.assignedByUserId,
+        purpose: 'homework_attachment',
+        files: [bannerFile],
+        prefix: 'homework-banner',
+      });
+      bannerAttachmentId = banner?._id || null;
+    } else if (removeBanner) {
+      bannerAttachmentId = null;
+    }
+
     const assignment = await assignmentRepository.updateById(
       assignmentId,
-      { $set: { ...updateData, attachments } },
+      { $set: { ...updateData, attachments, bannerAttachmentId } },
       { schoolId, courseId }
     );
     if (!assignment) throw new NotFoundError('Assignment not found', 'ASSIGNMENT_NOT_FOUND');
@@ -377,9 +406,11 @@ const assignmentService = {
     }
 
     if (attachment.purpose === 'homework_attachment') {
+      // Could be a reference attachment or the banner — both are stored under the same
+      // purpose, so either array/field can be the match.
       const assignment = await LmsAssignment.findOne({
         schoolId,
-        attachments: attachment._id,
+        $or: [{ attachments: attachment._id }, { bannerAttachmentId: attachment._id }],
       }).lean();
       if (!assignment) {
         throw new NotFoundError('Attachment not found', 'ATTACHMENT_NOT_FOUND');

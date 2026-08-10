@@ -61,6 +61,11 @@ const assertCourseInSchool = async (schoolId, courseId) => {
   return course;
 };
 
+// A course with no grade (or the school-wide catalog target) is shared LMS content,
+// not one class's coursework — there is no single teacher to check ownership against.
+const isUniversalOrUngradedCourse = (gradeClass) =>
+  !gradeClass || gradeClass.trim().toLowerCase() === 'all grades';
+
 const assertTeacherCourseAccess = async (req, course) => {
   if (req.auth.role !== ROLES.TEACHER) return;
 
@@ -76,6 +81,30 @@ const assertTeacherCourseAccess = async (req, course) => {
   }
 
   req.teacherProfile = profile;
+
+  // Approval alone used to be enough to manage any course in the school — any teacher
+  // could edit/delete/grade a colleague's homework. A class-scoped course is that
+  // class's coursework, so only a teacher actually assigned to teach that class +
+  // subject (per their classAssignments) may manage it.
+  if (isUniversalOrUngradedCourse(course.gradeClass)) return;
+
+  const courseGrade = normalizeGrade(course.gradeClass);
+  const courseSubject = String(course.subject || '').trim().toLowerCase();
+  const isAssigned = (profile.classAssignments || []).some(
+    (assignment) =>
+      normalizeGrade(assignment.class) === courseGrade &&
+      (!courseSubject ||
+        (assignment.subjects || []).some(
+          (subject) => String(subject).trim().toLowerCase() === courseSubject
+        ))
+  );
+
+  if (!isAssigned) {
+    throw new ForbiddenError(
+      'You are not assigned to teach this class and subject',
+      'LMS_COURSE_NOT_ASSIGNED'
+    );
+  }
 };
 
 // classGrade is free text across the app ("5", "Class 5", "class  5"), so compare

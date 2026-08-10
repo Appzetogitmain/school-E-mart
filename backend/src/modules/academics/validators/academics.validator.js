@@ -115,10 +115,13 @@ const createKitSchema = Joi.object({
   addOns: Joi.array().items(kitItemSchema).optional(),
   pricePaise: Joi.number().integer().min(0).optional(),
   mrpPaise: Joi.number().integer().min(0).optional(),
+  // `status` ('active' | 'draft') is the only visibility switch a kit has. There
+  // used to also be a showOnApp/availableOnline/allowPreorders `flags` shape here,
+  // accepted in two incompatible forms (top-level fields that matched no real
+  // field on the Kit model and were silently dropped by Mongoose, or a nested
+  // `flags` object whose partial updates clobbered the whole subdocument) and
+  // never actually set by any client — removed rather than fixed in place.
   status: Joi.string().valid('active', 'draft').optional(),
-  showOnApp: Joi.boolean().optional(),
-  availableOnline: Joi.boolean().optional(),
-  allowPreorders: Joi.boolean().optional(),
 });
 
 const updateKitSchema = Joi.object({
@@ -134,14 +137,6 @@ const updateKitSchema = Joi.object({
   pricePaise: Joi.number().integer().min(0).optional(),
   mrpPaise: Joi.number().integer().min(0).optional(),
   status: Joi.string().valid('active', 'draft').optional(),
-  showOnApp: Joi.boolean().optional(),
-  availableOnline: Joi.boolean().optional(),
-  allowPreorders: Joi.boolean().optional(),
-  flags: Joi.object({
-    showOnApp: Joi.boolean().optional(),
-    availableOnline: Joi.boolean().optional(),
-    allowPreorders: Joi.boolean().optional(),
-  }).optional(),
 }).min(1);
 
 module.exports = {

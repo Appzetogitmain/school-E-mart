@@ -31,13 +31,19 @@ const smsService = {
     }
 
     if (!env.SMSINDIAHUB_API_KEY || !env.SMSINDIAHUB_SENDER_ID) {
-      logger.warn(`[SMS] SMS Gateway credentials missing in .env. Generated OTP for ${phone}: ${otp}`);
+      logger.warn(`🔑 [SMS MOCK] Credentials unconfigured in .env. Generated OTP for ${phone}: ${otp}`);
+      if (env.NODE_ENV === 'production') {
+        throw new ServiceUnavailableError(
+          'SMS gateway credentials are missing. Please contact system administrator.',
+          'SMS_GATEWAY_CONFIG_MISSING'
+        );
+      }
       return { success: true, delivered: false, mock: true };
     }
 
     try {
       const result = await provider.send({ phone, message });
-      logger.info('OTP SMS sent', {
+      logger.info('OTP SMS sent successfully', {
         phone: maskPhone(phone),
         purpose,
         provider: result.provider,
@@ -52,8 +58,17 @@ const smsService = {
         reason: error.message,
         otpCode: otp,
       });
-      // Log fallback OTP to server console so login can proceed even if SMS gateway is failing
+
+      // In development / test, log fallback OTP so login can proceed
       logger.warn(`🔑 [OTP FALLBACK] SMS dispatch failed (${error.message}). Use OTP: ${otp} for phone: ${phone}`);
+
+      if (env.NODE_ENV === 'production') {
+        throw new ServiceUnavailableError(
+          'SMS gateway is currently unable to deliver your OTP. Please try again shortly.',
+          'SMS_GATEWAY_DISPATCH_FAILED'
+        );
+      }
+
       return { success: true, delivered: false, error: error.message };
     }
   },

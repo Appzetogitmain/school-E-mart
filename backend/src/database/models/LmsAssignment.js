@@ -36,6 +36,10 @@ const lmsAssignmentSchema = new mongoose.Schema({
   assignedByName: { type: String },
   maxScore: { type: Number, default: 100, min: 0 },
   attachments: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Attachment' }],
+  // The card/detail thumbnail shown to parents. Deliberately separate from
+  // `attachments` (the reference files a student needs) so it is never guessed at by
+  // mime type and never double-counted or double-listed as a downloadable attachment.
+  bannerAttachmentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Attachment' },
   status: {
     type: String,
     enum: ['draft', 'published', 'archived'],

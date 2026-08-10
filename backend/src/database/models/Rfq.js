@@ -23,6 +23,10 @@ const rfqSchema = new mongoose.Schema({
   publishedAt: { type: Date },
   awardedVendorId: { type: mongoose.Schema.Types.ObjectId, ref: 'VendorProfile' },
   awardedQuoteId: { type: mongoose.Schema.Types.ObjectId, ref: 'Quote' },
+  // The order created the moment the quote is awarded — the school's payment
+  // (advance, then remainder) and fulfilment tracking all happen on this Order
+  // from here on; the RFQ itself just keeps the reference for navigation.
+  orderId: { type: mongoose.Schema.Types.ObjectId, ref: 'Order' },
   targetDeliveryDate: { type: Date },
   attachments: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Attachment' }],
   status: {

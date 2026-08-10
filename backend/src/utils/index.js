@@ -30,7 +30,11 @@ const generateOtp = (length = 4) => {
   return String(num).padStart(length, '0');
 };
 
-const normalizePhone = (phone) => String(phone || '').replace(/\D/g, '').slice(-10);
+const normalizePhone = (phone) => {
+  const digits = String(phone || '').replace(/\D/g, '');
+  const tenDigits = digits.length >= 10 ? digits.slice(-10) : digits;
+  return tenDigits.length === 10 ? tenDigits : null;
+};
 
 const normalizeEmail = (email) => String(email || '').trim().toLowerCase();
 

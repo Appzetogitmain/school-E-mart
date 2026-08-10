@@ -49,6 +49,9 @@ const serializeQuote = (quote, vendor = null) => {
     tax: toRupees(quote.taxPaise),
     totalPaise: quote.totalPaise,
     total: toRupees(quote.totalPaise),
+    advancePercent: quote.advancePercent,
+    advanceAmountPaise: quote.advanceAmountPaise,
+    advanceAmount: toRupees(quote.advanceAmountPaise),
     termsAndConditions: quote.termsAndConditions || '',
     deliveryTimeline: quote.deliveryTimeline || '',
     validUntil: formatDate(quote.validUntil),
@@ -78,7 +81,26 @@ const withResolvedImageUrls = (meta, attachmentUrlMap) => {
   };
 };
 
-const serializeRfq = (rfq, { school = null, quotes = [], vendorQuote = null, attachmentUrlMap = null } = {}) => {
+/** Lightweight order summary attached to the school's own RFQ view — just
+ *  enough for the UI to decide which payment action (pay advance / pay
+ *  remainder / fully settled) to show, without a second round trip. */
+const serializeRfqOrderSummary = (order) => {
+  if (!order) return null;
+  return {
+    _id: order._id,
+    orderNumber: order.orderNumber,
+    orderStatus: order.orderStatus,
+    paymentStatus: order.paymentStatus,
+    totalPaise: order.totalPaise,
+    total: toRupees(order.totalPaise),
+    advancePaise: order.rfqAdvance?.advancePaise ?? null,
+    advance: order.rfqAdvance?.advancePaise != null ? toRupees(order.rfqAdvance.advancePaise) : null,
+    remainderPaise: order.rfqAdvance?.remainderPaise ?? null,
+    remainder: order.rfqAdvance?.remainderPaise != null ? toRupees(order.rfqAdvance.remainderPaise) : null,
+  };
+};
+
+const serializeRfq = (rfq, { school = null, quotes = [], vendorQuote = null, attachmentUrlMap = null, order = null } = {}) => {
   if (!rfq) return null;
 
   const schoolName = school?.name || 'School';
@@ -112,6 +134,10 @@ const serializeRfq = (rfq, { school = null, quotes = [], vendorQuote = null, att
     publishedAt: formatDate(rfq.publishedAt),
     awardedVendorId: rfq.awardedVendorId || null,
     awardedQuoteId: rfq.awardedQuoteId || null,
+    // Set the moment the quote is awarded — the order carrying the advance/
+    // remainder payment lifecycle for this contract.
+    orderId: rfq.orderId || null,
+    order: serializeRfqOrderSummary(order),
     schoolId: rfq.schoolId,
     schoolName,
     location,

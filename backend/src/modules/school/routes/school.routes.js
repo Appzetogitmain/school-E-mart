@@ -644,6 +644,39 @@ router.post(
   schoolController.awardRfqQuote
 );
 
+// RFQ advance/remainder payment lifecycle — orderId here is the Order created
+// by awardRfqQuote above, scoped to this school via the Rfq it came from.
+router.post(
+  '/:schoolId/rfq-orders/:orderId/advance/initiate',
+  ...schoolAdmin,
+  resolveSchool(),
+  validateParams(rfqValidators.orderIdParam),
+  schoolController.initiateRfqAdvancePayment
+);
+router.post(
+  '/:schoolId/rfq-orders/:orderId/advance/confirm',
+  ...schoolAdmin,
+  resolveSchool(),
+  validateParams(rfqValidators.orderIdParam),
+  validateBody(rfqValidators.confirmRfqPaymentSchema),
+  schoolController.confirmRfqAdvancePayment
+);
+router.post(
+  '/:schoolId/rfq-orders/:orderId/remainder/initiate',
+  ...schoolAdmin,
+  resolveSchool(),
+  validateParams(rfqValidators.orderIdParam),
+  schoolController.initiateRfqRemainderPayment
+);
+router.post(
+  '/:schoolId/rfq-orders/:orderId/remainder/confirm',
+  ...schoolAdmin,
+  resolveSchool(),
+  validateParams(rfqValidators.orderIdParam),
+  validateBody(rfqValidators.confirmRfqPaymentSchema),
+  schoolController.confirmRfqRemainderPayment
+);
+
 // Parents Management (view-only: parent accounts are created automatically
 // when a student is enrolled with parent details)
 router.get(

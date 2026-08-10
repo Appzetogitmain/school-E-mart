@@ -99,6 +99,13 @@ const createAssignmentSchema = Joi.object({
   maxScore: Joi.number().min(0).default(100),
   status: Joi.string().valid('draft', 'published', 'archived').optional(),
   files: Joi.array().items(Joi.string().max(MAX_BASE64_FILE_CHARS)).max(5).optional(),
+  // The card/detail thumbnail. Kept as its own field — and its own base64 string,
+  // not folded into `files` — so it can never eat into the 5-attachment cap or be
+  // mistaken for one of the reference attachments.
+  bannerFile: Joi.string().max(MAX_BASE64_FILE_CHARS).optional(),
+  // Update-only in practice (create has nothing to remove yet), but harmless to accept
+  // on create too rather than maintaining two near-identical schemas.
+  removeBanner: Joi.boolean().optional(),
 });
 
 const updateAssignmentSchema = createAssignmentSchema.fork(['title'], (s) => s.optional());

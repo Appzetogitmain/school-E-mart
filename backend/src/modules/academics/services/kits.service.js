@@ -67,7 +67,10 @@ const kitsService = {
       throw new BadRequestError('A kit needs at least one product item');
     }
 
-    const goingLive = payload.status === 'active' || payload.flags?.availableOnline;
+    // `status` is the only thing that puts a kit in front of parents (see
+    // getKit/listKits' requireActive gating and Kit.purchasableFilter), so it is
+    // the only thing this check needs to look at.
+    const goingLive = payload.status === 'active';
     if (goingLive && !payload.vendorId) {
       throw new BadRequestError('Select a fulfilling vendor before publishing the kit', null, 'KIT_VENDOR_REQUIRED');
     }
@@ -93,24 +96,44 @@ const kitsService = {
       mrpPaise,
       sku: `KIT-${suffix.toUpperCase()}-${Date.now().toString(36).toUpperCase()}`,
       status: payload.status === 'active' ? 'active' : 'draft',
+      // The model still carries these for schema compatibility, but nothing reads
+      // them — `status` is the real switch — so they are fixed defaults, not
+      // client input.
       flags: {
-        showOnApp: payload.showOnApp !== undefined ? Boolean(payload.showOnApp) : true,
-        availableOnline: payload.availableOnline !== undefined ? Boolean(payload.availableOnline) : true,
-        allowPreorders: Boolean(payload.allowPreorders),
+        showOnApp: true,
+        availableOnline: true,
+        allowPreorders: false,
       },
     });
     return kit.toObject();
   },
 
-  async listKits(schoolId, query = {}) {
+  // requireActive: true for viewers who are not managing the kit (parents, teachers,
+  // vendors) — they must only ever see published kits, and a client-supplied
+  // `status` query param must not be able to override that. false for school/super
+  // admins, who need to see and edit their own drafts.
+  async listKits(schoolId, query = {}, { requireActive = false } = {}) {
     const filter = { ...notDeleted };
     if (schoolId && schoolId !== 'all') filter.schoolId = schoolId;
-    if (query.status) filter.status = query.status;
+
+    // executePaginatedQuery's ApiFeatures.filter() re-applies every remaining
+    // query-string key — status included — as its own `.find()` call on top of
+    // whatever `filter` already set, and the later call wins on conflicts. So a
+    // forced status has to be scrubbed from the query string itself, or a caller
+    // simply asking for ?status=draft would silently win back the draft it was
+    // just blocked from seeing.
+    const effectiveQuery = { ...query };
+    if (requireActive) {
+      filter.status = 'active';
+      delete effectiveQuery.status;
+    } else if (query.status) {
+      filter.status = query.status;
+    }
     if (query.classGrade) filter.classGrade = query.classGrade;
     if (query.category) filter.category = query.category;
     if (query.search) filter.name = { $regex: query.search.trim(), $options: 'i' };
-    
-    const result = await executePaginatedQuery(Kit, filter, query, { defaultSort: '-audit.createdAt' });
+
+    const result = await executePaginatedQuery(Kit, filter, effectiveQuery, { defaultSort: '-audit.createdAt' });
     if (result.data && result.data.length) {
       result.data = await Kit.populate(result.data, [
         { path: 'schoolId', select: 'name schoolRefNo code logoUrl address' },
@@ -122,9 +145,10 @@ const kitsService = {
     return result;
   },
 
-  async getKit(schoolId, kitId) {
+  async getKit(schoolId, kitId, { requireActive = false } = {}) {
     const filter = { _id: kitId, ...notDeleted };
     if (schoolId && schoolId !== 'all') filter.schoolId = schoolId;
+    if (requireActive) filter.status = 'active';
 
     const kit = await Kit.findOne(filter)
       .populate({ path: 'schoolId', select: 'name schoolRefNo code logoUrl address' })
@@ -144,10 +168,16 @@ const kitsService = {
     const filter = { _id: kitId, ...notDeleted };
     if (schoolId && schoolId !== 'all') filter.schoolId = schoolId;
 
-    const goingLive = payload.status === 'active' || payload.flags?.availableOnline;
+    // Fetched unconditionally: an update that never touches `status` or `vendorId`
+    // but leaves an already-active kit active must still be checked, not just an
+    // update that explicitly flips status to 'active'.
+    const current = await Kit.findOne(filter).select('vendorId status').lean();
+    if (!current) throw new NotFoundError('Kit not found', 'KIT_NOT_FOUND');
+
+    const resolvedStatus = payload.status !== undefined ? payload.status : current.status;
+    const goingLive = resolvedStatus === 'active';
     if (goingLive) {
-      const current = await Kit.findOne(filter).select('vendorId').lean();
-      const resolvedVendor = payload.vendorId ?? current?.vendorId;
+      const resolvedVendor = payload.vendorId !== undefined ? payload.vendorId : current.vendorId;
       if (!resolvedVendor) {
         throw new BadRequestError('Select a fulfilling vendor before publishing the kit', null, 'KIT_VENDOR_REQUIRED');
       }
