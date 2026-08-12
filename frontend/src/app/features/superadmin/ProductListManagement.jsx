@@ -4,7 +4,7 @@ import { useSearchParams } from 'react-router-dom';
 import {
   Search, Edit, Trash2, X,
   Package, CheckCircle, AlertCircle, Check, Filter,
-  FileText, Tag, Folder, Image, ChevronDown, UploadCloud, Loader2
+  FileText, Tag, Folder, Image, ChevronDown, UploadCloud, Loader2, Camera
 } from 'lucide-react';
 import {
   listAdminProducts,
@@ -59,6 +59,7 @@ const ProductListManagement = () => {
   const [editImageFile, setEditImageFile] = useState(null);
   const [editImagePreview, setEditImagePreview] = useState('');
   const editImageInputRef = React.useRef(null);
+  const editImageCameraInputRef = React.useRef(null);
 
   const [products, setProducts] = useState([]);
   const [categoryTree, setCategoryTree] = useState([]);
@@ -840,7 +841,25 @@ const ProductListManagement = () => {
                     <input
                       type="file"
                       ref={editImageInputRef}
-                      accept="image/*"
+                      accept=".png,.jpg,.jpeg,.webp"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          setEditImageFile(file);
+                          setEditImagePreview(URL.createObjectURL(file));
+                        }
+                      }}
+                    />
+                    {/* capture="environment" opens the device's camera app
+                        directly on mobile; desktop browsers that don't support
+                        it fall back to the normal file picker, same as the
+                        input above. */}
+                    <input
+                      type="file"
+                      ref={editImageCameraInputRef}
+                      accept=".png,.jpg,.jpeg,.webp"
+                      capture="environment"
                       className="hidden"
                       onChange={(e) => {
                         const file = e.target.files?.[0];
@@ -851,10 +870,7 @@ const ProductListManagement = () => {
                       }}
                     />
 
-                    <div
-                      onClick={() => editImageInputRef.current?.click()}
-                      className="border-2 border-dashed border-indigo-150 hover:border-indigo-300 bg-indigo-50/10 rounded-2xl p-10 text-center transition-all cursor-pointer"
-                    >
+                    <div className="border-2 border-dashed border-indigo-150 bg-indigo-50/10 rounded-2xl p-10 text-center transition-all">
                       <div className="flex flex-col items-center justify-center space-y-3">
                         {editImagePreview || editImage ? (
                           <>
@@ -869,8 +885,7 @@ const ProductListManagement = () => {
                             {editImagePreview && (
                               <button
                                 type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
+                                onClick={() => {
                                   setEditImageFile(null);
                                   setEditImagePreview('');
                                 }}
@@ -884,11 +899,27 @@ const ProductListManagement = () => {
                           <>
                             <UploadCloud size={28} className="text-indigo-500" />
                             <div>
-                              <p className="text-xs font-black text-gray-950">Click to browse a replacement photo</p>
+                              <p className="text-xs font-black text-gray-950">Replace the product photo</p>
                               <p className="text-[10px] font-bold text-gray-400 mt-1">PNG, JPG formats supported up to 5MB.</p>
                             </div>
                           </>
                         )}
+                        <div className="flex items-center gap-2.5">
+                          <button
+                            type="button"
+                            onClick={() => editImageCameraInputRef.current?.click()}
+                            className="px-4 py-2 rounded-xl border border-gray-200 hover:border-indigo-300 bg-white text-xs font-bold text-gray-700 flex items-center gap-1.5 transition-colors"
+                          >
+                            <Camera size={14} /> Take Photo
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => editImageInputRef.current?.click()}
+                            className="px-4 py-2 rounded-xl border border-gray-200 hover:border-indigo-300 bg-white text-xs font-bold text-gray-700 flex items-center gap-1.5 transition-colors"
+                          >
+                            <UploadCloud size={14} /> Choose File
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>

@@ -1,6 +1,7 @@
 const vendorOrderService = require('../../src/modules/vendor/services/order.service');
 const { createVendorUser, seedProduct, seedOrder } = require('./helpers');
 const User = require('../../src/database/models/User');
+const Order = require('../../src/database/models/Order');
 
 describe('vendor order service', () => {
   let vendorId;
@@ -63,6 +64,69 @@ describe('vendor order service', () => {
     const { profile: otherVendor } = await createVendorUser({ storeName: 'Other Store' });
     await expect(vendorOrderService.getOrder(otherVendor._id, orderId)).rejects.toMatchObject({
       code: 'ORDER_NOT_FOUND',
+    });
+  });
+
+  describe('RFQ orders cannot be marked delivered until the remainder is paid', () => {
+    const actor = { userId: undefined, role: 'vendor' };
+
+    beforeEach(async () => {
+      actor.userId = userId;
+      // Fast-forward the fixture order straight to "out for delivery" with an
+      // RFQ advance/remainder split, the way an awarded quote's order would
+      // actually look once fulfilment is underway.
+      await Order.findByIdAndUpdate(orderId, {
+        $set: {
+          orderStatus: 'out_for_delivery',
+          rfqAdvance: { advancePaise: 5000, remainderPaise: 15000 },
+        },
+      });
+    });
+
+    test('rejects delivery while only the advance has been paid', async () => {
+      await Order.findByIdAndUpdate(orderId, { $set: { paymentStatus: 'partially_paid' } });
+
+      await expect(
+        vendorOrderService.updateOrderStatus(vendorId, orderId, { status: 'delivered' }, actor)
+      ).rejects.toMatchObject({ code: 'RFQ_REMAINDER_NOT_PAID' });
+
+      const order = await vendorOrderService.getOrder(vendorId, orderId);
+      expect(order.orderStatus).toBe('out_for_delivery');
+    });
+
+    test('rejects delivery when no payment has been captured at all', async () => {
+      await Order.findByIdAndUpdate(orderId, { $set: { paymentStatus: 'pending' } });
+
+      await expect(
+        vendorOrderService.updateOrderStatus(vendorId, orderId, { status: 'delivered' }, actor)
+      ).rejects.toMatchObject({ code: 'RFQ_REMAINDER_NOT_PAID' });
+    });
+
+    test('allows delivery once the remainder is paid in full', async () => {
+      await Order.findByIdAndUpdate(orderId, { $set: { paymentStatus: 'paid' } });
+
+      const order = await vendorOrderService.updateOrderStatus(
+        vendorId,
+        orderId,
+        { status: 'delivered' },
+        actor
+      );
+      expect(order.orderStatus).toBe('delivered');
+    });
+
+    test('a regular (non-RFQ) order is unaffected by the gate', async () => {
+      await Order.findByIdAndUpdate(orderId, {
+        $set: { paymentStatus: 'pending' },
+        $unset: { rfqAdvance: '' },
+      });
+
+      const order = await vendorOrderService.updateOrderStatus(
+        vendorId,
+        orderId,
+        { status: 'delivered' },
+        actor
+      );
+      expect(order.orderStatus).toBe('delivered');
     });
   });
 });

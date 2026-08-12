@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { 
   Plus, Search, Download, ChevronDown, ChevronRight, Edit, Trash2,
-  X, LayoutGrid, List, Upload, Loader2
+  X, LayoutGrid, List, Upload, Loader2, Camera
 } from 'lucide-react';
 import { 
   getCategoryTree, 
@@ -43,6 +43,7 @@ const CategoryManagement = () => {
   const [newCatImage, setNewCatImage] = useState(null);
   const [newCatImagePreview, setNewCatImagePreview] = useState('');
   const newCatFileInputRef = React.useRef(null);
+  const newCatCameraInputRef = React.useRef(null);
 
   // New subcategory form state (kept separate so the two modals never share values)
   const [newSubName, setNewSubName] = useState('');
@@ -63,11 +64,13 @@ const CategoryManagement = () => {
   const [newSubcatImage, setNewSubcatImage] = useState(null);
   const [newSubcatImagePreview, setNewSubcatImagePreview] = useState('');
   const newSubcatFileInputRef = React.useRef(null);
+  const newSubcatCameraInputRef = React.useRef(null);
 
   // Edit category image upload states
   const [editCatImageFile, setEditCatImageFile] = useState(null);
   const [editCatImagePreview, setEditCatImagePreview] = useState('');
   const editCatFileInputRef = React.useRef(null);
+  const editCatCameraInputRef = React.useRef(null);
 
   const [categories, setCategories] = useState([]);
   const [headerCategories, setHeaderCategories] = useState([]);
@@ -812,13 +815,27 @@ const CategoryManagement = () => {
                       setNewCatImagePreview(URL.createObjectURL(file));
                     }
                   }}
-                  accept="image/*"
+                  accept=".png,.jpg,.jpeg,.webp"
                   className="hidden"
                 />
-                <div
-                  onClick={() => newCatFileInputRef.current?.click()}
-                  className="border-2 border-dashed border-gray-200 rounded-xl p-5 flex flex-col items-center justify-center bg-gray-50/50 hover:bg-gray-50 transition-colors cursor-pointer select-none min-h-[110px]"
-                >
+                {/* capture="environment" opens the device's camera app directly
+                    on mobile; desktop browsers that don't support it fall back
+                    to the normal file picker, same as the input above. */}
+                <input
+                  type="file"
+                  ref={newCatCameraInputRef}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      setNewCatImage(file);
+                      setNewCatImagePreview(URL.createObjectURL(file));
+                    }
+                  }}
+                  accept=".png,.jpg,.jpeg,.webp"
+                  capture="environment"
+                  className="hidden"
+                />
+                <div className="border-2 border-dashed border-gray-200 rounded-xl p-5 flex flex-col items-center justify-center bg-gray-50/50 min-h-[110px]">
                   {newCatImagePreview ? (
                     <div className="flex flex-col items-center justify-center text-center">
                       <img
@@ -828,8 +845,7 @@ const CategoryManagement = () => {
                       />
                       <button
                         type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
+                        onClick={() => {
                           setNewCatImage(null);
                           setNewCatImagePreview('');
                         }}
@@ -841,8 +857,24 @@ const CategoryManagement = () => {
                   ) : (
                     <>
                       <Upload size={22} className="text-gray-400 mb-2 stroke-[2.5]" />
-                      <span className="text-xs font-black text-gray-700">Choose File or Drag & Drop</span>
-                      <span className="text-[10px] text-gray-400 mt-1 font-bold">Max 5MB</span>
+                      <span className="text-xs font-black text-gray-700">Choose File or Take a Photo</span>
+                      <span className="text-[10px] text-gray-400 mt-1 font-bold mb-3">Max 5MB</span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => newCatCameraInputRef.current?.click()}
+                          className="px-3.5 py-2 rounded-lg border border-gray-200 hover:border-indigo-300 bg-white text-[11px] font-black text-gray-700 flex items-center gap-1.5 transition-colors"
+                        >
+                          <Camera size={13} /> Take Photo
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => newCatFileInputRef.current?.click()}
+                          className="px-3.5 py-2 rounded-lg border border-gray-200 hover:border-indigo-300 bg-white text-[11px] font-black text-gray-700 flex items-center gap-1.5 transition-colors"
+                        >
+                          <Upload size={13} /> Choose File
+                        </button>
+                      </div>
                     </>
                   )}
                 </div>
@@ -941,7 +973,7 @@ const CategoryManagement = () => {
               {/* Category Image Upload Dropzone */}
               <div className="space-y-1">
                 <label className="text-xs font-black text-gray-700 mb-1.5 block">Category Image</label>
-                <input 
+                <input
                   type="file"
                   ref={newSubcatFileInputRef}
                   onChange={(e) => {
@@ -951,24 +983,37 @@ const CategoryManagement = () => {
                       setNewSubcatImagePreview(URL.createObjectURL(file));
                     }
                   }}
-                  accept="image/*"
+                  accept=".png,.jpg,.jpeg,.webp"
                   className="hidden"
                 />
-                <div 
-                  onClick={() => newSubcatFileInputRef.current?.click()}
-                  className="border-2 border-dashed border-gray-200 rounded-xl p-6 flex flex-col items-center justify-center bg-gray-50/50 hover:bg-gray-50 transition-colors cursor-pointer select-none relative overflow-hidden min-h-[120px]"
-                >
+                {/* capture="environment" opens the device's camera app directly
+                    on mobile; desktop browsers that don't support it fall back
+                    to the normal file picker, same as the input above. */}
+                <input
+                  type="file"
+                  ref={newSubcatCameraInputRef}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      setNewSubcatImage(file);
+                      setNewSubcatImagePreview(URL.createObjectURL(file));
+                    }
+                  }}
+                  accept=".png,.jpg,.jpeg,.webp"
+                  capture="environment"
+                  className="hidden"
+                />
+                <div className="border-2 border-dashed border-gray-200 rounded-xl p-6 flex flex-col items-center justify-center bg-gray-50/50 relative overflow-hidden min-h-[120px]">
                   {newSubcatImagePreview ? (
                     <div className="flex flex-col items-center justify-center text-center">
-                      <img 
-                        src={newSubcatImagePreview} 
-                        alt="Preview" 
-                        className="w-24 h-24 object-cover rounded-xl border border-gray-200 shadow-sm mb-1" 
+                      <img
+                        src={newSubcatImagePreview}
+                        alt="Preview"
+                        className="w-24 h-24 object-cover rounded-xl border border-gray-200 shadow-sm mb-1"
                       />
-                      <button 
+                      <button
                         type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
+                        onClick={() => {
                           setNewSubcatImage(null);
                           setNewSubcatImagePreview('');
                         }}
@@ -980,8 +1025,24 @@ const CategoryManagement = () => {
                   ) : (
                     <>
                       <Upload size={24} className="text-gray-400 mb-2 stroke-[2.5]" />
-                      <span className="text-xs font-black text-gray-700">Choose File or Drag & Drop</span>
-                      <span className="text-[10px] text-gray-400 mt-1 font-bold">Max 5MB</span>
+                      <span className="text-xs font-black text-gray-700">Choose File or Take a Photo</span>
+                      <span className="text-[10px] text-gray-400 mt-1 font-bold mb-3">Max 5MB</span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => newSubcatCameraInputRef.current?.click()}
+                          className="px-3.5 py-2 rounded-lg border border-gray-200 hover:border-indigo-300 bg-white text-[11px] font-black text-gray-700 flex items-center gap-1.5 transition-colors"
+                        >
+                          <Camera size={13} /> Take Photo
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => newSubcatFileInputRef.current?.click()}
+                          className="px-3.5 py-2 rounded-lg border border-gray-200 hover:border-indigo-300 bg-white text-[11px] font-black text-gray-700 flex items-center gap-1.5 transition-colors"
+                        >
+                          <Upload size={13} /> Choose File
+                        </button>
+                      </div>
                     </>
                   )}
                 </div>
@@ -1122,7 +1183,7 @@ const CategoryManagement = () => {
               {/* Category Image upload/preview dropzone */}
               <div className="space-y-1">
                 <label className="text-xs font-black text-gray-700 mb-1.5 block">Category Image</label>
-                <input 
+                <input
                   type="file"
                   ref={editCatFileInputRef}
                   onChange={(e) => {
@@ -1132,24 +1193,37 @@ const CategoryManagement = () => {
                       setEditCatImagePreview(URL.createObjectURL(file));
                     }
                   }}
-                  accept="image/*"
+                  accept=".png,.jpg,.jpeg,.webp"
                   className="hidden"
                 />
-                <div 
-                  onClick={() => editCatFileInputRef.current?.click()}
-                  className="border-2 border-dashed border-gray-200 rounded-xl p-6 flex flex-col items-center justify-center bg-gray-50/50 hover:bg-gray-50 transition-colors cursor-pointer select-none relative overflow-hidden min-h-[140px]"
-                >
+                {/* capture="environment" opens the device's camera app directly
+                    on mobile; desktop browsers that don't support it fall back
+                    to the normal file picker, same as the input above. */}
+                <input
+                  type="file"
+                  ref={editCatCameraInputRef}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      setEditCatImageFile(file);
+                      setEditCatImagePreview(URL.createObjectURL(file));
+                    }
+                  }}
+                  accept=".png,.jpg,.jpeg,.webp"
+                  capture="environment"
+                  className="hidden"
+                />
+                <div className="border-2 border-dashed border-gray-200 rounded-xl p-6 flex flex-col items-center justify-center bg-gray-50/50 relative overflow-hidden min-h-[140px]">
                   {editCatImagePreview ? (
                     <div className="flex flex-col items-center justify-center text-center">
-                      <img 
-                        src={editCatImagePreview} 
-                        alt="Preview" 
-                        className="w-28 h-28 object-cover rounded-xl border border-gray-200 shadow-sm mb-1" 
+                      <img
+                        src={editCatImagePreview}
+                        alt="Preview"
+                        className="w-28 h-28 object-cover rounded-xl border border-gray-200 shadow-sm mb-1"
                       />
-                      <button 
+                      <button
                         type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
+                        onClick={() => {
                           setEditCatImageFile(null);
                           setEditCatImagePreview('');
                         }}
@@ -1160,28 +1234,50 @@ const CategoryManagement = () => {
                     </div>
                   ) : editCatImage ? (
                     <div className="flex flex-col items-center justify-center text-center">
-                      <img 
-                        src={editCatImage} 
-                        alt="Current Category Image" 
-                        className="w-28 h-28 object-cover rounded-xl border border-gray-200 shadow-sm mb-2" 
+                      <img
+                        src={editCatImage}
+                        alt="Current Category Image"
+                        className="w-28 h-28 object-cover rounded-xl border border-gray-200 shadow-sm mb-2"
                       />
                       <span className="text-[10px] text-gray-400 font-bold">Current image</span>
-                      <button 
-                        type="button" 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setEditCatImage('');
-                        }}
-                        className="text-[10px] text-red-500 font-black hover:underline mt-1 block"
-                      >
-                        Remove
-                      </button>
+                      <div className="flex items-center gap-2 mt-2">
+                        <button
+                          type="button"
+                          onClick={() => editCatCameraInputRef.current?.click()}
+                          className="text-[10px] text-[#3b2d7d] font-black hover:underline flex items-center gap-1"
+                        >
+                          <Camera size={11} /> Retake
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEditCatImage('')}
+                          className="text-[10px] text-red-500 font-black hover:underline"
+                        >
+                          Remove
+                        </button>
+                      </div>
                     </div>
                   ) : (
-                    <div className="flex flex-col items-center justify-center cursor-pointer w-full h-full select-none">
+                    <div className="flex flex-col items-center justify-center w-full h-full select-none">
                       <Upload size={24} className="text-gray-400 mb-2 stroke-[2.5]" />
-                      <span className="text-xs font-black text-gray-700">Choose File or Drag & Drop</span>
-                      <span className="text-[10px] text-gray-400 mt-1 font-bold">Max 5MB</span>
+                      <span className="text-xs font-black text-gray-700">Choose File or Take a Photo</span>
+                      <span className="text-[10px] text-gray-400 mt-1 font-bold mb-3">Max 5MB</span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => editCatCameraInputRef.current?.click()}
+                          className="px-3.5 py-2 rounded-lg border border-gray-200 hover:border-indigo-300 bg-white text-[11px] font-black text-gray-700 flex items-center gap-1.5 transition-colors"
+                        >
+                          <Camera size={13} /> Take Photo
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => editCatFileInputRef.current?.click()}
+                          className="px-3.5 py-2 rounded-lg border border-gray-200 hover:border-indigo-300 bg-white text-[11px] font-black text-gray-700 flex items-center gap-1.5 transition-colors"
+                        >
+                          <Upload size={13} /> Choose File
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>

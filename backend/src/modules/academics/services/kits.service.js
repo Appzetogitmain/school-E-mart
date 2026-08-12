@@ -1,10 +1,13 @@
 const crypto = require('crypto');
 const Kit = require('../../../database/models/Kit');
 const SchoolKitCategory = require('../../../database/models/SchoolKitCategory');
+const Order = require('../../../database/models/Order');
+const ChildProfile = require('../../../database/models/ChildProfile');
 require('../../../database/models/School');
 require('../../../database/models/VendorProfile');
 require('../../../database/models/Attachment');
 require('../../../database/models/MasterKitProduct');
+require('../../../database/models/User');
 const { NotFoundError, BadRequestError } = require('../../../common/errors');
 const { executePaginatedQuery } = require('../../../repositories');
 
@@ -141,8 +144,34 @@ const kitsService = {
         { path: 'imageId', select: 'storageKey mime sizeBytes' },
         { path: 'items.masterProductId', select: 'name category subcategory imageUrl productType' }
       ]);
+
+      // Sales counts are only meaningful to whoever is managing the kit
+      // (school/super admin) — parents and vendors browsing the catalogue
+      // don't need or get this.
+      if (!requireActive) {
+        const kitIds = result.data.map((k) => k._id);
+        const counts = await this.getSalesCounts(kitIds);
+        result.data = result.data.map((k) => ({
+          ...k,
+          salesCount: counts.get(String(k._id)) || 0,
+        }));
+      }
     }
     return result;
+  },
+
+  // Number of non-cancelled orders that include each kit, batched in one
+  // aggregation rather than N queries. Used by the management list ("X sold")
+  // and as the headline figure on the purchases/report view.
+  async getSalesCounts(kitIds) {
+    if (!kitIds?.length) return new Map();
+    const rows = await Order.aggregate([
+      { $match: { 'items.kitId': { $in: kitIds }, orderStatus: { $nin: ['cancelled', 'returned'] } } },
+      { $unwind: '$items' },
+      { $match: { 'items.kitId': { $in: kitIds } } },
+      { $group: { _id: '$items.kitId', count: { $sum: 1 } } },
+    ]);
+    return new Map(rows.map((r) => [String(r._id), r.count]));
   },
 
   async getKit(schoolId, kitId, { requireActive = false } = {}) {
@@ -212,6 +241,144 @@ const kitsService = {
     ).lean();
     if (!kit) throw new NotFoundError('Kit not found', 'KIT_NOT_FOUND');
     return kit;
+  },
+
+  // "Who bought this kit, and who (of the students it's actually for) hasn't
+  // yet" — the school's sales/coverage report for a single kit.
+  async getKitPurchaseReport(schoolId, kitId) {
+    const kit = await this.getKit(schoolId, kitId, { requireActive: false });
+    // `schoolId` can be the literal string 'all' on a super-admin route, and
+    // `kit.schoolId` above comes back populated (or null, if the referenced
+    // School can't be found) — neither is safe to filter the student roster
+    // by. Read the kit's raw, unpopulated schoolId directly instead.
+    const kitSchoolId = (await Kit.findById(kitId).select('schoolId').lean())?.schoolId;
+
+    const orders = await Order.find({
+      'items.kitId': kitId,
+      orderStatus: { $nin: ['cancelled', 'returned'] },
+    })
+      .select('orderNumber userId items paymentStatus orderStatus placedAt audit')
+      .populate({ path: 'userId', select: 'name email phone' })
+      .sort('-audit.createdAt')
+      .lean();
+
+    const seenParentIds = new Set();
+    const purchases = [];
+
+    orders.forEach((order) => {
+      const pUserId = String(order.userId?._id || order.userId || '');
+      if (pUserId && seenParentIds.has(pUserId)) return;
+      if (pUserId) seenParentIds.add(pUserId);
+
+      const item = (order.items || []).find((it) => String(it.kitId) === String(kitId));
+      purchases.push({
+        orderId: order._id,
+        orderNumber: order.orderNumber,
+        parentUserId: order.userId?._id || order.userId || null,
+        parentName: order.userId?.name || 'Parent',
+        parentEmail: order.userId?.email || null,
+        parentPhone: order.userId?.phone || null,
+        quantity: item?.quantity || 1,
+        paymentStatus: order.paymentStatus,
+        orderStatus: order.orderStatus,
+        purchasedAt: order.placedAt || order.audit?.createdAt || null,
+      });
+    });
+
+    const purchasedParentIds = new Set(
+      purchases.filter((p) => p.parentUserId).map((p) => String(p.parentUserId))
+    );
+
+    // Scoped to the children this kit is actually meant for: the school's
+    // roster in the kit's target class/grade, or every child at the school if
+    // the kit isn't grade-specific. Orders are per-parent (not per-child), so
+    // a parent with two eligible kids who bought the kit once shows both kids
+    // as covered — there's no finer-grained signal to go on than that.
+    const childFilter = { schoolId: kitSchoolId, 'softDelete.isDeleted': { $ne: true } };
+    if (kit.classGrade) childFilter.grade = kit.classGrade;
+
+    const children = await ChildProfile.find(childFilter)
+      .select('name grade rollNo parentUserId avatarUrl')
+      .sort('name')
+      .lean();
+
+    const purchasedChildren = [];
+    const notPurchased = [];
+    for (const child of children) {
+      const bought = purchasedParentIds.has(String(child.parentUserId));
+      const row = {
+        childId: child._id,
+        name: child.name,
+        grade: child.grade,
+        rollNo: child.rollNo || null,
+        parentUserId: child.parentUserId,
+      };
+      (bought ? purchasedChildren : notPurchased).push(row);
+    }
+
+    return {
+      kit: {
+        id: kit._id,
+        name: kit.name,
+        classGrade: kit.classGrade || null,
+        pricePaise: kit.pricePaise,
+        status: kit.status,
+      },
+      totalOrders: purchases.length,
+      totalEligibleChildren: children.length,
+      purchasedChildrenCount: purchasedChildren.length,
+      notPurchasedCount: notPurchased.length,
+      purchases,
+      purchasedChildren,
+      notPurchased,
+    };
+  },
+
+  // Which of this school's active kits has the current parent already bought —
+  // the single source of truth behind every "X of Y kits purchased" progress
+  // bar (Home, My School, kit detail pages). Scoped by kit id directly rather
+  // than paginating the parent's whole order history, so it stays correct no
+  // matter how many other (non-kit) orders they've placed over the years —
+  // a plain `listOrders({limit: 100})` scan on the frontend would silently
+  // miss an old kit purchase once a family crosses 100 orders.
+  //
+  // "Purchased" mirrors cart.service.js's KIT_ALREADY_PURCHASED definition
+  // exactly: not cancelled/returned, and either already paid/authorized or
+  // COD (which reserves the kit the moment it's placed, before payment is
+  // actually collected).
+  async listPurchasedKitIds(userId, schoolId) {
+    const activeKits = await Kit.find({
+      schoolId,
+      status: 'active',
+      ...notDeleted,
+    })
+      .select('_id')
+      .lean();
+    const kitIds = activeKits.map((k) => k._id);
+    if (!kitIds.length) return [];
+
+    const orders = await Order.find({
+      userId,
+      orderStatus: { $nin: ['cancelled', 'returned'] },
+      $or: [{ paymentStatus: { $in: ['paid', 'authorized'] } }, { paymentMethod: 'cod' }],
+      'items': {
+        $elemMatch: { $or: [{ kitId: { $in: kitIds } }, { productId: { $in: kitIds } }] },
+      },
+    })
+      .select('items.kitId items.productId')
+      .lean();
+
+    const kitIdStrings = new Set(kitIds.map(String));
+    const purchased = new Set();
+    orders.forEach((order) => {
+      (order.items || []).forEach((item) => {
+        const kid = item.kitId ? String(item.kitId) : null;
+        const pid = item.productId ? String(item.productId) : null;
+        if (kid && kitIdStrings.has(kid)) purchased.add(kid);
+        if (pid && kitIdStrings.has(pid)) purchased.add(pid);
+      });
+    });
+    return [...purchased];
   },
 };
 

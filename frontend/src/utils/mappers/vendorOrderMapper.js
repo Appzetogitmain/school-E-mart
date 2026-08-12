@@ -23,6 +23,57 @@ const sumVendorItemsPaise = (order) => {
   return items.reduce((sum, item) => sum + (item.lineTotalPaise || 0), 0);
 };
 
+// RFQ-awarded orders collect payment as an advance up front, then the
+// remainder any time after — two separate captures on the same order,
+// distinct from a normal single-payment order. Vendors need to see that
+// split explicitly (not just "totalPaise"), and know delivery is blocked
+// until the remainder actually lands.
+const mapPaymentSplit = (order) => {
+  const rfqAdvance = order?.rfqAdvance;
+  if (!rfqAdvance) {
+    return {
+      isRfqOrder: false,
+      paymentStatusRaw: order?.paymentStatus || null,
+      advancePaise: null,
+      remainderPaise: null,
+      advancePaid: null,
+      remainderPaid: null,
+      paymentSplitLabel: null,
+      paymentSplitColor: null,
+    };
+  }
+
+  const paymentStatusRaw = order?.paymentStatus || 'pending';
+  const advancePaid = paymentStatusRaw === 'partially_paid' || paymentStatusRaw === 'paid';
+  const remainderPaid = paymentStatusRaw === 'paid';
+  const advancePaise = rfqAdvance.advancePaise ?? 0;
+  const remainderPaise = rfqAdvance.remainderPaise ?? 0;
+
+  let paymentSplitLabel;
+  let paymentSplitColor;
+  if (remainderPaid) {
+    paymentSplitLabel = 'Advance + Remaining Received — Fully Paid';
+    paymentSplitColor = 'bg-emerald-50 text-emerald-700 border-emerald-100';
+  } else if (advancePaid) {
+    paymentSplitLabel = `Advance Received — ₹${paiseToRupees(remainderPaise).toFixed(2)} Remaining Pending`;
+    paymentSplitColor = 'bg-amber-50 text-amber-700 border-amber-100';
+  } else {
+    paymentSplitLabel = 'Advance Payment Pending';
+    paymentSplitColor = 'bg-red-50 text-red-600 border-red-100';
+  }
+
+  return {
+    isRfqOrder: true,
+    paymentStatusRaw,
+    advancePaise,
+    remainderPaise,
+    advancePaid,
+    remainderPaid,
+    paymentSplitLabel,
+    paymentSplitColor,
+  };
+};
+
 const mapVendorOrderItems = (items = []) =>
   items.map((item, index) => ({
     itemIndex: index,
@@ -39,6 +90,12 @@ const mapVendorOrderItems = (items = []) =>
       category: kitItem.category,
       subcategory: kitItem.subcategory,
       qty: kitItem.qty,
+      // The parent's actual pick, not the school's full menu of options — this
+      // is what to pack. `attributes.color` is a legacy single free-text value
+      // from before per-parent color selection existed; there's no equivalent
+      // fallback for size since it was always a list of options, never one value.
+      size: kitItem.selectedSize || null,
+      color: kitItem.selectedColor || kitItem.attributes?.color || null,
       packed: Boolean(kitItem.packed),
     })),
   }));
@@ -61,6 +118,7 @@ export const mapVendorOrderForList = (order) => {
     website: '',
     timeSlot: order?.deliveryType === 'school' ? 'School Pickup' : 'Home Delivery',
     items: mapVendorOrderItems(order?.items || []).slice(0, 5),
+    ...mapPaymentSplit(order),
     raw: order,
   };
 };
@@ -81,7 +139,11 @@ export const mapVendorOrderForDetail = (order) => {
   };
 };
 
-export const getVendorOrderActions = (status = '') => {
+// `order` (the mapped shape from above) is optional and only consulted for
+// the 'delivered' action — an RFQ order whose remainder is still outstanding
+// gets that action rendered disabled, with the reason surfaced, rather than
+// letting the vendor tap it and hit the backend's RFQ_REMAINDER_NOT_PAID error.
+export const getVendorOrderActions = (status = '', order = {}) => {
   const normalized = String(status).toLowerCase();
   if (normalized === 'placed') {
     return [
@@ -102,7 +164,16 @@ export const getVendorOrderActions = (status = '') => {
     return [{ key: 'out_for_delivery', label: 'Out for Delivery', variant: 'primary' }];
   }
   if (normalized === 'out_for_delivery') {
-    return [{ key: 'delivered', label: 'Mark Delivered', variant: 'primary' }];
+    const remainderOutstanding = order?.isRfqOrder && !order?.remainderPaid;
+    return [{
+      key: 'delivered',
+      label: remainderOutstanding ? 'Mark Delivered (Remaining Payment Pending)' : 'Mark Delivered',
+      variant: 'primary',
+      disabled: remainderOutstanding,
+      disabledReason: remainderOutstanding
+        ? 'The school still owes the remaining quotation payment — this unlocks once it is paid.'
+        : null,
+    }];
   }
   return [];
 };

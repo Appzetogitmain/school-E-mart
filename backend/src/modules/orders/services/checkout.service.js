@@ -5,6 +5,7 @@ const variantRepository = require('../../marketplace/repositories/variant.reposi
 const orderAccessPolicy = require('../policies/orderAccess.policy');
 const BillingConfig = require('../../../database/models/BillingConfig');
 const Kit = require('../../../database/models/Kit');
+const { validateAndNormalizeKitSelections } = require('../../marketplace/utils/kitSelection.util');
 
 // Fallbacks used only if the admin has never saved a BillingConfig. Real values
 // come from the admin's Billing & Charges page and are resolved per checkout.
@@ -35,6 +36,10 @@ const checkoutService = {
         // can go from active to draft/deleted/vendor-less in between.
         const kit = await Kit.findOne(Kit.purchasableFilter(item.productId)).lean();
         if (kit) {
+          // Re-validate the parent's size/color picks against the live kit —
+          // the school may have edited or removed an option since it was added
+          // to the cart, so the choice made then can no longer be trusted blind.
+          const selections = validateAndNormalizeKitSelections(kit, item.kitSelections);
           product = {
             _id: kit._id,
             vendorId: kit.vendorId || null,
@@ -49,13 +54,15 @@ const checkoutService = {
             kitId: kit._id,
             schoolId: kit.schoolId,
             kitCreatedAt: kit.audit?.createdAt || kit.createdAt || null,
-            kitItems: (kit.items || []).map((kitItem) => ({
+            kitItems: (kit.items || []).map((kitItem, index) => ({
               name: kitItem.name,
               category: kitItem.category,
               subcategory: kitItem.subcategory,
               imageUrl: kitItem.imageUrl,
               qty: kitItem.qty,
               attributes: kitItem.attributes,
+              selectedSize: selections[index]?.size || null,
+              selectedColor: selections[index]?.color || null,
             })),
           };
         }

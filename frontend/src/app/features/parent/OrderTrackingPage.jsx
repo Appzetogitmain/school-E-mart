@@ -4,10 +4,10 @@ import {
   ChevronLeft, RefreshCw,
   Home, ShieldCheck,
   HelpCircle, XCircle,
-  Package, Loader2,
+  Package, Loader2, FileText,
 } from 'lucide-react';
 import {
-  trackOrder, getOrder, cancelOrder,
+  trackOrder, getOrder, cancelOrder, getInvoice,
 } from '../../../services/ordersApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 import {
@@ -18,6 +18,7 @@ import {
 } from '../../../utils/mappers/orderMapper';
 import { formatRupee } from '../../../utils/mappers/productMapper';
 import useAuthStore from '../../../store/useAuthStore';
+import InvoiceModal from '../../../components/InvoiceModal';
 
 const OrderTrackingPage = () => {
   const navigate = useNavigate();
@@ -31,8 +32,28 @@ const OrderTrackingPage = () => {
   const [orderDetails, setOrderDetails] = useState(null);
   const [tracking, setTracking] = useState(null);
   const [cancelling, setCancelling] = useState(false);
+  const [invoiceModalOpen, setInvoiceModalOpen] = useState(false);
+  const [invoiceData, setInvoiceData] = useState(null);
+  const [invoiceLoading, setInvoiceLoading] = useState(false);
+  const [invoiceError, setInvoiceError] = useState('');
 
   const orderMongoId = location.state?.orderId;
+
+  const handleViewInvoice = async (targetOrderId) => {
+    const idToFetch = targetOrderId || orderMongoId;
+    if (!idToFetch) return;
+    setInvoiceModalOpen(true);
+    setInvoiceLoading(true);
+    setInvoiceError('');
+    try {
+      const data = await getInvoice(idToFetch);
+      setInvoiceData(data);
+    } catch (err) {
+      setInvoiceError(getErrorMessage(err, 'Unable to load invoice receipt'));
+    } finally {
+      setInvoiceLoading(false);
+    }
+  };
 
   const loadOrderData = useCallback(async (isRefresh = false) => {
     if (!orderNumberParam) return;
@@ -226,14 +247,26 @@ const OrderTrackingPage = () => {
         </div>
 
         <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="p-4 border-b border-gray-50 flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center text-gray-400">
-              <Package size={20} />
+          <div className="p-4 border-b border-gray-50 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center text-gray-400">
+                <Package size={20} />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-deep-purple uppercase tracking-tight">Bill Summary</h3>
+                <p className="text-[10px] text-gray-400 font-bold">#{displayNumber} • {orderDetails?.itemsCount || 1} Items</p>
+              </div>
             </div>
-            <div>
-              <h3 className="text-sm font-bold text-deep-purple uppercase tracking-tight">Bill Summary</h3>
-              <p className="text-[10px] text-gray-400 font-bold">#{displayNumber} • {orderDetails?.itemsCount || 1} Items</p>
-            </div>
+            {orderMongoId && (
+              <button
+                type="button"
+                onClick={() => handleViewInvoice(orderMongoId)}
+                className="px-3.5 py-2 bg-primary/10 hover:bg-primary/20 text-primary-900 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
+              >
+                <FileText size={14} />
+                <span>Invoice</span>
+              </button>
+            )}
           </div>
           <div className="p-4 space-y-3">
             <div className="flex justify-between text-xs font-bold uppercase tracking-widest text-gray-400">
@@ -297,6 +330,14 @@ const OrderTrackingPage = () => {
           View All Orders
         </button>
       </div>
+
+      <InvoiceModal
+        isOpen={invoiceModalOpen}
+        onClose={() => setInvoiceModalOpen(false)}
+        invoiceData={invoiceData}
+        loading={invoiceLoading}
+        error={invoiceError}
+      />
     </div>
   );
 };

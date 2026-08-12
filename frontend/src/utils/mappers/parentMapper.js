@@ -68,11 +68,16 @@ export const mapAssignmentForParentHomework = (assignment, course, submission = 
   const priority = assignment?.priority || null;
   const maxScore = assignment?.maxScore ?? 100;
 
-  // Resolve banner image: first check if teacher uploaded any image attachment on assignment
-  const firstImageAttachment = (assignment?.attachments || []).find(
-    (att) => String(att?.mime || '').startsWith('image/')
-  );
-  const bannerAttachmentId = firstImageAttachment?._id?.toString?.() || firstImageAttachment?.toString?.() || firstImageAttachment || null;
+  // A real field on the assignment now — not guessed by picking the first image-mime
+  // attachment, which used to misfire whenever a reference photo was attached without
+  // a banner, and which duplicated the banner into the downloadable attachments list.
+  const bannerAttachmentId =
+    assignment?.bannerAttachmentId?._id?.toString?.() ||
+    assignment?.bannerAttachmentId?.toString?.() ||
+    null;
+
+  const assignedDateValue = assignment?.assignedDate || assignment?.audit?.createdAt || assignment?.createdAt;
+  const dueDateValue = assignment?.dueDate;
 
   return {
     id,
@@ -87,8 +92,13 @@ export const mapAssignmentForParentHomework = (assignment, course, submission = 
     priority,
     status,
     statusColor,
-    assignedDate: formatDate(assignment?.assignedDate || assignment?.audit?.createdAt || assignment?.createdAt),
-    dueDate: formatDate(assignment?.dueDate),
+    assignedDate: formatDate(assignedDateValue),
+    dueDate: formatDate(dueDateValue),
+    // Sortable timestamps behind the display strings above — `assignedDate`/`dueDate`
+    // are formatted for humans ("10 Aug 2026") and must never be sorted as strings:
+    // lexicographic order puts "10 Aug" before "2 Aug".
+    assignedDateSort: assignedDateValue ? new Date(assignedDateValue).getTime() : 0,
+    dueDateSort: dueDateValue ? new Date(dueDateValue).getTime() : 0,
     daysRemaining: daysRemainingLabel(assignment?.dueDate),
     // The teacher who set this homework; the course instructor is only a fallback
     // because a course can be shared by several teachers.

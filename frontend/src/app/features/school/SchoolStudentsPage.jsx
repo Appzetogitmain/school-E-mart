@@ -1076,12 +1076,28 @@ const SchoolStudentsPage = () => {
                   <div className="flex-1">
                     <label className="block text-[11px] font-bold text-gray-700 mb-1">Profile Photo</label>
                     <div className="flex items-center gap-2">
+                      {/* capture="environment" opens the device's camera app
+                          directly on mobile; desktop browsers that don't
+                          support it fall back to the normal file picker, same
+                          as the "Choose File" input below. */}
                       <label className="cursor-pointer px-3 py-1.5 bg-purple-50 hover:bg-purple-100 text-[#3b2d7d] border border-purple-200 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5">
                         <Camera size={13} />
-                        <span>{editUploadingPhoto ? 'Uploading…' : 'Upload Photo'}</span>
+                        <span>{editUploadingPhoto ? 'Uploading…' : 'Take Photo'}</span>
                         <input
                           type="file"
-                          accept="image/*"
+                          accept=".png,.jpg,.jpeg,.webp"
+                          capture="environment"
+                          onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0], true)}
+                          disabled={editUploadingPhoto}
+                          className="hidden"
+                        />
+                      </label>
+                      <label className="cursor-pointer px-3 py-1.5 bg-purple-50 hover:bg-purple-100 text-[#3b2d7d] border border-purple-200 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5">
+                        <Upload size={13} />
+                        <span>{editUploadingPhoto ? 'Uploading…' : 'Choose File'}</span>
+                        <input
+                          type="file"
+                          accept=".png,.jpg,.jpeg,.webp"
                           onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0], true)}
                           disabled={editUploadingPhoto}
                           className="hidden"
@@ -1398,12 +1414,28 @@ const SchoolStudentsPage = () => {
                     <div className="flex-1">
                       <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider block mb-1">Student Profile Picture</label>
                       <div className="flex items-center gap-2">
+                        {/* capture="environment" opens the device's camera app
+                            directly on mobile; desktop browsers that don't
+                            support it fall back to the normal file picker,
+                            same as "Choose File" below. */}
                         <label className="cursor-pointer px-3 py-1.5 bg-white hover:bg-purple-50 text-[#3b2d7d] border border-purple-200 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm">
                           <Camera size={13} />
-                          <span>{addUploadingPhoto ? 'Uploading…' : 'Upload Photo'}</span>
+                          <span>{addUploadingPhoto ? 'Uploading…' : 'Take Photo'}</span>
                           <input
                             type="file"
-                            accept="image/*"
+                            accept=".png,.jpg,.jpeg,.webp"
+                            capture="environment"
+                            onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0], false)}
+                            disabled={addUploadingPhoto}
+                            className="hidden"
+                          />
+                        </label>
+                        <label className="cursor-pointer px-3 py-1.5 bg-white hover:bg-purple-50 text-[#3b2d7d] border border-purple-200 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm">
+                          <Upload size={13} />
+                          <span>{addUploadingPhoto ? 'Uploading…' : 'Choose File'}</span>
+                          <input
+                            type="file"
+                            accept=".png,.jpg,.jpeg,.webp"
                             onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0], false)}
                             disabled={addUploadingPhoto}
                             className="hidden"

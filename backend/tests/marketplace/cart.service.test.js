@@ -103,6 +103,62 @@ describe('cartService', () => {
       ).rejects.toMatchObject({ code: 'PRODUCT_NOT_FOUND' });
     });
 
+    test('an item with size/color options requires a matching selection', async () => {
+      const kit = await kitsService.createKit(schoolId, {
+        name: 'Uniform Kit',
+        status: 'active',
+        vendorId,
+        items: [{
+          name: 'Shirt',
+          category: 'Uniform',
+          qty: 1,
+          attributes: { sizes: ['S', 'M', 'L'], colors: ['White', 'Sky Blue'] },
+        }],
+      });
+
+      await expect(
+        cartService.addItem(userId, 'parent', { productId: kit._id, quantity: 1 })
+      ).rejects.toMatchObject({ code: 'KIT_SIZE_REQUIRED' });
+
+      await expect(
+        cartService.addItem(userId, 'parent', {
+          productId: kit._id,
+          quantity: 1,
+          kitSelections: [{ itemIndex: 0, size: 'M' }],
+        })
+      ).rejects.toMatchObject({ code: 'KIT_COLOR_REQUIRED' });
+
+      await expect(
+        cartService.addItem(userId, 'parent', {
+          productId: kit._id,
+          quantity: 1,
+          kitSelections: [{ itemIndex: 0, size: 'XXL', color: 'White' }],
+        })
+      ).rejects.toMatchObject({ code: 'KIT_INVALID_SIZE' });
+
+      const cart = await cartService.addItem(userId, 'parent', {
+        productId: kit._id,
+        quantity: 1,
+        kitSelections: [{ itemIndex: 0, size: 'M', color: 'White' }],
+      });
+      expect(cart.items[0].kitSelections).toEqual([
+        expect.objectContaining({ itemIndex: 0, size: 'M', color: 'White' }),
+      ]);
+    });
+
+    test('an item with no size/color options needs no selection at all', async () => {
+      const kit = await kitsService.createKit(schoolId, {
+        name: 'Stationary Kit', items: kitItems, status: 'active', vendorId, pricePaise: 1000,
+      });
+
+      const cart = await cartService.addItem(userId, 'parent', { productId: kit._id, quantity: 1 });
+      expect(cart.items[0].kitSelections).toEqual([
+        expect.objectContaining({ itemIndex: 0 }),
+      ]);
+      expect(cart.items[0].kitSelections[0].size).toBeUndefined();
+      expect(cart.items[0].kitSelections[0].color).toBeUndefined();
+    });
+
     test('an active kit with no vendor cannot be added to cart', async () => {
       // Bypasses the service's own create-time guard to simulate legacy data.
       const kit = await Kit.create({

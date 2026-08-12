@@ -4,6 +4,7 @@ const productRepository = require('../repositories/product.repository');
 const variantRepository = require('../repositories/variant.repository');
 const productService = require('./product.service');
 const Kit = require('../../../database/models/Kit');
+const { validateAndNormalizeKitSelections } = require('../utils/kitSelection.util');
 
 const itemKey = (productId, variantId) => `${productId}:${variantId || 'base'}`;
 
@@ -91,10 +92,12 @@ const cartService = {
       productRepository.findPublishedFilter({ _id: payload.productId })
     );
     let isKit = false;
+    let kitDoc = null;
     if (!product) {
       const kit = await Kit.findOne(Kit.purchasableFilter(payload.productId)).lean();
       if (kit) {
         isKit = true;
+        kitDoc = kit;
         const kitImg =
           kit.imageUrl ||
           kit.items?.find((i) => i.imageUrl)?.imageUrl ||
@@ -146,16 +149,18 @@ const cartService = {
       const existingOrder = await Order.findOne({
         userId,
         orderStatus: { $nin: ['cancelled', 'returned'] },
-        $and: [
-          { $or: [{ 'items.productId': product._id }, { 'items.kitId': product._id }] },
-          { $or: [{ paymentStatus: { $in: ['paid', 'authorized'] } }, { paymentMethod: 'cod' }] },
-        ],
+        $or: [{ 'items.productId': product._id }, { 'items.kitId': product._id }],
       }).lean();
 
       if (existingOrder) {
         throw new BadRequestError('You have already purchased this kit.', null, 'KIT_ALREADY_PURCHASED');
       }
     }
+
+    // Every kit item that offers sizes/colors requires an explicit parent
+    // choice before it can go in the cart — the vendor needs to know exactly
+    // what to pack, not the school's full menu of options.
+    const kitSelections = isKit ? validateAndNormalizeKitSelections(kitDoc, payload.kitSelections) : undefined;
 
     if (stock < payload.quantity) {
       throw new BadRequestError('Insufficient stock', null, 'INSUFFICIENT_STOCK');
@@ -181,6 +186,11 @@ const cartService = {
       if (!items[index].name && product.name) {
         items[index].name = product.name;
       }
+      if (isKit) {
+        // Re-selecting (e.g. re-adding the same kit) refreshes the choice
+        // rather than stacking a second, potentially conflicting one.
+        items[index].kitSelections = kitSelections;
+      }
     } else {
       items.push({
         productId: product._id,
@@ -192,6 +202,7 @@ const cartService = {
         mrpPaise: product.originalPricePaise || pricePaise,
         quantity: payload.quantity,
         size: payload.size || variant?.attributes?.get?.('size'),
+        ...(isKit ? { kitSelections } : {}),
       });
     }
 

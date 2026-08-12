@@ -17,6 +17,7 @@ const VendorQuotations = () => {
   const [selectedRfq, setSelectedRfq] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [bidPrice, setBidPrice] = useState('');
+  const [bidAdvancePercent, setBidAdvancePercent] = useState('');
   const [bidDelivery, setBidDelivery] = useState('');
   const [bidNotes, setBidNotes] = useState('');
   const [bidSubmitted, setBidSubmitted] = useState(false);
@@ -77,6 +78,7 @@ const VendorQuotations = () => {
     try {
       await submitVendorQuote(selectedRfq.rfqId, {
         unitPrice: Number(bidPrice),
+        advancePercent: Number(bidAdvancePercent) || 0,
         deliveryTimeline: bidDelivery,
         termsAndConditions: bidNotes,
         remarks: bidNotes,
@@ -89,6 +91,7 @@ const VendorQuotations = () => {
         setSelectedRfq(null);
         setBidSubmitted(false);
         setBidPrice('');
+        setBidAdvancePercent('');
         setBidDelivery('');
         setBidNotes('');
       }, 2000);
@@ -515,6 +518,24 @@ const VendorQuotations = () => {
                       />
                     </div>
 
+                    {/* 1b. Advance Required */}
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wide">Advance Required (%)</label>
+                      <input
+                        type="number"
+                        required
+                        min={0}
+                        max={100}
+                        value={bidAdvancePercent}
+                        onChange={(e) => setBidAdvancePercent(e.target.value)}
+                        placeholder="e.g. 30 — % of quote total you want paid up front"
+                        className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-[#5B3FD6]/10 focus:border-[#5B3FD6] font-semibold"
+                      />
+                      <p className="text-[9px] text-gray-400 font-semibold pt-0.5">
+                        The school sees and pays this before you start fulfilling the order.
+                      </p>
+                    </div>
+
                     {/* 2. Delivery Time */}
                     <div className="space-y-1">
                       <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wide">Fulfillment Timeline</label>
@@ -560,16 +581,24 @@ const VendorQuotations = () => {
                   <div>
                     <p className="font-bold text-gray-800 uppercase tracking-wide text-[10px]">Quotation Status: {selectedRfq.status}</p>
                     {selectedRfq.vendorQuote ? (
-                      <p className="mt-1 font-semibold">
-                        You submitted a bidding rate of{' '}
-                        <span className="text-gray-900 font-bold">
-                          ₹{selectedRfq.vendorQuote.items?.[0]?.unitPrice || selectedRfq.vendorQuote.items?.[0]?.unitPricePaise / 100 || '—'}/unit
-                        </span>
-                        {selectedRfq.vendorQuote.deliveryTimeline
-                          ? ` with ${selectedRfq.vendorQuote.deliveryTimeline} delivery terms.`
-                          : '.'}
-                        {' '}This request is closed for bidding.
-                      </p>
+                      <>
+                        <p className="mt-1 font-semibold">
+                          You submitted a bidding rate of{' '}
+                          <span className="text-gray-900 font-bold">
+                            ₹{selectedRfq.vendorQuote.items?.[0]?.unitPrice || selectedRfq.vendorQuote.items?.[0]?.unitPricePaise / 100 || '—'}/unit
+                          </span>
+                          {selectedRfq.vendorQuote.deliveryTimeline
+                            ? ` with ${selectedRfq.vendorQuote.deliveryTimeline} delivery terms.`
+                            : '.'}
+                          {' '}This request is closed for bidding.
+                        </p>
+                        {selectedRfq.vendorQuote.advancePercent != null && (
+                          <p className="mt-1.5 font-semibold text-[#5B3FD6]">
+                            Advance requested: {selectedRfq.vendorQuote.advancePercent}%
+                            {selectedRfq.vendorQuote.advanceAmount ? ` (₹${selectedRfq.vendorQuote.advanceAmount})` : ''}
+                          </p>
+                        )}
+                      </>
                     ) : (
                       <p className="mt-1 font-semibold">This request is closed for bidding.</p>
                     )}

@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import useAuthStore from '../store/useAuthStore';
+import { buildChildInfoFromUser } from './mappers/userMapper';
 
 export const getChildInfoFromStorage = () => {
   try {
@@ -17,13 +18,8 @@ export const getChildInfoFromStorage = () => {
 //    (same-tab writes don't fire the native event — this is the app-wide
 //    convention for broadcasting a childInfo update within one tab), or
 //  - the authenticated user identity changes.
-// Returns null while nothing is loaded yet — callers should treat that as
-// "still loading" and render a skeleton, never a hardcoded placeholder name.
 export const useChildInfo = () => {
   const authUser = useAuthStore((state) => state.user);
-  // Forces a re-render on the same-tab 'storage' broadcast; the actual value
-  // is read fresh below on every render (cheap — a small JSON.parse), so it
-  // also stays current whenever `authUser` changes without a second effect.
   const [, forceUpdate] = useState(0);
 
   useEffect(() => {
@@ -33,11 +29,30 @@ export const useChildInfo = () => {
   }, []);
 
   const stored = getChildInfoFromStorage();
-  if (!stored) return null;
+  const serializedStored = JSON.stringify(stored || {});
+  const authUserKey = `${authUser?._id || ''}-${authUser?.updatedAt || ''}-${authUser?.tenantSchoolId || ''}-${authUser?.childProfile?.grade || ''}`;
 
-  return {
-    ...stored,
-    studentId: stored.studentId || authUser?.profile?.studentId || authUser?.childProfile?.studentId,
-    schoolId: stored.schoolId || authUser?.tenantSchoolId,
-  };
+  return useMemo(() => {
+    if (!stored) {
+      if (!authUser) return null;
+      return buildChildInfoFromUser(authUser);
+    }
+
+    const resolvedGrade =
+      stored.grade && stored.grade !== 'Select Grade'
+        ? stored.grade
+        : authUser?.childProfile?.grade || authUser?.profile?.grade || 'Select Grade';
+
+    const resolvedSchoolId =
+      stored.schoolId && stored.schoolId !== 'explore-schools'
+        ? stored.schoolId
+        : authUser?.childProfile?.schoolId || authUser?.tenantSchoolId || authUser?.schoolId || stored.schoolId;
+
+    return {
+      ...stored,
+      grade: resolvedGrade,
+      schoolId: resolvedSchoolId,
+      studentId: stored.studentId || authUser?.profile?.studentId || authUser?.childProfile?.studentId,
+    };
+  }, [serializedStored, authUserKey]);
 };

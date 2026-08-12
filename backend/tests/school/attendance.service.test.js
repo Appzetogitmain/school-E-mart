@@ -167,4 +167,32 @@ describe('attendanceService', () => {
       expect(data[0].status).toBe('absent');
     });
   });
+
+  test('allows marking attendance for past dates', async () => {
+    const pastDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000); // 7 days ago
+    const { records } = await attendanceService.markAttendance(adminReq, {
+      date: pastDate,
+      classGrade: 'Class 4',
+      section: 'A',
+      records: [{ studentId, status: 'present' }],
+    });
+
+    expect(records).toHaveLength(1);
+    expect(records[0].status).toBe('present');
+  });
+
+  test('validator rejects future dates for attendance', () => {
+    const markAttendanceSchema = require('../../src/modules/school/validators/school.validator').markAttendanceSchema;
+    const futureDate = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000); // 2 days in future
+    const { error } = markAttendanceSchema.validate({
+      date: futureDate,
+      classGrade: 'Class 4',
+      section: 'A',
+      records: [{ studentId: String(studentId), status: 'present' }],
+    });
+
+    expect(error).toBeDefined();
+    expect(error.message).toMatch(/"date" must be less than or equal to/);
+  });
 });
+

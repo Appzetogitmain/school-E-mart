@@ -269,6 +269,12 @@ const adminController = {
     return success(res, { school }, 'School fetched', undefined, req);
   }),
 
+  getSchoolParents: asyncHandler(async (req, res) => {
+    const parentService = require('../../school/services/parent.service');
+    const { data, pagination, stats } = await parentService.listParents(req.params.schoolId, req.query);
+    return paginated(res, { parents: data, stats }, pagination, 'School parents fetched', req);
+  }),
+
   setSchoolCommission: asyncHandler(async (req, res) => {
     const school = await schoolApprovalService.setCommission(
       req.params.schoolId,

@@ -150,6 +150,15 @@ router.get(
   validateQuery(validators.paginationQuery),
   academicsController.listKits
 );
+// Declared before the generic /:kitId route below so 'purchased' is never
+// treated as a kit id — same trick already used for phonebook/contacts above.
+router.get(
+  '/:schoolId/kits/purchased',
+  ...schoolRead,
+  resolveSchool(),
+  validateParams(validators.schoolIdParam),
+  academicsController.getPurchasedKitIds
+);
 router.get(
   '/:schoolId/kits/:kitId',
   ...schoolRead,
@@ -171,6 +180,13 @@ router.delete(
   resolveSchool(),
   validateParams(validators.kitIdParam),
   academicsController.deleteKit
+);
+router.get(
+  '/:schoolId/kits/:kitId/purchases',
+  ...kitsManage,
+  resolveSchool(),
+  validateParams(validators.kitIdParam),
+  academicsController.getKitPurchases
 );
 
 module.exports = router;

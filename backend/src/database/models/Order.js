@@ -36,6 +36,12 @@ const orderSchema = new mongoose.Schema({
       imageUrl: { type: String },
       qty: { type: Number },
       attributes: { type: mongoose.Schema.Types.Mixed },
+      // The parent's actual choice out of `attributes.sizes`/`attributes.colors`
+      // at the time this kit was ordered — what the vendor must actually pack,
+      // as opposed to `attributes` which is just the full menu of options the
+      // school made available. Null when the item didn't offer that choice.
+      selectedSize: { type: String },
+      selectedColor: { type: String },
       packed: { type: Boolean, default: false }
     }],
     // Commission split snapshotted at order time so a later rate change never

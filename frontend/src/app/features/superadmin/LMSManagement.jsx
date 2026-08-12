@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import ReactDOM from 'react-dom';
 import {
-  GraduationCap, Film, Plus, Edit3, Trash2, BookOpen, Clock, Play, X, ChevronRight, CheckCircle, Info, Upload, Image as ImageIcon, User, Award, Tag, Loader2, ArrowLeft, Video, Settings
+  GraduationCap, Film, Plus, Edit3, Trash2, BookOpen, Clock, Play, X, ChevronRight, CheckCircle, Info, Upload, Image as ImageIcon, User, Award, Tag, Loader2, ArrowLeft, Video, Settings, Camera
 } from 'lucide-react';
 import {
   listPlatformCourses,
@@ -106,6 +106,7 @@ const LMSManagement = () => {
   const [coverFile, setCoverFile] = useState(null);
   const [coverPreview, setCoverPreview] = useState('');
   const coverInputRef = useRef(null);
+  const coverCameraInputRef = useRef(null);
 
   // Lesson Management view state
   const [selectedCourseForLessons, setSelectedCourseForLessons] = useState(null);
@@ -704,27 +705,37 @@ const LMSManagement = () => {
               <input
                 type="file"
                 ref={coverInputRef}
-                accept="image/*"
+                accept=".png,.jpg,.jpeg,.webp"
                 onChange={handleCoverFileChange}
                 className="hidden"
               />
-              <div 
-                onClick={() => coverInputRef.current?.click()}
-                className={`border-2 border-dashed rounded-2xl p-4 text-center cursor-pointer transition-all hover:bg-gray-50/70 bg-white ${
+              {/* capture="environment" opens the device's camera app directly
+                  on mobile; desktop browsers that don't support it fall back
+                  to the normal file picker, same as the input above. */}
+              <input
+                type="file"
+                ref={coverCameraInputRef}
+                accept=".png,.jpg,.jpeg,.webp"
+                capture="environment"
+                onChange={handleCoverFileChange}
+                className="hidden"
+              />
+              <div
+                className={`border-2 border-dashed rounded-2xl p-4 text-center transition-all bg-white ${
                   coverPreview ? 'border-emerald-200 bg-emerald-50/20' : 'border-gray-250'
                 }`}
               >
-                <div className="flex flex-col items-center gap-1.5 select-none">
+                <div className="flex flex-col items-center gap-2 select-none">
                   {coverPreview ? (
                     <div className="flex items-center gap-3 text-left">
-                      <img 
-                        src={coverPreview.startsWith('blob:') || coverPreview.startsWith('data:') ? coverPreview : toAbsoluteUrl(coverPreview)} 
-                        alt="lms cover preview" 
+                      <img
+                        src={coverPreview.startsWith('blob:') || coverPreview.startsWith('data:') ? coverPreview : toAbsoluteUrl(coverPreview)}
+                        alt="lms cover preview"
                         className="w-10 h-10 object-cover rounded-lg border border-emerald-100"
                       />
                       <div>
                         <span className="block text-emerald-700 font-extrabold text-[10px] uppercase tracking-wide">Cover Image Set!</span>
-                        <span className="block text-[8px] text-gray-400">Click to replace photo</span>
+                        <span className="block text-[8px] text-gray-400">Use the buttons below to replace it</span>
                       </div>
                     </div>
                   ) : (
@@ -733,6 +744,22 @@ const LMSManagement = () => {
                       <span className="text-gray-700 font-black">Choose course cover photo</span>
                     </>
                   )}
+                  <div className="flex items-center gap-2 mt-1">
+                    <button
+                      type="button"
+                      onClick={() => coverCameraInputRef.current?.click()}
+                      className="px-3 py-1.5 rounded-lg border border-gray-200 hover:border-indigo-300 bg-white text-[10px] font-black text-gray-700 flex items-center gap-1.5 transition-colors"
+                    >
+                      <Camera size={12} /> Take Photo
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => coverInputRef.current?.click()}
+                      className="px-3 py-1.5 rounded-lg border border-gray-200 hover:border-indigo-300 bg-white text-[10px] font-black text-gray-700 flex items-center gap-1.5 transition-colors"
+                    >
+                      <Upload size={12} /> Choose File
+                    </button>
+                  </div>
                 </div>
               </div>
               <input
@@ -978,7 +1005,7 @@ const LMSManagement = () => {
                   <input
                     type="file"
                     ref={lessonVideoInputRef}
-                    accept="video/*"
+                    accept=".mp4,.mov,.webm,.mkv"
                     onChange={handleLessonVideoFileChange}
                     className="hidden"
                   />

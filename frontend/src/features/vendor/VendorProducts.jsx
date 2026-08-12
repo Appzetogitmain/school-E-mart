@@ -5,7 +5,7 @@ import {
   ChevronRight, Plus, HelpCircle, ArrowUpDown, ChevronDown, Check, X,
   Tag, Layers, ShieldCheck, ShoppingCart, ListCollapse, ArrowLeft,
   Bold, Italic, List, AlignLeft, Folder, Image, FileText, CheckCircle2,
-  UploadCloud, Loader2, Edit3, Trash2, Eye, Power
+  UploadCloud, Loader2, Edit3, Trash2, Eye, Power, Camera
 } from 'lucide-react';
 import {
   deleteVendorProduct, listVendorProducts, setVendorProductPublishStatus,
@@ -1009,25 +1009,43 @@ const VendorProducts = () => {
                         </div>
                         <div className="space-y-2">
                           <p className="text-xs font-black text-emerald-600 flex items-center gap-1"><CheckCircle2 size={14} /> Image uploaded</p>
-                          <label className="inline-block text-[11px] font-black text-[#5B3FD6] cursor-pointer">
-                            Replace image
-                            <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
-                          </label>
+                          <div className="flex items-center gap-3">
+                            <label className="inline-flex items-center gap-1 text-[11px] font-black text-[#5B3FD6] cursor-pointer">
+                              <Camera size={12} /> Take photo
+                              {/* capture="environment" opens the device's camera app
+                                  directly on mobile; desktop browsers that don't
+                                  support it fall back to the normal file picker. */}
+                              <input type="file" accept=".png,.jpg,.jpeg,.webp" capture="environment" className="hidden" onChange={handleImageUpload} />
+                            </label>
+                            <label className="inline-flex items-center gap-1 text-[11px] font-black text-[#5B3FD6] cursor-pointer">
+                              <UploadCloud size={12} /> Replace image
+                              <input type="file" accept=".png,.jpg,.jpeg,.webp" className="hidden" onChange={handleImageUpload} />
+                            </label>
+                          </div>
                         </div>
                       </div>
                     ) : (
-                      <label className="block border-2 border-dashed border-purple-200 hover:border-[#5B3FD6]/30 bg-purple-50/10 rounded-2xl p-12 text-center transition-all cursor-pointer">
-                        <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
+                      <div className="border-2 border-dashed border-purple-200 hover:border-[#5B3FD6]/30 bg-purple-50/10 rounded-2xl p-12 text-center transition-all">
                         <div className="flex flex-col items-center justify-center space-y-3">
                           <div className="w-12 h-12 rounded-xl bg-purple-50 text-[#5B3FD6] flex items-center justify-center border border-purple-100">
                             {uploadingImage ? <Loader2 size={24} className="animate-spin" /> : <UploadCloud size={24} />}
                           </div>
                           <div>
-                            <p className="text-xs font-black text-gray-900">{uploadingImage ? 'Uploading…' : 'Browse to upload'}</p>
+                            <p className="text-xs font-black text-gray-900">{uploadingImage ? 'Uploading…' : 'Add a product image'}</p>
                             <p className="text-[10px] font-bold text-gray-400 mt-1">PNG, JPG formats supported up to 5MB.</p>
                           </div>
+                          <div className="flex items-center gap-2.5 pt-1">
+                            <label className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white border border-purple-200 hover:border-[#5B3FD6]/40 text-[#5B3FD6] text-[11px] font-black cursor-pointer transition-all">
+                              <Camera size={13} /> Take Photo
+                              <input type="file" accept=".png,.jpg,.jpeg,.webp" capture="environment" className="hidden" onChange={handleImageUpload} />
+                            </label>
+                            <label className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white border border-purple-200 hover:border-[#5B3FD6]/40 text-[#5B3FD6] text-[11px] font-black cursor-pointer transition-all">
+                              <UploadCloud size={13} /> Browse to Upload
+                              <input type="file" accept=".png,.jpg,.jpeg,.webp" className="hidden" onChange={handleImageUpload} />
+                            </label>
+                          </div>
                         </div>
-                      </label>
+                      </div>
                     )}
                   </div>
                 )}
@@ -1089,11 +1107,18 @@ const VendorProducts = () => {
                       <Image size={20} />
                     </div>
                   )}
-                  <label className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-purple-50 hover:bg-purple-100 text-[#5B3FD6] text-xs font-bold border border-purple-100 cursor-pointer transition-colors">
-                    {uploadingImage ? <Loader2 size={14} className="animate-spin" /> : <UploadCloud size={14} />}
-                    <span>{editImagePreview ? 'Change Image' : 'Upload Image'}</span>
-                    <input type="file" accept="image/*" className="hidden" onChange={handleEditImageUpload} />
-                  </label>
+                  <div className="flex items-center gap-2">
+                    <label className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-purple-50 hover:bg-purple-100 text-[#5B3FD6] text-xs font-bold border border-purple-100 cursor-pointer transition-colors">
+                      <Camera size={14} />
+                      <span>Take Photo</span>
+                      <input type="file" accept=".png,.jpg,.jpeg,.webp" capture="environment" className="hidden" onChange={handleEditImageUpload} />
+                    </label>
+                    <label className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-purple-50 hover:bg-purple-100 text-[#5B3FD6] text-xs font-bold border border-purple-100 cursor-pointer transition-colors">
+                      {uploadingImage ? <Loader2 size={14} className="animate-spin" /> : <UploadCloud size={14} />}
+                      <span>{editImagePreview ? 'Change Image' : 'Upload Image'}</span>
+                      <input type="file" accept=".png,.jpg,.jpeg,.webp" className="hidden" onChange={handleEditImageUpload} />
+                    </label>
+                  </div>
                 </div>
               </div>
 

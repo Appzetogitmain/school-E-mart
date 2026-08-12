@@ -7,6 +7,16 @@ export const parseClassGrade = (label = '') => {
   return trimmed;
 };
 
+// classGrade is free text across the app ("5", "Class 5", "class  5"), so any grade
+// comparison must go through this rather than string equality or (worse) substring
+// matching — "Class 1".includes-style checks also match "Class 10/11/12".
+export const normalizeGrade = (value = '') =>
+  String(value)
+    .toLowerCase()
+    .replace(/class/g, '')
+    .replace(/\s+/g, '')
+    .trim();
+
 export const parseSection = (label = '') =>
   String(label).replace(/^section\s*/i, '').trim().toUpperCase();
 
@@ -98,6 +108,12 @@ export const mapAssignmentForHomework = (assignment, course) => ({
   type: assignment?.homeworkType || 'Written',
   priority: assignment?.priority || null,
   maxScore: assignment?.maxScore ?? 100,
+  // The card thumbnail — a real field on the assignment now, never guessed at from the
+  // attachment list, so it can't collide with or duplicate a reference attachment.
+  bannerAttachmentId:
+    assignment?.bannerAttachmentId?._id?.toString?.() ||
+    assignment?.bannerAttachmentId?.toString?.() ||
+    null,
   attachments: (assignment?.attachments || []).map((attachment, idx) => ({
     id: attachment?._id?.toString?.() || attachment?.toString?.(),
     name: `Attachment ${idx + 1}`,

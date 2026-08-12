@@ -161,44 +161,46 @@ const AppAuthPage = () => {
 };
 
 const ContactInput = ({ onSendOtp, onError, error, loading }) => {
-  const [value, setValue] = useState('');
-
-  const handleInputChange = (e) => {
-    const val = e.target.value.replace(/\D/g, '').slice(0, 10);
-    setValue(val);
-    if (error) onError('');
-  };
+  const [phone, setPhone] = useState('');
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (value.length !== 10) return onError('Please enter a valid 10-digit mobile number');
-    await onSendOtp(value);
+    const cleanPhone = phone.replace(/\D/g, '');
+    if (cleanPhone.length !== 10) return onError('Please enter a valid 10-digit mobile number');
+    await onSendOtp(cleanPhone);
   };
-
-  const isValid = value.length === 10;
 
   return (
     <div className="animate-in fade-in slide-in-from-right-4 duration-500">
-      <h2 className="text-2xl font-semibold text-deep-purple mb-8">Welcome to School E-Mart</h2>
-      <form onSubmit={handleSubmit} className="space-y-10">
-        <div className="space-y-4">
-          <label className="block text-[13px] font-semibold text-black ml-1">Mobile number</label>
+      <h1 className="text-3xl font-bold text-deep-purple mb-2">Welcome! 👋</h1>
+      <p className="text-gray-400 text-sm mb-10">Enter your 10-digit mobile number to get started.</p>
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="space-y-2">
+          <label className="block text-[13px] font-semibold text-black ml-1">Mobile Number</label>
           <div className="relative group">
             <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-primary transition-colors" size={20} />
             <input
               type="tel"
-              value={value}
-              onChange={handleInputChange}
+              value={phone}
+              onChange={(e) => {
+                setPhone(e.target.value);
+                if (error) onError('');
+              }}
               placeholder="e.g. 9876543210"
-              className="w-full pl-12 pr-4 py-4 bg-gray-50 border-none rounded-2xl text-base focus:ring-2 focus:ring-primary/10 outline-none"
+              maxLength={10}
+              className="w-full pl-12 pr-4 py-4 bg-gray-50 border-none rounded-2xl text-base focus:ring-2 focus:ring-primary/10 outline-none transition-all font-medium text-black placeholder-gray-300"
             />
           </div>
           {error && <p className="text-red-500 text-[11px] font-medium ml-1 mt-1">{error}</p>}
         </div>
         <button
           type="submit"
-          disabled={!isValid || loading}
-          className={`w-full py-4 font-medium rounded-2xl flex items-center justify-center gap-3 transition-all duration-300 ${isValid && !loading ? 'bg-primary text-white shadow-xl shadow-primary/20 active:scale-95' : 'bg-gray-50 text-gray-300 border border-gray-100 cursor-not-allowed'}`}
+          disabled={loading || phone.replace(/\D/g, '').length !== 10}
+          className={`w-full py-4 font-medium rounded-2xl flex items-center justify-center gap-3 transition-all duration-300 ${
+            phone.replace(/\D/g, '').length === 10 && !loading
+              ? 'bg-primary text-white shadow-xl shadow-primary/20 active:scale-95 cursor-pointer'
+              : 'bg-gray-50 text-gray-300 border border-gray-100 cursor-not-allowed'
+          }`}
         >
           {loading ? (
             <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -211,8 +213,37 @@ const ContactInput = ({ onSendOtp, onError, error, loading }) => {
   );
 };
 
-const Verification = ({ phone, onVerifyOtp, onError, error, loading }) => {
+const Verification = ({ phone, onVerifyOtp, onResendOtp, onError, error, loading }) => {
   const [value, setValue] = useState('');
+  const [timer, setTimer] = useState(60);
+  const [resending, setResending] = useState(false);
+
+  useEffect(() => {
+    let interval = null;
+    if (timer > 0) {
+      interval = setInterval(() => {
+        setTimer((prev) => prev - 1);
+      }, 1000);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [timer]);
+
+  const handleResend = async () => {
+    if (timer > 0 || resending || loading) return;
+    setResending(true);
+    if (error) onError('');
+    try {
+      await onResendOtp(phone);
+      setTimer(60);
+      setValue('');
+    } catch (err) {
+      onError(getErrorMessage(err, 'Unable to resend OTP. Please try again.'));
+    } finally {
+      setResending(false);
+    }
+  };
 
   const handleInputChange = (e) => {
     const val = e.target.value.replace(/\D/g, '').slice(0, 4);
@@ -234,9 +265,9 @@ const Verification = ({ phone, onVerifyOtp, onError, error, loading }) => {
   return (
     <div className="animate-in fade-in slide-in-from-right-4 duration-500">
       <h2 className="text-2xl font-semibold text-deep-purple mb-2">Verify it's you</h2>
-      <p className="text-gray-400 text-sm mb-10">Enter the 4-digit code sent to {phone || 'your phone'}</p>
-      <form onSubmit={handleSubmit} className="space-y-8">
-        <div className="space-y-4">
+      <p className="text-gray-400 text-sm mb-8">Enter the 4-digit code sent to <span className="font-semibold text-black">{phone || 'your phone'}</span></p>
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="space-y-3">
           <label className="block text-[13px] font-semibold text-black ml-1">OTP code</label>
           <div className="relative group">
             <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-primary transition-colors" size={20} />
@@ -251,10 +282,27 @@ const Verification = ({ phone, onVerifyOtp, onError, error, loading }) => {
           </div>
           {error && <p className="text-red-500 text-[11px] font-medium ml-1 mt-1">{error}</p>}
         </div>
+
+        <div className="flex items-center justify-between text-xs px-1">
+          <span className="text-gray-400">Didn't receive the code?</span>
+          <button
+            type="button"
+            onClick={handleResend}
+            disabled={timer > 0 || resending || loading}
+            className={`font-semibold transition-colors ${
+              timer === 0 && !resending && !loading
+                ? 'text-primary hover:underline cursor-pointer'
+                : 'text-gray-300 cursor-not-allowed'
+            }`}
+          >
+            {resending ? 'Sending...' : timer > 0 ? `Resend in ${timer}s` : 'Resend OTP'}
+          </button>
+        </div>
+
         <button
           type="submit"
           disabled={!isValid || loading}
-          className={`w-full py-4 font-medium rounded-2xl flex items-center justify-center gap-3 transition-all duration-300 ${isValid && !loading ? 'bg-primary text-white shadow-xl shadow-primary/20 active:scale-95' : 'bg-gray-50 text-gray-300 border border-gray-100 cursor-not-allowed'}`}
+          className={`w-full py-4 font-medium rounded-2xl flex items-center justify-center gap-3 transition-all duration-300 ${isValid && !loading ? 'bg-primary text-white shadow-xl shadow-primary/20 active:scale-95 cursor-pointer' : 'bg-gray-50 text-gray-300 border border-gray-100 cursor-not-allowed'}`}
         >
           {loading ? (
             <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />

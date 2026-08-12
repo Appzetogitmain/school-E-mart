@@ -91,6 +91,7 @@ const SchoolStudentsPage = React.lazy(() => import('../app/features/school/Schoo
 const SchoolVendorsPage = React.lazy(() => import('../app/features/school/SchoolVendorsPage'));
 const SchoolQuotationsPage = React.lazy(() => import('../app/features/school/SchoolQuotationsPage'));
 const SchoolKitsPage = React.lazy(() => import('../app/features/school/SchoolKitsPage'));
+const SchoolKitPurchasesPage = React.lazy(() => import('../app/features/school/SchoolKitPurchasesPage'));
 const SchoolWallet = React.lazy(() => import('../app/features/school/SchoolWallet'));
 const SchoolChangePasswordPage = React.lazy(() => import('../app/features/school/SchoolChangePasswordPage'));
 const SchoolAddClass = React.lazy(() => import('../app/features/school/SchoolAddClass'));
@@ -358,6 +359,7 @@ const AppRoutes = () => {
             <Route path="vendors" element={<SchoolVendorsPage />} />
             <Route path="quotations" element={<SchoolQuotationsPage />} />
             <Route path="kits" element={<SchoolKitsPage />} />
+            <Route path="kits/:kitId/purchases" element={<SchoolKitPurchasesPage />} />
             <Route path="wallet" element={<SchoolWallet />} />
             <Route path="grade" element={<SchoolGradePage />} />
             <Route path="categories" element={<SchoolCategoryPage />} />

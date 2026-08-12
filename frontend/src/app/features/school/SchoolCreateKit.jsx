@@ -5,7 +5,7 @@ import {
   ArrowLeft, Package, Layers, Trash2, Plus, Info, Check, ChevronRight,
   Upload, Sparkles, TrendingUp, X, Loader2, AlertCircle, ShoppingBag, Store, Tag,
   Search, Filter, Sliders, DollarSign, Image as LucideImage, Minus, HelpCircle,
-  LayoutGrid, List, School as LucideSchool
+  LayoutGrid, List, School as LucideSchool, Camera
 } from 'lucide-react';
 import { 
   createKit, updateKit, getKit, listClasses, listVendors, 
@@ -172,9 +172,10 @@ const SchoolCreateKit = () => {
               productType: it.masterProductId?.productType || 'general',
               imageUrl: it.imageUrl || it.masterProductId?.imageUrl || '',
               qty: it.qty || 1,
+              colorDraft: '',
               attributes: {
-                color: it.attributes?.color || '',
                 sizes: it.attributes?.sizes || [],
+                colors: it.attributes?.colors || (it.attributes?.color ? [it.attributes.color] : []),
                 gender: it.attributes?.gender || 'Unisex',
                 publisher: it.attributes?.publisher || '',
                 subject: it.attributes?.subject || '',
@@ -244,9 +245,10 @@ const SchoolCreateKit = () => {
       productType: mp.productType || 'general',
       imageUrl: mp.imageUrl || '',
       qty: 1,
+      colorDraft: '',
       attributes: {
-        color: '',
         sizes: [],
+        colors: [],
         gender: 'Unisex',
         publisher: '',
         subject: '',
@@ -292,6 +294,42 @@ const SchoolCreateKit = () => {
         attributes: {
           ...copy[index].attributes,
           sizes: updated,
+        }
+      };
+      return copy;
+    });
+  };
+
+  const addColorToItem = (index) => {
+    setItems((prev) => {
+      const copy = [...prev];
+      const draft = (copy[index].colorDraft || '').trim();
+      if (!draft) return prev;
+      const currentColors = copy[index].attributes?.colors || [];
+      if (currentColors.some((c) => c.toLowerCase() === draft.toLowerCase())) {
+        copy[index] = { ...copy[index], colorDraft: '' };
+        return copy;
+      }
+      copy[index] = {
+        ...copy[index],
+        colorDraft: '',
+        attributes: {
+          ...copy[index].attributes,
+          colors: [...currentColors, draft],
+        }
+      };
+      return copy;
+    });
+  };
+
+  const removeColorFromItem = (index, color) => {
+    setItems((prev) => {
+      const copy = [...prev];
+      copy[index] = {
+        ...copy[index],
+        attributes: {
+          ...copy[index].attributes,
+          colors: (copy[index].attributes?.colors || []).filter((c) => c !== color),
         }
       };
       return copy;
@@ -680,18 +718,40 @@ const SchoolCreateKit = () => {
                     {imagePreview ? (
                       <div className="relative max-w-xs mx-auto h-40 rounded-xl overflow-hidden group shadow-sm bg-white border border-gray-200">
                         <img src={imagePreview} alt="Kit Cover" className="w-full h-full object-contain p-2" />
-                        <label className="absolute inset-0 bg-black/60 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 cursor-pointer transition-opacity text-xs font-bold">
-                          Click to Change Image
-                          <input type="file" accept="image/*" onChange={handleImageChange} className="hidden" />
-                        </label>
+                        <div className="absolute inset-0 bg-black/60 text-white flex items-center justify-center gap-4 opacity-0 group-hover:opacity-100 transition-opacity text-xs font-bold">
+                          {/* capture="environment" opens the device's camera app
+                              directly on mobile; desktop browsers that don't
+                              support it fall back to the normal file picker. */}
+                          <label className="flex flex-col items-center gap-1 cursor-pointer">
+                            <Camera size={18} />
+                            <span>Take Photo</span>
+                            <input type="file" accept=".png,.jpg,.jpeg,.webp" capture="environment" onChange={handleImageChange} className="hidden" />
+                          </label>
+                          <label className="flex flex-col items-center gap-1 cursor-pointer">
+                            <Upload size={18} />
+                            <span>Choose File</span>
+                            <input type="file" accept=".png,.jpg,.jpeg,.webp" onChange={handleImageChange} className="hidden" />
+                          </label>
+                        </div>
                       </div>
                     ) : (
-                      <label className="cursor-pointer flex flex-col items-center justify-center py-4 text-gray-400 hover:text-[#3b2d7d] transition-colors">
+                      <div className="flex flex-col items-center justify-center py-4 text-gray-400">
                         <Upload size={28} className="mb-2 text-gray-400" />
                         <span className="text-sm font-bold text-gray-800">Upload Kit Main Image</span>
-                        <span className="text-xs text-gray-400 mt-0.5">JPEG / PNG up to 10MB</span>
-                        <input type="file" accept="image/*" onChange={handleImageChange} className="hidden" />
-                      </label>
+                        <span className="text-xs text-gray-400 mt-0.5 mb-3">JPEG / PNG up to 10MB</span>
+                        <div className="flex items-center gap-2.5">
+                          <label className="px-4 py-2 rounded-xl border border-gray-200 hover:border-[#3b2d7d] hover:text-[#3b2d7d] text-gray-600 text-xs font-bold cursor-pointer transition-colors flex items-center gap-1.5">
+                            <Camera size={14} />
+                            <span>Take Photo</span>
+                            <input type="file" accept=".png,.jpg,.jpeg,.webp" capture="environment" onChange={handleImageChange} className="hidden" />
+                          </label>
+                          <label className="px-4 py-2 rounded-xl border border-gray-200 hover:border-[#3b2d7d] hover:text-[#3b2d7d] text-gray-600 text-xs font-bold cursor-pointer transition-colors flex items-center gap-1.5">
+                            <Upload size={14} />
+                            <span>Choose File</span>
+                            <input type="file" accept=".png,.jpg,.jpeg,.webp" onChange={handleImageChange} className="hidden" />
+                          </label>
+                        </div>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -887,14 +947,52 @@ const SchoolCreateKit = () => {
                         {(item.productType === 'uniform' || item.productType === 'winter') && (
                           <div className="space-y-3.5 bg-gray-50/70 p-4 rounded-2xl border border-gray-150/80">
                             <div>
-                              <label className="block text-[10px] font-black text-gray-600 uppercase tracking-wider mb-1 ml-0.5">Uniform Color</label>
-                              <input
-                                type="text"
-                                value={item.attributes?.color || ''}
-                                onChange={(e) => updateItemAttribute(index, 'color', e.target.value)}
-                                placeholder="e.g. Navy Blue / White"
-                                className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-900 focus:outline-none focus:border-[#3b2d7d]"
-                              />
+                              <label className="block text-[10px] font-black text-gray-600 uppercase tracking-wider mb-1.5 ml-0.5">
+                                Available Colors <span className="font-normal normal-case text-gray-400">— parent picks one at order time</span>
+                              </label>
+                              <div className="flex flex-wrap gap-1.5 mb-2">
+                                {(item.attributes?.colors || []).length === 0 && (
+                                  <span className="text-[10px] text-gray-400 font-medium italic">No colors added yet — this item will not ask parents to choose a color.</span>
+                                )}
+                                {(item.attributes?.colors || []).map((c) => (
+                                  <span
+                                    key={c}
+                                    className="inline-flex items-center gap-1 pl-2.5 pr-1.5 py-1 rounded-lg text-xs font-bold bg-[#3b2d7d] text-white border border-[#3b2d7d]"
+                                  >
+                                    {c}
+                                    <button
+                                      type="button"
+                                      onClick={() => removeColorFromItem(index, c)}
+                                      className="p-0.5 hover:bg-white/20 rounded-md"
+                                      title="Remove color"
+                                    >
+                                      <X size={11} />
+                                    </button>
+                                  </span>
+                                ))}
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="text"
+                                  value={item.colorDraft || ''}
+                                  onChange={(e) => updateItem(index, 'colorDraft', e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      e.preventDefault();
+                                      addColorToItem(index);
+                                    }
+                                  }}
+                                  placeholder="e.g. Navy Blue"
+                                  className="flex-1 px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-900 focus:outline-none focus:border-[#3b2d7d]"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => addColorToItem(index)}
+                                  className="px-3.5 py-2.5 bg-white border border-gray-200 hover:border-[#3b2d7d] text-[#3b2d7d] font-black text-xs rounded-xl transition-all shrink-0"
+                                >
+                                  <Plus size={14} className="stroke-[3]" />
+                                </button>
+                              </div>
                             </div>
 
                             <div>

@@ -11,34 +11,30 @@ import AppHeader from '../../components/AppHeader';
 import SectionHeader from '../../components/SectionHeader';
 import LoginRequired from '../../components/LoginRequired';
 import AuthPrompt from '../../components/AuthPrompt';
-import { getSchool, listNotices, listKits } from '../../../services/schoolApi';
-import { listOrders } from '../../../services/ordersApi';
+import { getSchool, listNotices } from '../../../services/schoolApi';
 import { toAbsoluteUrl } from '../../../utils/url';
-import { getChildInfoFromStorage } from '../../../utils/parentContext';
+import { getChildInfoFromStorage, useChildInfo } from '../../../utils/parentContext';
+import { useKitProcurementProgress } from '../../../hooks/useKitProcurementProgress';
+import useAuthStore from '../../../store/useAuthStore';
 
 const MySchoolPage = () => {
   const navigate = useNavigate();
   const [scrolled, setScrolled] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
-  const isGuest = !localStorage.getItem('childInfo');
+  const activeChildInfo = useChildInfo();
+  const childInfo = activeChildInfo || {
+    name: 'Guest',
+    school: 'Explore Schools',
+    grade: 'Select Grade',
+    schoolId: null,
+  };
+
+  const isGuest = !localStorage.getItem('childInfo') && !useAuthStore.getState().user;
   const [isAuthPromptOpen, setIsAuthPromptOpen] = useState(isGuest);
 
-  const [childInfo, setChildInfo] = useState(() => {
-    const saved = getChildInfoFromStorage();
-    return saved || {
-      name: 'Guest',
-      school: 'Explore Schools',
-      grade: 'Select Grade',
-      schoolId: null,
-    };
-  });
-
-  const schoolId = childInfo?.schoolId;
-
-  const [kits, setKits] = useState([]);
-  const [purchasedKitIds, setPurchasedKitIds] = useState(new Set());
-  const [kitsLoading, setKitsLoading] = useState(true);
+  const progress = useKitProcurementProgress(childInfo, { isGuest });
+  const schoolId = progress.schoolId;
 
   const [announcements, setAnnouncements] = useState([]);
   const [noticesLoading, setNoticesLoading] = useState(true);
@@ -64,74 +60,30 @@ const MySchoolPage = () => {
     loadSchool();
   }, [loadSchool]);
 
-  // Load School Kits & Parent Purchased Orders with Data Isolation
-  const loadKitsAndOrders = useCallback(async () => {
-    if (!schoolId || isGuest) {
-      setKits([]);
-      setKitsLoading(false);
-      return;
-    }
+  // Display-shape the already grade-filtered kits the hook fetched, tagging
+  // each with its purchased state for the card UI below.
+  const kits = progress.kits.map((k) => {
+    const imageUrl = toAbsoluteUrl(k.imageId?.storageKey || k.imageUrl || k.image?.url);
+    const avatar = imageUrl
+      ? imageUrl
+      : `https://ui-avatars.com/api/?background=3b2d7d&color=fff&bold=true&name=${encodeURIComponent(k.name || 'Kit')}`;
+    const price = ((k.pricePaise || 0) / 100).toFixed(0);
+    const mrp = k.mrpPaise ? ((k.mrpPaise || 0) / 100).toFixed(0) : null;
 
-    setKitsLoading(true);
-    try {
-      // Fetch user's orders to track purchased kits (only non-cancelled, paid/COD orders)
-      const purchasedSet = new Set();
-      try {
-        const { data: ordersData } = await listOrders({ limit: 100 });
-        const validOrders = (ordersData || []).filter((o) => {
-          const isCancelled = ['cancelled', 'returned'].includes(o.status || o.orderStatus);
-          const isPaid = ['paid', 'authorized'].includes(o.paymentStatus) || o.paymentMethod === 'cod';
-          return !isCancelled && isPaid;
-        });
-        validOrders.forEach((order) => {
-          (order.items || []).forEach((item) => {
-            if (item.kitId) purchasedSet.add(String(item.kitId));
-            if (item.productId) purchasedSet.add(String(item.productId));
-          });
-        });
-      } catch {
-        // order fetch optional
-      }
-      setPurchasedKitIds(purchasedSet);
-
-      // Fetch ONLY the active kits belonging to the logged-in parent's school (Strict Data Isolation)
-      const { data: rawKits } = await listKits(schoolId, { status: 'active', limit: 100 });
-
-      const mappedKits = (rawKits || []).map((k) => {
-        const imageUrl = toAbsoluteUrl(k.imageId?.storageKey || k.imageUrl || k.image?.url);
-        const avatar = imageUrl
-          ? imageUrl
-          : `https://ui-avatars.com/api/?background=3b2d7d&color=fff&bold=true&name=${encodeURIComponent(k.name || 'Kit')}`;
-        const price = ((k.pricePaise || 0) / 100).toFixed(0);
-        const mrp = k.mrpPaise ? ((k.mrpPaise || 0) / 100).toFixed(0) : null;
-        const isPurchased = purchasedSet.has(String(k._id)) || purchasedSet.has(String(k.id));
-
-        return {
-          id: k._id || k.id,
-          name: k.name,
-          desc: k.description || '',
-          category: k.category || 'General Kit',
-          classes: k.classGrade || 'All Classes',
-          itemsCount: (k.items || []).length,
-          price,
-          mrp,
-          avatar,
-          isPurchased,
-          raw: k,
-        };
-      });
-
-      setKits(mappedKits);
-    } catch {
-      setKits([]);
-    } finally {
-      setKitsLoading(false);
-    }
-  }, [schoolId, isGuest]);
-
-  useEffect(() => {
-    loadKitsAndOrders();
-  }, [loadKitsAndOrders]);
+    return {
+      id: k._id || k.id,
+      name: k.name,
+      desc: k.description || '',
+      category: k.category || 'General Kit',
+      classes: k.classGrade || 'All Classes',
+      itemsCount: (k.items || []).length,
+      price,
+      mrp,
+      avatar,
+      isPurchased: progress.isPurchased(k),
+      raw: k,
+    };
+  });
 
   // Load School Notices
   useEffect(() => {
@@ -194,39 +146,19 @@ const MySchoolPage = () => {
     setScrolled(scrollPos > 50);
   };
 
-  const studentGrade = childInfo?.grade || '';
+  // `kits` (above) is already grade-filtered by the shared hook — no need to
+  // filter it again here.
+  const categories = ['All', ...Array.from(new Set(kits.map((k) => k.category).filter(Boolean)))];
 
-  const matchesStudentGrade = (kitClasses, sGrade) => {
-    if (!sGrade || sGrade === 'Select Grade') return true;
-    const kGrade = String(kitClasses || '').toLowerCase().trim();
-    const studentG = String(sGrade).toLowerCase().trim();
-
-    if (!kGrade || kGrade === 'all' || kGrade === 'all classes') return true;
-
-    const kitNum = kGrade.match(/\d+/)?.[0];
-    const studentNum = studentG.match(/\d+/)?.[0];
-
-    if (kitNum && studentNum) {
-      return kitNum === studentNum;
-    }
-
-    return kGrade.includes(studentG) || studentG.includes(kGrade);
-  };
-
-  const classFilteredKits = kits.filter((k) => matchesStudentGrade(k.classes, studentGrade));
-
-  const categories = ['All', ...Array.from(new Set(classFilteredKits.map((k) => k.category).filter(Boolean)))];
-
-  const displayedKits = classFilteredKits.filter((k) => {
+  const displayedKits = kits.filter((k) => {
     if (activeCategory === 'All') return true;
     return k.category === activeCategory;
   });
 
-  // Gamification Metrics
-  const totalKits = classFilteredKits.length;
-  const purchasedCount = classFilteredKits.filter((k) => k.isPurchased).length;
-  const remainingCount = Math.max(0, totalKits - purchasedCount);
-  const progressPercent = totalKits > 0 ? Math.round((purchasedCount / totalKits) * 100) : 0;
+  // Gamification Metrics — sourced from the shared hook so this page's numbers
+  // can never drift from the Home page's for the same parent.
+  const { totalKits, purchasedCount, remainingCount, progressPercent } = progress;
+  const kitsLoading = progress.loading;
 
   return (
     <>

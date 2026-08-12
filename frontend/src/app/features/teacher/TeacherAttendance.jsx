@@ -18,8 +18,12 @@ import { toLocalDateKey } from '../../../utils/date';
 import { useTeacherSchoolId } from '../../../utils/teacherContext';
 import { useTeacherClassOptions } from '../../../hooks/useTeacherClassOptions';
 
-const formatDisplayDate = (date = new Date()) =>
-  date.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric', weekday: 'long' });
+const formatDisplayDate = (dateStr) => {
+  if (!dateStr) return '';
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const dateObj = new Date(year, month - 1, day);
+  return dateObj.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric', weekday: 'long' });
+};
 
 // Statuses the roster cannot set. They only arrive on records created elsewhere, and
 // are shown as a read-only badge so re-saving the day does not rewrite them.
@@ -29,7 +33,8 @@ const TeacherAttendance = () => {
   const navigate = useNavigate();
   const schoolId = useTeacherSchoolId();
   const { classLabels, getSectionLabels } = useTeacherClassOptions(schoolId);
-  const attendanceDate = toLocalDateKey();
+  const todayKey = toLocalDateKey();
+  const [attendanceDate, setAttendanceDate] = useState(todayKey);
 
   const [selectedClass, setSelectedClass] = useState('');
   const [selectedSection, setSelectedSection] = useState('');
@@ -200,14 +205,82 @@ const TeacherAttendance = () => {
             <ArrowLeft size={20} strokeWidth={2.5} />
           </button>
           <div>
-            <h1 className="text-lg font-black text-deep-purple leading-none">Mark Attendance</h1>
-            <div className="flex items-center gap-1.5 text-gray-400 font-bold text-[10px] mt-1.5">
-              <Calendar size={12} className="text-primary" />
-              <span>{formatDisplayDate()}</span>
+            <div className="flex items-center gap-2">
+              <h1 className="text-lg font-black text-deep-purple leading-none">Mark Attendance</h1>
+              {attendanceDate === todayKey ? (
+                <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-emerald-100 text-emerald-700 border border-emerald-200">
+                  Today
+                </span>
+              ) : (
+                <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-amber-100 text-amber-800 border border-amber-200">
+                  Past Date
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-2 text-gray-500 font-bold text-[10px] mt-2 flex-wrap">
+              <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 hover:border-primary/30 rounded-xl px-2.5 py-1 text-deep-purple transition-all">
+                <Calendar size={13} className="text-primary shrink-0" />
+                <input
+                  type="date"
+                  max={todayKey}
+                  value={attendanceDate}
+                  onChange={(e) => {
+                    const selected = e.target.value;
+                    if (!selected) return;
+                    if (selected > todayKey) {
+                      setError('Future dates cannot be selected for marking attendance.');
+                      return;
+                    }
+                    setError('');
+                    setAttendanceDate(selected);
+                  }}
+                  className="bg-transparent text-xs font-black text-deep-purple focus:outline-none cursor-pointer"
+                />
+              </div>
+              <span className="text-[11px] font-bold text-gray-500 hidden sm:inline">
+                {formatDisplayDate(attendanceDate)}
+              </span>
+              {attendanceDate !== todayKey && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setError('');
+                    setAttendanceDate(todayKey);
+                  }}
+                  className="text-[10px] font-black text-primary bg-primary/10 hover:bg-primary/20 px-2 py-1 rounded-lg transition-all"
+                  title="Switch to Today"
+                >
+                  Go to Today
+                </button>
+              )}
             </div>
           </div>
         </div>
       </div>
+
+      {/* Past Date Banner */}
+      {attendanceDate !== todayKey && (
+        <div className="px-6 mt-3">
+          <div className="px-4 py-2.5 rounded-2xl bg-amber-50/90 border border-amber-200/80 flex items-center justify-between shadow-sm">
+            <div className="flex items-center gap-2">
+              <Clock size={14} className="text-amber-600 shrink-0" />
+              <span className="text-xs font-bold text-amber-900">
+                Marking past attendance for <span className="font-black">{formatDisplayDate(attendanceDate)}</span>
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setError('');
+                setAttendanceDate(todayKey);
+              }}
+              className="text-[10px] font-black text-amber-900 underline hover:text-amber-700 shrink-0 ml-2"
+            >
+              Reset to Today
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* 2. Class & Section Selectors */}
       <div className="px-6 mt-4 grid grid-cols-2 gap-4 relative z-30">

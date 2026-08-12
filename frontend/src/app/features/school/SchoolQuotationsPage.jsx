@@ -1,15 +1,22 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  ArrowLeft, Filter, ChevronRight, Calendar, Users, 
+import {
+  ArrowLeft, Filter, ChevronRight, Calendar, Users,
   FileText, Clipboard, CheckCircle, Clock, Check, X,
   Plus, AlertCircle, Shirt, BookOpen, FlaskConical, Snowflake,
-  Building, Star, ShieldCheck, HelpCircle, MessageSquare, Loader2
+  Building, Star, ShieldCheck, HelpCircle, MessageSquare, Loader2,
+  Ban, Trophy, IndianRupee, Wallet
 } from 'lucide-react';
-import { listSchoolRfqs, getSchoolRfq, awardRfqQuote } from '../../../services/rfqApi';
+import {
+  listSchoolRfqs, getSchoolRfq, awardRfqQuote, cancelRfq,
+  initiateRfqAdvancePayment, confirmRfqAdvancePayment,
+  initiateRfqRemainderPayment, confirmRfqRemainderPayment,
+} from '../../../services/rfqApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 import { mapSchoolRfqForList, mapSchoolQuoteForCompare } from '../../../utils/mappers/rfqMapper';
 import { useSchoolId } from '../../../utils/schoolContext';
+import { openRazorpayCheckout } from '../../../utils/razorpay';
+import { ENV } from '../../../config/env';
 
 const SchoolQuotationsPage = () => {
   const navigate = useNavigate();
@@ -26,6 +33,14 @@ const SchoolQuotationsPage = () => {
   const [loadError, setLoadError] = useState('');
   const [loadingQuotes, setLoadingQuotes] = useState(false);
   const [awardingQuoteId, setAwardingQuoteId] = useState(null);
+  const [confirmingCancel, setConfirmingCancel] = useState(null);
+  const [cancelling, setCancelling] = useState(false);
+
+  // Drives the "pay the advance now" screen that opens immediately after an
+  // award — { orderId, reqTitle, vendorName, status: 'processing'|'error'|'success', message }
+  const [advancePaymentState, setAdvancePaymentState] = useState(null);
+  // Drives "Pay Remaining Balance" from inside the compare/view-quotes modal.
+  const [remainderPaymentState, setRemainderPaymentState] = useState(null);
 
   const loadRequirements = useCallback(async () => {
     if (!schoolId) {
@@ -58,9 +73,11 @@ const SchoolQuotationsPage = () => {
     setLoadingQuotes(true);
     try {
       const rfq = await getSchoolRfq(schoolId, req.id);
+      setRemainderPaymentState(null);
       setSelectedRequirement({
         ...req,
         quotes: (rfq.quotes || []).map(mapSchoolQuoteForCompare),
+        order: rfq.order || null,
       });
     } catch (err) {
       setLoadError(getErrorMessage(err, 'Unable to load quotes'));
@@ -85,14 +102,123 @@ const SchoolQuotationsPage = () => {
 
     setAwardingQuoteId(quote.quoteId);
     try {
-      await awardRfqQuote(schoolId, selectedRequirement.id, quote.quoteId);
-      setQuoteSuccessMsg(`Contract for ${reqTitle} awarded to ${quote.vendorName} successfully!`);
+      const rfq = await awardRfqQuote(schoolId, selectedRequirement.id, quote.quoteId);
       setSelectedRequirement(null);
       await loadRequirements();
+
+      // Award flows straight into paying the advance — the school never lands
+      // on a plain "success" screen with a separate step to go find and pay it.
+      if (rfq?.orderId) {
+        await runAdvancePayment(rfq.orderId, reqTitle, quote.vendorName);
+      } else {
+        setQuoteSuccessMsg(`Contract for ${reqTitle} awarded to ${quote.vendorName} successfully!`);
+      }
     } catch (err) {
       setLoadError(getErrorMessage(err, 'Unable to award contract'));
     } finally {
       setAwardingQuoteId(null);
+    }
+  };
+
+  const runAdvancePayment = async (orderId, reqTitle, vendorName) => {
+    setAdvancePaymentState({ orderId, reqTitle, vendorName, status: 'processing', message: '' });
+    try {
+      const { payment, checkout } = await initiateRfqAdvancePayment(schoolId, orderId);
+
+      if (checkout?.razorpayOrderId) {
+        const razorpayResponse = await openRazorpayCheckout({
+          keyId: checkout.keyId || ENV.RAZORPAY_KEY_ID,
+          razorpayOrderId: checkout.razorpayOrderId,
+          amountPaise: checkout.amountPaise,
+          currency: checkout.currency,
+          description: `Advance for ${reqTitle}`,
+          notes: { orderId },
+        });
+        await confirmRfqAdvancePayment(schoolId, orderId, {
+          razorpayPaymentId: razorpayResponse.razorpay_payment_id,
+          razorpayOrderId: razorpayResponse.razorpay_order_id,
+          razorpaySignature: razorpayResponse.razorpay_signature,
+        });
+      } else if (payment?.status !== 'captured') {
+        // No gateway checkout to open (e.g. Razorpay not configured) but the
+        // payment isn't auto-settled either — confirm it directly, same as
+        // the regular checkout flow does for this exact edge case.
+        await confirmRfqAdvancePayment(schoolId, orderId);
+      }
+
+      setAdvancePaymentState({ orderId, reqTitle, vendorName, status: 'success', message: '' });
+      await loadRequirements();
+    } catch (err) {
+      setAdvancePaymentState({
+        orderId,
+        reqTitle,
+        vendorName,
+        status: 'error',
+        message: getErrorMessage(err, 'Advance payment failed'),
+      });
+    }
+  };
+
+  // Retries the advance from inside the compare/view-quotes modal — covers a
+  // school that awarded, then navigated away or closed the browser before the
+  // advance payment completed. Without this there'd be no way back to it.
+  const handlePayAdvanceFromModal = () => {
+    if (!selectedRequirement?.order?._id) return;
+    const { order, title } = selectedRequirement;
+    const acceptedQuote = selectedRequirement.quotes?.find((q) => q.status === 'accepted');
+    setSelectedRequirement(null);
+    runAdvancePayment(order._id, title, acceptedQuote?.vendorName || 'the vendor');
+  };
+
+  const handlePayRemainder = async () => {
+    if (!schoolId || !selectedRequirement?.order?._id) return;
+    const orderId = selectedRequirement.order._id;
+
+    setRemainderPaymentState({ status: 'processing', message: '' });
+    try {
+      const { payment, checkout } = await initiateRfqRemainderPayment(schoolId, orderId);
+
+      if (checkout?.razorpayOrderId) {
+        const razorpayResponse = await openRazorpayCheckout({
+          keyId: checkout.keyId || ENV.RAZORPAY_KEY_ID,
+          razorpayOrderId: checkout.razorpayOrderId,
+          amountPaise: checkout.amountPaise,
+          currency: checkout.currency,
+          description: `Remaining balance for ${selectedRequirement.title}`,
+          notes: { orderId },
+        });
+        await confirmRfqRemainderPayment(schoolId, orderId, {
+          razorpayPaymentId: razorpayResponse.razorpay_payment_id,
+          razorpayOrderId: razorpayResponse.razorpay_order_id,
+          razorpaySignature: razorpayResponse.razorpay_signature,
+        });
+      } else if (payment?.status !== 'captured') {
+        await confirmRfqRemainderPayment(schoolId, orderId);
+      }
+
+      setRemainderPaymentState({ status: 'success', message: '' });
+      setSelectedRequirement(null);
+      await loadRequirements();
+    } catch (err) {
+      setRemainderPaymentState({
+        status: 'error',
+        message: getErrorMessage(err, 'Payment failed'),
+      });
+    }
+  };
+
+  const handleCancelRequest = async () => {
+    if (!schoolId || !confirmingCancel) return;
+    setCancelling(true);
+    try {
+      await cancelRfq(schoolId, confirmingCancel.id);
+      setConfirmingCancel(null);
+      await loadRequirements();
+    } catch (err) {
+      setLoadError(getErrorMessage(err, 'Unable to cancel this request'));
+      setConfirmingCancel(null);
+    } finally {
+      setCancelling(false);
     }
   };
 
@@ -223,6 +349,24 @@ const SchoolQuotationsPage = () => {
                   {req.badgeText}
                 </span>
 
+                {/* Payment status — only once awarded, so the school can spot
+                    an order still waiting on its advance without opening it. */}
+                {req.order && (
+                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 mt-1.5 ml-1.5 rounded-full border text-[9px] font-black uppercase tracking-wider ${
+                    req.order.paymentStatus === 'paid'
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                      : req.order.paymentStatus === 'partially_paid'
+                        ? 'bg-amber-50 text-amber-700 border-amber-100'
+                        : 'bg-red-50 text-red-600 border-red-100'
+                  }`}>
+                    {req.order.paymentStatus === 'paid'
+                      ? 'Fully Paid'
+                      : req.order.paymentStatus === 'partially_paid'
+                        ? 'Advance Paid'
+                        : 'Advance Due'}
+                  </span>
+                )}
+
               </div>
 
               {/* Chevron Link right */}
@@ -256,25 +400,37 @@ const SchoolQuotationsPage = () => {
             </div>
 
             {/* Card Footer actions */}
-            <div className="flex items-center justify-between pt-1">
-              <span className="text-[10px] text-gray-400 font-bold">Created: {req.createdDate}</span>
-              
-              {req.quotesReceived > 0 ? (
-                <button 
-                  onClick={() => handleOpenCompare(req)}
-                  disabled={loadingQuotes}
-                  className="px-4 py-2 border border-purple-250 text-[#3b2d7d] hover:bg-purple-50 bg-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 shadow-sm disabled:opacity-60"
-                >
-                  {loadingQuotes ? 'Loading...' : 'Compare Quotes'}
-                </button>
-              ) : (
-                <button 
-                  disabled
-                  className="px-4 py-2 border border-gray-200 text-gray-400 bg-gray-50 rounded-xl text-[10px] font-bold uppercase tracking-wider cursor-not-allowed"
-                >
-                  Awaiting Bids
-                </button>
-              )}
+            <div className="flex items-center justify-between pt-1 gap-2">
+              <span className="text-[10px] text-gray-400 font-bold shrink-0">Created: {req.createdDate}</span>
+
+              <div className="flex items-center gap-2">
+                {['open', 'reviewing'].includes(req.rawStatus) && (
+                  <button
+                    onClick={() => setConfirmingCancel(req)}
+                    title="Cancel this request"
+                    className="w-8 h-8 shrink-0 flex items-center justify-center border border-gray-200 text-gray-400 hover:text-red-500 hover:border-red-200 hover:bg-red-50 rounded-xl transition-all active:scale-95"
+                  >
+                    <Ban size={13} />
+                  </button>
+                )}
+
+                {req.quotesReceived > 0 ? (
+                  <button
+                    onClick={() => handleOpenCompare(req)}
+                    disabled={loadingQuotes}
+                    className="px-4 py-2 border border-purple-250 text-[#3b2d7d] hover:bg-purple-50 bg-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 shadow-sm disabled:opacity-60"
+                  >
+                    {loadingQuotes ? 'Loading...' : req.status === 'Awarded' ? 'View Quotes' : 'Compare Quotes'}
+                  </button>
+                ) : (
+                  <button
+                    disabled
+                    className="px-4 py-2 border border-gray-200 text-gray-400 bg-gray-50 rounded-xl text-[10px] font-bold uppercase tracking-wider cursor-not-allowed"
+                  >
+                    Awaiting Bids
+                  </button>
+                )}
+              </div>
             </div>
 
           </div>
@@ -304,6 +460,48 @@ const SchoolQuotationsPage = () => {
         </button>
       </div>
 
+      {/* Cancel Request confirmation modal */}
+      {confirmingCancel && (
+        <div
+          className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm transition-all duration-300 animate-in fade-in"
+          onClick={() => !cancelling && setConfirmingCancel(null)}
+        >
+          <div
+            className="w-full max-w-sm bg-white rounded-[2.2rem] p-6 shadow-2xl border border-gray-100"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-14 h-14 bg-red-50 rounded-full flex items-center justify-center text-red-500 border border-red-100 shadow-inner">
+              <Ban size={22} className="stroke-[2.5]" />
+            </div>
+            <h3 className="text-base font-black text-deep-purple block mt-4 leading-tight">
+              Cancel this request?
+            </h3>
+            <p className="text-xs text-gray-400 font-bold block mt-2 leading-relaxed">
+              “{confirmingCancel.title}” will stop accepting quotes and every invited vendor will be notified it's
+              cancelled. This can't be undone.
+            </p>
+            <div className="flex gap-2.5 mt-6">
+              <button
+                type="button"
+                onClick={() => setConfirmingCancel(null)}
+                disabled={cancelling}
+                className="flex-1 py-3.5 rounded-2xl bg-gray-50 border border-gray-100 text-gray-600 text-xs font-black disabled:opacity-60"
+              >
+                Keep Request
+              </button>
+              <button
+                type="button"
+                onClick={handleCancelRequest}
+                disabled={cancelling}
+                className="flex-1 py-3.5 rounded-2xl bg-red-600 hover:bg-red-700 text-white text-xs font-black disabled:opacity-60"
+              >
+                {cancelling ? 'Cancelling…' : 'Cancel Request'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Contract Award success toast modal overlay */}
       {quoteSuccessMsg && (
         <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm transition-all duration-300 animate-in fade-in">
@@ -318,12 +516,79 @@ const SchoolQuotationsPage = () => {
               {quoteSuccessMsg} The winning vendor has been notified, and the other bidders have been informed their quote wasn't selected.
             </p>
 
-            <button 
+            <button
               onClick={() => setQuoteSuccessMsg(null)}
               className="w-full mt-6 py-3.5 bg-[#3b2d7d] hover:bg-[#523da7] text-white font-black rounded-2xl text-xs uppercase tracking-widest transition-all active:scale-95 shadow-md"
             >
               Done
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Post-award advance payment modal — award flows straight into this,
+          since the vendor won't start work until the advance is captured. */}
+      {advancePaymentState && (
+        <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm transition-all duration-300 animate-in fade-in">
+          <div className="w-full max-w-sm bg-white rounded-[2.2rem] p-6 shadow-2xl border border-gray-100 text-center animate-in zoom-in duration-200">
+
+            {advancePaymentState.status === 'processing' && (
+              <>
+                <Loader2 size={36} className="text-[#3b2d7d] mx-auto animate-spin" />
+                <h3 className="text-base font-black text-deep-purple block mt-4 leading-tight">Awarded — Pay Advance</h3>
+                <p className="text-xs text-gray-400 font-bold block mt-2 px-1">
+                  {advancePaymentState.vendorName} has been awarded the contract for "{advancePaymentState.reqTitle}".
+                  Complete the advance payment to confirm the order.
+                </p>
+              </>
+            )}
+
+            {advancePaymentState.status === 'success' && (
+              <>
+                <div className="w-14 h-14 bg-emerald-50 rounded-full flex items-center justify-center mx-auto text-emerald-500 border border-emerald-100 shadow-inner">
+                  <CheckCircle size={24} className="stroke-[2.5]" />
+                </div>
+                <h3 className="text-base font-black text-deep-purple block mt-4 leading-tight">Advance Paid — Order Confirmed</h3>
+                <p className="text-xs text-gray-400 font-bold block mt-2 px-1">
+                  {advancePaymentState.vendorName} has been notified and can begin fulfilling "{advancePaymentState.reqTitle}".
+                  You can pay the remaining balance any time from this order.
+                </p>
+                <button
+                  onClick={() => setAdvancePaymentState(null)}
+                  className="w-full mt-6 py-3.5 bg-[#3b2d7d] hover:bg-[#523da7] text-white font-black rounded-2xl text-xs uppercase tracking-widest transition-all active:scale-95 shadow-md"
+                >
+                  Done
+                </button>
+              </>
+            )}
+
+            {advancePaymentState.status === 'error' && (
+              <>
+                <div className="w-14 h-14 bg-red-50 rounded-full flex items-center justify-center mx-auto text-red-500 border border-red-100 shadow-inner">
+                  <AlertCircle size={24} className="stroke-[2.5]" />
+                </div>
+                <h3 className="text-base font-black text-deep-purple block mt-4 leading-tight">Advance Payment Failed</h3>
+                <p className="text-xs text-gray-400 font-bold block mt-2 px-1">{advancePaymentState.message}</p>
+                <p className="text-[10px] text-gray-400 font-semibold block mt-1 px-1">
+                  The contract is still awarded to {advancePaymentState.vendorName} — you can retry the advance payment from the order.
+                </p>
+                <div className="flex gap-2.5 mt-6">
+                  <button
+                    onClick={() => setAdvancePaymentState(null)}
+                    className="flex-1 py-3.5 rounded-2xl bg-gray-50 border border-gray-100 text-gray-600 text-xs font-black"
+                  >
+                    Close
+                  </button>
+                  <button
+                    onClick={() => runAdvancePayment(advancePaymentState.orderId, advancePaymentState.reqTitle, advancePaymentState.vendorName)}
+                    className="flex-1 py-3.5 rounded-2xl bg-[#3b2d7d] hover:bg-[#523da7] text-white text-xs font-black"
+                  >
+                    Retry Payment
+                  </button>
+                </div>
+              </>
+            )}
+
           </div>
         </div>
       )}
@@ -352,14 +617,34 @@ const SchoolQuotationsPage = () => {
               
               {/* Splendid comparison list */}
               <div className="space-y-4">
-                {selectedRequirement.quotes.map((quote, idx) => (
-                  <div 
+                {selectedRequirement.quotes.map((quote, idx) => {
+                  // Once the RFQ has moved past open/reviewing, awarding is done —
+                  // the backend rejects a second award attempt, so the UI must not
+                  // keep offering it as if the decision were still pending.
+                  const canAward = ['open', 'reviewing'].includes(selectedRequirement.rawStatus);
+                  const isAccepted = quote.status === 'accepted';
+                  const isRejected = quote.status === 'rejected';
+
+                  return (
+                  <div
                     key={quote.quoteId || idx}
-                    className="border border-purple-100 rounded-3xl p-5 bg-purple-50/20 hover:bg-purple-50/45 transition-all shadow-sm space-y-3.5 relative overflow-hidden"
+                    className={`border rounded-3xl p-5 transition-all shadow-sm space-y-3.5 relative overflow-hidden ${
+                      isAccepted
+                        ? 'border-emerald-200 bg-emerald-50/40'
+                        : isRejected
+                          ? 'border-gray-150 bg-gray-50/60 opacity-75'
+                          : 'border-purple-100 bg-purple-50/20 hover:bg-purple-50/45'
+                    }`}
                   >
-                    {/* Rank Badge */}
-                    <div className="absolute top-0 right-0 px-3 py-1 bg-purple-100 text-[#3b2d7d] text-[9px] font-black uppercase rounded-bl-2xl">
-                      Bid #{idx + 1}
+                    {/* Outcome / Rank Badge */}
+                    <div className={`absolute top-0 right-0 px-3 py-1 text-[9px] font-black uppercase rounded-bl-2xl flex items-center gap-1 ${
+                      isAccepted
+                        ? 'bg-emerald-100 text-emerald-700'
+                        : isRejected
+                          ? 'bg-gray-150 text-gray-500'
+                          : 'bg-purple-100 text-[#3b2d7d]'
+                    }`}>
+                      {isAccepted ? (<><Trophy size={10} /> Awarded</>) : isRejected ? 'Not Selected' : `Bid #${idx + 1}`}
                     </div>
 
                     {/* Vendor title and rating */}
@@ -392,6 +677,17 @@ const SchoolQuotationsPage = () => {
                       </div>
                     </div>
 
+                    {/* Advance the vendor requires up front — visible before
+                        awarding, since accepting this quote means committing
+                        to pay it right away. */}
+                    <div className="flex items-center gap-2 bg-amber-50/60 p-2.5 rounded-xl border border-amber-100/60 text-[10px] font-bold text-amber-700">
+                      <Wallet size={12} className="shrink-0" />
+                      <span>
+                        Advance required: <span className="font-black">{quote.advancePercent}%</span>
+                        {' '}({quote.advanceAmount})
+                      </span>
+                    </div>
+
                     <div className="space-y-1 font-bold text-gray-400">
                       <span className="text-[9px] uppercase tracking-wider block">Material Specifications:</span>
                       <p className="text-deep-purple text-xs leading-relaxed font-bold bg-white/40 p-2.5 rounded-xl border border-gray-150/40">
@@ -404,19 +700,93 @@ const SchoolQuotationsPage = () => {
                       <span>Remarks: <span className="text-deep-purple font-bold">{quote.remarks}</span></span>
                     </div>
 
-                    {/* Award Contract Button inside bid card */}
-                    <button 
-                      onClick={() => handleAwardContract(quote, selectedRequirement.title)}
-                      disabled={awardingQuoteId === quote.quoteId}
-                      className="w-full py-3 bg-[#3b2d7d] hover:bg-emerald-600 text-white font-black rounded-2xl text-[10px] uppercase tracking-widest transition-all active:scale-95 shadow-md flex items-center justify-center gap-1.5 disabled:opacity-60"
-                    >
-                      <Check size={13} className="stroke-[3]" />
-                      {awardingQuoteId === quote.quoteId ? 'Awarding...' : 'Award Contract'}
-                    </button>
+                    {/* Award Contract Button inside bid card — only while the RFQ is
+                        still undecided and this particular quote hasn't already
+                        been accepted or rejected. */}
+                    {canAward && !isAccepted && !isRejected ? (
+                      <button
+                        onClick={() => handleAwardContract(quote, selectedRequirement.title)}
+                        disabled={awardingQuoteId === quote.quoteId}
+                        className="w-full py-3 bg-[#3b2d7d] hover:bg-emerald-600 text-white font-black rounded-2xl text-[10px] uppercase tracking-widest transition-all active:scale-95 shadow-md flex items-center justify-center gap-1.5 disabled:opacity-60"
+                      >
+                        <Check size={13} className="stroke-[3]" />
+                        {awardingQuoteId === quote.quoteId ? 'Awarding...' : 'Award Contract'}
+                      </button>
+                    ) : isAccepted ? (
+                      <div className="w-full py-3 bg-emerald-50 border border-emerald-100 text-emerald-700 font-black rounded-2xl text-[10px] uppercase tracking-widest flex items-center justify-center gap-1.5">
+                        <Trophy size={13} /> Contract Awarded
+                      </div>
+                    ) : (
+                      <div className="w-full py-3 bg-gray-100 border border-gray-150 text-gray-400 font-bold rounded-2xl text-[10px] uppercase tracking-widest text-center">
+                        {isRejected ? 'Not Selected' : 'Decision Pending'}
+                      </div>
+                    )}
 
                   </div>
-                ))}
+                  );
+                })}
               </div>
+
+              {/* Order / payment status for the awarded contract — this is the
+                  school's one place to see what's been paid and pay what's left. */}
+              {selectedRequirement.order && (
+                <div className="border border-purple-100 bg-purple-50/30 rounded-3xl p-5 space-y-3">
+                  <span className="text-[10px] font-black text-[#3b2d7d] uppercase tracking-widest flex items-center gap-1.5">
+                    <IndianRupee size={12} /> Order Payment Status
+                  </span>
+                  <div className="grid grid-cols-2 gap-2 text-[10px] font-bold text-gray-400">
+                    <div>
+                      <span>Order Total</span>
+                      <span className="block mt-0.5 font-black text-deep-purple text-xs">₹{selectedRequirement.order.total}</span>
+                    </div>
+                    <div>
+                      <span>Status</span>
+                      <span className="block mt-0.5 font-black text-xs">
+                        {selectedRequirement.order.paymentStatus === 'paid' ? (
+                          <span className="text-emerald-600">Fully Paid</span>
+                        ) : selectedRequirement.order.paymentStatus === 'partially_paid' ? (
+                          <span className="text-amber-600">Advance Paid</span>
+                        ) : (
+                          <span className="text-gray-500">Advance Pending</span>
+                        )}
+                      </span>
+                    </div>
+                    {selectedRequirement.order.remainder != null && (
+                      <div className="col-span-2 pt-1 border-t border-purple-100/60">
+                        <span>Remaining Balance</span>
+                        <span className="block mt-0.5 font-black text-deep-purple text-xs">
+                          ₹{selectedRequirement.order.paymentStatus === 'paid' ? '0.00' : selectedRequirement.order.remainder}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {selectedRequirement.order.paymentStatus === 'pending' && (
+                    <button
+                      onClick={handlePayAdvanceFromModal}
+                      className="w-full py-3 bg-amber-600 hover:bg-amber-700 text-white font-black rounded-2xl text-[10px] uppercase tracking-widest transition-all active:scale-95 shadow-md flex items-center justify-center gap-1.5"
+                    >
+                      <Wallet size={13} />
+                      Pay Advance Now
+                    </button>
+                  )}
+                  {selectedRequirement.order.paymentStatus === 'partially_paid' && (
+                    <button
+                      onClick={handlePayRemainder}
+                      disabled={remainderPaymentState?.status === 'processing'}
+                      className="w-full py-3 bg-[#3b2d7d] hover:bg-[#4d3db9] text-white font-black rounded-2xl text-[10px] uppercase tracking-widest transition-all active:scale-95 shadow-md flex items-center justify-center gap-1.5 disabled:opacity-60"
+                    >
+                      <Wallet size={13} />
+                      {remainderPaymentState?.status === 'processing' ? 'Processing…' : 'Pay Remaining Balance'}
+                    </button>
+                  )}
+                  {remainderPaymentState?.status === 'error' && (
+                    <p className="text-[10px] font-bold text-red-600 bg-red-50 border border-red-100 rounded-xl p-2.5">
+                      {remainderPaymentState.message}
+                    </p>
+                  )}
+                </div>
+              )}
 
             </div>
 

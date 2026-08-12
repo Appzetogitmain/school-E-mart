@@ -49,6 +49,18 @@ const vendorOrderService = {
       );
     }
 
+    // RFQ-awarded orders collect payment in two parts (advance up front, the
+    // remainder any time after). A vendor must not mark one delivered while
+    // the remainder is still outstanding — `paymentStatus` only reaches
+    // 'paid' once confirmRemainderPayment actually captures it.
+    if (status === 'delivered' && order.rfqAdvance && order.paymentStatus !== 'paid') {
+      throw new BadRequestError(
+        'The remaining payment for this quotation order has not been collected yet',
+        null,
+        'RFQ_REMAINDER_NOT_PAID'
+      );
+    }
+
     const statusEntry = {
       status,
       at: new Date(),

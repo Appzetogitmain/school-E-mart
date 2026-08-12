@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import ReactDOM from 'react-dom';
 import {
   MonitorPlay, Film, Edit3, Trash2, Eye, Play, X, ChevronRight, CheckCircle,
-  Upload, Image as ImageIcon, Users, GraduationCap, Building2, Globe2,
+  Upload, Image as ImageIcon, Users, GraduationCap, Building2, Globe2, Camera,
 } from 'lucide-react';
 import {
   listTutorials, createTutorial, updateTutorial, deleteTutorial,
@@ -53,6 +53,7 @@ const PlatformTutorialsManagement = () => {
 
   const videoInputRef = useRef(null);
   const coverInputRef = useRef(null);
+  const coverCameraInputRef = useRef(null);
 
   const [playingVideo, setPlayingVideo] = useState(null);
 
@@ -328,7 +329,7 @@ const PlatformTutorialsManagement = () => {
             {/* VIDEO FILE */}
             <div className="space-y-1.5">
               <label className="block text-gray-400 uppercase tracking-wide text-[9px] font-black select-none">Video File *</label>
-              <input type="file" ref={videoInputRef} accept="video/*" onChange={handleVideoFileChange} className="hidden" />
+              <input type="file" ref={videoInputRef} accept=".mp4,.mov,.webm,.mkv" onChange={handleVideoFileChange} className="hidden" />
               <div
                 onClick={() => videoInputRef.current?.click()}
                 className={`border-2 border-dashed rounded-2xl p-5 text-center cursor-pointer transition-all hover:bg-gray-50 ${
@@ -358,14 +359,17 @@ const PlatformTutorialsManagement = () => {
             {/* COVER IMAGE */}
             <div className="space-y-1.5">
               <label className="block text-gray-400 uppercase tracking-wide text-[9px] font-black select-none">Thumbnail Cover (optional)</label>
-              <input type="file" ref={coverInputRef} accept="image/*" onChange={handleCoverFileChange} className="hidden" />
+              <input type="file" ref={coverInputRef} accept=".png,.jpg,.jpeg,.webp" onChange={handleCoverFileChange} className="hidden" />
+              {/* capture="environment" opens the device's camera app directly
+                  on mobile; desktop browsers that don't support it fall back
+                  to the normal file picker, same as the input above. */}
+              <input type="file" ref={coverCameraInputRef} accept=".png,.jpg,.jpeg,.webp" capture="environment" onChange={handleCoverFileChange} className="hidden" />
               <div
-                onClick={() => coverInputRef.current?.click()}
-                className={`border-2 border-dashed rounded-2xl p-5 text-center cursor-pointer transition-all hover:bg-gray-50 ${
+                className={`border-2 border-dashed rounded-2xl p-5 text-center transition-all ${
                   coverPreview ? 'border-emerald-200 bg-emerald-50/20' : 'border-gray-250 bg-white'
                 }`}
               >
-                <div className="flex flex-col items-center gap-1.5 select-none">
+                <div className="flex flex-col items-center gap-2 select-none">
                   {coverPreview ? (
                     <div className="flex items-center gap-3 text-left">
                       <img src={coverPreview} alt="cover thumb" className="w-10 h-10 object-cover rounded-lg border border-emerald-100" />
@@ -379,10 +383,26 @@ const PlatformTutorialsManagement = () => {
                   ) : (
                     <>
                       <ImageIcon size={24} className="text-gray-400" />
-                      <span className="text-gray-700 font-black">Choose cover image file</span>
+                      <span className="text-gray-700 font-black">Choose a cover image</span>
                       <span className="text-[8px] text-gray-400">Select png or jpeg cover</span>
                     </>
                   )}
+                  <div className="flex items-center gap-2 mt-1">
+                    <button
+                      type="button"
+                      onClick={() => coverCameraInputRef.current?.click()}
+                      className="px-3 py-1.5 rounded-lg border border-gray-200 hover:border-indigo-300 bg-white text-[10px] font-black text-gray-700 flex items-center gap-1.5 transition-colors"
+                    >
+                      <Camera size={12} /> Take Photo
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => coverInputRef.current?.click()}
+                      className="px-3 py-1.5 rounded-lg border border-gray-200 hover:border-indigo-300 bg-white text-[10px] font-black text-gray-700 flex items-center gap-1.5 transition-colors"
+                    >
+                      <Upload size={12} /> Choose File
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>

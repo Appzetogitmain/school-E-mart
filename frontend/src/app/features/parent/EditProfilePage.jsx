@@ -4,7 +4,7 @@ import {
   ArrowLeft, Upload, User, Mail, Phone,
   MapPin, Home, Globe, Navigation,
   ShieldCheck, Check, AlertCircle, ImageIcon,
-  Hash, GraduationCap, School, FileText
+  Hash, GraduationCap, School, FileText, Camera
 } from 'lucide-react';
 import { updateMyProfile } from '../../../services/parentApi';
 import useAuthStore from '../../../store/useAuthStore';
@@ -12,6 +12,7 @@ import useAuthStore from '../../../store/useAuthStore';
 const EditProfilePage = () => {
   const navigate = useNavigate();
   const fileInputRef = useRef(null);
+  const cameraInputRef = useRef(null);
   const [loading, setLoading] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [errors, setErrors] = useState({});
@@ -118,6 +119,10 @@ const EditProfilePage = () => {
     fileInputRef.current?.click();
   };
 
+  const handleTakePhotoClick = () => {
+    cameraInputRef.current?.click();
+  };
+
   const handleFileChange = (e) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -205,20 +210,31 @@ const EditProfilePage = () => {
       <div className="pt-24 px-6 space-y-8 overflow-y-auto">
         {/* Avatar Section */}
         <div className="flex flex-col items-center gap-4">
-          <input 
-            type="file" 
-            ref={fileInputRef} 
-            onChange={handleFileChange} 
-            accept="image/*" 
-            className="hidden" 
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileChange}
+            accept=".png,.jpg,.jpeg,.webp"
+            className="hidden"
+          />
+          {/* capture="environment" opens the device's camera app directly on
+              mobile; desktop browsers that don't support it fall back to the
+              normal file picker, same as the Upload input above. */}
+          <input
+            type="file"
+            ref={cameraInputRef}
+            onChange={handleFileChange}
+            accept=".png,.jpg,.jpeg,.webp"
+            capture="environment"
+            className="hidden"
           />
           <div className="relative group">
             <div className="w-28 h-28 rounded-[2.5rem] bg-white p-1 shadow-xl shadow-primary/10 border-2 border-primary/20">
               <div className="w-full h-full rounded-[2.2rem] bg-gray-100 overflow-hidden relative flex items-center justify-center">
                 {formData.photo ? (
-                  <img 
-                    src={formData.photo} 
-                    alt="Avatar" 
+                  <img
+                    src={formData.photo}
+                    alt="Avatar"
                     className="w-full h-full object-cover"
                   />
                 ) : (
@@ -229,10 +245,17 @@ const EditProfilePage = () => {
                 )}
               </div>
             </div>
-            <button 
+            <button
+              onClick={handleTakePhotoClick}
+              className="absolute bottom-0 left-0 w-10 h-10 bg-white text-primary rounded-2xl flex items-center justify-center shadow-lg border-4 border-white active:scale-90 transition-all hover:bg-primary hover:text-white"
+              title="Take a photo"
+            >
+              <Camera size={18} />
+            </button>
+            <button
               onClick={handlePhotoClick}
               className="absolute bottom-0 right-0 w-10 h-10 bg-primary text-white rounded-2xl flex items-center justify-center shadow-lg border-4 border-white active:scale-90 transition-all hover:bg-deep-purple"
-              title="Upload Photo"
+              title="Choose File"
             >
               <Upload size={18} />
             </button>

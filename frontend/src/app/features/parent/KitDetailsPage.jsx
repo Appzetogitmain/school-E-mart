@@ -9,11 +9,11 @@ import {
 import { useCart } from '../../context/CartContext';
 import AuthPrompt from '../../components/AuthPrompt';
 import * as catalogApi from '../../../services/catalogApi';
-import { getKit, listKits } from '../../../services/schoolApi';
-import { listOrders } from '../../../services/ordersApi';
+import { getKit, listKits, listPurchasedKitIds } from '../../../services/schoolApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 import { mapProductForDetailView } from '../../../utils/mappers/productMapper';
 import { toAbsoluteUrl } from '../../../utils/url';
+import { resolveParentSchoolId } from '../../../hooks/useKitProcurementProgress';
 
 const KitDetailsPage = () => {
   const { kitId } = useParams();
@@ -26,6 +26,9 @@ const KitDetailsPage = () => {
   const [currentKitData, setCurrentKitData] = useState(null);
   const [selectedItemIds, setSelectedItemIds] = useState([]);
   const [isPurchased, setIsPurchased] = useState(false);
+  // { [itemIndex]: { size, color } } — the parent's picks for items that offer
+  // a choice. Required before the kit can be added to cart.
+  const [selections, setSelections] = useState({});
 
   useEffect(() => {
     let cancelled = false;
@@ -33,15 +36,18 @@ const KitDetailsPage = () => {
     const checkPurchased = async () => {
       if (isGuest) return;
       try {
-        const { data: ordersData } = await listOrders({ limit: 100 });
-        const validOrders = (ordersData || []).filter((o) => {
-          const isCancelled = ['cancelled', 'returned'].includes(o.status || o.orderStatus);
-          const isPaid = ['paid', 'authorized'].includes(o.paymentStatus) || o.paymentMethod === 'cod';
-          return !isCancelled && isPaid;
-        });
-        const purchased = validOrders.some((o) =>
-          (o.items || []).some((item) => String(item.kitId || item.productId) === String(kitId))
-        );
+        const childInfo = JSON.parse(localStorage.getItem('childInfo') || '{}');
+        // Prefer the parent's linked school; fall back to the kit's own
+        // school once it's loaded (covers a deep link opened before the
+        // parent's school context is known).
+        const schoolId = resolveParentSchoolId(childInfo) || currentKitData?.schoolId;
+        if (!schoolId) return;
+
+        // Same query the procurement progress bar uses — accurate regardless
+        // of how many other (non-kit) orders this parent has placed, unlike
+        // scanning a page of recent orders.
+        const purchasedIds = await listPurchasedKitIds(schoolId);
+        const purchased = (purchasedIds || []).map(String).includes(String(kitId));
         if (!cancelled) setIsPurchased(purchased);
       } catch {
         // order fetch optional
@@ -52,7 +58,7 @@ const KitDetailsPage = () => {
     return () => {
       cancelled = true;
     };
-  }, [kitId, isGuest]);
+  }, [kitId, isGuest, currentKitData?.schoolId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -100,6 +106,7 @@ const KitDetailsPage = () => {
         if (rawKit) {
           const kitData = {
             id: rawKit._id || rawKit.id,
+            schoolId: rawKit.schoolId?._id || rawKit.schoolId || null,
             name: rawKit.name,
             description: rawKit.description || 'Official school procurement kit',
             image: toAbsoluteUrl(rawKit.imageUrl || rawKit.avatar || rawKit.items?.find((i) => i.imageUrl)?.imageUrl || rawKit.items?.[0]?.imageUrl) || '',
@@ -113,12 +120,19 @@ const KitDetailsPage = () => {
               const pPrice = item.pricePaise ? Math.round(item.pricePaise / 100) : (item.price || 0);
               return {
                 id: item._id || item.id || item.masterProductId?._id || `item-${index}`,
+                itemIndex: index,
                 name: pName,
                 price: pPrice,
                 originalPrice: item.mrpPaise ? Math.round(item.mrpPaise / 100) : pPrice,
                 quantity: item.quantity || 1,
                 type: item.type || item.masterProductId?.category || 'Item',
                 image: pImg,
+                // What the school made available for this item — the parent
+                // must pick exactly one of each before this kit can be ordered,
+                // so the vendor knows exactly what to pack for their child.
+                sizes: item.attributes?.sizes || [],
+                colors: item.attributes?.colors || [],
+                gender: item.attributes?.gender || '',
               };
             }),
             addons: [],
@@ -126,6 +140,7 @@ const KitDetailsPage = () => {
 
           setCurrentKitData(kitData);
           setSelectedItemIds(kitData.items.map((item) => item.id));
+          setSelections({});
           setLoading(false);
           return;
         }
@@ -155,6 +170,7 @@ const KitDetailsPage = () => {
 
         setCurrentKitData(kitData);
         setSelectedItemIds(kitData.items.map((item) => item.id));
+        setSelections({});
       } catch (err) {
         if (!cancelled) {
           setCurrentKitData(null);
@@ -172,10 +188,28 @@ const KitDetailsPage = () => {
   }, [kitId]);
 
   const toggleItem = (id) => {
-    setSelectedItemIds(prev => 
+    setSelectedItemIds(prev =>
       prev.includes(id) ? prev.filter(itemId => itemId !== id) : [...prev, id]
     );
   };
+
+  const setSelection = (itemIndex, field, value) => {
+    setSelections((prev) => ({
+      ...prev,
+      [itemIndex]: { ...prev[itemIndex], [field]: value },
+    }));
+  };
+
+  // Every item that offers sizes/colors must have a pick before checkout — a
+  // silent default risks the wrong size/color reaching a vendor for someone's
+  // child.
+  const itemsNeedingSelection = (currentKitData?.items || []).filter(
+    (item) => item.sizes?.length > 0 || item.colors?.length > 0
+  );
+  const missingSelections = itemsNeedingSelection.some((item) => {
+    const picked = selections[item.itemIndex] || {};
+    return (item.sizes?.length > 0 && !picked.size) || (item.colors?.length > 0 && !picked.color);
+  });
 
   const handleAddOn = (addon) => {
     if (isGuest) {
@@ -219,11 +253,24 @@ const KitDetailsPage = () => {
       setIsAuthPromptOpen(true);
       return;
     }
+    if (missingSelections) {
+      setBuyError('Please choose a size and color for every item that needs one before ordering.');
+      return;
+    }
 
     setAddingToCart(true);
     setBuyError('');
 
     try {
+      const kitSelections = (currentKitData.items || [])
+        .filter((item) => item.sizes?.length > 0 || item.colors?.length > 0)
+        .map((item) => ({
+          itemIndex: item.itemIndex,
+          name: item.name,
+          size: selections[item.itemIndex]?.size || undefined,
+          color: selections[item.itemIndex]?.color || undefined,
+        }));
+
       const kitCartItem = {
         id: currentKitData.id,
         productId: currentKitData.id,
@@ -233,6 +280,7 @@ const KitDetailsPage = () => {
         pricePaise: Math.round(currentKitData.price * 100),
         image: currentKitData.image || currentKitData.items?.find((i) => i.image)?.image || '',
         quantity: 1,
+        kitSelections,
       };
 
       await addToCart(kitCartItem);
@@ -329,35 +377,95 @@ const KitDetailsPage = () => {
         <div className="space-y-3">
           {currentKitData.items.map((item) => {
             const isSelected = selectedItemIds.includes(item.id);
+            const needsSize = item.sizes?.length > 0;
+            const needsColor = item.colors?.length > 0;
+            const picked = selections[item.itemIndex] || {};
             return (
-              <div 
+              <div
                 key={item.id}
-                onClick={() => toggleItem(item.id)}
-                className={`p-4 rounded-2xl border transition-all flex items-center justify-between gap-3 cursor-pointer ${
+                className={`p-4 rounded-2xl border transition-all space-y-3 ${
                   isSelected ? 'bg-white border-[#3b2d7d] shadow-xs' : 'bg-gray-50 border-gray-200 opacity-60'
                 }`}
               >
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-12 h-12 rounded-xl bg-gray-100 border border-gray-200 p-1 shrink-0 flex items-center justify-center">
-                    {item.image ? (
-                      <img src={item.image} alt={item.name} className="w-full h-full object-contain" />
-                    ) : (
-                      <Package size={20} className="text-purple-300" />
-                    )}
+                <div
+                  onClick={() => toggleItem(item.id)}
+                  className="flex items-center justify-between gap-3 cursor-pointer"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-12 h-12 rounded-xl bg-gray-100 border border-gray-200 p-1 shrink-0 flex items-center justify-center">
+                      {item.image ? (
+                        <img src={item.image} alt={item.name} className="w-full h-full object-contain" />
+                      ) : (
+                        <Package size={20} className="text-purple-300" />
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <h4 className="text-xs font-black text-gray-900 truncate">{item.name}</h4>
+                      <span className="text-[10px] text-gray-400 font-bold">{item.type} • Qty: {item.quantity}</span>
+                    </div>
                   </div>
-                  <div className="min-w-0">
-                    <h4 className="text-xs font-black text-gray-900 truncate">{item.name}</h4>
-                    <span className="text-[10px] text-gray-400 font-bold">{item.type} • Qty: {item.quantity}</span>
+
+                  <div className="flex items-center gap-3 shrink-0">
+                    <div className={`w-6 h-6 rounded-full border flex items-center justify-center transition-all ${
+                      isSelected ? 'bg-[#3b2d7d] border-[#3b2d7d] text-white shadow-2xs' : 'border-gray-300 bg-white'
+                    }`}>
+                      {isSelected && <Check size={13} className="stroke-[3]" />}
+                    </div>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3 shrink-0">
-                  <div className={`w-6 h-6 rounded-full border flex items-center justify-center transition-all ${
-                    isSelected ? 'bg-[#3b2d7d] border-[#3b2d7d] text-white shadow-2xs' : 'border-gray-300 bg-white'
-                  }`}>
-                    {isSelected && <Check size={13} className="stroke-[3]" />}
+                {/* Size/color pickers — required whenever the school offered options,
+                    so the vendor gets the exact fit for this child, not a guess. */}
+                {(needsSize || needsColor) && (
+                  <div className="pt-3 border-t border-gray-100 space-y-2.5" onClick={(e) => e.stopPropagation()}>
+                    {needsSize && (
+                      <div>
+                        <span className="text-[9px] font-black text-gray-400 uppercase tracking-wider block mb-1.5">
+                          Select Size <span className="text-red-500">*</span>
+                        </span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {item.sizes.map((sz) => (
+                            <button
+                              key={sz}
+                              type="button"
+                              onClick={() => setSelection(item.itemIndex, 'size', sz)}
+                              className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all border ${
+                                picked.size === sz
+                                  ? 'bg-[#3b2d7d] text-white border-[#3b2d7d]'
+                                  : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-100'
+                              }`}
+                            >
+                              {sz}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {needsColor && (
+                      <div>
+                        <span className="text-[9px] font-black text-gray-400 uppercase tracking-wider block mb-1.5">
+                          Select Color <span className="text-red-500">*</span>
+                        </span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {item.colors.map((c) => (
+                            <button
+                              key={c}
+                              type="button"
+                              onClick={() => setSelection(item.itemIndex, 'color', c)}
+                              className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all border ${
+                                picked.color === c
+                                  ? 'bg-[#3b2d7d] text-white border-[#3b2d7d]'
+                                  : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-100'
+                              }`}
+                            >
+                              {c}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                </div>
+                )}
               </div>
             );
           })}
@@ -377,6 +485,12 @@ const KitDetailsPage = () => {
             </button>
           </div>
         )}
+        {!buyError && missingSelections && !isPurchased && (
+          <div className="max-w-md mx-auto mb-3 p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 font-bold text-xs flex items-center gap-2 shadow-2xs">
+            <AlertCircle size={16} className="text-amber-500 shrink-0" />
+            <span>Select a size and color for every item above to continue.</span>
+          </div>
+        )}
         <div className="max-w-md mx-auto flex items-center justify-between gap-4">
           <div>
             <span className="text-[9px] font-black text-gray-400 uppercase tracking-wider block">Payable Amount</span>
@@ -385,13 +499,15 @@ const KitDetailsPage = () => {
 
           <button
             type="button"
-            disabled={isPurchased || addingToCart}
+            disabled={isPurchased || addingToCart || missingSelections}
             onClick={handleAddToCart}
             className={`px-6 py-3.5 font-black text-xs uppercase tracking-wider rounded-2xl shadow-lg flex items-center gap-2 transition-all active:scale-95 ${
               isPurchased
                 ? 'bg-emerald-600 text-white opacity-90 cursor-not-allowed shadow-emerald-900/10'
                 : addingToCart
                 ? 'bg-[#3b2d7d]/80 text-white cursor-wait'
+                : missingSelections
+                ? 'bg-gray-300 text-white cursor-not-allowed'
                 : 'bg-[#3b2d7d] hover:bg-[#2c2060] text-white shadow-purple-950/15'
             }`}
           >

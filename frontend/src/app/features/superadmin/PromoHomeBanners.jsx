@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import ReactDOM from 'react-dom';
 import { 
-  Plus, Edit3, Trash2, X, Upload, Image as ImageIcon, CheckCircle, ChevronRight, Link as LinkIcon, Tag, Trash 
+  Plus, Edit3, Trash2, X, Upload, Image as ImageIcon, CheckCircle, ChevronRight, Link as LinkIcon, Tag, Trash, Camera
 } from 'lucide-react';
 import { listBanners, deleteBanner, createBanner, updateBanner, uploadAdminFile } from '../../../services/adminApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
@@ -34,6 +34,7 @@ const PromoHomeBanners = () => {
   const [uploadedImages, setUploadedImages] = useState([]);
   
   const fileInputRef = useRef(null);
+  const cameraInputRef = useRef(null);
 
   const loadBanners = useCallback(async () => {
     setLoading(true);
@@ -360,25 +361,52 @@ const PromoHomeBanners = () => {
                 <input
                   type="file"
                   ref={fileInputRef}
-                  accept="image/*"
+                  accept=".png,.jpg,.jpeg,.webp"
                   multiple={!isEditing} // Allow multiple images only in "Add" mode
                   onChange={handleFileSelect}
                   className="hidden"
                 />
+                {/* capture="environment" opens the device's camera app directly
+                    on mobile; desktop browsers that don't support it fall back
+                    to the normal file picker, same as the input above. With
+                    "multiple" set, mobile browsers still only capture one photo
+                    per tap — take it again to add another slide. */}
+                <input
+                  type="file"
+                  ref={cameraInputRef}
+                  accept=".png,.jpg,.jpeg,.webp"
+                  capture="environment"
+                  multiple={!isEditing}
+                  onChange={handleFileSelect}
+                  className="hidden"
+                />
 
-                {/* Clickable Uploader Box */}
-                <div 
-                  onClick={() => fileInputRef.current?.click()}
-                  className="border-2 border-dashed rounded-2xl p-5 text-center cursor-pointer transition-all border-gray-250 hover:bg-gray-50/70 bg-white"
-                >
-                  <div className="flex flex-col items-center gap-1.5 select-none">
+                {/* Uploader Box */}
+                <div className="border-2 border-dashed rounded-2xl p-5 text-center transition-all border-gray-250 bg-white">
+                  <div className="flex flex-col items-center gap-2 select-none">
                     <Upload size={24} className="text-gray-400" />
                     <span className="text-gray-700 font-black">
                       {isEditing ? 'Choose replacement banner image' : 'Choose / select multiple banner files'}
                     </span>
-                    <span className="text-[8px] text-gray-400">
+                    <span className="text-[8px] text-gray-400 mb-1.5">
                       {isEditing ? 'Select one PNG/JPEG' : 'Select one or more PNG/JPEG image slides'}
                     </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => cameraInputRef.current?.click()}
+                        className="px-3.5 py-2 rounded-lg border border-gray-200 hover:border-indigo-300 bg-white text-[11px] font-black text-gray-700 flex items-center gap-1.5 transition-colors"
+                      >
+                        <Camera size={13} /> Take Photo
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="px-3.5 py-2 rounded-lg border border-gray-200 hover:border-indigo-300 bg-white text-[11px] font-black text-gray-700 flex items-center gap-1.5 transition-colors"
+                      >
+                        <Upload size={13} /> Choose File
+                      </button>
+                    </div>
                   </div>
                 </div>
 

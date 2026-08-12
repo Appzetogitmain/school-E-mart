@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, ShieldAlert, Upload, User, Phone,
   Mail, MapPin, Briefcase, Lock, CheckCircle2, ChevronRight,
-  Save, X, Loader2, LogOut, Building2, MonitorPlay
+  Save, X, Loader2, LogOut, Building2, MonitorPlay, Camera
 } from 'lucide-react';
 import { updateTeacher, getSchool, uploadSchoolFile } from '../../../services/schoolApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
@@ -42,6 +42,7 @@ const TeacherProfile = () => {
 
   // File Upload Ref
   const fileInputRef = useRef(null);
+  const cameraInputRef = useRef(null);
 
   // Password Modal states
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
@@ -190,6 +191,12 @@ const TeacherProfile = () => {
     }
   };
 
+  const handleTakePhoto = () => {
+    if (cameraInputRef.current) {
+      cameraInputRef.current.click();
+    }
+  };
+
   const handleFileChange = async (e) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
@@ -311,22 +318,44 @@ const TeacherProfile = () => {
             </div>
           </div>
 
-          <input 
-            type="file" 
-            ref={fileInputRef} 
-            onChange={handleFileChange} 
-            accept="image/*" 
-            className="hidden" 
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileChange}
+            accept=".png,.jpg,.jpeg,.webp"
+            className="hidden"
+          />
+          {/* capture="environment" opens the device's camera app directly on
+              mobile; desktop browsers that don't support it just fall back to
+              the normal file picker, same as the "Choose File" input above. */}
+          <input
+            type="file"
+            ref={cameraInputRef}
+            onChange={handleFileChange}
+            accept=".png,.jpg,.jpeg,.webp"
+            capture="environment"
+            className="hidden"
           />
 
-          <button 
-            type="button"
-            onClick={handleAvatarChange}
-            className="px-4 py-2 border border-primary hover:bg-primary hover:text-white text-primary active:scale-95 transition-all rounded-xl text-[9px] font-black flex items-center gap-1 shadow-sm"
-          >
-            <Upload size={12} />
-            <span>Change</span>
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={handleTakePhoto}
+              className="px-3 py-2 border border-primary hover:bg-primary hover:text-white text-primary active:scale-95 transition-all rounded-xl text-[9px] font-black flex items-center gap-1 shadow-sm"
+              title="Take a photo"
+            >
+              <Camera size={12} />
+              <span>Take Photo</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleAvatarChange}
+              className="px-3 py-2 border border-primary hover:bg-primary hover:text-white text-primary active:scale-95 transition-all rounded-xl text-[9px] font-black flex items-center gap-1 shadow-sm"
+            >
+              <Upload size={12} />
+              <span>Choose File</span>
+            </button>
+          </div>
         </div>
 
         {/* Form Container */}

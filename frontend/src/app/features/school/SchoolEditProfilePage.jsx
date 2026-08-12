@@ -1,9 +1,9 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  ArrowLeft, Upload, User, Mail, Phone, 
-  MapPin, Home, Globe, Navigation, 
-  ShieldCheck, Check, AlertCircle, ImageIcon, Building2
+  ArrowLeft, Upload, User, Mail, Phone,
+  MapPin, Home, Globe, Navigation,
+  ShieldCheck, Check, AlertCircle, ImageIcon, Building2, Camera
 } from 'lucide-react';
 import { getSchool, updateSchool } from '../../../services/schoolApi';
 import { getMyProfile, updateMyProfile } from '../../../services/parentApi';
@@ -14,6 +14,7 @@ import { toAbsoluteUrl } from '../../../utils/url';
 const SchoolEditProfilePage = () => {
   const navigate = useNavigate();
   const fileInputRef = useRef(null);
+  const cameraInputRef = useRef(null);
   const schoolId = useSchoolId();
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
@@ -87,6 +88,10 @@ const SchoolEditProfilePage = () => {
 
   const handlePhotoClick = () => {
     fileInputRef.current?.click();
+  };
+
+  const handleTakePhotoClick = () => {
+    cameraInputRef.current?.click();
   };
 
   const handleFileChange = (e) => {
@@ -213,14 +218,21 @@ const SchoolEditProfilePage = () => {
         ) : (
         <>
         <div className="flex flex-col items-center gap-4">
-          <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" className="hidden" />
+          <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".png,.jpg,.jpeg,.webp" className="hidden" />
+          {/* capture="environment" opens the device's camera app directly on
+              mobile; desktop browsers that don't support it fall back to the
+              normal file picker, same as the Upload input above. */}
+          <input type="file" ref={cameraInputRef} onChange={handleFileChange} accept=".png,.jpg,.jpeg,.webp" capture="environment" className="hidden" />
           <div className="relative group">
             <div className="w-28 h-28 rounded-[2.5rem] bg-white p-1.5 shadow-xl border-2 border-primary/20">
               <div className="w-full h-full rounded-[2rem] bg-gray-100 overflow-hidden relative flex items-center justify-center">
                 {formData.photo ? <img src={formData.photo} alt="School Logo" className="w-full h-full object-cover" /> : <Building2 size={36} className="text-gray-300" />}
               </div>
             </div>
-            <button onClick={handlePhotoClick} title="Upload Logo" className="absolute bottom-0 right-0 w-10 h-10 bg-primary text-white rounded-2xl flex items-center justify-center shadow-lg border-4 border-white active:scale-90 transition-all">
+            <button onClick={handleTakePhotoClick} title="Take a photo" className="absolute bottom-0 left-0 w-10 h-10 bg-white text-primary rounded-2xl flex items-center justify-center shadow-lg border-4 border-white active:scale-90 transition-all hover:bg-primary hover:text-white">
+              <Camera size={18} />
+            </button>
+            <button onClick={handlePhotoClick} title="Choose File" className="absolute bottom-0 right-0 w-10 h-10 bg-primary text-white rounded-2xl flex items-center justify-center shadow-lg border-4 border-white active:scale-90 transition-all">
               <Upload size={18} />
             </button>
           </div>

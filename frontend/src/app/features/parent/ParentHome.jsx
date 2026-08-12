@@ -9,8 +9,8 @@ import {
 } from 'lucide-react';
 import AppHeader from '../../components/AppHeader';
 import { getAttendanceHistory, fetchParentHomework, listParentNotices } from '../../../services/parentApi';
-import { listKits } from '../../../services/schoolApi';
-import { listOrders } from '../../../services/ordersApi';
+import { useKitProcurementProgress } from '../../../hooks/useKitProcurementProgress';
+import { useChildInfo } from '../../../utils/parentContext';
 import { toLocalDateKey } from '../../../utils/date';
 import { buildHomeworkStats, mapAssignmentForParentHomework } from '../../../utils/mappers/parentMapper';
 import ProductCard from '../../components/ProductCard';
@@ -37,17 +37,16 @@ const ParentHome = () => {
   const [scrolled, setScrolled] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isAuthPromptOpen, setIsAuthPromptOpen] = useState(false);
-  const [childInfo, setChildInfo] = useState(() => {
-    const saved = localStorage.getItem('childInfo');
-    return saved ? JSON.parse(saved) : {
-      name: "Guest",
-      school: "Explore Schools",
-      grade: "Select Grade",
-      phone: ""
-    };
-  });
 
-  const isGuest = !localStorage.getItem('childInfo');
+  const activeChildInfo = useChildInfo();
+  const childInfo = activeChildInfo || {
+    name: "Guest",
+    school: "Explore Schools",
+    grade: "Select Grade",
+    phone: ""
+  };
+
+  const isGuest = !localStorage.getItem('childInfo') && !useAuthStore.getState().user;
   const { tree: categoryTree } = useCategoryTree();
   const { products: essentialProducts, loading: essentialLoading } = useProducts({ limit: 4, sort: 'popular' });
   const uniformsHeader = findHeaderCategory(categoryTree, 'uniforms');
@@ -70,74 +69,7 @@ const ParentHome = () => {
   const [todayAttendance, setTodayAttendance] = useState(null);
   const [pendingHomeworkCount, setPendingHomeworkCount] = useState(0);
   const [noticeAlerts, setNoticeAlerts] = useState([]);
-  const [kitStats, setKitStats] = useState({ totalKits: 0, purchasedCount: 0, remainingCount: 0, progressPercent: 0 });
-
-  useEffect(() => {
-    const loadKitsReadiness = async () => {
-      const { schoolId } = getResolvedContext();
-      if (!schoolId || schoolId === 'explore-schools' || isGuest) {
-        setKitStats({ totalKits: 0, purchasedCount: 0, remainingCount: 0, progressPercent: 0 });
-        return;
-      }
-      try {
-        const purchasedSet = new Set();
-        try {
-          const { data: ordersData } = await listOrders({ limit: 100 });
-          const validOrders = (ordersData || []).filter((o) => {
-            const isCancelled = ['cancelled', 'returned'].includes(o.status || o.orderStatus);
-            const isPaid = ['paid', 'authorized'].includes(o.paymentStatus) || o.paymentMethod === 'cod';
-            return !isCancelled && isPaid;
-          });
-          validOrders.forEach((order) => {
-            (order.items || []).forEach((item) => {
-              if (item.kitId) purchasedSet.add(String(item.kitId));
-              if (item.productId) purchasedSet.add(String(item.productId));
-            });
-          });
-        } catch {
-          // ignore order fetch error
-        }
-
-        const { data: rawKits } = await listKits(schoolId, { status: 'active', limit: 100 });
-
-        const matchesStudentGrade = (kitClasses, sGrade) => {
-          if (!sGrade || sGrade === 'Select Grade') return true;
-          const kGrade = String(kitClasses || '').toLowerCase().trim();
-          const studentG = String(sGrade).toLowerCase().trim();
-          if (!kGrade || kGrade === 'all' || kGrade === 'all classes') return true;
-          const kitNum = kGrade.match(/\d+/)?.[0];
-          const studentNum = studentG.match(/\d+/)?.[0];
-          if (kitNum && studentNum) return kitNum === studentNum;
-          return kGrade.includes(studentG) || studentG.includes(kGrade);
-        };
-
-        const classKits = (rawKits || []).filter((k) => matchesStudentGrade(k.classGrade, childInfo?.grade));
-        const total = classKits.length;
-        const purchased = classKits.filter((k) => purchasedSet.has(String(k._id)) || purchasedSet.has(String(k.id))).length;
-        const remaining = Math.max(0, total - purchased);
-        const percent = total > 0 ? Math.round((purchased / total) * 100) : 0;
-
-        setKitStats({
-          totalKits: total,
-          purchasedCount: purchased,
-          remainingCount: remaining,
-          progressPercent: percent,
-        });
-      } catch {
-        setKitStats({ totalKits: 0, purchasedCount: 0, remainingCount: 0, progressPercent: 0 });
-      }
-    };
-    loadKitsReadiness();
-  }, [childInfo]);
-
-  useEffect(() => {
-    const handleUpdate = () => {
-      const saved = localStorage.getItem('childInfo');
-      if (saved) setChildInfo(JSON.parse(saved));
-    };
-    window.addEventListener('storage', handleUpdate);
-    return () => window.removeEventListener('storage', handleUpdate);
-  }, []);
+  const kitStats = useKitProcurementProgress(childInfo, { isGuest });
 
   const getResolvedContext = () => {
     let studentId = childInfo?.studentId;
@@ -193,7 +125,7 @@ const ParentHome = () => {
       }
     };
     fetchTodayAttendance();
-  }, [childInfo]);
+  }, [childInfo?.schoolId, childInfo?.studentId]);
 
   useEffect(() => {
     const loadHomeworkSummary = async () => {
@@ -211,7 +143,7 @@ const ParentHome = () => {
       }
     };
     loadHomeworkSummary();
-  }, [childInfo]);
+  }, [childInfo?.schoolId, childInfo?.studentId, childInfo?.grade]);
 
   useEffect(() => {
     const loadNoticeAlerts = async () => {
@@ -233,7 +165,7 @@ const ParentHome = () => {
       }
     };
     loadNoticeAlerts();
-  }, [childInfo]);
+  }, [childInfo?.schoolId]);
 
   const getTodayStatusDetails = () => {
     if (!todayAttendance) {

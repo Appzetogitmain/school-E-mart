@@ -35,6 +35,7 @@ const mapKit = (k) => {
     price: ((k.pricePaise || 0) / 100).toFixed(0),
     mrp: k.mrpPaise ? ((k.mrpPaise || 0) / 100).toFixed(0) : null,
     vendorName,
+    salesCount: k.salesCount || 0,
     status: k.status === 'active' ? 'Active' : 'Draft',
     updatedDate: k.audit?.updatedAt
       ? new Date(k.audit.updatedAt).toLocaleDateString('en-GB')
@@ -340,6 +341,19 @@ const SchoolKitsPage = () => {
                   </div>
                 </div>
 
+                {/* Sold count — quick link to the purchases report */}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    navigate(`/school/kits/${kit.id}/purchases`);
+                  }}
+                  className="mt-1.5 inline-flex items-center gap-1 text-[10px] font-black text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-full px-2 py-0.5 hover:bg-emerald-100 transition-all"
+                >
+                  <ShoppingBag size={10} />
+                  {kit.salesCount} Sold — View Purchases
+                </button>
+
               </div>
             </div>
 
@@ -398,6 +412,17 @@ const SchoolKitsPage = () => {
                     className="w-full px-4 py-2.5 flex items-center gap-2.5 text-[11px] font-black text-deep-purple hover:bg-gray-50 text-left"
                   >
                     <Pencil size={13} className="text-[#3b2d7d]" /> Edit kit details
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpenMenuId(null);
+                      navigate(`/school/kits/${kit.id}/purchases`);
+                    }}
+                    className="w-full px-4 py-2.5 flex items-center gap-2.5 text-[11px] font-black text-deep-purple hover:bg-gray-50 text-left border-t border-gray-100"
+                  >
+                    <ShoppingBag size={13} className="text-emerald-600" /> View sales / purchases
                   </button>
 
                   <button
@@ -594,6 +619,19 @@ const SchoolKitsPage = () => {
                 >
                   <Power size={13} />
                   <span>{selectedKit.status === 'Active' ? 'Set Inactive' : 'Activate'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const kitToView = selectedKit;
+                    setSelectedKit(null);
+                    navigate(`/school/kits/${kitToView.id}/purchases`);
+                  }}
+                  className="flex-1 sm:flex-initial px-4 py-2.5 bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 font-black rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95 shadow-xs"
+                >
+                  <ShoppingBag size={13} />
+                  <span>Sales ({selectedKit.salesCount})</span>
                 </button>
               </div>
 

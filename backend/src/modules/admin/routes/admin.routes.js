@@ -268,6 +268,12 @@ router.get(
   validateParams(validators.schoolIdParam),
   adminController.getSchool
 );
+router.get(
+  '/schools/:schoolId/parents',
+  ...adminOnly,
+  validateParams(validators.schoolIdParam),
+  adminController.getSchoolParents
+);
 // Master-admin-only: set a school's commission rates.
 router.patch(
   '/schools/:schoolId/commission',

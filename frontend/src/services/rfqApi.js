@@ -36,11 +36,49 @@ export const updateRfq = async (schoolId, rfqId, payload) => {
   return unwrapData(response)?.rfq;
 };
 
+/** Only valid while the request is still open/under review — the server rejects
+ *  cancelling anything already awarded (a real contract) or already terminal. */
+export const cancelRfq = async (schoolId, rfqId) => {
+  const response = await apiClient.patch(schoolRfqPath(schoolId, `/${rfqId}`), { status: 'cancelled' });
+  return unwrapData(response)?.rfq;
+};
+
 export const awardRfqQuote = async (schoolId, rfqId, quoteId) => {
   const response = await apiClient.post(
     schoolRfqPath(schoolId, `/${rfqId}/quotes/${quoteId}/award`)
   );
   return unwrapData(response)?.rfq;
+};
+
+const rfqOrderPath = (schoolId, orderId, suffix = '') =>
+  `/schools/${schoolId}/rfq-orders/${orderId}${suffix}`;
+
+/** Creates the gateway payment for the vendor-set advance on an awarded RFQ
+ *  order. Returns { payment, checkout } — checkout is null once nothing is
+ *  left to collect from the gateway (e.g. a 0% advance). */
+export const initiateRfqAdvancePayment = async (schoolId, orderId) => {
+  const response = await apiClient.post(rfqOrderPath(schoolId, orderId, '/advance/initiate'));
+  return unwrapData(response);
+};
+
+/** Confirms the advance after the Razorpay checkout completes. */
+export const confirmRfqAdvancePayment = async (schoolId, orderId, payload = {}) => {
+  const response = await apiClient.post(rfqOrderPath(schoolId, orderId, '/advance/confirm'), payload);
+  return unwrapData(response);
+};
+
+/** Creates the gateway payment for whatever's left of the order total, once
+ *  the advance has already been captured. Available any time after that —
+ *  there's no gate tied to delivery status. */
+export const initiateRfqRemainderPayment = async (schoolId, orderId) => {
+  const response = await apiClient.post(rfqOrderPath(schoolId, orderId, '/remainder/initiate'));
+  return unwrapData(response);
+};
+
+/** Confirms the remainder after the Razorpay checkout completes, settling the order. */
+export const confirmRfqRemainderPayment = async (schoolId, orderId, payload = {}) => {
+  const response = await apiClient.post(rfqOrderPath(schoolId, orderId, '/remainder/confirm'), payload);
+  return unwrapData(response);
 };
 
 export const listVendorRfqs = async (params = {}) => {

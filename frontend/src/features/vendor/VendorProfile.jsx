@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   ShieldCheck, Building, MapPin, Landmark, FileText, Check,
-  AlertTriangle, Loader2, Upload, Trash2,
+  AlertTriangle, Loader2, Upload, Trash2, Camera,
 } from 'lucide-react';
 import useAuthStore from '../../store/useAuthStore';
 import {
@@ -83,6 +83,7 @@ const VendorProfile = () => {
   const [docType, setDocType] = useState('pan');
   const [docFile, setDocFile] = useState(null);
   const fileInputRef = React.useRef(null);
+  const cameraInputRef = React.useRef(null);
 
   const hydrate = useCallback((p) => {
     setProfile(p);
@@ -566,18 +567,51 @@ const VendorProfile = () => {
                   <input
                     ref={fileInputRef}
                     type="file"
-                    accept="image/*,application/pdf"
+                    accept=".png,.jpg,.jpeg,.webp,.pdf"
                     onChange={(e) => setDocFile(e.target.files?.[0] || null)}
                     className="hidden"
                   />
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="w-full border-2 border-dashed border-gray-200 hover:border-indigo-300 rounded-xl px-3.5 py-2.5 text-xs font-bold text-gray-500 flex items-center justify-center gap-2 transition-all"
-                  >
-                    <Upload size={13} />
-                    <span className="truncate">{docFile ? docFile.name : 'Choose image or PDF (max 5MB)'}</span>
-                  </button>
+                  {/* capture="environment" opens the device's camera app directly
+                      on mobile for photographing a physical document; desktop
+                      browsers that don't support it fall back to the normal file
+                      picker, same as the input above. */}
+                  <input
+                    ref={cameraInputRef}
+                    type="file"
+                    accept=".png,.jpg,.jpeg,.webp"
+                    capture="environment"
+                    onChange={(e) => setDocFile(e.target.files?.[0] || null)}
+                    className="hidden"
+                  />
+                  {docFile ? (
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="w-full border-2 border-dashed border-gray-200 hover:border-indigo-300 rounded-xl px-3.5 py-2.5 text-xs font-bold text-gray-500 flex items-center justify-center gap-2 transition-all"
+                    >
+                      <Upload size={13} />
+                      <span className="truncate">{docFile.name}</span>
+                    </button>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => cameraInputRef.current?.click()}
+                        className="border-2 border-dashed border-gray-200 hover:border-indigo-300 rounded-xl px-3 py-2.5 text-xs font-bold text-gray-500 flex items-center justify-center gap-1.5 transition-all"
+                      >
+                        <Camera size={13} />
+                        <span>Take Photo</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="border-2 border-dashed border-gray-200 hover:border-indigo-300 rounded-xl px-3 py-2.5 text-xs font-bold text-gray-500 flex items-center justify-center gap-1.5 transition-all"
+                      >
+                        <Upload size={13} />
+                        <span>Choose File</span>
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
 

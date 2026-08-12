@@ -18,7 +18,19 @@ const cartSchema = new mongoose.Schema({
     mrpPaise: { type: Number, required: true, min: 0 },
     quantity: { type: Number, required: true, min: 1 },
     size: { type: String },
-    weightGrams: { type: Number }
+    weightGrams: { type: Number },
+    // Only present when productId is a Kit: the parent's chosen size/color for
+    // each kit item that offers a choice, positionally matched to Kit.items by
+    // index. Re-validated against the live kit again at checkout (see
+    // checkout.service.js) since the kit can change between add-to-cart and
+    // placing the order.
+    kitSelections: [{
+      itemIndex: { type: Number, required: true },
+      name: { type: String },
+      size: { type: String },
+      color: { type: String },
+      _id: false
+    }]
   }],
   subtotalPaise: { type: Number, required: true, default: 0, min: 0 },
   taxPaise: { type: Number, required: true, default: 0, min: 0 },

@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { 
-  Package, Plus, Search, Filter, Trash2, Edit3, X, Check, 
+  Package, Plus, Search, Filter, Trash2, Edit3, X, Check,
   Loader2, AlertCircle, ImageIcon, Layers, Tag, Upload, FileText, Sparkles, Image as LucideImage,
-  LayoutGrid, List
+  LayoutGrid, List, Camera
 } from 'lucide-react';
 import { 
   listMasterKitProducts, createMasterKitProduct, 
@@ -599,14 +599,22 @@ const KitProductsManagement = () => {
                     )}
                   </div>
 
-                  <div className="md:col-span-2 space-y-2.5">
+                  <div className="md:col-span-2 space-y-2">
                     {/* Uploaded files only — every product image must live under
                         the server's own uploads folder, never a pasted
-                        third-party URL. */}
+                        third-party URL. capture="environment" opens the
+                        device's camera app directly on mobile; desktop
+                        browsers that don't support it fall back to the normal
+                        file picker, same as "Choose Photo File". */}
+                    <label className="w-full px-4 py-2.5 bg-purple-50 hover:bg-purple-100 active:scale-95 text-[#0B1528] font-black rounded-xl cursor-pointer transition-all flex items-center justify-center gap-2 border border-purple-200/60 shadow-sm text-xs">
+                      {uploadingImage ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />}
+                      <span>{uploadingImage ? 'Uploading Image...' : 'Take Photo'}</span>
+                      <input type="file" accept=".png,.jpg,.jpeg,.webp" capture="environment" onChange={handleImageUpload} className="hidden" disabled={uploadingImage} />
+                    </label>
                     <label className="w-full px-4 py-2.5 bg-purple-50 hover:bg-purple-100 active:scale-95 text-[#0B1528] font-black rounded-xl cursor-pointer transition-all flex items-center justify-center gap-2 border border-purple-200/60 shadow-sm text-xs">
                       {uploadingImage ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
                       <span>{uploadingImage ? 'Uploading Image...' : 'Choose Photo File'}</span>
-                      <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" disabled={uploadingImage} />
+                      <input type="file" accept=".png,.jpg,.jpeg,.webp" onChange={handleImageUpload} className="hidden" disabled={uploadingImage} />
                     </label>
                   </div>
                 </div>

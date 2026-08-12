@@ -3,9 +3,9 @@ import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import {
   ArrowLeft, Calendar, Clock, Bookmark, Edit2,
   Tag, Flag, FileText, Paperclip, Info, BookOpen,
-  Trash2, Plus, Save, File, Check, Loader2, Award, Lock, Image
+  Trash2, Plus, Save, File, Check, Loader2, Award, Lock, Image, Camera
 } from 'lucide-react';
-import { createAssignment, updateAssignment } from '../../../services/lmsApi';
+import { createAssignment, updateAssignment, fetchSubmissionAttachment } from '../../../services/lmsApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 import { parseClassGrade, parseSection } from '../../../utils/mappers/teacherMapper';
 import { ensureCourse } from '../../../utils/teacherApiHelpers';
@@ -28,6 +28,7 @@ const TeacherHomework = () => {
   const authUser = useAuthUser();
   const { classLabels, getSections, getSubjects } = useTeacherClassOptions(schoolId);
   const fileInputRef = React.useRef(null);
+  const cameraFileInputRef = React.useRef(null);
 
   // Editing an existing homework arrives with its data via navigation state
   // (set by the Manage Homework list) — there is no other way to reach this
@@ -73,13 +74,52 @@ const TeacherHomework = () => {
 
   // Attachments Mock State (Starts empty)
   const [attachments, setAttachments] = useState([]);
-  
+
   // Homework Banner Image State & Ref
   const bannerInputRef = React.useRef(null);
+  const cameraBannerInputRef = React.useRef(null);
   const [bannerFile, setBannerFile] = useState(null);
   const [bannerPreview, setBannerPreview] = useState('');
+  const [loadingBanner, setLoadingBanner] = useState(false);
+  // The banner already on this homework (edit mode only) — kept separate from
+  // `bannerFile` so we know whether a save with no new file means "leave it alone" or
+  // "the parent explicitly cleared it".
+  const existingBannerId = editingHomework?.bannerAttachmentId || null;
+  const [bannerRemoved, setBannerRemoved] = useState(false);
+
+  // Preload the current banner for preview when editing. Fetched through the same
+  // authorized endpoint the parent view uses, since submission/homework attachments
+  // are never served statically.
+  useEffect(() => {
+    if (!isEdit || !existingBannerId || !schoolId || bannerFile || bannerRemoved) return undefined;
+
+    let cancelled = false;
+    let objectUrl = null;
+    setLoadingBanner(true);
+    (async () => {
+      try {
+        const url = await fetchSubmissionAttachment(schoolId, existingBannerId);
+        if (cancelled) {
+          URL.revokeObjectURL(url);
+          return;
+        }
+        objectUrl = url;
+        setBannerPreview(url);
+      } catch {
+        if (!cancelled) setBannerPreview('');
+      } finally {
+        if (!cancelled) setLoadingBanner(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [isEdit, existingBannerId, schoolId, bannerFile, bannerRemoved]);
 
   const [showToast, setShowToast] = useState(false);
+  const [savedAsDraft, setSavedAsDraft] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -110,6 +150,7 @@ const TeacherHomework = () => {
     }
     setError('');
     setBannerFile(file);
+    setBannerRemoved(false);
     const reader = new FileReader();
     reader.onload = () => setBannerPreview(reader.result);
     reader.readAsDataURL(file);
@@ -119,6 +160,10 @@ const TeacherHomework = () => {
   const handleRemoveBanner = () => {
     setBannerFile(null);
     setBannerPreview('');
+    // In edit mode, removing a banner that was already saved must tell the server to
+    // clear it — leaving both flags false would just make the preload effect fetch it
+    // right back.
+    if (isEdit && existingBannerId) setBannerRemoved(true);
   };
 
   useEffect(() => {
@@ -159,8 +204,8 @@ const TeacherHomework = () => {
     e.target.value = '';
   };
 
-  const handleAddHomework = async (e) => {
-    e.preventDefault();
+  const handleAddHomework = async (e, desiredStatus = 'published') => {
+    if (e?.preventDefault) e.preventDefault();
     if (editDataMissing) return;
     if (!title.trim()) {
       setError('Please enter a homework title');
@@ -189,6 +234,11 @@ const TeacherHomework = () => {
         ...(chapter.trim() ? { chapter: chapter.trim() } : {}),
       };
 
+      // The banner is uploaded and validated on its own — it must never share the
+      // attachments' 5-file cap, and a stray non-image file here can't silently end up
+      // filed as a reference attachment (or vice versa).
+      const bannerFileEncoded = bannerFile ? (await filesToCompressedDataUrls([bannerFile]))[0] : undefined;
+
       if (isEdit) {
         // Class, section and subject pin down which course the homework
         // belongs to — those are fixed at creation, so only the rest changes.
@@ -202,6 +252,8 @@ const TeacherHomework = () => {
           priority,
           ...(Object.keys(reference).length ? { reference } : {}),
           maxScore: parsedMaxScore,
+          ...(bannerFileEncoded ? { bannerFile: bannerFileEncoded } : {}),
+          ...(!bannerFileEncoded && bannerRemoved ? { removeBanner: true } : {}),
         });
 
         setShowToast(true);
@@ -222,15 +274,8 @@ const TeacherHomework = () => {
         instructorUserId: authUser?.id,
       });
 
-      const allFilesToUpload = [];
-      if (bannerFile) {
-        allFilesToUpload.push(bannerFile);
-      }
-      attachments.forEach((att) => {
-        if (att.file) allFilesToUpload.push(att.file);
-      });
-
-      const files = await filesToCompressedDataUrls(allFilesToUpload);
+      const attachmentFiles = attachments.map((att) => att.file).filter(Boolean);
+      const files = await filesToCompressedDataUrls(attachmentFiles);
 
       await createAssignment(schoolId, course._id || course.id, {
         title: title.trim(),
@@ -244,14 +289,16 @@ const TeacherHomework = () => {
         priority,
         ...(Object.keys(reference).length ? { reference } : {}),
         maxScore: parsedMaxScore,
-        status: 'published',
+        status: desiredStatus,
         files,
+        ...(bannerFileEncoded ? { bannerFile: bannerFileEncoded } : {}),
       });
 
+      setSavedAsDraft(desiredStatus === 'draft');
       setShowToast(true);
       setTimeout(() => {
         setShowToast(false);
-        navigate('/school/teacher/dashboard');
+        navigate(desiredStatus === 'draft' ? '/school/teacher/homework/manage' : '/school/teacher/dashboard');
       }, 2000);
     } catch (err) {
       setError(getErrorMessage(err, isEdit ? 'Unable to update homework' : 'Unable to add homework'));
@@ -298,7 +345,9 @@ const TeacherHomework = () => {
           <div className="w-6 h-6 bg-white/20 rounded-full flex items-center justify-center">
             <Check size={14} strokeWidth={3} />
           </div>
-          <span className="text-xs font-black">{isEdit ? 'Homework Updated Successfully!' : 'Homework Added Successfully!'}</span>
+          <span className="text-xs font-black">
+            {isEdit ? 'Homework Updated Successfully!' : savedAsDraft ? 'Saved as Draft!' : 'Homework Published Successfully!'}
+          </span>
         </div>
       )}
 
@@ -606,14 +655,37 @@ const TeacherHomework = () => {
           <input
             ref={bannerInputRef}
             type="file"
-            accept="image/*"
+            accept=".png,.jpg,.jpeg,.webp"
+            className="hidden"
+            onChange={handleBannerSelect}
+          />
+          {/* capture="environment" opens the device's camera app directly on
+              mobile; desktop browsers that don't support it fall back to the
+              normal file picker, same as the input above. */}
+          <input
+            ref={cameraBannerInputRef}
+            type="file"
+            accept=".png,.jpg,.jpeg,.webp"
+            capture="environment"
             className="hidden"
             onChange={handleBannerSelect}
           />
 
-          {bannerPreview ? (
+          {loadingBanner ? (
+            <div className="w-full h-40 rounded-2xl border border-dashed border-gray-200 flex items-center justify-center">
+              <Loader2 size={20} className="animate-spin text-gray-400" />
+            </div>
+          ) : bannerPreview ? (
             <div className="relative w-full h-40 rounded-2xl overflow-hidden border border-gray-200 group">
               <img src={bannerPreview} alt="Homework Banner Preview" className="w-full h-full object-cover" />
+              <button
+                type="button"
+                onClick={() => cameraBannerInputRef.current?.click()}
+                className="absolute top-2.5 right-11 w-8 h-8 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-primary transition-colors shadow-md"
+                title="Take a new photo"
+              >
+                <Camera size={14} />
+              </button>
               <button
                 type="button"
                 onClick={handleRemoveBanner}
@@ -624,15 +696,24 @@ const TeacherHomework = () => {
               </button>
             </div>
           ) : (
-            <button
-              type="button"
-              onClick={() => bannerInputRef.current?.click()}
-              className="w-full py-6 border-2 border-dashed border-purple-200 hover:border-primary active:scale-[0.99] transition-all rounded-2xl flex flex-col items-center justify-center gap-2 text-xs font-bold text-primary bg-purple-50/50 hover:bg-purple-50"
-            >
-              <Image size={24} className="text-primary/70" />
-              <span className="font-black text-xs">Upload Banner Image</span>
-              <span className="text-[9px] text-gray-400 font-normal">PNG, JPG, WEBP recommended</span>
-            </button>
+            <div className="grid grid-cols-2 gap-2.5">
+              <button
+                type="button"
+                onClick={() => cameraBannerInputRef.current?.click()}
+                className="py-6 border-2 border-dashed border-purple-200 hover:border-primary active:scale-[0.99] transition-all rounded-2xl flex flex-col items-center justify-center gap-2 text-xs font-bold text-primary bg-purple-50/50 hover:bg-purple-50"
+              >
+                <Camera size={22} className="text-primary/70" />
+                <span className="font-black text-xs">Take Photo</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => bannerInputRef.current?.click()}
+                className="py-6 border-2 border-dashed border-purple-200 hover:border-primary active:scale-[0.99] transition-all rounded-2xl flex flex-col items-center justify-center gap-2 text-xs font-bold text-primary bg-purple-50/50 hover:bg-purple-50"
+              >
+                <Image size={22} className="text-primary/70" />
+                <span className="font-black text-xs">Choose File</span>
+              </button>
+            </div>
           )}
         </div>
 
@@ -709,18 +790,41 @@ const TeacherHomework = () => {
                 ref={fileInputRef}
                 type="file"
                 multiple
-                accept="image/*,application/pdf"
+                accept=".png,.jpg,.jpeg,.webp,.pdf,.doc,.docx"
                 className="hidden"
                 onChange={handleAttachmentSelected}
               />
-              <button
-                type="button"
-                onClick={handleAddAttachment}
-                className="w-32 py-2 border border-dashed border-primary/45 hover:border-primary active:scale-95 transition-all rounded-xl flex items-center justify-center gap-1.5 text-[10px] font-black text-primary bg-primary/5 shadow-sm"
-              >
-                <Plus size={14} strokeWidth={2.5} />
-                <span>Add More</span>
-              </button>
+              {/* capture="environment" opens the device's camera app directly on
+                  mobile; desktop browsers that don't support it fall back to the
+                  normal file picker, same as the input above. Camera capture is
+                  image-only, unlike the file picker which also accepts PDFs/docs. */}
+              <input
+                ref={cameraFileInputRef}
+                type="file"
+                multiple
+                accept=".png,.jpg,.jpeg,.webp"
+                capture="environment"
+                className="hidden"
+                onChange={handleAttachmentSelected}
+              />
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => cameraFileInputRef.current?.click()}
+                  className="py-2 px-3 border border-dashed border-primary/45 hover:border-primary active:scale-95 transition-all rounded-xl flex items-center justify-center gap-1.5 text-[10px] font-black text-primary bg-primary/5 shadow-sm"
+                >
+                  <Camera size={14} strokeWidth={2.5} />
+                  <span>Take Photo</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleAddAttachment}
+                  className="py-2 px-3 border border-dashed border-primary/45 hover:border-primary active:scale-95 transition-all rounded-xl flex items-center justify-center gap-1.5 text-[10px] font-black text-primary bg-primary/5 shadow-sm"
+                >
+                  <Plus size={14} strokeWidth={2.5} />
+                  <span>Add More</span>
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -789,16 +893,26 @@ const TeacherHomework = () => {
 
       </form>
 
-      {/* 11. Add Homework Primary Button */}
-      <div className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white border-t border-gray-100 p-4 z-40">
-        <button 
-          type="submit"
-          onClick={handleAddHomework}
+      {/* 11. Primary Action Buttons */}
+      <div className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white border-t border-gray-100 p-4 z-40 flex gap-3">
+        {!isEdit && (
+          <button
+            type="button"
+            onClick={(e) => handleAddHomework(e, 'draft')}
+            disabled={saving}
+            className="flex-1 py-4 border border-gray-200 text-deep-purple hover:bg-gray-50 active:scale-98 transition-all rounded-[1.8rem] text-sm font-black flex items-center justify-center gap-2 disabled:opacity-60"
+          >
+            <span>Save as Draft</span>
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={(e) => handleAddHomework(e, 'published')}
           disabled={saving}
-          className="w-full py-4 bg-primary text-white hover:bg-deep-purple active:scale-98 transition-all rounded-[1.8rem] text-sm font-black shadow-lg shadow-purple-100 flex items-center justify-center gap-2 disabled:opacity-60"
+          className="flex-1 py-4 bg-primary text-white hover:bg-deep-purple active:scale-98 transition-all rounded-[1.8rem] text-sm font-black shadow-lg shadow-purple-100 flex items-center justify-center gap-2 disabled:opacity-60"
         >
           {saving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} strokeWidth={2.5} />}
-          <span>{saving ? 'Saving...' : isEdit ? 'Save Changes' : 'Add Homework'}</span>
+          <span>{saving ? 'Saving...' : isEdit ? 'Save Changes' : 'Publish Homework'}</span>
         </button>
       </div>
 

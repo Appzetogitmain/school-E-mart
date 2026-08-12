@@ -65,3 +65,8 @@ export const getOrderShipments = async (orderId) => {
   const response = await apiClient.get(`/orders/${orderId}/shipments`);
   return unwrapData(response)?.shipments || [];
 };
+
+export const getInvoice = async (orderId) => {
+  const response = await apiClient.get(`/orders/${orderId}/invoice`);
+  return unwrapData(response)?.invoice;
+};

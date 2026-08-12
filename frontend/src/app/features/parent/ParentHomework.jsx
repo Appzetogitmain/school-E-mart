@@ -40,6 +40,11 @@ const ParentHomework = () => {
     phone: "",
   });
 
+  // Banner images are fetched as blob URLs (submitted/homework attachments are never
+  // served statically). Tracked here so every reload — and unmount — revokes the
+  // previous batch instead of leaking them.
+  const bannerUrlsRef = React.useRef([]);
+
   const loadHomework = useCallback(async () => {
     const schoolId = childInfo?.schoolId;
     const studentId = childInfo?.studentId;
@@ -54,12 +59,14 @@ const ParentHomework = () => {
     setError('');
     try {
       const rows = await fetchParentHomework(schoolId, childInfo.grade, studentId);
+      const nextBannerUrls = [];
       const mapped = await Promise.all(
         rows.map(async ({ assignment, course, submission }) => {
           const item = mapAssignmentForParentHomework(assignment, course, submission);
           if (item.bannerAttachmentId) {
             try {
               const url = await fetchSubmissionAttachment(schoolId, item.bannerAttachmentId);
+              nextBannerUrls.push(url);
               item.image = url;
             } catch {
               item.image = null;
@@ -68,6 +75,8 @@ const ParentHomework = () => {
           return item;
         })
       );
+      bannerUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+      bannerUrlsRef.current = nextBannerUrls;
       setHomeworkItems(mapped);
       setHomeworkStats(buildHomeworkStats(mapped));
     } catch (err) {
@@ -77,11 +86,16 @@ const ParentHomework = () => {
     } finally {
       setLoading(false);
     }
-  }, [childInfo]);
+  }, [childInfo?.schoolId, childInfo?.studentId, childInfo?.grade]);
 
   useEffect(() => {
     loadHomework();
   }, [loadHomework]);
+
+  // Revoke on unmount too, not just on the next reload.
+  useEffect(() => () => {
+    bannerUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+  }, []);
 
   const filteredHomework = useMemo(() => {
     let items = [...homeworkItems];
@@ -89,14 +103,17 @@ const ParentHomework = () => {
       items = items.filter((item) => item.tabType === activeTab);
     }
 
+    // assignedDate/dueDate are formatted for display ("10 Aug 2026") and must never be
+    // sorted as strings — lexicographic order puts "10 Aug" before "2 Aug". Sort on the
+    // raw timestamps the mapper carries alongside them instead.
     items.sort((a, b) => {
       if (sortOrder === 'Oldest') {
-        return String(a.assignedDate).localeCompare(String(b.assignedDate));
+        return (a.assignedDateSort || 0) - (b.assignedDateSort || 0);
       }
       if (sortOrder === 'Due Date') {
-        return String(a.dueDate).localeCompare(String(b.dueDate));
+        return (a.dueDateSort || 0) - (b.dueDateSort || 0);
       }
-      return String(b.assignedDate).localeCompare(String(a.assignedDate));
+      return (b.assignedDateSort || 0) - (a.assignedDateSort || 0);
     });
 
     return items;

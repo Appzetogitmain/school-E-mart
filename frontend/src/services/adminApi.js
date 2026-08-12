@@ -125,6 +125,15 @@ export const getSchool = async (schoolId) => {
   return unwrapData(response)?.school;
 };
 
+export const getSchoolParents = async (schoolId, params = {}) => {
+  const response = await apiClient.get(`/admin/schools/${schoolId}/parents`, { params });
+  return {
+    data: response.data?.data?.parents || [],
+    pagination: response.data?.pagination || null,
+    stats: response.data?.data?.stats || null,
+  };
+};
+
 export const createSchool = async (payload) => {
   const response = await apiClient.post('/admin/schools', payload);
   return unwrapData(response)?.school;

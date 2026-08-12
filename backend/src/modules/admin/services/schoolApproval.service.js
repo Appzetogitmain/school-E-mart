@@ -19,6 +19,125 @@ const findAdminUser = (schoolId) =>
     .lean();
 
 /**
+ * Efficiently computes total, loggedIn, and neverLoggedIn parent counts for a set of school IDs.
+ */
+const getParentStatsBySchoolIds = async (schoolIds) => {
+  if (!schoolIds || !schoolIds.length) return new Map();
+
+  const ChildProfile = require('../../../database/models/ChildProfile');
+  const Student = require('../../../database/models/Student');
+  const ParentProfile = require('../../../database/models/ParentProfile');
+  const User = require('../../../database/models/User');
+
+  // 1. Find parentUserIds via ChildProfile for each school
+  const childProfiles = await ChildProfile.find({
+    schoolId: { $in: schoolIds },
+    'softDelete.isDeleted': { $ne: true },
+  }).select('schoolId parentUserId').lean();
+
+  const schoolParentUserMap = new Map();
+  schoolIds.forEach((id) => schoolParentUserMap.set(String(id), new Set()));
+
+  childProfiles.forEach((cp) => {
+    if (cp.schoolId && cp.parentUserId) {
+      const sId = String(cp.schoolId);
+      if (schoolParentUserMap.has(sId)) {
+        schoolParentUserMap.get(sId).add(String(cp.parentUserId));
+      }
+    }
+  });
+
+  // 2. Find parentUserIds via Student.parentProfileIds -> ParentProfile.userId
+  const students = await Student.find({
+    schoolId: { $in: schoolIds },
+    'softDelete.isDeleted': { $ne: true },
+  }).select('schoolId parentProfileIds').lean();
+
+  const parentProfileIds = [];
+  const schoolByParentProfileId = new Map();
+  students.forEach((s) => {
+    (s.parentProfileIds || []).forEach((pid) => {
+      const pidStr = String(pid);
+      parentProfileIds.push(pid);
+      if (!schoolByParentProfileId.has(pidStr)) {
+        schoolByParentProfileId.set(pidStr, new Set());
+      }
+      schoolByParentProfileId.get(pidStr).add(String(s.schoolId));
+    });
+  });
+
+  if (parentProfileIds.length) {
+    const parentProfiles = await ParentProfile.find({
+      _id: { $in: parentProfileIds },
+      'softDelete.isDeleted': { $ne: true },
+    }).select('_id userId').lean();
+
+    parentProfiles.forEach((pp) => {
+      const pidStr = String(pp._id);
+      const uIdStr = String(pp.userId);
+      const sIds = schoolByParentProfileId.get(pidStr);
+      if (sIds) {
+        sIds.forEach((sId) => {
+          if (schoolParentUserMap.has(sId)) {
+            schoolParentUserMap.get(sId).add(uIdStr);
+          }
+        });
+      }
+    });
+  }
+
+  const allUserIdsFromLinks = new Set();
+  schoolParentUserMap.forEach((userSet) => {
+    userSet.forEach((uId) => allUserIdsFromLinks.add(uId));
+  });
+
+  // 3. Fetch all matching parent Users (either by tenantSchoolId or linked ID)
+  const parentUsers = await User.find({
+    role: 'parent',
+    'softDelete.isDeleted': { $ne: true },
+    $or: [
+      { tenantSchoolId: { $in: schoolIds } },
+      ...(allUserIdsFromLinks.size > 0 ? [{ _id: { $in: Array.from(allUserIdsFromLinks) } }] : []),
+    ],
+  }).select('_id tenantSchoolId loginCount lastLoginAt').lean();
+
+  const statsMap = new Map();
+  schoolIds.forEach((id) => {
+    statsMap.set(String(id), { total: 0, loggedIn: 0, neverLoggedIn: 0 });
+  });
+
+  parentUsers.forEach((u) => {
+    const uIdStr = String(u._id);
+    const isLoggedIn = (u.loginCount > 0) || Boolean(u.lastLoginAt);
+
+    const targetSchools = new Set();
+    if (u.tenantSchoolId) {
+      targetSchools.add(String(u.tenantSchoolId));
+    }
+
+    schoolParentUserMap.forEach((userSet, sId) => {
+      if (userSet.has(uIdStr)) {
+        targetSchools.add(sId);
+      }
+    });
+
+    targetSchools.forEach((sId) => {
+      if (statsMap.has(sId)) {
+        const stats = statsMap.get(sId);
+        stats.total += 1;
+        if (isLoggedIn) {
+          stats.loggedIn += 1;
+        } else {
+          stats.neverLoggedIn += 1;
+        }
+      }
+    });
+  });
+
+  return statsMap;
+};
+
+/**
  * Resolves each school's admin user in one query and folds in the computed
  * display status plus the contact fields the admin table needs. Without this the
  * list has no phone number and cannot tell a rejected school from a pending one.
@@ -27,9 +146,12 @@ const decorateSchools = async (schools) => {
   if (!schools.length) return schools;
 
   const ids = schools.map((s) => s._id).filter(Boolean);
-  const admins = await User.find({ tenantSchoolId: { $in: ids }, role: 'school' })
-    .sort({ 'audit.createdAt': 1 })
-    .lean();
+  const [admins, parentStatsMap] = await Promise.all([
+    User.find({ tenantSchoolId: { $in: ids }, role: 'school' })
+      .sort({ 'audit.createdAt': 1 })
+      .lean(),
+    getParentStatsBySchoolIds(ids),
+  ]);
 
   // First admin per school wins, matching findAdminUser's ordering.
   const bySchool = new Map();
@@ -40,6 +162,7 @@ const decorateSchools = async (schools) => {
 
   return schools.map((school) => {
     const admin = bySchool.get(String(school._id)) || {};
+    const parentStats = parentStatsMap.get(String(school._id)) || { total: 0, loggedIn: 0, neverLoggedIn: 0 };
     return {
       ...school,
       status: mapSchoolDisplayStatus(school, admin),
@@ -47,6 +170,7 @@ const decorateSchools = async (schools) => {
       adminPhone: admin.phone || null,
       adminEmail: school.adminEmail || admin.email || null,
       adminUserStatus: admin.status || null,
+      parentStats,
     };
   });
 };

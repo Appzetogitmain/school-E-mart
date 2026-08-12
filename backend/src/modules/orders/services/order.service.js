@@ -62,13 +62,39 @@ const orderService = {
     return runAtomic(async (session) => {
       const opts = session ? { session } : {};
 
+      // Block duplicate kit purchases for the same parent
+      const Kit = require('../../../database/models/Kit');
+      const kitIdsInOrder = [];
+      for (const item of summary.items) {
+        const idToCheck = item.kitId || item.productId;
+        if (idToCheck) {
+          const isKit = await Kit.exists({ _id: idToCheck });
+          if (isKit) kitIdsInOrder.push(idToCheck);
+        }
+      }
+
+      if (kitIdsInOrder.length) {
+        const existingKitOrder = await Order.findOne({
+          userId,
+          orderStatus: { $nin: ['cancelled', 'returned'] },
+          $or: [
+            { 'items.kitId': { $in: kitIdsInOrder } },
+            { 'items.productId': { $in: kitIdsInOrder } },
+          ],
+        }).session(session).lean();
+
+        if (existingKitOrder) {
+          throw new BadRequestError('You have already purchased this kit.', null, 'KIT_ALREADY_PURCHASED');
+        }
+      }
+
       await inventoryService.deductStock(summary.items, session);
 
       const orderNumber = generateOrderNumber();
       const initialStatus = 'placed';
-      // COD and fully wallet-paid orders are settled up front; online orders with
-      // a payable remainder wait for gateway confirmation.
-      const paymentStatus = paymentMethod === 'cod' || payablePaise === 0 ? 'paid' : 'pending';
+      // COD and online orders with a payable balance start with pending payment status;
+      // 100% wallet-paid or zero-total orders are paid up front.
+      const paymentStatus = payablePaise === 0 ? 'paid' : 'pending';
 
       const [order] = await Order.create(
         [

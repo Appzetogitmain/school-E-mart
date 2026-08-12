@@ -94,6 +94,7 @@ const kitItemSchema = Joi.object({
   attributes: Joi.object({
     color: Joi.string().trim().optional().allow('', null),
     sizes: Joi.array().items(Joi.string().trim()).optional(),
+    colors: Joi.array().items(Joi.string().trim()).optional(),
     gender: Joi.string().trim().optional().allow('', null),
     publisher: Joi.string().trim().optional().allow('', null),
     subject: Joi.string().trim().optional().allow('', null),

@@ -3,6 +3,9 @@ const ReturnRequest = require('../../../database/models/ReturnRequest');
 const returnRepository = require('../repositories/return.repository');
 const orderService = require('./order.service');
 const inventoryService = require('./inventory.service');
+const paymentService = require('./payment.service');
+const walletService = require('../../wallet/services/wallet.service');
+const Order = require('../../../database/models/Order');
 const { RETURN_ELIGIBLE } = require('../utils/statusMachine');
 const { runAtomic } = require('../utils/atomic');
 
@@ -91,6 +94,45 @@ const returnService = {
         },
         { new: true, ...(session ? { session } : {}) }
       ).lean();
+
+      // Refund the customer for returned item
+      const refundAmount = item?.lineTotalPaise || 0;
+      const walletApplied = order.walletAmountPaise || 0;
+      const gatewayPaidPaise = Math.max(0, (order.totalPaise || 0) - walletApplied);
+
+      if (order.paymentStatus === 'paid' && refundAmount > 0) {
+        if (gatewayPaidPaise > 0) {
+          try {
+            await paymentService.initiateRefund(
+              order._id,
+              { amountPaise: Math.min(refundAmount, gatewayPaidPaise), reason: 'Item returned' },
+              { actorUserId: actor.userId, session }
+            );
+          } catch {
+            // best effort refund initiation
+          }
+        }
+
+        if (walletApplied > 0) {
+          try {
+            await walletService.postTransaction(order.userId, {
+              type: 'credit',
+              category: 'order_refund',
+              amountPaise: Math.min(refundAmount, walletApplied),
+              reference: { kind: 'Order', id: order._id },
+              description: `Wallet refund for returned item in order ${order.orderNumber}`,
+            });
+          } catch {
+            // best effort wallet refund
+          }
+        }
+
+        await Order.findByIdAndUpdate(
+          order._id,
+          { $set: { paymentStatus: 'refunded' } },
+          session ? { session } : {}
+        );
+      }
 
       await orderService.transitionStatus(
         order._id,

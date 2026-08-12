@@ -86,7 +86,7 @@ const ParentAttendance = () => {
       }
     };
     fetchHistory();
-  }, [childInfo]);
+  }, [childInfo?.schoolId, childInfo?.studentId]);
 
   useEffect(() => {
     if (records.length === 0) {

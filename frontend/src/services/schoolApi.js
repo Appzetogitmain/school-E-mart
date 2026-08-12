@@ -370,11 +370,29 @@ export const deleteKit = async (schoolId, kitId) => {
   await apiClient.delete(schoolPath(schoolId, `/kits/${kitId}`));
 };
 
+export const getKitPurchases = async (schoolId, kitId) => {
+  const response = await apiClient.get(schoolPath(schoolId, `/kits/${kitId}/purchases`));
+  return unwrapData(response);
+};
+
+// Parent-facing: which of this school's active kits has the current parent
+// already bought — powers the procurement-readiness progress bar. Backed by
+// a dedicated query (not a scan of the parent's order history), so it stays
+// correct no matter how many other orders they've placed.
+export const listPurchasedKitIds = async (schoolId) => {
+  const response = await apiClient.get(schoolPath(schoolId, '/kits/purchased'));
+  return unwrapData(response)?.purchasedKitIds || [];
+};
+
 // Parent Management APIs (parents are created automatically via student
 // enrollment — see registerStudent's parentName/parentPhone fields)
 export const listParents = async (schoolId, params = {}) => {
   const response = await apiClient.get(schoolPath(schoolId, '/parents'), { params });
-  return extractPaginated(response, 'parents');
+  return {
+    data: response.data?.data?.parents || response.data?.data || [],
+    pagination: response.data?.pagination || null,
+    stats: response.data?.data?.stats || null,
+  };
 };
 
 export const updateParent = async (schoolId, parentId, payload) => {

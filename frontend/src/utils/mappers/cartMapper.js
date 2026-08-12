@@ -56,6 +56,8 @@ export const productToCartPayload = (product, quantity = 1) => ({
   ...(product?.selectedSize || product?.size
     ? { size: product.selectedSize || product.size }
     : {}),
+  // Kit-only: the parent's per-item size/color picks, see KitDetailsPage.
+  ...(product?.kitSelections?.length ? { kitSelections: product.kitSelections } : {}),
 });
 
 export const findCartLine = (items, productId, variantId) =>

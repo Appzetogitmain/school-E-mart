@@ -108,6 +108,18 @@ const academicsController = {
     await kitsService.deleteKit(req.params.schoolId, req.params.kitId, req.auth.userId);
     return success(res, null, 'Kit deleted', undefined, req);
   }),
+
+  getKitPurchases: asyncHandler(async (req, res) => {
+    const report = await kitsService.getKitPurchaseReport(req.params.schoolId, req.params.kitId);
+    return success(res, report, 'Kit purchase report fetched', undefined, req);
+  }),
+
+  // Parent-facing: "which of this school's kits have I already bought" —
+  // powers the procurement-readiness progress bar on Home/My School/kit detail.
+  getPurchasedKitIds: asyncHandler(async (req, res) => {
+    const purchasedKitIds = await kitsService.listPurchasedKitIds(req.auth.userId, req.params.schoolId);
+    return success(res, { purchasedKitIds }, 'Purchased kits fetched', undefined, req);
+  }),
 };
 
 module.exports = academicsController;

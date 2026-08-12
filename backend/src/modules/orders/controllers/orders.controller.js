@@ -112,6 +112,9 @@ const ordersController = {
   confirmPayment: asyncHandler(async (req, res) => {
     const order = await orderService.getOrder(req.params.orderId);
     await orderAccessPolicy.assertOrderAccess(req.auth, order);
+    if (order.orderStatus === 'cancelled') {
+      throw new BadRequestError('Cannot confirm payment for a cancelled order', null, 'ORDER_CANCELLED');
+    }
     const payment = await paymentService.confirmPayment(order._id, req.body);
     await orderService.updatePaymentStatus(order._id, 'paid');
     return success(res, { payment }, 'Payment confirmed', undefined, req);

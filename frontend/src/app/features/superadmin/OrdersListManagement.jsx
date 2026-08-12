@@ -2,11 +2,12 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useSearchParams } from 'react-router-dom';
 import {
-  Eye, Search, Download, ChevronRight, X, Calendar, User, MapPin, Clock, FileText
+  Eye, Search, Download, ChevronRight, X, Calendar, User, MapPin, Clock, FileText, CheckCircle
 } from 'lucide-react';
-import { listOrders } from '../../../services/ordersApi';
+import { listOrders, getInvoice } from '../../../services/ordersApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 import { mapOrderForAdminList, ORDER_STATUS_LABELS } from '../../../utils/mappers/orderMapper';
+import InvoiceModal from '../../../components/InvoiceModal';
 
 const STATUS_QUERY_MAP = {
   delivered: ORDER_STATUS_LABELS.delivered,
@@ -40,6 +41,24 @@ const OrdersListManagement = () => {
 
   // Selected Order for Modal Details Invoice
   const [selectedOrder, setSelectedOrder] = useState(null);
+  const [invoiceModalOpen, setInvoiceModalOpen] = useState(false);
+  const [invoiceData, setInvoiceData] = useState(null);
+  const [invoiceLoading, setInvoiceLoading] = useState(false);
+  const [invoiceError, setInvoiceError] = useState('');
+
+  const handleViewInvoice = async (orderId) => {
+    setInvoiceModalOpen(true);
+    setInvoiceLoading(true);
+    setInvoiceError('');
+    try {
+      const data = await getInvoice(orderId);
+      setInvoiceData(data);
+    } catch (err) {
+      setInvoiceError(getErrorMessage(err, 'Failed to fetch invoice details'));
+    } finally {
+      setInvoiceLoading(false);
+    }
+  };
 
   useEffect(() => {
     const mapped = STATUS_QUERY_MAP[searchParams.get('status')];
@@ -364,13 +383,23 @@ const OrdersListManagement = () => {
                 <span className="text-[9px] font-black text-indigo-400 uppercase tracking-widest block">ORDER INVOICE RECEIPT</span>
                 <h3 className="text-sm font-black uppercase tracking-wider mt-0.5">{selectedOrder.id}</h3>
               </div>
-              <button
-                type="button"
-                onClick={() => setSelectedOrder(null)}
-                className="text-gray-400 hover:text-white p-1 rounded-full transition-all"
-              >
-                <X size={18} />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleViewInvoice(selectedOrder.mongoId || selectedOrder.id)}
+                  className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all cursor-pointer"
+                >
+                  <FileText size={14} />
+                  <span>Print Tax Invoice</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedOrder(null)}
+                  className="text-gray-400 hover:text-white p-1 rounded-full transition-all cursor-pointer"
+                >
+                  <X size={18} />
+                </button>
+              </div>
             </div>
 
             {/* Invoice Body content */}
@@ -487,6 +516,14 @@ const OrdersListManagement = () => {
           Copyright © 2026. Developed By <span className="text-[#0B1528] font-black">School E-Mart</span>
         </p>
       </div>
+
+      <InvoiceModal
+        isOpen={invoiceModalOpen}
+        onClose={() => setInvoiceModalOpen(false)}
+        invoiceData={invoiceData}
+        loading={invoiceLoading}
+        error={invoiceError}
+      />
 
     </div>
   );

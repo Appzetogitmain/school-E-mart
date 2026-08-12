@@ -22,8 +22,14 @@ const kitSchema = new mongoose.Schema({
     imageUrl: { type: String },
     qty: { type: Number, required: true, min: 1, default: 1 },
     attributes: {
+      // Deprecated single free-text color, kept for backward compatibility with
+      // kits created before `colors` existed. New kits should populate `colors`
+      // instead — a list of options, mirroring `sizes`, that a parent picks one
+      // of when ordering. Neither the create/edit UI nor the parent order flow
+      // reads `color` anymore.
       color: { type: String },
       sizes: [{ type: String }],
+      colors: [{ type: String }],
       gender: { type: String },
       publisher: { type: String },
       subject: { type: String },

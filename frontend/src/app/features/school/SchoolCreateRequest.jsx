@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { 
-  ArrowLeft, HelpCircle, Calendar, Users, 
-  Clipboard, Info, Check, ChevronDown, Save, 
+  ArrowLeft, HelpCircle, Calendar, Users,
+  Clipboard, Info, Check, ChevronDown, Save,
   ArrowRight, Sparkles, Plus, Edit2, Trash2,
   Upload, Image as ImageIcon, Search, Star,
-  ShieldCheck, Loader2
+  ShieldCheck, Loader2, Camera
 } from 'lucide-react';
 import { listVendors, getVendorsByIds, uploadSchoolFile } from '../../../services/schoolApi';
 import { createRfq, getSchoolRfq, updateRfq } from '../../../services/rfqApi';
@@ -14,6 +14,21 @@ import { mapSchoolVendorForInvite } from '../../../utils/mappers/schoolVendorMap
 import { buildCreateRfqPayload } from '../../../utils/mappers/rfqMapper';
 import { useSchoolId } from '../../../utils/schoolContext';
 import { toAbsoluteUrl } from '../../../utils/url';
+
+// A sane starting point for a new request's deadline — two weeks out, in
+// "yyyy-mm-dd" for the date input. Was previously a hardcoded '2025-12-15',
+// which meant every request created without the school noticing and changing
+// it published with a deadline already in the past: no vendor could ever
+// submit a quote against it.
+const defaultDeadlineDate = () => {
+  const d = new Date();
+  d.setDate(d.getDate() + 14);
+  return d.toISOString().slice(0, 10);
+};
+
+// Today, for the date input's `min` — blocks picking a past deadline outright
+// rather than relying only on the server to reject it after the fact.
+const todayDateString = () => new Date().toISOString().slice(0, 10);
 
 const SchoolCreateRequest = () => {
   const navigate = useNavigate();
@@ -42,7 +57,7 @@ const SchoolCreateRequest = () => {
 
   // STEP 3 STATES
   const [searchQuery, setSearchQuery] = useState('');
-  const [deadlineDate, setDeadlineDate] = useState('2025-12-15');
+  const [deadlineDate, setDeadlineDate] = useState(defaultDeadlineDate);
   const [additionalNotes, setAdditionalNotes] = useState('');
   
   const [vendors, setVendors] = useState([]);
@@ -209,6 +224,10 @@ const SchoolCreateRequest = () => {
     }
     if (!vendors.some((v) => v.checked)) return 'Select at least one vendor';
     if (!deadlineDate) return 'Quotation submission deadline is required';
+    // A deadline already in the past means no vendor could ever submit a quote —
+    // the server rejects this too, but catching it here means the school finds
+    // out before waiting on a publish request that's going to fail anyway.
+    if (deadlineDate < todayDateString()) return 'Quotation submission deadline must be in the future';
     return '';
   };
 
@@ -1054,20 +1073,32 @@ const SchoolCreateRequest = () => {
                   {set.images.map((img, imgIndex) => {
                     const fileInputId = `file-input-${set.id}-${imgIndex}`;
                     const previewSrc = img.preview || (img.url ? toAbsoluteUrl(img.url) : null);
+                    const onSelect = (e) => handleImageUpload(set.id, img.label, e.target.files[0]);
                     return (
-                      <label
+                      <div
                         key={imgIndex}
-                        htmlFor={fileInputId}
-                        className={`border border-dashed rounded-2xl p-3 flex flex-col items-center justify-center gap-2 hover:bg-gray-50/50 cursor-pointer group transition-colors text-center aspect-square relative overflow-hidden ${
+                        className={`border border-dashed rounded-2xl p-3 flex flex-col items-center justify-center gap-2 group transition-colors text-center aspect-square relative overflow-hidden ${
                           img.uploadError ? 'border-red-300' : 'border-gray-200'
                         }`}
                       >
+                        {/* capture="environment" opens the device's camera app
+                            directly on mobile; desktop browsers that don't
+                            support it fall back to the normal file picker,
+                            same as the gallery input below. */}
+                        <input
+                          type="file"
+                          id={`${fileInputId}-camera`}
+                          accept=".png,.jpg,.jpeg,.webp"
+                          capture="environment"
+                          className="hidden"
+                          onChange={onSelect}
+                        />
                         <input
                           type="file"
                           id={fileInputId}
-                          accept="image/*"
+                          accept=".png,.jpg,.jpeg,.webp"
                           className="hidden"
-                          onChange={(e) => handleImageUpload(set.id, img.label, e.target.files[0])}
+                          onChange={onSelect}
                         />
                         {previewSrc ? (
                           <>
@@ -1078,9 +1109,15 @@ const SchoolCreateRequest = () => {
                                 <span className="text-[8px] font-black uppercase tracking-wider">Uploading…</span>
                               </div>
                             ) : (
-                              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1.5 text-white">
-                                <Upload size={14} />
-                                <span className="text-[9px] font-black uppercase tracking-wider">Replace</span>
+                              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2.5 text-white">
+                                <label htmlFor={`${fileInputId}-camera`} className="flex flex-col items-center gap-0.5 cursor-pointer">
+                                  <Camera size={13} />
+                                  <span className="text-[7px] font-black uppercase tracking-wider">Photo</span>
+                                </label>
+                                <label htmlFor={fileInputId} className="flex flex-col items-center gap-0.5 cursor-pointer">
+                                  <Upload size={13} />
+                                  <span className="text-[7px] font-black uppercase tracking-wider">Replace</span>
+                                </label>
                               </div>
                             )}
                             {img.uploadError && (
@@ -1091,15 +1128,28 @@ const SchoolCreateRequest = () => {
                           </>
                         ) : (
                           <>
-                            <div className="w-9 h-9 rounded-full bg-purple-50 text-[#3b2d7d] flex items-center justify-center transition-all group-hover:scale-110">
-                              <Upload size={16} />
+                            <div className="flex items-center gap-1.5">
+                              <label
+                                htmlFor={`${fileInputId}-camera`}
+                                className="w-9 h-9 rounded-full bg-purple-50 text-[#3b2d7d] flex items-center justify-center transition-all group-hover:scale-110 cursor-pointer"
+                                title="Take a photo"
+                              >
+                                <Camera size={15} />
+                              </label>
+                              <label
+                                htmlFor={fileInputId}
+                                className="w-9 h-9 rounded-full bg-purple-50 text-[#3b2d7d] flex items-center justify-center transition-all group-hover:scale-110 cursor-pointer"
+                                title="Choose file"
+                              >
+                                <Upload size={15} />
+                              </label>
                             </div>
                             <span className="text-[9.5px] font-black text-deep-purple leading-tight block">
                               {img.label}
                             </span>
                           </>
                         )}
-                      </label>
+                      </div>
                     );
                   })}
                   
@@ -1273,8 +1323,9 @@ const SchoolCreateRequest = () => {
               </label>
               <div className="relative flex items-center">
                 <Calendar size={16} className="absolute left-4.5 text-gray-400" />
-                <input 
+                <input
                   type="date"
+                  min={todayDateString()}
                   value={deadlineDate}
                   onChange={(e) => setDeadlineDate(e.target.value)}
                   className="w-full pl-11 pr-4 py-3.5 bg-white border border-gray-200 rounded-2xl text-sm font-bold text-deep-purple focus:outline-none focus:border-[#3b2d7d]/50 transition-colors cursor-pointer leading-relaxed"

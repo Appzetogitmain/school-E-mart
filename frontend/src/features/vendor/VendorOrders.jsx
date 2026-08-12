@@ -15,6 +15,7 @@ import {
   updateVendorOrderStatus,
   toggleVendorKitItemPacked,
 } from '../../services/vendorApi';
+import { getInvoice } from '../../services/ordersApi';
 import { getErrorMessage } from '../../utils/apiHelpers';
 import {
   getVendorOrderActions,
@@ -22,6 +23,7 @@ import {
   mapVendorOrderForList,
   VENDOR_STATUS_FILTER_OPTIONS,
 } from '../../utils/mappers/vendorOrderMapper';
+import InvoiceModal from '../../components/InvoiceModal';
 
 const VendorOrders = () => {
   const [searchParams] = useSearchParams();
@@ -40,6 +42,24 @@ const VendorOrders = () => {
   const [actionLoading, setActionLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [isExportOpen, setIsExportOpen] = useState(false);
+  const [invoiceModalOpen, setInvoiceModalOpen] = useState(false);
+  const [invoiceData, setInvoiceData] = useState(null);
+  const [invoiceLoading, setInvoiceLoading] = useState(false);
+  const [invoiceError, setInvoiceError] = useState('');
+
+  const handleViewInvoice = async (orderId) => {
+    setInvoiceModalOpen(true);
+    setInvoiceLoading(true);
+    setInvoiceError('');
+    try {
+      const data = await getInvoice(orderId);
+      setInvoiceData(data);
+    } catch (err) {
+      setInvoiceError(getErrorMessage(err, 'Failed to load tax invoice'));
+    } finally {
+      setInvoiceLoading(false);
+    }
+  };
 
   const loadOrders = useCallback(async () => {
     setLoading(true);
@@ -159,7 +179,7 @@ const VendorOrders = () => {
 
   const totalPages = Math.ceil(filteredOrders.length / limit) || 1;
   const orderActions = selectedOrder
-    ? getVendorOrderActions(selectedOrder.statusRaw || selectedOrder.raw?.orderStatus)
+    ? getVendorOrderActions(selectedOrder.statusRaw || selectedOrder.raw?.orderStatus, selectedOrder)
     : [];
 
   if (selectedOrder) {
@@ -191,19 +211,26 @@ const VendorOrders = () => {
               </div>
             ) : (
               orderActions.map((action) => (
-                <button
-                  key={action.key}
-                  type="button"
-                  disabled={actionLoading}
-                  onClick={() => handleOrderAction(action.key)}
-                  className={`px-4 py-3 rounded-xl text-xs font-bold transition-all shadow-sm disabled:opacity-60 ${
-                    action.variant === 'danger'
-                      ? 'bg-red-50 text-red-600 border border-red-100 hover:bg-red-100'
-                      : 'bg-[#5B3FD6] text-white hover:bg-[#472fc2]'
-                  }`}
-                >
-                  {actionLoading ? 'Updating...' : action.label}
-                </button>
+                <div key={action.key} className="flex flex-col gap-1">
+                  <button
+                    type="button"
+                    disabled={actionLoading || action.disabled}
+                    title={action.disabledReason || undefined}
+                    onClick={() => handleOrderAction(action.key)}
+                    className={`px-4 py-3 rounded-xl text-xs font-bold transition-all shadow-sm disabled:opacity-60 disabled:cursor-not-allowed ${
+                      action.variant === 'danger'
+                        ? 'bg-red-50 text-red-600 border border-red-100 hover:bg-red-100'
+                        : 'bg-[#5B3FD6] text-white hover:bg-[#472fc2]'
+                    }`}
+                  >
+                    {actionLoading ? 'Updating...' : action.label}
+                  </button>
+                  {action.disabled && action.disabledReason && (
+                    <span className="text-[10px] font-bold text-amber-600 max-w-[220px] leading-snug">
+                      {action.disabledReason}
+                    </span>
+                  )}
+                </div>
               ))
             )}
           </div>
@@ -237,6 +264,11 @@ const VendorOrders = () => {
                 <p><span className="text-gray-400 font-bold">Phone:</span> {selectedOrder.phone}</p>
                 <p><span className="text-gray-400 font-bold">Payment:</span> {selectedOrder.paymentMethod}</p>
               </div>
+              {selectedOrder.isRfqOrder && (
+                <span className={`inline-block mt-1 text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full border ${selectedOrder.paymentSplitColor}`}>
+                  {selectedOrder.paymentSplitLabel}
+                </span>
+              )}
             </div>
 
             <div className="text-left md:text-right space-y-2 text-xs">
@@ -244,6 +276,14 @@ const VendorOrders = () => {
               <h3 className="text-lg font-black text-gray-900 tracking-tight pt-1">
                 Invoice #{selectedOrder.id}
               </h3>
+              <button
+                type="button"
+                onClick={() => handleViewInvoice(selectedOrder.rawId || selectedOrder.id)}
+                className="mt-2 inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-xl transition-all active:scale-95 cursor-pointer border border-indigo-100"
+              >
+                <FileText size={14} />
+                <span>View & Print Tax Invoice</span>
+              </button>
             </div>
           </div>
 
@@ -307,6 +347,16 @@ const VendorOrders = () => {
                                         ({[kitItem.category, kitItem.subcategory].filter(Boolean).join(' / ')})
                                       </span>
                                     )}
+                                    {kitItem.size && (
+                                      <span className="px-1.5 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-100 font-black text-[10px] shrink-0">
+                                        Size: {kitItem.size}
+                                      </span>
+                                    )}
+                                    {kitItem.color && (
+                                      <span className="px-1.5 py-0.5 rounded-md bg-purple-50 text-purple-700 border border-purple-100 font-black text-[10px] shrink-0">
+                                        Color: {kitItem.color}
+                                      </span>
+                                    )}
                                   </label>
                                   <span className="text-gray-500 font-bold shrink-0">Qty: {kitItem.qty}</span>
                                 </li>
@@ -328,6 +378,47 @@ const VendorOrders = () => {
                 <span className="text-gray-500 font-semibold">Order Total:</span>
                 <span className="font-black text-gray-950">₹{selectedOrder.amount.toFixed(2)}</span>
               </div>
+
+              {selectedOrder.isRfqOrder && (
+                <>
+                  <div className="border-t border-gray-100 pt-3 space-y-2.5">
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                      Quotation Payment Breakdown
+                    </p>
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-gray-500 font-semibold flex items-center gap-1.5">
+                        Advance Payment
+                        <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded-full border ${
+                          selectedOrder.advancePaid
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                            : 'bg-red-50 text-red-600 border-red-100'
+                        }`}>
+                          {selectedOrder.advancePaid ? 'Received' : 'Pending'}
+                        </span>
+                      </span>
+                      <span className="font-black text-gray-950">₹{(selectedOrder.advancePaise / 100).toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-gray-500 font-semibold flex items-center gap-1.5">
+                        Remaining Payment
+                        <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded-full border ${
+                          selectedOrder.remainderPaid
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                            : 'bg-amber-50 text-amber-700 border-amber-100'
+                        }`}>
+                          {selectedOrder.remainderPaid ? 'Received' : 'Pending'}
+                        </span>
+                      </span>
+                      <span className="font-black text-gray-950">₹{(selectedOrder.remainderPaise / 100).toFixed(2)}</span>
+                    </div>
+                  </div>
+                  {!selectedOrder.remainderPaid && (
+                    <p className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 leading-snug">
+                      This order can't be marked delivered until the school pays the remaining balance.
+                    </p>
+                  )}
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -467,7 +558,14 @@ const VendorOrders = () => {
                           {order.status}
                         </span>
                       </td>
-                      <td className="px-6 py-4 font-black text-gray-900">₹{order.amount.toFixed(2)}</td>
+                      <td className="px-6 py-4 font-black text-gray-900">
+                        ₹{order.amount.toFixed(2)}
+                        {order.isRfqOrder && (
+                          <span className={`block mt-1 text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-full border w-fit ${order.paymentSplitColor}`}>
+                            {order.remainderPaid ? 'Fully Paid' : order.advancePaid ? 'Advance Only' : 'Unpaid'}
+                          </span>
+                        )}
+                      </td>
                       <td className="px-6 py-4 text-center">
                         <button
                           onClick={() => openOrderDetail(order)}
@@ -514,6 +612,14 @@ const VendorOrders = () => {
           </div>
         )}
       </div>
+
+      <InvoiceModal
+        isOpen={invoiceModalOpen}
+        onClose={() => setInvoiceModalOpen(false)}
+        invoiceData={invoiceData}
+        loading={invoiceLoading}
+        error={invoiceError}
+      />
     </div>
   );
 };

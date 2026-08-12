@@ -471,8 +471,8 @@ const schoolController = {
   }),
 
   listParents: asyncHandler(async (req, res) => {
-    const { data, pagination } = await parentService.listParents(req.schoolId, req.query);
-    return paginated(res, { parents: data }, pagination, 'Parents fetched successfully', req);
+    const { data, pagination, stats } = await parentService.listParents(req.schoolId, req.query);
+    return paginated(res, { parents: data, stats }, pagination, 'Parents fetched successfully', req);
   }),
 
   getParent: asyncHandler(async (req, res) => {

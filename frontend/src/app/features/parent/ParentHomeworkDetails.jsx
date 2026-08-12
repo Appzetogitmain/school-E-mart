@@ -18,7 +18,8 @@ import {
   Trash2,
   Award,
   Loader2,
-  Paperclip
+  Paperclip,
+  Camera
 } from 'lucide-react';
 import { submitHomework } from '../../../services/parentApi';
 import { fetchSubmissionAttachment } from '../../../services/lmsApi';
@@ -43,20 +44,31 @@ const ParentHomeworkDetails = ({ homework, childInfo, onClose, onSubmitted }) =>
   const [attachmentUrls, setAttachmentUrls] = useState({});
   const [loadingAttachments, setLoadingAttachments] = useState(false);
 
-  const [bannerImageUrl, setBannerImageUrl] = useState(homework?.image || null);
+  const [bannerImageUrl, setBannerImageUrl] = useState(null);
 
+  // Deliberately independent of the list card's already-fetched `homework.image` blob
+  // URL: the list (ParentHomework.jsx) revokes its own banner URLs on every reload —
+  // including right after a successful submission via `onSubmitted` — and this panel
+  // can still be open when that happens. Reusing that URL would go blank out from
+  // under it. Owning a separate fetch/revoke here, same as the attachments effect
+  // below, means this panel's image never depends on another component's lifecycle.
   React.useEffect(() => {
-    if (homework?.image) {
-      setBannerImageUrl(homework.image);
+    if (!homework?.bannerAttachmentId || !childInfo?.schoolId) {
+      setBannerImageUrl(null);
       return undefined;
     }
-    if (!homework?.bannerAttachmentId || !childInfo?.schoolId) return undefined;
 
     let cancelled = false;
+    let objectUrl = null;
     (async () => {
       try {
         const url = await fetchSubmissionAttachment(childInfo.schoolId, homework.bannerAttachmentId);
-        if (!cancelled) setBannerImageUrl(url);
+        if (cancelled) {
+          URL.revokeObjectURL(url);
+          return;
+        }
+        objectUrl = url;
+        setBannerImageUrl(url);
       } catch {
         if (!cancelled) setBannerImageUrl(null);
       }
@@ -64,8 +76,9 @@ const ParentHomeworkDetails = ({ homework, childInfo, onClose, onSubmitted }) =>
 
     return () => {
       cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [homework?.image, homework?.bannerAttachmentId, childInfo?.schoolId]);
+  }, [homework?.bannerAttachmentId, childInfo?.schoolId]);
 
   React.useEffect(() => {
     if (!homework?.attachments?.length || !childInfo?.schoolId) return undefined;
@@ -549,29 +562,47 @@ const ParentHomeworkDetails = ({ homework, childInfo, onClose, onSubmitted }) =>
           {canSubmit && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
-            {/* Column 1: Choose from Gallery Clickable box */}
-            <label className="border-2 border-dashed border-[#6A47DE]/25 hover:border-[#6A47DE]/40 bg-white rounded-3xl p-5 flex flex-col items-center justify-center text-center cursor-pointer active:scale-[0.99] transition-all min-h-[160px]">
-              <input
-                type="file"
-                multiple
-                accept="image/*,application/pdf"
-                onChange={handleFileChange}
-                className="hidden"
-              />
+            {/* Column 1: Take Photo / Choose from Gallery */}
+            <div className="border-2 border-dashed border-[#6A47DE]/25 bg-white rounded-3xl p-5 flex flex-col items-center justify-center text-center min-h-[160px]">
               <div className="w-12 h-12 rounded-2xl bg-[#F4EBFF] text-[#7F56D9] flex items-center justify-center mb-2.5 shadow-sm">
                 <Image size={20} className="text-[#6A47DE]" />
               </div>
               <span className="text-[11px] font-black text-gray-800 leading-snug">
-                Upload from Gallery
+                Upload Completed Homework
               </span>
               <span className="text-[9px] font-semibold text-gray-400 mt-1 leading-snug">
                 JPG, PNG or PDF (Max 5 MB per file, up to {MAX_FILES} files)
               </span>
-              <div className="mt-3.5 px-4 py-2 border border-[#6A47DE]/20 rounded-2xl text-[10px] font-black text-[#6A47DE] hover:bg-[#6A47DE]/5 transition-colors flex items-center gap-1.5 bg-white shadow-sm">
-                <Image size={11} />
-                <span>Choose from Gallery</span>
+              <div className="mt-3.5 flex items-center gap-2">
+                {/* capture="environment" opens the device's camera app directly
+                    on mobile — the natural way to submit a photo of finished
+                    homework. Desktop browsers that don't support it fall back
+                    to the normal file picker, same as "Choose from Gallery". */}
+                <label className="px-3.5 py-2 border border-[#6A47DE]/20 rounded-2xl text-[10px] font-black text-[#6A47DE] hover:bg-[#6A47DE]/5 transition-colors flex items-center gap-1.5 bg-white shadow-sm cursor-pointer active:scale-95">
+                  <input
+                    type="file"
+                    multiple
+                    accept=".png,.jpg,.jpeg,.webp"
+                    capture="environment"
+                    onChange={handleFileChange}
+                    className="hidden"
+                  />
+                  <Camera size={11} />
+                  <span>Take Photo</span>
+                </label>
+                <label className="px-3.5 py-2 border border-[#6A47DE]/20 rounded-2xl text-[10px] font-black text-[#6A47DE] hover:bg-[#6A47DE]/5 transition-colors flex items-center gap-1.5 bg-white shadow-sm cursor-pointer active:scale-95">
+                  <input
+                    type="file"
+                    multiple
+                    accept=".png,.jpg,.jpeg,.webp,.pdf,.doc,.docx"
+                    onChange={handleFileChange}
+                    className="hidden"
+                  />
+                  <Image size={11} />
+                  <span>Gallery</span>
+                </label>
               </div>
-            </label>
+            </div>
 
             {/* Column 2: Uploaded Previews List */}
             <div className="bg-white border border-gray-100 rounded-3xl p-5 flex flex-col items-center justify-center min-h-[160px] relative overflow-hidden">

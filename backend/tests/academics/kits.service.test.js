@@ -1,6 +1,10 @@
 const mongoose = require('mongoose');
 const kitsService = require('../../src/modules/academics/services/kits.service');
 const Kit = require('../../src/database/models/Kit');
+const Order = require('../../src/database/models/Order');
+const ChildProfile = require('../../src/database/models/ChildProfile');
+const { generateOrderNumber } = require('../../src/modules/orders/utils/orderNumber');
+const { createParentUser } = require('../orders/helpers');
 
 const baseItems = [{ name: 'Notebook', category: 'Stationary', qty: 5 }];
 
@@ -161,6 +165,210 @@ describe('kitsService', () => {
 
       const found = await Kit.findOne(Kit.purchasableFilter(kit._id)).lean();
       expect(found).toBeNull();
+    });
+  });
+
+  describe('sales / purchase reporting', () => {
+    const makeOrder = async ({ userId, kit, orderStatus = 'placed', paymentStatus = 'paid', paymentMethod = 'online' }) =>
+      Order.create({
+        orderNumber: generateOrderNumber(),
+        userId,
+        audience: 'parent',
+        items: [{
+          productId: kit._id,
+          vendorId,
+          kitId: kit._id,
+          schoolId,
+          name: kit.name,
+          sku: kit.sku,
+          pricePaise: kit.pricePaise,
+          mrpPaise: kit.mrpPaise,
+          quantity: 1,
+          taxPaise: 0,
+          lineTotalPaise: kit.pricePaise,
+        }],
+        subtotalPaise: kit.pricePaise,
+        taxPaise: 0,
+        discountPaise: 0,
+        totalPaise: kit.pricePaise,
+        address: { line1: 'Line 1', city: 'City', state: 'State', country: 'India', pinCode: '110001' },
+        deliveryType: 'home',
+        paymentMethod,
+        paymentStatus,
+        orderStatus,
+      });
+
+    test('getSalesCounts / listKits report how many non-cancelled orders bought each kit', async () => {
+      const kit = await kitsService.createKit(schoolId, {
+        name: 'Popular Kit', items: baseItems, status: 'active', vendorId,
+      });
+      const buyerA = await createParentUser();
+      const buyerB = await createParentUser();
+      await makeOrder({ userId: buyerA._id, kit });
+      await makeOrder({ userId: buyerB._id, kit });
+      // Cancelled purchases don't count towards sales.
+      await makeOrder({ userId: buyerA._id, kit, orderStatus: 'cancelled' });
+
+      const { data } = await kitsService.listKits(schoolId, {});
+      const row = data.find((k) => String(k._id) === String(kit._id));
+      expect(row.salesCount).toBe(2);
+    });
+
+    test('getKitPurchaseReport lists who bought and who (in the target class) has not', async () => {
+      const kit = await kitsService.createKit(schoolId, {
+        name: 'Class 5 Kit', classGrade: 'Class 5', items: baseItems, status: 'active', vendorId,
+      });
+      const buyer = await createParentUser();
+      const nonBuyer = await createParentUser();
+      await makeOrder({ userId: buyer._id, kit });
+
+      await ChildProfile.create({ parentUserId: buyer._id, name: 'Bought Child', schoolId, grade: 'Class 5' });
+      await ChildProfile.create({ parentUserId: nonBuyer._id, name: 'Waiting Child', schoolId, grade: 'Class 5' });
+      // A different grade must not count towards this kit's coverage.
+      await ChildProfile.create({ parentUserId: nonBuyer._id, name: 'Other Grade Child', schoolId, grade: 'Class 6' });
+
+      const report = await kitsService.getKitPurchaseReport(schoolId, kit._id);
+      expect(report.totalOrders).toBe(1);
+      expect(report.totalEligibleChildren).toBe(2);
+      expect(report.purchasedChildrenCount).toBe(1);
+      expect(report.notPurchasedCount).toBe(1);
+      expect(report.purchasedChildren[0].name).toBe('Bought Child');
+      expect(report.notPurchased[0].name).toBe('Waiting Child');
+    });
+
+    test('getKitPurchaseReport scopes to every child at the school when the kit has no target class', async () => {
+      const kit = await kitsService.createKit(schoolId, {
+        name: 'All-Class Kit', items: baseItems, status: 'active', vendorId,
+      });
+      const nonBuyer = await createParentUser();
+      await ChildProfile.create({ parentUserId: nonBuyer._id, name: 'Any Grade Child', schoolId, grade: 'Class 3' });
+
+      const report = await kitsService.getKitPurchaseReport(schoolId, kit._id);
+      expect(report.totalEligibleChildren).toBe(1);
+      expect(report.notPurchasedCount).toBe(1);
+    });
+  });
+
+  describe('listPurchasedKitIds (progress bar source of truth)', () => {
+    const makeKitOrder = async ({ userId, kit, orderStatus = 'placed', paymentStatus = 'paid', paymentMethod = 'online' }) =>
+      Order.create({
+        orderNumber: generateOrderNumber(),
+        userId,
+        audience: 'parent',
+        items: [{
+          productId: kit._id,
+          vendorId,
+          kitId: kit._id,
+          schoolId,
+          name: kit.name,
+          sku: kit.sku,
+          pricePaise: kit.pricePaise,
+          mrpPaise: kit.mrpPaise,
+          quantity: 1,
+          taxPaise: 0,
+          lineTotalPaise: kit.pricePaise,
+        }],
+        subtotalPaise: kit.pricePaise,
+        taxPaise: 0,
+        discountPaise: 0,
+        totalPaise: kit.pricePaise,
+        address: { line1: 'Line 1', city: 'City', state: 'State', country: 'India', pinCode: '110001' },
+        deliveryType: 'home',
+        paymentMethod,
+        paymentStatus,
+        orderStatus,
+      });
+
+    test('returns no kits when the school has none configured', async () => {
+      const buyer = await createParentUser();
+      const purchased = await kitsService.listPurchasedKitIds(buyer._id, schoolId);
+      expect(purchased).toEqual([]);
+    });
+
+    test('an unpaid online order does not count as purchased', async () => {
+      const kit = await kitsService.createKit(schoolId, { name: 'Kit', items: baseItems, status: 'active', vendorId });
+      const buyer = await createParentUser();
+      await makeKitOrder({ userId: buyer._id, kit, paymentStatus: 'pending', paymentMethod: 'online' });
+
+      const purchased = await kitsService.listPurchasedKitIds(buyer._id, schoolId);
+      expect(purchased).toEqual([]);
+    });
+
+    test('a placed COD order counts as purchased even before payment is collected', async () => {
+      const kit = await kitsService.createKit(schoolId, { name: 'Kit', items: baseItems, status: 'active', vendorId });
+      const buyer = await createParentUser();
+      await makeKitOrder({ userId: buyer._id, kit, paymentStatus: 'pending', paymentMethod: 'cod' });
+
+      const purchased = await kitsService.listPurchasedKitIds(buyer._id, schoolId);
+      expect(purchased).toEqual([String(kit._id)]);
+    });
+
+    test('a cancelled order does not count, even if it was paid', async () => {
+      const kit = await kitsService.createKit(schoolId, { name: 'Kit', items: baseItems, status: 'active', vendorId });
+      const buyer = await createParentUser();
+      await makeKitOrder({ userId: buyer._id, kit, orderStatus: 'cancelled' });
+
+      const purchased = await kitsService.listPurchasedKitIds(buyer._id, schoolId);
+      expect(purchased).toEqual([]);
+    });
+
+    test("one parent's purchase never counts for another parent", async () => {
+      const kit = await kitsService.createKit(schoolId, { name: 'Kit', items: baseItems, status: 'active', vendorId });
+      const buyer = await createParentUser();
+      const otherParent = await createParentUser();
+      await makeKitOrder({ userId: buyer._id, kit });
+
+      const purchased = await kitsService.listPurchasedKitIds(otherParent._id, schoolId);
+      expect(purchased).toEqual([]);
+    });
+
+    test('stays correct even when the parent has 100+ unrelated orders — not bounded by order-list pagination', async () => {
+      const kit = await kitsService.createKit(schoolId, { name: 'Kit', items: baseItems, status: 'active', vendorId });
+      const buyer = await createParentUser();
+      // The kit purchase happens first — a naive "scan the latest 100 orders"
+      // approach would push it off the page once enough newer orders exist.
+      await makeKitOrder({ userId: buyer._id, kit });
+      for (let i = 0; i < 100; i += 1) {
+        await Order.create({
+          orderNumber: generateOrderNumber(),
+          userId: buyer._id,
+          audience: 'parent',
+          items: [{
+            productId: new mongoose.Types.ObjectId(),
+            vendorId,
+            name: `Unrelated item ${i}`,
+            sku: `SKU-${i}`,
+            pricePaise: 1000,
+            mrpPaise: 1000,
+            quantity: 1,
+            taxPaise: 0,
+            lineTotalPaise: 1000,
+          }],
+          subtotalPaise: 1000,
+          taxPaise: 0,
+          discountPaise: 0,
+          totalPaise: 1000,
+          address: { line1: 'Line 1', city: 'City', state: 'State', country: 'India', pinCode: '110001' },
+          deliveryType: 'home',
+          paymentMethod: 'online',
+          paymentStatus: 'paid',
+          orderStatus: 'placed',
+        });
+      }
+
+      const purchased = await kitsService.listPurchasedKitIds(buyer._id, schoolId);
+      expect(purchased).toEqual([String(kit._id)]);
+    });
+
+    test('a draft kit never counts towards the purchased set even if somehow ordered', async () => {
+      const kit = await kitsService.createKit(schoolId, { name: 'Kit', items: baseItems, status: 'active', vendorId });
+      const buyer = await createParentUser();
+      await makeKitOrder({ userId: buyer._id, kit });
+      // School un-publishes the kit after the purchase.
+      await kitsService.updateKit(schoolId, kit._id, { status: 'draft' });
+
+      const purchased = await kitsService.listPurchasedKitIds(buyer._id, schoolId);
+      expect(purchased).toEqual([]);
     });
   });
 });

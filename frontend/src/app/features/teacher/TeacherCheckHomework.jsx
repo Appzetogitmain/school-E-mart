@@ -18,6 +18,7 @@ import { getErrorMessage } from '../../../utils/apiHelpers';
 import {
   mapAssignmentForHomework,
   mapRosterRowForCheck,
+  normalizeGrade,
   parseClassGrade,
   parseSection,
 } from '../../../utils/mappers/teacherMapper';
@@ -68,15 +69,18 @@ const TeacherCheckHomework = () => {
     setError('');
     try {
       const grade = parseClassGrade(selectedClass);
+      const normalizedGrade = normalizeGrade(grade);
       const section = parseSection(selectedSection);
       const { data: courses } = await listCourses(schoolId, { limit: 50 });
+      // Exact normalized match only — a substring check here previously matched "Class 1"
+      // against courses titled "Class 10/11/12", leaking other grades' homework in.
       const matchingCourses = (courses || []).filter(
-        (course) => course.gradeClass === grade || course.title?.includes(grade)
+        (course) => normalizeGrade(course.gradeClass) === normalizedGrade
       );
 
-      // A teacher is only allowed to read courses they own, so a course belonging to a
-      // colleague answers 403. That must not blank out the whole screen — skip it and
-      // show the homework this teacher can actually see.
+      // A teacher is only allowed to manage courses they're assigned to teach, so a
+      // course belonging to a colleague answers 403. That must not blank out the whole
+      // screen — skip it and show the homework this teacher can actually see.
       const results = await Promise.all(
         matchingCourses.map(async (course) => {
           const courseId = course._id || course.id;

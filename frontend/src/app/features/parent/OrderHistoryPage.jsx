@@ -1,13 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import {
-  RotateCcw, CheckCircle2, AlertCircle, Clock, Package
+  RotateCcw, CheckCircle2, AlertCircle, Clock, Package, FileText,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import AppHeader from '../../components/AppHeader';
 import LoginRequired from '../../components/LoginRequired';
 import AuthPrompt from '../../components/AuthPrompt';
+import InvoiceModal from '../../../components/InvoiceModal';
 import useAuthStore from '../../../store/useAuthStore';
-import { listOrders } from '../../../services/ordersApi';
+import { listOrders, getInvoice } from '../../../services/ordersApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 import {
   getOrderStatusStyle,
@@ -35,6 +36,25 @@ const OrderHistoryPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [reorderingId, setReorderingId] = useState(null);
+  const [invoiceModalOpen, setInvoiceModalOpen] = useState(false);
+  const [invoiceData, setInvoiceData] = useState(null);
+  const [invoiceLoading, setInvoiceLoading] = useState(false);
+  const [invoiceError, setInvoiceError] = useState('');
+
+  const handleViewInvoice = async (orderId, e) => {
+    if (e) e.stopPropagation();
+    setInvoiceModalOpen(true);
+    setInvoiceLoading(true);
+    setInvoiceError('');
+    try {
+      const data = await getInvoice(orderId);
+      setInvoiceData(data);
+    } catch (err) {
+      setInvoiceError(getErrorMessage(err, 'Unable to load invoice receipt'));
+    } finally {
+      setInvoiceLoading(false);
+    }
+  };
 
   useEffect(() => {
     const handleUpdate = () => {
@@ -184,17 +204,26 @@ const OrderHistoryPage = () => {
                         ))}
                       </div>
 
-                      <button
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          handleReorder(order);
-                        }}
-                        disabled={reorderingId === order.id}
-                        className="bg-primary hover:bg-[#eeb100] text-white text-[11px] font-black px-6 py-3 rounded-2xl shadow-lg active:scale-90 transition-all flex items-center gap-2 uppercase tracking-tighter disabled:opacity-60"
-                      >
-                        <RotateCcw size={14} strokeWidth={3} />
-                        {reorderingId === order.id ? 'Adding...' : 'Order Again'}
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={(event) => handleViewInvoice(order.id, event)}
+                          className="bg-gray-100 hover:bg-gray-200 text-gray-700 text-[11px] font-bold px-4 py-3 rounded-2xl transition-all flex items-center gap-1.5 active:scale-95 cursor-pointer"
+                        >
+                          <FileText size={14} />
+                          <span>Invoice</span>
+                        </button>
+                        <button
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleReorder(order);
+                          }}
+                          disabled={reorderingId === order.id}
+                          className="bg-primary hover:bg-[#eeb100] text-white text-[11px] font-black px-5 py-3 rounded-2xl shadow-lg active:scale-90 transition-all flex items-center gap-2 uppercase tracking-tighter disabled:opacity-60 cursor-pointer"
+                        >
+                          <RotateCcw size={14} strokeWidth={3} />
+                          {reorderingId === order.id ? 'Adding...' : 'Order Again'}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -224,6 +253,13 @@ const OrderHistoryPage = () => {
         onClose={() => setIsAuthPromptOpen(false)}
         title="Track Your Orders"
         message="Login to see your past orders, active shipments, and digital invoices."
+      />
+      <InvoiceModal
+        isOpen={invoiceModalOpen}
+        onClose={() => setInvoiceModalOpen(false)}
+        invoiceData={invoiceData}
+        loading={invoiceLoading}
+        error={invoiceError}
       />
     </>
   );

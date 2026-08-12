@@ -2,11 +2,11 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, GraduationCap, Users, Calendar, Clock, BookOpen,
-  Plus, Pencil, Trash2, Loader2, AlertTriangle, Award,
+  Plus, Pencil, Trash2, Loader2, AlertTriangle, Award, Send,
 } from 'lucide-react';
-import { listCourses, listAssignments, deleteAssignment } from '../../../services/lmsApi';
+import { listCourses, listAssignments, deleteAssignment, updateAssignment } from '../../../services/lmsApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
-import { mapAssignmentForHomework, parseClassGrade, parseSection } from '../../../utils/mappers/teacherMapper';
+import { mapAssignmentForHomework, normalizeGrade, parseClassGrade, parseSection } from '../../../utils/mappers/teacherMapper';
 import { useTeacherSchoolId } from '../../../utils/teacherContext';
 import { useTeacherClassOptions } from '../../../hooks/useTeacherClassOptions';
 
@@ -27,6 +27,7 @@ const toEditableHomework = (hw) => ({
   maxScore: hw.raw?.maxScore ?? hw.maxScore,
   reference: hw.raw?.reference || {},
   attachmentsCount: (hw.attachments || []).length,
+  bannerAttachmentId: hw.bannerAttachmentId || null,
 });
 
 const TeacherManageHomework = () => {
@@ -44,6 +45,7 @@ const TeacherManageHomework = () => {
   const [error, setError] = useState('');
   const [deletingId, setDeletingId] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
+  const [publishingId, setPublishingId] = useState(null);
   const [toast, setToast] = useState('');
 
   const classes = classLabels;
@@ -68,10 +70,13 @@ const TeacherManageHomework = () => {
     setError('');
     try {
       const grade = parseClassGrade(selectedClass);
+      const normalizedGrade = normalizeGrade(grade);
       const section = parseSection(selectedSection);
       const { data: courses } = await listCourses(schoolId, { limit: 50 });
+      // Exact normalized match only — a substring check here previously matched "Class 1"
+      // against courses titled "Class 10/11/12", leaking other grades' homework in.
       const matchingCourses = (courses || []).filter(
-        (course) => course.gradeClass === grade || course.title?.includes(grade)
+        (course) => normalizeGrade(course.gradeClass) === normalizedGrade
       );
 
       // A course belonging to a colleague answers 403 — skip it rather than
@@ -110,6 +115,28 @@ const TeacherManageHomework = () => {
     navigate(`/school/teacher/homework/${hw.id}/edit`, {
       state: { homework: toEditableHomework(hw) },
     });
+  };
+
+  // The only reachable way to move a homework from draft to published outside of
+  // publishing it fresh from the Add Homework screen.
+  const handlePublish = async (hw) => {
+    if (!schoolId || publishingId) return;
+    setPublishingId(hw.id);
+    setError('');
+    try {
+      await updateAssignment(schoolId, hw.courseId, hw.id, { status: 'published' });
+      setHomeworks((prev) =>
+        prev.map((item) =>
+          item.id === hw.id ? { ...item, raw: { ...item.raw, status: 'published' } } : item
+        )
+      );
+      setToast('Homework published!');
+      setTimeout(() => setToast(''), 2200);
+    } catch (err) {
+      setError(getErrorMessage(err, 'Unable to publish homework'));
+    } finally {
+      setPublishingId(null);
+    }
   };
 
   const handleConfirmDelete = async () => {
@@ -267,6 +294,17 @@ const TeacherManageHomework = () => {
                   <p className="text-[9px] text-gray-400 font-bold mt-1">{hw.subject} • {hw.type}</p>
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
+                  {hw.raw?.status === 'draft' && (
+                    <button
+                      onClick={() => handlePublish(hw)}
+                      disabled={publishingId === hw.id}
+                      className="w-8 h-8 rounded-xl bg-emerald-50 hover:bg-emerald-100 active:scale-90 transition-all flex items-center justify-center text-emerald-600 disabled:opacity-50"
+                      aria-label="Publish homework"
+                      title="Publish"
+                    >
+                      {publishingId === hw.id ? <Loader2 size={14} className="animate-spin" /> : <Send size={13} />}
+                    </button>
+                  )}
                   <button
                     onClick={() => handleEdit(hw)}
                     className="w-8 h-8 rounded-xl bg-purple-50 hover:bg-purple-100 active:scale-90 transition-all flex items-center justify-center text-primary"

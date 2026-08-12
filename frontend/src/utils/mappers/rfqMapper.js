@@ -54,6 +54,10 @@ export const mapSchoolRfqForList = (rfq) => {
     rfqNumber: rfq.rfqNumber,
     title: rfq.title,
     ...statusMeta,
+    // Raw backend status ('open' | 'reviewing' | 'awarded' | 'closed' | 'cancelled'),
+    // for logic that needs the real state machine rather than the display label —
+    // e.g. deciding whether "Cancel Request" applies.
+    rawStatus: rfq.status,
     iconType: 'uniform',
     iconBg: 'bg-purple-50',
     deadline: formatDisplayDate(rfq.quotationDeadline),
@@ -61,6 +65,10 @@ export const mapSchoolRfqForList = (rfq) => {
     quotesReceived: rfq.quoteCount || 0,
     createdDate: formatDisplayDate(rfq.createdAt),
     quotes: (rfq.quotes || []).map(mapSchoolQuoteForCompare),
+    orderId: rfq.orderId || null,
+    // Present only once awarded — drives the "pay advance" / "pay remaining
+    // balance" affordances directly on the list card.
+    order: rfq.order || null,
     raw: rfq,
   };
 };
@@ -74,8 +82,20 @@ export const mapSchoolQuoteForCompare = (quote) => ({
   deliveryDays: quote.deliveryTimeline || '—',
   material: quote.termsAndConditions || '—',
   remarks: quote.items?.[0]?.remarks || quote.termsAndConditions || '—',
+  // Vendor-set advance — shown before the school ever awards, so they know
+  // what they're committing to pay up front.
+  advancePercent: quote.advancePercent ?? 0,
+  advanceAmount: quote.advanceAmount ? `₹${quote.advanceAmount}` : '₹0.00',
+  // 'submitted' | 'shortlisted' | 'accepted' | 'rejected' | 'withdrawn' — drives
+  // whether the compare view still offers "Award Contract" for this quote.
+  status: quote.status,
   raw: quote,
 });
+
+// Terminal states that ended without an award — a vendor who hasn't quoted must
+// see this, not "Pending", which used to invite a bid attempt the server would
+// then reject (RFQ_NOT_ACCEPTING) since neither status accepts new quotes.
+const TERMINAL_STATUS_LABELS = { cancelled: 'Cancelled', closed: 'Closed' };
 
 export const mapVendorRfqStatus = (rfq) => {
   const vendorQuote = rfq.vendorQuote;
@@ -92,6 +112,14 @@ export const mapVendorRfqStatus = (rfq) => {
       status: 'Rejected',
       statusColor: 'bg-red-50 text-red-700 border-red-100',
       statusBullet: 'bg-red-500',
+    };
+  }
+
+  if (TERMINAL_STATUS_LABELS[rfq.status]) {
+    return {
+      status: TERMINAL_STATUS_LABELS[rfq.status],
+      statusColor: 'bg-gray-100 text-gray-500 border-gray-200',
+      statusBullet: 'bg-gray-400',
     };
   }
 

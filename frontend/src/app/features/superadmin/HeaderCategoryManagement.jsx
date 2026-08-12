@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Plus, Search, Edit, Trash2, X, ChevronRight, Upload,
-  ShoppingBag, HelpCircle, Utensils, Home as HomeIcon, Baby, Heart, ShieldAlert, Loader2
+  ShoppingBag, HelpCircle, Utensils, Home as HomeIcon, Baby, Heart, ShieldAlert, Loader2, Camera
 } from 'lucide-react';
 import { listHeaderCategories, createHeaderCategory, updateHeaderCategory, deleteHeaderCategory } from '../../../services/catalogApi';
 import { uploadAdminFile } from '../../../services/adminApi';
@@ -32,6 +32,8 @@ const HeaderCategoryManagement = () => {
   const [formImageFile, setFormImageFile] = useState(null);
   const [uploadingImage, setUploadingImage] = useState(false);
   const headerFileInputRef = useRef(null);
+  // Shared across both the Add and Edit modals — they're never open at once.
+  const headerCameraInputRef = useRef(null);
 
   const [headers, setHeaders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -404,13 +406,21 @@ const HeaderCategoryManagement = () => {
                   type="file"
                   ref={headerFileInputRef}
                   onChange={(e) => setFormImageFile(e.target.files?.[0] || null)}
-                  accept="image/*"
+                  accept=".png,.jpg,.jpeg,.webp"
                   className="hidden"
                 />
-                <div
-                  onClick={() => headerFileInputRef.current?.click()}
-                  className="border-2 border-dashed border-gray-200 rounded-xl p-4 flex items-center gap-3 bg-gray-50/50 hover:bg-gray-50 transition-colors cursor-pointer select-none"
-                >
+                {/* capture="environment" opens the device's camera app directly
+                    on mobile; desktop browsers that don't support it fall back
+                    to the normal file picker, same as the input above. */}
+                <input
+                  type="file"
+                  ref={headerCameraInputRef}
+                  onChange={(e) => setFormImageFile(e.target.files?.[0] || null)}
+                  accept=".png,.jpg,.jpeg,.webp"
+                  capture="environment"
+                  className="hidden"
+                />
+                <div className="border-2 border-dashed border-gray-200 rounded-xl p-4 flex items-center gap-3 bg-gray-50/50">
                   {formImageFile ? (
                     <img src={URL.createObjectURL(formImageFile)} alt="Preview" className="w-12 h-12 object-cover rounded-lg border border-gray-200 shrink-0" />
                   ) : formImage ? (
@@ -418,11 +428,29 @@ const HeaderCategoryManagement = () => {
                   ) : (
                     <Upload size={18} className="text-gray-400 shrink-0" />
                   )}
-                  <span className="text-xs font-bold text-gray-500">
-                    {uploadingImage
-                      ? 'Uploading…'
-                      : formImageFile ? formImageFile.name : formImage ? 'Change image' : 'Click to upload an image'}
-                  </span>
+                  <div className="flex-1 min-w-0">
+                    <span className="text-xs font-bold text-gray-500 block truncate">
+                      {uploadingImage
+                        ? 'Uploading…'
+                        : formImageFile ? formImageFile.name : formImage ? 'Current image' : 'No image selected'}
+                    </span>
+                    <div className="flex items-center gap-2 mt-1.5">
+                      <button
+                        type="button"
+                        onClick={() => headerCameraInputRef.current?.click()}
+                        className="text-[10px] font-black text-[#3b2d7d] hover:underline flex items-center gap-1"
+                      >
+                        <Camera size={11} /> Take Photo
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => headerFileInputRef.current?.click()}
+                        className="text-[10px] font-black text-[#3b2d7d] hover:underline flex items-center gap-1"
+                      >
+                        <Upload size={11} /> Choose File
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -532,13 +560,21 @@ const HeaderCategoryManagement = () => {
                   type="file"
                   ref={headerFileInputRef}
                   onChange={(e) => setFormImageFile(e.target.files?.[0] || null)}
-                  accept="image/*"
+                  accept=".png,.jpg,.jpeg,.webp"
                   className="hidden"
                 />
-                <div
-                  onClick={() => headerFileInputRef.current?.click()}
-                  className="border-2 border-dashed border-gray-200 rounded-xl p-4 flex items-center gap-3 bg-gray-50/50 hover:bg-gray-50 transition-colors cursor-pointer select-none"
-                >
+                {/* capture="environment" opens the device's camera app directly
+                    on mobile; desktop browsers that don't support it fall back
+                    to the normal file picker, same as the input above. */}
+                <input
+                  type="file"
+                  ref={headerCameraInputRef}
+                  onChange={(e) => setFormImageFile(e.target.files?.[0] || null)}
+                  accept=".png,.jpg,.jpeg,.webp"
+                  capture="environment"
+                  className="hidden"
+                />
+                <div className="border-2 border-dashed border-gray-200 rounded-xl p-4 flex items-center gap-3 bg-gray-50/50">
                   {formImageFile ? (
                     <img src={URL.createObjectURL(formImageFile)} alt="Preview" className="w-12 h-12 object-cover rounded-lg border border-gray-200 shrink-0" />
                   ) : formImage ? (
@@ -546,11 +582,29 @@ const HeaderCategoryManagement = () => {
                   ) : (
                     <Upload size={18} className="text-gray-400 shrink-0" />
                   )}
-                  <span className="text-xs font-bold text-gray-500">
-                    {uploadingImage
-                      ? 'Uploading…'
-                      : formImageFile ? formImageFile.name : formImage ? 'Change image' : 'Click to upload an image'}
-                  </span>
+                  <div className="flex-1 min-w-0">
+                    <span className="text-xs font-bold text-gray-500 block truncate">
+                      {uploadingImage
+                        ? 'Uploading…'
+                        : formImageFile ? formImageFile.name : formImage ? 'Current image' : 'No image selected'}
+                    </span>
+                    <div className="flex items-center gap-2 mt-1.5">
+                      <button
+                        type="button"
+                        onClick={() => headerCameraInputRef.current?.click()}
+                        className="text-[10px] font-black text-[#3b2d7d] hover:underline flex items-center gap-1"
+                      >
+                        <Camera size={11} /> Take Photo
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => headerFileInputRef.current?.click()}
+                        className="text-[10px] font-black text-[#3b2d7d] hover:underline flex items-center gap-1"
+                      >
+                        <Upload size={11} /> Choose File
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
 

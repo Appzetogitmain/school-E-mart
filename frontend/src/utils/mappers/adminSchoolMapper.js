@@ -63,6 +63,8 @@ export const mapAdminSchoolForList = (school) => {
     // Approve/reject only make sense before a decision has been made.
     needsDecision: status === 'pending',
 
+    parentStats: school?.parentStats || { total: 0, loggedIn: 0, neverLoggedIn: 0 },
+
     registeredOn: school?.audit?.createdAt
       ? formatOrderDateShort(school.audit.createdAt)
       : '',

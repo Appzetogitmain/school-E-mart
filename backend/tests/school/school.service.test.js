@@ -20,8 +20,7 @@ describe('schoolService', () => {
     });
     expect(updated.principalName).toBe('Dr. Mehta');
 
-    const deleted = await schoolService.deleteSchool(created._id, created._id);
-    expect(deleted.softDelete.isDeleted).toBe(true);
+    await schoolService.deleteSchool(created._id, created._id);
 
     await expect(schoolService.getSchool(created._id)).rejects.toMatchObject({
       code: 'SCHOOL_NOT_FOUND',

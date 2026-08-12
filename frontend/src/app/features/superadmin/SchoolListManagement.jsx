@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Search, Eye, X, School, MapPin, Mail, User, Check, Ban, RefreshCw, Loader2,
   GraduationCap, Plus, Phone, Hash, CalendarDays, AlertCircle, Package, Edit, Trash2,
+  Users, PhoneCall, CheckCircle2, Clock, Copy
 } from 'lucide-react';
 import {
   listSchools,
@@ -14,6 +15,7 @@ import {
   rejectSchool,
   suspendSchool,
   reactivateSchool,
+  getSchoolParents,
 } from '../../../services/adminApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 import { mapAdminSchoolForList } from '../../../utils/mappers/adminSchoolMapper';
@@ -152,6 +154,73 @@ const SchoolListManagement = () => {
   const [editingSchool, setEditingSchool] = useState(null);
   const [editForm, setEditForm] = useState(null);
   const [editError, setEditError] = useState('');
+
+  // Parents modal state for admin to inspect logged-in vs never logged-in parents for a school
+  const [parentsSchool, setParentsSchool] = useState(null);
+  const [parentsList, setParentsList] = useState([]);
+  const [parentsStats, setParentsStats] = useState(null);
+  const [parentsLoading, setParentsLoading] = useState(false);
+  const [parentsError, setParentsError] = useState('');
+  const [parentsTab, setParentsTab] = useState('all');
+  const [parentsSearch, setParentsSearch] = useState('');
+  const [copiedPhone, setCopiedPhone] = useState('');
+
+  const loadParentsModalData = useCallback(async () => {
+    if (!parentsSchool) return;
+    setParentsLoading(true);
+    setParentsError('');
+    try {
+      const res = await getSchoolParents(parentsSchool.mongoId, {
+        loginStatus: parentsTab,
+        search: parentsSearch,
+        limit: 200,
+      });
+      setParentsList(res.data || []);
+      if (res.stats) {
+        setParentsStats(res.stats);
+        setSchools((prev) =>
+          prev.map((s) =>
+            s.mongoId === parentsSchool.mongoId
+              ? {
+                  ...s,
+                  parentStats: {
+                    total: res.stats.totalParents,
+                    loggedIn: res.stats.loggedInParents,
+                    neverLoggedIn: res.stats.neverLoggedInParents,
+                  },
+                }
+              : s
+          )
+        );
+      }
+    } catch (err) {
+      setParentsError(getErrorMessage(err, 'Unable to load parent details'));
+      setParentsList([]);
+    } finally {
+      setParentsLoading(false);
+    }
+  }, [parentsSchool, parentsTab, parentsSearch]);
+
+  useEffect(() => {
+    if (parentsSchool) {
+      loadParentsModalData();
+    }
+  }, [loadParentsModalData]);
+
+  const openParentsModal = (school, initialTab = 'all') => {
+    setParentsSchool(school);
+    setParentsTab(initialTab);
+    setParentsSearch('');
+    setParentsStats(
+      school.parentStats
+        ? {
+            totalParents: school.parentStats.total,
+            loggedInParents: school.parentStats.loggedIn,
+            neverLoggedInParents: school.parentStats.neverLoggedIn,
+          }
+        : { totalParents: 0, loggedInParents: 0, neverLoggedInParents: 0 }
+    );
+  };
 
   // Fetched unfiltered so the stat cards count every school. Filtering per tab
   // server-side made each card report only the visible tab's total.
@@ -483,6 +552,7 @@ const SchoolListManagement = () => {
                   <th className="py-4 px-5">Admin</th>
                   <th className="py-4 px-5">Contact</th>
                   <th className="py-4 px-5">Location</th>
+                  <th className="py-4 px-5">Parent Logins</th>
                   <th className="py-4 px-5">Grades</th>
                   <th className="py-4 px-5">Registered</th>
                   <th className="py-4 px-5">Status</th>
@@ -492,7 +562,7 @@ const SchoolListManagement = () => {
               <tbody className="divide-y divide-gray-100 bg-white">
                 {visibleSchools.length === 0 ? (
                   <tr>
-                    <td colSpan="9" className="py-12 text-center text-xs font-black text-gray-400">
+                    <td colSpan="10" className="py-12 text-center text-xs font-black text-gray-400">
                       No school records found.
                     </td>
                   </tr>
@@ -526,6 +596,21 @@ const SchoolListManagement = () => {
                         <span className="text-[10px] font-bold text-gray-600">
                           {[school.city, school.state].filter(Boolean).join(', ') || '—'}
                         </span>
+                      </td>
+                      <td className="py-4 px-5">
+                        <button
+                          type="button"
+                          onClick={() => openParentsModal(school, 'all')}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-gray-200 bg-gray-50/80 hover:bg-indigo-50/70 hover:border-indigo-300 transition-all text-xs font-black group cursor-pointer whitespace-nowrap"
+                          title="Click to view parent account details"
+                        >
+                          <span className="text-emerald-600 font-black" title="Logged In Parents">{school.parentStats?.loggedIn ?? 0}</span>
+                          <span className="text-gray-300 font-bold">/</span>
+                          <span className="text-amber-600 font-black" title="Never Logged In Parents">{school.parentStats?.neverLoggedIn ?? 0}</span>
+                          <span className="text-gray-400 font-bold text-[10px] group-hover:text-indigo-600 ml-0.5">
+                            ({school.parentStats?.total ?? 0} Total)
+                          </span>
+                        </button>
                       </td>
                       <td className="py-4 px-5">
                         <span className="text-xs font-extrabold text-gray-700">{school.gradesCount}</span>
@@ -994,6 +1079,268 @@ const SchoolListManagement = () => {
                 {saving ? 'Saving…' : 'Save Changes'}
               </button>
             </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Parent Logins Modal (Superadmin view) */}
+      {parentsSchool && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl border border-gray-200 shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-slide-up">
+            
+            {/* Modal Header */}
+            <div className="p-5 border-b border-gray-150 bg-gradient-to-r from-slate-900 to-[#0B1528] text-white flex items-center justify-between px-6">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-white/10 flex items-center justify-center text-white">
+                  <Users size={20} />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-white leading-tight">Parent Accounts &amp; Logins</h3>
+                  <p className="text-[11px] text-gray-300 font-medium">
+                    {parentsSchool.name} ({parentsSchool.code || parentsSchool.id})
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setParentsSchool(null)}
+                className="p-2 rounded-full hover:bg-white/10 text-gray-300 hover:text-white transition-all"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 overflow-y-auto space-y-5 flex-1 bg-[#F9FAFC]">
+
+              {/* Stat Cards Row */}
+              <div className="grid grid-cols-3 gap-4">
+                <button
+                  type="button"
+                  onClick={() => setParentsTab('all')}
+                  className={`p-4 rounded-2xl border text-left transition-all ${
+                    parentsTab === 'all'
+                      ? 'bg-indigo-50 border-indigo-300 ring-2 ring-indigo-500/20'
+                      : 'bg-white border-gray-200 hover:bg-gray-50'
+                  }`}
+                >
+                  <span className="text-[10px] font-black uppercase text-gray-400 block">Total Registered</span>
+                  <span className="text-xl font-black text-[#0B1528] mt-1 block">
+                    {parentsStats?.totalParents ?? parentsSchool.parentStats?.total ?? 0}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setParentsTab('logged_in')}
+                  className={`p-4 rounded-2xl border text-left transition-all ${
+                    parentsTab === 'logged_in'
+                      ? 'bg-emerald-50 border-emerald-300 ring-2 ring-emerald-500/20'
+                      : 'bg-white border-gray-200 hover:bg-gray-50'
+                  }`}
+                >
+                  <span className="text-[10px] font-black uppercase text-emerald-600 block">Logged In Users</span>
+                  <span className="text-xl font-black text-emerald-700 mt-1 block">
+                    {parentsStats?.loggedInParents ?? parentsSchool.parentStats?.loggedIn ?? 0}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setParentsTab('never_logged_in')}
+                  className={`p-4 rounded-2xl border text-left transition-all ${
+                    parentsTab === 'never_logged_in'
+                      ? 'bg-amber-50 border-amber-300 ring-2 ring-amber-500/20'
+                      : 'bg-white border-gray-200 hover:bg-gray-50'
+                  }`}
+                >
+                  <span className="text-[10px] font-black uppercase text-amber-700 block">Never Logged In</span>
+                  <span className="text-xl font-black text-amber-800 mt-1 block">
+                    {parentsStats?.neverLoggedInParents ?? parentsSchool.parentStats?.neverLoggedIn ?? 0}
+                  </span>
+                </button>
+              </div>
+
+              {/* Controls Bar: Filter Tabs + Search */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-gray-200 shadow-sm">
+                <div className="flex gap-2">
+                  {[
+                    { key: 'all', label: 'All Parents' },
+                    { key: 'logged_in', label: 'Logged In' },
+                    { key: 'never_logged_in', label: 'Never Logged In' },
+                  ].map((tab) => (
+                    <button
+                      key={tab.key}
+                      type="button"
+                      onClick={() => setParentsTab(tab.key)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all ${
+                        parentsTab === tab.key
+                          ? 'bg-[#0B1528] text-white shadow-sm'
+                          : 'text-gray-500 hover:bg-gray-100'
+                      }`}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="relative w-full sm:w-64">
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    value={parentsSearch}
+                    onChange={(e) => setParentsSearch(e.target.value)}
+                    placeholder="Search parent name, mobile, child..."
+                    className="w-full pl-9 pr-3 py-1.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                  />
+                </div>
+              </div>
+
+              {parentsError && (
+                <div className="p-3 bg-red-50 border border-red-100 rounded-xl text-xs font-bold text-red-600">
+                  {parentsError}
+                </div>
+              )}
+
+              {/* Parent Accounts List / Table */}
+              {parentsLoading ? (
+                <div className="py-16 text-center text-gray-400 flex flex-col items-center justify-center gap-2">
+                  <Loader2 size={24} className="animate-spin text-indigo-600" />
+                  <span className="text-xs font-bold">Loading parent details...</span>
+                </div>
+              ) : parentsList.length === 0 ? (
+                <div className="py-12 bg-white rounded-2xl border border-gray-200 text-center">
+                  <span className="text-xs font-bold text-gray-400">No parent records found matching criteria.</span>
+                </div>
+              ) : (
+                <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs font-semibold text-gray-700">
+                      <thead>
+                        <tr className="bg-gray-50 border-b border-gray-200 text-[10px] font-black uppercase text-gray-400 tracking-wider">
+                          <th className="py-3 px-4">Parent Name</th>
+                          <th className="py-3 px-4">Phone / Contact</th>
+                          <th className="py-3 px-4">Linked Student(s)</th>
+                          <th className="py-3 px-4">Login Status</th>
+                          <th className="py-3 px-4 text-right pr-5">Call / Remind</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {parentsList.map((parent) => {
+                          const phone = parent.user?.phone || '';
+                          const name = parent.user?.name || 'Unnamed Parent';
+                          const hasLoggedIn = parent.hasLoggedIn;
+                          return (
+                            <tr key={parent._id || parent.user?._id} className="hover:bg-gray-50/60 transition-colors">
+                              <td className="py-3 px-4">
+                                <span className="font-extrabold text-[#0B1528] text-xs block">{name}</span>
+                                {parent.user?.refId && (
+                                  <span className="text-[9px] font-bold text-gray-400">ID: {parent.user.refId}</span>
+                                )}
+                              </td>
+
+                              <td className="py-3 px-4">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-bold text-gray-800 text-xs">{phone || '—'}</span>
+                                  {phone && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        navigator.clipboard.writeText(phone);
+                                        setCopiedPhone(phone);
+                                        setTimeout(() => setCopiedPhone(''), 2000);
+                                      }}
+                                      title="Copy mobile number"
+                                      className="text-gray-400 hover:text-indigo-600 transition-colors"
+                                    >
+                                      {copiedPhone === phone ? <Check size={13} className="text-emerald-600" /> : <Copy size={12} />}
+                                    </button>
+                                  )}
+                                </div>
+                                {parent.user?.email && (
+                                  <span className="text-[10px] text-gray-400 font-bold block truncate max-w-[180px]">
+                                    {parent.user.email}
+                                  </span>
+                                )}
+                              </td>
+
+                              <td className="py-3 px-4">
+                                {(parent.children || []).length === 0 ? (
+                                  <span className="text-[10px] text-gray-400 italic">No linked students</span>
+                                ) : (
+                                  <div className="flex flex-wrap gap-1">
+                                    {parent.children.map((c) => (
+                                      <span
+                                        key={c._id || c.studentId}
+                                        className="bg-indigo-50 text-indigo-700 border border-indigo-100 text-[10px] font-extrabold px-2 py-0.5 rounded-lg"
+                                      >
+                                        {c.name} {c.grade ? `(${c.grade})` : ''}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+                              </td>
+
+                              <td className="py-3 px-4">
+                                {hasLoggedIn ? (
+                                  <div>
+                                    <span className="px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase bg-emerald-50 text-emerald-700 border border-emerald-200 inline-flex items-center gap-1">
+                                      <CheckCircle2 size={10} /> Logged In
+                                    </span>
+                                    {parent.lastLoginAt && (
+                                      <span className="text-[9px] font-bold text-gray-400 block mt-0.5">
+                                        Last: {new Date(parent.lastLoginAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                      </span>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <div>
+                                    <span className="px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase bg-amber-50 text-amber-800 border border-amber-200 inline-flex items-center gap-1">
+                                      <Clock size={10} /> Never Logged In
+                                    </span>
+                                  </div>
+                                )}
+                              </td>
+
+                              <td className="py-3 px-4 text-right pr-5">
+                                {phone ? (
+                                  <a
+                                    href={`tel:${phone}`}
+                                    className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white text-[10px] font-black inline-flex items-center gap-1.5 shadow-sm transition-all"
+                                  >
+                                    <PhoneCall size={12} />
+                                    <span>Call Parent</span>
+                                  </a>
+                                ) : (
+                                  <span className="text-[10px] text-gray-400 font-bold">No phone</span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 border-t border-gray-150 bg-white flex items-center justify-between px-6">
+              <span className="text-xs font-bold text-gray-400">
+                Showing {parentsList.length} parent accounts
+              </span>
+              <button
+                type="button"
+                onClick={() => setParentsSchool(null)}
+                className="px-4 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-black transition-all"
+              >
+                Close
+              </button>
+            </div>
+
           </div>
         </div>,
         document.body

@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import ReactDOM from 'react-dom';
 import { 
-  Video, Film, Plus, Edit3, Trash2, Heart, Eye, Play, X, ChevronRight, CheckCircle, Info, Upload, Image as ImageIcon, ShoppingBag, Globe, EyeOff
+  Video, Film, Plus, Edit3, Trash2, Heart, Eye, Play, X, ChevronRight, CheckCircle, Info, Upload, Image as ImageIcon, ShoppingBag, Globe, EyeOff, Camera
 } from 'lucide-react';
 import { listVendors, listReels, createReel, updateReel, deleteReel, uploadAdminFile, uploadAdminMedia } from '../../../services/adminApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
@@ -46,7 +46,9 @@ const ReelsManagement = () => {
   // Refs for hidden inputs
   const videoInputRef = useRef(null);
   const coverInputRef = useRef(null);
+  const coverCameraInputRef = useRef(null);
   const productInputRef = useRef(null);
+  const productCameraInputRef = useRef(null);
 
   // Video portal state
   const [playingVideo, setPlayingVideo] = useState(null);
@@ -398,7 +400,7 @@ const ReelsManagement = () => {
               <input
                 type="file"
                 ref={videoInputRef}
-                accept="video/*"
+                accept=".mp4,.mov,.webm,.mkv"
                 onChange={handleVideoFileChange}
                 className="hidden"
               />
@@ -437,25 +439,35 @@ const ReelsManagement = () => {
               <input
                 type="file"
                 ref={coverInputRef}
-                accept="image/*"
+                accept=".png,.jpg,.jpeg,.webp"
+                onChange={handleCoverFileChange}
+                className="hidden"
+              />
+              {/* capture="environment" opens the device's camera app directly
+                  on mobile; desktop browsers that don't support it fall back
+                  to the normal file picker, same as the input above. */}
+              <input
+                type="file"
+                ref={coverCameraInputRef}
+                accept=".png,.jpg,.jpeg,.webp"
+                capture="environment"
                 onChange={handleCoverFileChange}
                 className="hidden"
               />
 
-              <div 
-                onClick={() => coverInputRef.current?.click()}
-                className={`border-2 border-dashed rounded-2xl p-5 text-center cursor-pointer transition-all hover:bg-gray-50 ${
-                  coverPreview 
-                    ? 'border-emerald-200 bg-emerald-50/20' 
+              <div
+                className={`border-2 border-dashed rounded-2xl p-5 text-center transition-all ${
+                  coverPreview
+                    ? 'border-emerald-200 bg-emerald-50/20'
                     : 'border-gray-250 bg-white'
                 }`}
               >
-                <div className="flex flex-col items-center gap-1.5 select-none">
+                <div className="flex flex-col items-center gap-2 select-none">
                   {coverPreview ? (
                     <div className="flex items-center gap-3 text-left">
-                      <img 
-                        src={coverPreview} 
-                        alt="cover thumb" 
+                      <img
+                        src={coverPreview}
+                        alt="cover thumb"
                         className="w-10 h-10 object-cover rounded-lg border border-emerald-100"
                       />
                       <div>
@@ -468,10 +480,26 @@ const ReelsManagement = () => {
                   ) : (
                     <>
                       <ImageIcon size={24} className="text-gray-400" />
-                      <span className="text-gray-700 font-black">Choose cover image file</span>
+                      <span className="text-gray-700 font-black">Choose a cover image</span>
                       <span className="text-[8px] text-gray-400">Select png or jpeg cover</span>
                     </>
                   )}
+                  <div className="flex items-center gap-2 mt-1">
+                    <button
+                      type="button"
+                      onClick={() => coverCameraInputRef.current?.click()}
+                      className="px-3 py-1.5 rounded-lg border border-gray-200 hover:border-emerald-300 bg-white text-[10px] font-black text-gray-700 flex items-center gap-1.5 transition-colors"
+                    >
+                      <Camera size={12} /> Take Photo
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => coverInputRef.current?.click()}
+                      className="px-3 py-1.5 rounded-lg border border-gray-200 hover:border-emerald-300 bg-white text-[10px] font-black text-gray-700 flex items-center gap-1.5 transition-colors"
+                    >
+                      <Upload size={12} /> Choose File
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -537,33 +565,56 @@ const ReelsManagement = () => {
                 <input
                   type="file"
                   ref={productInputRef}
-                  accept="image/*"
+                  accept=".png,.jpg,.jpeg,.webp"
                   onChange={handleProductFileChange}
                   className="hidden"
                 />
-                
-                <div 
-                  onClick={() => productInputRef.current?.click()}
-                  className={`border border-dashed rounded-xl p-3 text-center cursor-pointer transition-all hover:bg-gray-100/50 bg-white ${
+                {/* capture="environment" opens the device's camera app directly
+                    on mobile; desktop browsers that don't support it fall back
+                    to the normal file picker, same as the input above. */}
+                <input
+                  type="file"
+                  ref={productCameraInputRef}
+                  accept=".png,.jpg,.jpeg,.webp"
+                  capture="environment"
+                  onChange={handleProductFileChange}
+                  className="hidden"
+                />
+
+                <div
+                  className={`border border-dashed rounded-xl p-3 text-center transition-all bg-white ${
                     productPreview ? 'border-emerald-200' : 'border-gray-250'
                   }`}
                 >
                   <div className="flex items-center justify-center gap-2 select-none">
                     {productPreview ? (
                       <>
-                        <img 
-                          src={productPreview} 
-                          alt="product cover" 
+                        <img
+                          src={productPreview}
+                          alt="product cover"
                           className="w-7 h-7 object-cover rounded-md border border-gray-100"
                         />
                         <span className="text-emerald-700 font-extrabold text-[8px] uppercase tracking-wide">Product Image Added</span>
                       </>
                     ) : (
-                      <>
-                        <Upload size={14} className="text-gray-400" />
-                        <span className="text-[10px] text-gray-500 font-bold">Select Product Image</span>
-                      </>
+                      <span className="text-[10px] text-gray-500 font-bold">Select Product Image</span>
                     )}
+                    <button
+                      type="button"
+                      onClick={() => productCameraInputRef.current?.click()}
+                      className="p-1.5 rounded-md border border-gray-200 hover:border-emerald-300 text-gray-500 hover:text-emerald-600 transition-colors"
+                      title="Take a photo"
+                    >
+                      <Camera size={12} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => productInputRef.current?.click()}
+                      className="p-1.5 rounded-md border border-gray-200 hover:border-emerald-300 text-gray-500 hover:text-emerald-600 transition-colors"
+                      title="Choose file"
+                    >
+                      <Upload size={12} />
+                    </button>
                   </div>
                 </div>
               </div>

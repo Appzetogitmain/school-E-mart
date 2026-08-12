@@ -169,11 +169,21 @@ const updateVariantSchema = createVariantSchema.fork(
   (s) => s.optional()
 );
 
+const kitSelectionSchema = Joi.object({
+  itemIndex: Joi.number().integer().min(0).required(),
+  name: Joi.string().trim().optional().allow('', null),
+  size: Joi.string().trim().optional().allow('', null),
+  color: Joi.string().trim().optional().allow('', null),
+});
+
 const cartItemSchema = Joi.object({
   productId: objectId.required(),
   variantId: objectId.optional(),
   quantity: Joi.number().integer().min(1).default(1),
   size: Joi.string().trim().optional(),
+  // Only meaningful when productId is a Kit — the parent's chosen size/color
+  // per kit item, validated against the kit's actual options in cart.service.js.
+  kitSelections: Joi.array().items(kitSelectionSchema).optional(),
 });
 
 const updateCartQuantitySchema = Joi.object({

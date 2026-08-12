@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft, Search, Users, Loader2, GraduationCap, UserPlus, Mail, Send, CheckCircle2, Pencil, X
+  ArrowLeft, Search, Users, Loader2, GraduationCap, UserPlus, Mail, Send, CheckCircle2, Pencil, X,
+  PhoneCall, Clock, Copy, Check
 } from 'lucide-react';
 import {
   listParents,
@@ -19,6 +20,9 @@ const SchoolParentsPage = () => {
   const schoolId = useSchoolId();
 
   const [parents, setParents] = useState([]);
+  const [stats, setStats] = useState({ totalParents: 0, loggedInParents: 0, neverLoggedInParents: 0 });
+  const [loginStatusFilter, setLoginStatusFilter] = useState('all');
+  const [copiedPhone, setCopiedPhone] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -33,15 +37,19 @@ const SchoolParentsPage = () => {
     setLoading(true);
     setError('');
     try {
-      const { data } = await listParents(schoolId, { limit: 500 });
-      setParents(data || []);
+      const res = await listParents(schoolId, {
+        limit: 500,
+        loginStatus: loginStatusFilter === 'all' ? undefined : loginStatusFilter,
+      });
+      setParents(res.data || []);
+      if (res.stats) setStats(res.stats);
     } catch (err) {
       setParents([]);
       setError(getErrorMessage(err, 'Unable to load parents'));
     } finally {
       setLoading(false);
     }
-  }, [schoolId]);
+  }, [schoolId, loginStatusFilter]);
 
   useEffect(() => {
     loadParents();
@@ -266,16 +274,81 @@ const SchoolParentsPage = () => {
           with their name and mobile number.
         </div>
 
-        {/* Search Bar */}
-        <div className="relative flex items-center w-full">
-          <Search size={16} className="absolute left-4.5 text-gray-400" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search parents by name, email, mobile or child..."
-            className="w-full pl-11 pr-4 py-3.5 bg-white border border-gray-200 rounded-2xl text-sm font-bold text-deep-purple focus:outline-none focus:border-[#3b2d7d]/50 transition-colors placeholder:text-gray-300 shadow-inner"
-          />
+        {/* Stat Cards Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 select-none">
+          <button
+            type="button"
+            onClick={() => setLoginStatusFilter('all')}
+            className={`p-4 rounded-2xl border text-left transition-all ${
+              loginStatusFilter === 'all'
+                ? 'bg-purple-50 border-[#3b2d7d] ring-2 ring-[#3b2d7d]/20'
+                : 'bg-white border-gray-200 hover:bg-gray-50'
+            }`}
+          >
+            <span className="text-[10px] font-black uppercase text-gray-400 block">Total Registered</span>
+            <span className="text-xl font-black text-[#3b2d7d] mt-1 block">{stats.totalParents}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setLoginStatusFilter('logged_in')}
+            className={`p-4 rounded-2xl border text-left transition-all ${
+              loginStatusFilter === 'logged_in'
+                ? 'bg-emerald-50 border-emerald-400 ring-2 ring-emerald-500/20'
+                : 'bg-white border-gray-200 hover:bg-gray-50'
+            }`}
+          >
+            <span className="text-[10px] font-black uppercase text-emerald-600 block">Logged In Users</span>
+            <span className="text-xl font-black text-emerald-700 mt-1 block">{stats.loggedInParents}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setLoginStatusFilter('never_logged_in')}
+            className={`p-4 rounded-2xl border text-left transition-all ${
+              loginStatusFilter === 'never_logged_in'
+                ? 'bg-amber-50 border-amber-400 ring-2 ring-amber-500/20'
+                : 'bg-white border-gray-200 hover:bg-gray-50'
+            }`}
+          >
+            <span className="text-[10px] font-black uppercase text-amber-700 block">Never Logged In</span>
+            <span className="text-xl font-black text-amber-800 mt-1 block">{stats.neverLoggedInParents}</span>
+          </button>
+        </div>
+
+        {/* Filter Tabs & Search Bar */}
+        <div className="space-y-3">
+          <div className="flex gap-2 border-b border-gray-200 pb-2 overflow-x-auto">
+            {[
+              { key: 'all', label: `All Parents (${stats.totalParents})` },
+              { key: 'logged_in', label: `Logged In (${stats.loggedInParents})` },
+              { key: 'never_logged_in', label: `Never Logged In (${stats.neverLoggedInParents})` },
+            ].map((tab) => (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setLoginStatusFilter(tab.key)}
+                className={`px-4 py-2 rounded-xl text-xs font-black transition-all shrink-0 ${
+                  loginStatusFilter === tab.key
+                    ? 'bg-[#3b2d7d] text-white shadow-sm'
+                    : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="relative flex items-center w-full">
+            <Search size={16} className="absolute left-4.5 text-gray-400" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search parents by name, email, mobile or child..."
+              className="w-full pl-11 pr-4 py-3.5 bg-white border border-gray-200 rounded-2xl text-sm font-bold text-deep-purple focus:outline-none focus:border-[#3b2d7d]/50 transition-colors placeholder:text-gray-300 shadow-inner"
+            />
+          </div>
         </div>
 
         {/* Bulk resend — send the account/login email to everyone currently listed */}
@@ -344,17 +417,18 @@ const SchoolParentsPage = () => {
           <div className="space-y-4 w-full">
             {filteredParents.map((parent) => {
               const name = parent.user?.name || 'Unnamed Parent';
+              const phone = parent.user?.phone || '';
               const initials = name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+              const hasLoggedIn = parent.hasLoggedIn;
               return (
                 <div
                   key={parent._id || parent.user?._id}
                   className="bg-white border border-gray-150 rounded-[2.2rem] p-5.5 relative flex flex-col justify-between hover:shadow-md transition-all duration-300 w-full group overflow-hidden"
                 >
                   <div>
-                    {/* Top Row: Initials Avatar + Name & Referral Code */}
-                    <div className="flex items-center justify-between gap-3 w-full">
+                    {/* Top Row: Avatar + Name + Login Status Badge */}
+                    <div className="flex items-start justify-between gap-3 w-full">
                       <div className="flex items-center gap-3.5 min-w-0 flex-1">
-                        {/* Initials Avatar */}
                         <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#3b2d7d]/5 to-purple-50 flex items-center justify-center font-black text-[#3b2d7d] text-sm shrink-0 border border-purple-100/50">
                           {initials}
                         </div>
@@ -369,14 +443,54 @@ const SchoolParentsPage = () => {
                           )}
                         </div>
                       </div>
+
+                      {/* Login Status Badge */}
+                      <div>
+                        {hasLoggedIn ? (
+                          <span className="px-2.5 py-1 rounded-xl text-[9px] font-black uppercase bg-emerald-50 text-emerald-700 border border-emerald-200 inline-flex items-center gap-1">
+                            <CheckCircle2 size={11} /> Logged In
+                          </span>
+                        ) : (
+                          <span className="px-2.5 py-1 rounded-xl text-[9px] font-black uppercase bg-amber-50 text-amber-800 border border-amber-200 inline-flex items-center gap-1">
+                            <Clock size={11} /> Never Logged In
+                          </span>
+                        )}
+                      </div>
                     </div>
 
                     {/* Middle: Contact Info Stack */}
                     <div className="py-3.5 my-3 border-y border-gray-100 text-[11px] font-bold text-gray-500 space-y-2.5 w-full">
-                      <div className="flex items-center gap-2.5">
-                        <span className="text-gray-400 text-sm">📞</span>
-                        <span className="text-deep-purple">{parent.user?.phone || 'No phone number'}</span>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2.5">
+                          <span className="text-gray-400 text-sm">📞</span>
+                          <span className="text-deep-purple font-extrabold">{phone || 'No phone number'}</span>
+                          {phone && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                navigator.clipboard.writeText(phone);
+                                setCopiedPhone(phone);
+                                setTimeout(() => setCopiedPhone(''), 2000);
+                              }}
+                              className="text-gray-400 hover:text-[#3b2d7d] transition-colors"
+                              title="Copy mobile number"
+                            >
+                              {copiedPhone === phone ? <Check size={13} className="text-emerald-600" /> : <Copy size={12} />}
+                            </button>
+                          )}
+                        </div>
+
+                        {phone && (
+                          <a
+                            href={`tel:${phone}`}
+                            className="px-3 py-1 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black inline-flex items-center gap-1 shadow-sm transition-all"
+                          >
+                            <PhoneCall size={11} />
+                            Call
+                          </a>
+                        )}
                       </div>
+
                       {parent.user?.email && (
                         <div className="flex items-center gap-2.5">
                           <span className="text-gray-400 text-sm">✉️</span>
@@ -452,10 +566,15 @@ const SchoolParentsPage = () => {
                   {/* Bottom Role Info */}
                   <div className="flex items-center justify-between text-[9px] font-black text-purple-300 uppercase tracking-wider w-full">
                     <span>PARENT ACCOUNT</span>
-                    <span className="text-emerald-500 flex items-center gap-1 font-black">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                      ACTIVE
-                    </span>
+                    {hasLoggedIn && parent.lastLoginAt ? (
+                      <span className="text-emerald-600 font-bold">
+                        LAST LOGIN: {new Date(parent.lastLoginAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                      </span>
+                    ) : (
+                      <span className="text-amber-600 font-bold">
+                        NEVER LOGGED IN
+                      </span>
+                    )}
                   </div>
 
                 </div>

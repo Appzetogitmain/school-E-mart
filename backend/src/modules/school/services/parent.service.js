@@ -10,9 +10,9 @@ const { normalizePhone } = require('../../../utils');
 // Parent accounts are no longer created here — they are created automatically
 // by student.service's linkParentByPhone when a student is enrolled.
 const parentService = {
-  async listParents(schoolId, query) {
+  async listParents(schoolId, query = {}) {
     const page = parseInt(query.page) || 1;
-    const limit = parseInt(query.limit) || 20;
+    const limit = parseInt(query.limit) || 500;
     const skip = (page - 1) * limit;
 
     const ChildProfile = require('../../../database/models/ChildProfile');
@@ -21,7 +21,7 @@ const parentService = {
       'softDelete.isDeleted': { $ne: true }
     }).distinct('parentUserId');
 
-    const filter = {
+    const baseScope = {
       role: 'parent',
       'softDelete.isDeleted': { $ne: true },
       $or: [
@@ -30,25 +30,52 @@ const parentService = {
       ]
     };
 
+    // Calculate parent login statistics across all parents in scope for this school
+    const allSchoolParents = await User.find(baseScope).select('_id loginCount lastLoginAt').lean();
+    const totalParents = allSchoolParents.length;
+    let loggedInParents = 0;
+    let neverLoggedInParents = 0;
+
+    allSchoolParents.forEach((u) => {
+      const loggedIn = (u.loginCount > 0) || Boolean(u.lastLoginAt);
+      if (loggedIn) {
+        loggedInParents += 1;
+      } else {
+        neverLoggedInParents += 1;
+      }
+    });
+
+    const conditions = [baseScope];
+
+    // Filter by loginStatus if requested
+    if (query.loginStatus === 'logged_in') {
+      conditions.push({
+        $or: [
+          { loginCount: { $gt: 0 } },
+          { lastLoginAt: { $ne: null } }
+        ]
+      });
+    } else if (query.loginStatus === 'never_logged_in') {
+      conditions.push({
+        $and: [
+          { $or: [{ loginCount: 0 }, { loginCount: { $exists: false } }] },
+          { $or: [{ lastLoginAt: null }, { lastLoginAt: { $exists: false } }] }
+        ]
+      });
+    }
+
     if (query.search) {
       const searchRegex = new RegExp(query.search, 'i');
-      filter.$and = [
-        {
-          $or: [
-            { tenantSchoolId: schoolId },
-            { _id: { $in: parentUserIds } }
-          ]
-        },
-        {
-          $or: [
-            { name: searchRegex },
-            { phone: searchRegex },
-            { email: searchRegex },
-          ]
-        }
-      ];
-      delete filter.$or;
+      conditions.push({
+        $or: [
+          { name: searchRegex },
+          { phone: searchRegex },
+          { email: searchRegex },
+        ]
+      });
     }
+
+    const filter = conditions.length === 1 ? conditions[0] : { $and: conditions };
 
     const total = await User.countDocuments(filter);
     const users = await User.find(filter)
@@ -57,18 +84,21 @@ const parentService = {
       .limit(limit)
       .lean();
 
-    // Populate ParentProfile details and linked children so the (view-only)
-    // parents directory can show who each account belongs to
+    // Populate ParentProfile details and linked children
     const populated = await Promise.all(users.map(async (user) => {
       const profile = await ParentProfile.findOne({ userId: user._id, 'softDelete.isDeleted': { $ne: true } }).lean();
       const children = await ChildProfile.find({
         parentUserId: user._id,
         'softDelete.isDeleted': { $ne: true },
       }).select('name grade rollNo studentId').lean();
+      const hasLoggedIn = (user.loginCount > 0) || Boolean(user.lastLoginAt);
       return {
         ...profile,
         user,
         children,
+        hasLoggedIn,
+        lastLoginAt: user.lastLoginAt || null,
+        loginCount: user.loginCount || 0,
       };
     }));
 
@@ -79,6 +109,11 @@ const parentService = {
         limit,
         total,
         pages: Math.ceil(total / limit),
+      },
+      stats: {
+        totalParents,
+        loggedInParents,
+        neverLoggedInParents,
       },
     };
   },
