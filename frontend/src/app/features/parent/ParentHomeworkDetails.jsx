@@ -30,7 +30,7 @@ import {
   MAX_FILES,
 } from '../../../utils/fileUpload';
 
-const ParentHomeworkDetails = ({ homework, childInfo, onClose, onSubmitted }) => {
+const ParentHomeworkDetails = ({ homework, childInfo, canSubmit: isLinked = true, onClose, onSubmitted }) => {
   const [error, setError] = useState('');
 
   const [uploadedFiles, setUploadedFiles] = useState([]);
@@ -118,8 +118,10 @@ const ParentHomeworkDetails = ({ homework, childInfo, onClose, onSubmitted }) =>
   const isGraded = submissionStatus === 'graded';
   const isReturned = submissionStatus === 'returned';
   const isSubmitted = submissionStatus === 'submitted';
-  // Graded work is final. Returned work is explicitly being asked for again.
-  const canSubmit = !isGraded && !isSubmitted;
+  // Graded work is final. Returned work is explicitly being asked for again. And a
+  // child the school has not added to its student register has nothing to attach a
+  // submission to, so the upload UI is hidden rather than left to fail on send.
+  const canSubmit = isLinked && !isGraded && !isSubmitted;
 
   const statusLabel = isGraded
     ? 'Checked'
@@ -718,19 +720,31 @@ const ParentHomeworkDetails = ({ homework, childInfo, onClose, onSubmitted }) =>
             <p className="text-[11px] font-bold text-rose-500 text-center">{error}</p>
           )}
 
+          {/* Not on the school's student register yet — reading the homework works,
+              handing it in cannot until the office links the child. */}
+          {!isLinked && !isGraded && !isSubmitted && (
+            <div className="bg-white border border-amber-100 rounded-2xl p-3.5 text-[10.5px] font-bold text-amber-700 leading-relaxed">
+              Your child is not linked to this school's student records yet, so work
+              can't be submitted from here. Ask the school office to add them — the
+              homework itself stays visible.
+            </div>
+          )}
+
           {/* Main Action Submit Button */}
           <button
             onClick={handleUploadHomework}
             disabled={isSubmitting || !canSubmit}
             className={`w-full font-black py-3.5 rounded-3xl flex items-center justify-center gap-2 active:scale-95 transition-all shadow-sm disabled:cursor-not-allowed ${
-              !canSubmit
+              isGraded || isSubmitted
                 ? 'bg-[#34A853] text-white'
-                : 'bg-[#6A47DE] hover:bg-[#5532C8] text-white shadow-[#6A47DE]/15'
+                : !canSubmit
+                  ? 'bg-gray-200 text-gray-500'
+                  : 'bg-[#6A47DE] hover:bg-[#5532C8] text-white shadow-[#6A47DE]/15'
             }`}
           >
             {isSubmitting ? (
               <div className="w-4.5 h-4.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-            ) : !canSubmit ? (
+            ) : isGraded || isSubmitted ? (
               <Check size={16} />
             ) : (
               <UploadCloud size={16} />
@@ -742,9 +756,11 @@ const ParentHomeworkDetails = ({ homework, childInfo, onClose, onSubmitted }) =>
                   ? 'Checked by Teacher'
                   : isSubmitted
                     ? 'Submitted — Awaiting Check'
-                    : isReturned
-                      ? 'Submit Revised Homework'
-                      : 'Submit Homework'}
+                    : !isLinked
+                      ? 'Submission Not Available Yet'
+                      : isReturned
+                        ? 'Submit Revised Homework'
+                        : 'Submit Homework'}
             </span>
           </button>
 

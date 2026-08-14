@@ -177,12 +177,14 @@ export const sortKeyFromLabel = (label) => {
 };
 
 export const gradeLabelToQuery = (gradeLabel) => {
-  if (!gradeLabel || gradeLabel === 'All Grades') return undefined;
+  if (!gradeLabel || gradeLabel === 'All Grades' || gradeLabel === 'Bulk Orders' || gradeLabel === 'All') return undefined;
   return gradeLabel;
 };
 
 export const classIdToGradeQuery = (classId) => {
   const map = {
+    playgroup: 'Play Group',
+    'play-group': 'Play Group',
     nursery: 'Nursery',
     lkg: 'LKG',
     ukg: 'UKG',
@@ -199,5 +201,5 @@ export const classIdToGradeQuery = (classId) => {
     '11': 'Class 11',
     '12': 'Class 12',
   };
-  return map[classId] || `Class ${classId}`;
+  return map[classId?.toLowerCase?.()] || (classId ? (classId.startsWith('Class ') ? classId : `Class ${classId}`) : undefined);
 };

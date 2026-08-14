@@ -9,8 +9,9 @@ import {
   listNotifications,
   markNotificationAsRead,
 } from '../../../services/notificationApi';
-import { listNotices } from '../../../services/schoolApi';
+import { listNotices, listEvents } from '../../../services/schoolApi';
 import { useTeacherSchoolId } from '../../../utils/teacherContext';
+import { getErrorMessage } from '../../../utils/apiHelpers';
 
 const TYPE_MAP = {
   campaign: 'Notice',
@@ -34,6 +35,7 @@ const mapNotification = (n) => {
     sender: 'School Administration',
     date: created ? created.toLocaleDateString('en-GB') : '',
     time: created ? created.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '',
+    rawDate: created ? created.getTime() : 0,
     hasAttachment: false,
   };
 };
@@ -64,17 +66,19 @@ const TeacherNotifications = () => {
       const promises = [listNotifications({ limit: 50 })];
       if (schoolId) {
         promises.push(listNotices(schoolId, { status: 'published', limit: 50 }));
+        promises.push(listEvents(schoolId, { limit: 50 }));
       }
       const results = await Promise.allSettled(promises);
       
       const notifRes = results[0]?.status === 'fulfilled' ? results[0].value : null;
       const noticeRes = results[1]?.status === 'fulfilled' ? results[1].value : null;
+      const eventRes = results[2]?.status === 'fulfilled' ? results[2].value : null;
 
       const items = (notifRes?.data || notifRes?.items || []).map(mapNotification);
 
       if (noticeRes?.data) {
         noticeRes.data.forEach((notice) => {
-          const created = notice.publishDate ? new Date(notice.publishDate) : new Date();
+          const created = notice.publishDate ? new Date(notice.publishDate) : (notice.createdAt ? new Date(notice.createdAt) : new Date());
           items.push({
             id: notice._id || notice.id,
             type: 'Notice',
@@ -85,10 +89,36 @@ const TeacherNotifications = () => {
             sender: 'School Administration',
             date: created.toLocaleDateString('en-GB'),
             time: created.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            rawDate: created.getTime(),
             hasAttachment: Boolean(notice.attachments?.length),
           });
         });
       }
+
+      const eventsData = Array.isArray(eventRes) ? eventRes : (eventRes?.data || []);
+      eventsData.forEach((evt) => {
+        const created = evt.startDate ? new Date(evt.startDate) : (evt.createdAt ? new Date(evt.createdAt) : new Date());
+        let desc = evt.description || '';
+        if (evt.location) {
+          desc = desc ? `${desc} • Location: ${evt.location}` : `Location: ${evt.location}`;
+        }
+        const isPtm = evt.eventType === 'parent-teacher' || (evt.title || '').toLowerCase().includes('ptm');
+        items.push({
+          id: evt._id || evt.id,
+          type: isPtm ? 'PTM' : 'Event',
+          read: true,
+          isNew: false,
+          title: evt.title,
+          description: desc,
+          sender: 'School Administration',
+          date: created.toLocaleDateString('en-GB'),
+          time: created.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          rawDate: created.getTime(),
+          hasAttachment: false,
+        });
+      });
+
+      items.sort((a, b) => (b.rawDate || 0) - (a.rawDate || 0));
 
       setNotifications(items);
     } catch (err) {

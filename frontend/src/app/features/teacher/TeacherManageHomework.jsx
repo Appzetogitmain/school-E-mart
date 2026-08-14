@@ -72,7 +72,7 @@ const TeacherManageHomework = () => {
       const grade = parseClassGrade(selectedClass);
       const normalizedGrade = normalizeGrade(grade);
       const section = parseSection(selectedSection);
-      const { data: courses } = await listCourses(schoolId, { limit: 50 });
+      const { data: courses } = await listCourses(schoolId, { limit: 100 });
       // Exact normalized match only — a substring check here previously matched "Class 1"
       // against courses titled "Class 10/11/12", leaking other grades' homework in.
       const matchingCourses = (courses || []).filter(
@@ -93,9 +93,11 @@ const TeacherManageHomework = () => {
         })
       );
 
+      // Section is free text ("A" / "a" / "Section A"), so compare it the same
+      // normalized way the parent feed does rather than on the raw strings.
       const forSection = results
         .flat()
-        .filter((row) => !row.section || row.section === section);
+        .filter((row) => !row.section || parseSection(row.section) === section);
 
       forSection.sort((a, b) => new Date(b.dateAssigned || 0) - new Date(a.dateAssigned || 0));
       setHomeworks(forSection);

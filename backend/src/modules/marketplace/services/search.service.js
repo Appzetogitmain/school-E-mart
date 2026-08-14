@@ -30,7 +30,16 @@ const buildProductFilter = (query = {}, { publicOnly = true, vendorId = null } =
   if (query.categoryId) filter.categoryId = query.categoryId;
   if (query.subcategoryId) filter.subcategoryId = query.subcategoryId;
   if (query.brand) filter.brand = query.brand;
-  if (query.grade) filter.gradeTags = { $in: [query.grade] };
+  if (query.grade) {
+    const escaped = query.grade.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    filter.$or = [
+      { gradeTags: { $size: 0 } },
+      { gradeTags: { $exists: false } },
+      { gradeTags: { $in: ['All', 'all', 'All Grades', 'all-grades'] } },
+      { gradeTags: { $elemMatch: { $regex: new RegExp(`^${escaped}$`, 'i') } } },
+      { gradeTags: query.grade }
+    ];
+  }
   if (query.featured === 'true') filter.gradeTags = { $in: ['featured'] };
   if (query.minPrice || query.maxPrice) {
     filter.pricePaise = {};

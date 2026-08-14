@@ -2,13 +2,13 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Bell, GraduationCap, Users, Clock, ArrowRight,
-  Calendar, BookOpen, FileText, CheckSquare, Plus,
+  BookOpen, FileText, CheckSquare, Plus,
   ChevronDown, UserCheck, MessageSquare, PlusCircle, FileCheck, Loader2, Building2, Megaphone, ClipboardList
 } from 'lucide-react';
 import { getDailyAttendance, listStudents, getSchool } from '../../../services/schoolApi';
 import { listCourses, listAssignments } from '../../../services/lmsApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
-import { parseClassGrade, parseSection } from '../../../utils/mappers/teacherMapper';
+import { parseClassGrade, parseSection, normalizeGrade } from '../../../utils/mappers/teacherMapper';
 import { toLocalDateKey } from '../../../utils/date';
 import { useAuthUser, useTeacherSchoolId } from '../../../utils/teacherContext';
 import { useTeacherClassOptions } from '../../../hooks/useTeacherClassOptions';
@@ -95,8 +95,11 @@ const TeacherDashboard = () => {
         listCourses(schoolId, { limit: 50 }),
       ]);
 
+      // Exact normalized match on the grade. Falling back to a title substring made
+      // "Class 1" match courses titled "Class 10"/"Class 11", inflating this count with
+      // other grades' homework.
       const matchingCourses = (courses || []).filter(
-        (course) => course.gradeClass === classGrade || course.title?.includes(classGrade)
+        (course) => normalizeGrade(course.gradeClass) === normalizeGrade(classGrade)
       );
       let homeworkCount = 0;
       for (const course of matchingCourses) {
@@ -434,27 +437,7 @@ const TeacherDashboard = () => {
           </div>
         </div>
 
-        {/* 7. Upcoming Events Widget */}
-        <div className="bg-white border border-gray-200 p-6 rounded-[2.2rem] shadow-xl shadow-gray-100/40">
-          <div className="flex items-center justify-between mb-5">
-            <h2 className="text-sm font-black text-deep-purple tracking-tight">Upcoming Events</h2>
-          </div>
 
-          <div className="space-y-4">
-            <EventItem 
-              icon={<Users size={16} />} 
-              bgColor="bg-pink-50 text-pink-500"
-              title="PTM Meeting" 
-              time="20 May 2025 • 11:00 AM" 
-            />
-            <EventItem 
-              icon={<Calendar size={16} />} 
-              bgColor="bg-emerald-50 text-emerald-500"
-              title="Science Exhibition" 
-              time="28 May 2025 • 09:00 AM" 
-            />
-          </div>
-        </div>
 
 
       </div>
@@ -512,17 +495,7 @@ const ActivityItem = ({ icon, bgColor, title, desc, detail, time }) => (
   </div>
 );
 
-const EventItem = ({ icon, bgColor, title, time }) => (
-  <div className="flex items-center gap-4">
-    <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 ${bgColor}`}>
-      {icon}
-    </div>
-    <div className="flex-1">
-      <h3 className="text-xs font-black text-deep-purple leading-tight">{title}</h3>
-      <span className="text-[9px] text-gray-400 font-bold block mt-1">{time}</span>
-    </div>
-  </div>
-);
+
 
 
 export default TeacherDashboard;

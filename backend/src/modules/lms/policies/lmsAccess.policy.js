@@ -126,26 +126,23 @@ const isUniversalGradeTarget = (gradeClass) =>
   !gradeClass || gradeClass.trim().toLowerCase() === 'all grades';
 
 const autoEnrollForClassCourse = async (schoolId, courseId, student, userId) => {
-  let course = await courseRepository.findOne({ _id: courseId, schoolId });
-  let isPlatformCourse = false;
-  if (!course) {
-    // Platform-wide courses (schoolId: null) aren't tied to any one school's
-    // class roster, so the student was never going to be "in the class" the
-    // way school-authored coursework works. Auto-enroll on grade targeting
-    // instead: "All Grades" (or no target set) matches every student, a
-    // specific grade matches only that grade's students.
-    course = await courseRepository.findOne({ _id: courseId, schoolId: null });
-    isPlatformCourse = true;
-  }
+  // Platform-wide courses (schoolId: null) aren't tied to any one school's class
+  // roster, so the student was never going to be "in the class" the way
+  // school-authored coursework works. Either way enrollment follows the grade the
+  // course targets.
+  const course =
+    (await courseRepository.findOne({ _id: courseId, schoolId })) ||
+    (await courseRepository.findOne({ _id: courseId, schoolId: null }));
   if (!course) return null;
 
-  if (isPlatformCourse) {
-    if (!isUniversalGradeTarget(course.gradeClass) && normalizeGrade(course.gradeClass) !== normalizeGrade(student.classGrade)) {
-      return null;
-    }
-  } else {
-    if (!course.gradeClass) return null;
-    if (normalizeGrade(course.gradeClass) !== normalizeGrade(student.classGrade)) return null;
+  // A course with no grade target — school-authored or platform — is set for
+  // everyone. Refusing to enroll on it left parents able to see homework they could
+  // not then submit, which reads as the submit button being broken.
+  if (
+    !isUniversalGradeTarget(course.gradeClass) &&
+    normalizeGrade(course.gradeClass) !== normalizeGrade(student.classGrade)
+  ) {
+    return null;
   }
 
   try {
@@ -175,9 +172,15 @@ const assertEnrollmentAccess = async (req, courseId, studentId = null) => {
     throw new ForbiddenError('Enrollment required', 'ENROLLMENT_REQUIRED');
   }
 
+  // Reading class content tolerates an unlinked child (see
+  // studentRepository.resolveLearnerContext); writing against one never can — a
+  // submission has to belong to a real roster student for the teacher to grade it.
   const resolved = await studentRepository.resolveStudentForUser(req.schoolId, req.auth.userId, studentId);
   if (!resolved) {
-    throw new ForbiddenError('Student context is required', 'STUDENT_REQUIRED');
+    throw new ForbiddenError(
+      'Your child is not linked to this school\'s student records yet. Ask the school office to add them, then you can submit work.',
+      'STUDENT_NOT_LINKED'
+    );
   }
 
   let enrollment = await enrollmentRepository.findEnrollment(

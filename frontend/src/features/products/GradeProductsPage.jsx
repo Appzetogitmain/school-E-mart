@@ -20,9 +20,10 @@ import { useProducts } from '../../hooks/useProducts';
 import { findHeaderCategory } from '../../utils/mappers/categoryMapper';
 import { classIdToGradeQuery, sortKeyFromLabel } from '../../utils/mappers/productMapper';
 
-const GRADE_IDS = ['nursery', 'lkg', 'ukg', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'];
+const GRADE_IDS = ['playgroup', 'nursery', 'lkg', 'ukg', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'];
 
 const formatGradeLabel = (classId) => {
+  if (classId === 'playgroup' || classId === 'play-group') return 'Play Group';
   if (classId === 'nursery') return 'Nursery';
   if (classId === 'lkg') return 'LKG';
   if (classId === 'ukg') return 'UKG';

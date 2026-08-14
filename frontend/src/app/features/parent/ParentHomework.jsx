@@ -18,7 +18,14 @@ import { fetchParentHomework } from '../../../services/parentApi';
 import { fetchSubmissionAttachment } from '../../../services/lmsApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 import { buildHomeworkStats, mapAssignmentForParentHomework } from '../../../utils/mappers/parentMapper';
-import { getChildInfoFromStorage } from '../../../utils/parentContext';
+import { useChildInfo } from '../../../utils/parentContext';
+
+const GUEST_CHILD_INFO = {
+  name: 'Guest',
+  school: 'Explore Schools',
+  grade: 'Select Grade',
+  phone: '',
+};
 
 const ParentHomework = () => {
   const [activeTab, setActiveTab] = useState('Pending');
@@ -29,16 +36,26 @@ const ParentHomework = () => {
   const [homeworkStats, setHomeworkStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  // False once the server tells us the child has no roster record at this school yet.
+  // Homework is still readable; only handing work in needs the school to link them.
+  const [canSubmit, setCanSubmit] = useState(true);
 
   const [showSortDropdown, setShowSortDropdown] = useState(false);
   const [sortOrder, setSortOrder] = useState('Newest');
 
-  const [childInfo] = useState(() => getChildInfoFromStorage() || {
-    name: "Guest",
-    school: "Explore Schools",
-    grade: "Select Grade",
-    phone: "",
-  });
+  // The shared reactive identity, not a one-shot localStorage read. The stored blob
+  // routinely lacks schoolId/studentId (or holds the 'explore-schools' placeholder)
+  // right after login, and reading it once into state meant this page bailed out
+  // before it ever called the API — an empty homework list with no error shown. The
+  // hook backfills those from the authenticated user and re-renders when they arrive.
+  const activeChildInfo = useChildInfo();
+  const childInfo = activeChildInfo || GUEST_CHILD_INFO;
+  // Pulled out as plain values so the loader below depends on the identity itself
+  // rather than on the object holding it.
+  const schoolId =
+    childInfo.schoolId && childInfo.schoolId !== 'explore-schools' ? childInfo.schoolId : null;
+  const studentId = childInfo.studentId || null;
+  const grade = childInfo.grade || null;
 
   // Banner images are fetched as blob URLs (submitted/homework attachments are never
   // served statically). Tracked here so every reload — and unmount — revokes the
@@ -46,9 +63,7 @@ const ParentHomework = () => {
   const bannerUrlsRef = React.useRef([]);
 
   const loadHomework = useCallback(async () => {
-    const schoolId = childInfo?.schoolId;
-    const studentId = childInfo?.studentId;
-    if (!schoolId || schoolId === 'explore-schools') {
+    if (!schoolId) {
       setLoading(false);
       setHomeworkItems([]);
       setHomeworkStats(buildHomeworkStats([]));
@@ -58,7 +73,12 @@ const ParentHomework = () => {
     setLoading(true);
     setError('');
     try {
-      const rows = await fetchParentHomework(schoolId, childInfo.grade, studentId);
+      const { homework: rows, canSubmit: allowed } = await fetchParentHomework(
+        schoolId,
+        grade,
+        studentId
+      );
+      setCanSubmit(allowed);
       const nextBannerUrls = [];
       const mapped = await Promise.all(
         rows.map(async ({ assignment, course, submission }) => {
@@ -86,7 +106,7 @@ const ParentHomework = () => {
     } finally {
       setLoading(false);
     }
-  }, [childInfo?.schoolId, childInfo?.studentId, childInfo?.grade]);
+  }, [schoolId, studentId, grade]);
 
   useEffect(() => {
     loadHomework();
@@ -123,7 +143,10 @@ const ParentHomework = () => {
     setScrolled(e.target.scrollTop > 10);
   };
 
-  const isGuest = !localStorage.getItem('childInfo');
+  // A signed-in parent whose `childInfo` was never written to this device still has an
+  // identity through the auth store, and must not be shown the login wall. useChildInfo
+  // returns null only when there is neither stored info nor an authenticated user.
+  const isGuest = !activeChildInfo;
 
   if (isGuest) {
     return (
@@ -297,8 +320,24 @@ const ParentHomework = () => {
           {/* 4. Homework Lists */}
           <div className="px-6 flex flex-col gap-4">
             {error && (
-              <div className="px-4 py-3 bg-rose-50 border border-rose-100 rounded-2xl text-xs font-bold text-rose-600">
-                {error}
+              <div className="px-4 py-3 bg-rose-50 border border-rose-100 rounded-2xl text-xs font-bold text-rose-600 flex items-center justify-between gap-3">
+                <span className="min-w-0">{error}</span>
+                <button
+                  onClick={loadHomework}
+                  className="shrink-0 px-3 py-1.5 bg-white border border-rose-200 rounded-xl text-[10px] font-black text-rose-600 active:scale-95 transition-transform"
+                >
+                  Retry
+                </button>
+              </div>
+            )}
+
+            {/* The child is at this school but the office has not added them to the
+                student register yet: the class's homework is readable, submitting is
+                not. Saying so beats a submit button that fails with a 403. */}
+            {!error && !canSubmit && homeworkItems.length > 0 && (
+              <div className="px-4 py-3 bg-amber-50 border border-amber-100 rounded-2xl text-[11px] font-bold text-amber-700">
+                Your child is not linked to the school's student records yet, so homework
+                can be viewed but not submitted. Ask the school office to add them.
               </div>
             )}
 
@@ -386,12 +425,26 @@ const ParentHomework = () => {
             ) : (
               <div className="bg-white border border-gray-100 rounded-2xl p-10 flex flex-col items-center justify-center text-center shadow-[0_2px_8px_rgba(0,0,0,0.01)] py-14">
                 <ClipboardList size={36} className="text-gray-300 mb-2" />
-                <h4 className="text-[13px] font-black text-gray-700">No {activeTab} Homework</h4>
-                <p className="text-[11px] font-semibold text-gray-400 mt-1 max-w-[200px] mx-auto leading-relaxed">
-                  {activeTab === 'All'
-                    ? 'Published assignments from your school will appear here.'
-                    : 'Switch tabs or check back when teachers assign new homework.'}
+                <h4 className="text-[13px] font-black text-gray-700">
+                  {!schoolId ? 'No School Selected' : `No ${activeTab} Homework`}
+                </h4>
+                <p className="text-[11px] font-semibold text-gray-400 mt-1 max-w-[220px] mx-auto leading-relaxed">
+                  {/* An empty list used to mean any of these three things. Guessing wrong
+                      is what made "the homework isn't showing" impossible to self-diagnose. */}
+                  {!schoolId
+                    ? 'Pick your school to see the homework your teachers set.'
+                    : activeTab === 'All'
+                      ? 'Published assignments from your school will appear here.'
+                      : 'Switch tabs or check back when teachers assign new homework.'}
                 </p>
+                {!schoolId && (
+                  <button
+                    onClick={() => { window.location.href = '/user/my-school'; }}
+                    className="mt-4 px-5 py-2.5 bg-[#5B3FD6] text-white rounded-2xl text-[11px] font-black active:scale-95 transition-transform"
+                  >
+                    Choose School
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -399,9 +452,10 @@ const ParentHomework = () => {
 
         </div>
         {selectedHomework && (
-          <ParentHomeworkDetails 
+          <ParentHomeworkDetails
             homework={selectedHomework}
             childInfo={childInfo}
+            canSubmit={canSubmit}
             onClose={() => setSelectedHomework(null)}
             onSubmitted={loadHomework}
           />

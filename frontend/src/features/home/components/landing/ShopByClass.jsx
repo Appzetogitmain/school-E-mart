@@ -6,6 +6,7 @@ const ShopByClass = () => {
   const navigate = useNavigate();
 
   const classes = [
+    { id: 'playgroup', name: 'Play Group', group: 'Pre-Primary' },
     { id: 'nursery', name: 'Nursery', group: 'Pre-Primary' },
     { id: 'lkg', name: 'LKG', group: 'Pre-Primary' },
     { id: 'ukg', name: 'UKG', group: 'Pre-Primary' },

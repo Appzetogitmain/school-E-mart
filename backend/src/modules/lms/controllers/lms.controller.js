@@ -295,17 +295,29 @@ const lmsController = {
   }),
 
   getStudentHomework: asyncHandler(async (req, res) => {
-    const resolved = await studentRepository.resolveStudentForUser(
+    // Reading the class's homework only needs to know which child is being asked
+    // about — not that the school has already added them to its roster. Submitting
+    // still does, which is what `canSubmit` tells the client.
+    const resolved = await studentRepository.resolveLearnerContext(
       req.schoolId,
       req.auth.userId,
       req.query.studentId
     );
     if (!resolved) {
-      throw new ForbiddenError('Student context is required', 'STUDENT_REQUIRED');
+      throw new ForbiddenError(
+        'No child of yours is registered at this school',
+        'STUDENT_REQUIRED'
+      );
     }
 
     const homework = await assignmentService.getStudentHomeworkFeed(req.schoolId, resolved.student);
-    return success(res, { homework }, 'Homework fetched successfully', undefined, req);
+    return success(
+      res,
+      { homework, canSubmit: resolved.isLinked },
+      'Homework fetched successfully',
+      undefined,
+      req
+    );
   }),
 
   streamSubmissionAttachment: asyncHandler(async (req, res) => {

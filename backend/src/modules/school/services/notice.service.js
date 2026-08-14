@@ -45,7 +45,9 @@ const isNoticeVisibleToParent = (notice, student) => {
 
 const buildParentNoticeFilter = async (schoolId, userId, studentId) => {
   const studentLookup = require('../../lms/repositories/student.repository');
-  const resolved = await studentLookup.resolveStudentForUser(schoolId, userId, studentId);
+  // A child the school has not rostered yet still has a grade on their ChildProfile,
+  // so scope to it rather than falling all the way back to every published notice.
+  const resolved = await studentLookup.resolveLearnerContext(schoolId, userId, studentId);
   const now = new Date();
   const nowWithBuffer = new Date(now.getTime() + 5 * 60 * 1000);
 
@@ -233,7 +235,9 @@ const noticeService = {
 
     if ([ROLES.PARENT, 'user', 'parent'].includes(role)) {
       const studentLookup = require('../../lms/repositories/student.repository');
-      const resolved = await studentLookup.resolveStudentForUser(
+      // The list already falls back for a child the school has not rostered yet
+      // (buildParentNoticeFilter); opening one of those notices must not then 403.
+      const resolved = await studentLookup.resolveLearnerContext(
         schoolId,
         userId,
         req.query.studentId

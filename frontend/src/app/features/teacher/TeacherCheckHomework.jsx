@@ -100,8 +100,10 @@ const TeacherCheckHomework = () => {
       // A course covers the whole grade, so keep only the homework aimed at this
       // section. Older homework predates section tagging, so show it in every section
       // rather than hiding it entirely.
+      // Section is free text ("A" / "a" / "Section A"), so it is compared normalized —
+      // matching raw strings hid homework the teacher had set for this very section.
       const forSection = assignmentRows.filter(
-        (row) => !row.section || row.section === section
+        (row) => !row.section || parseSection(row.section) === section
       );
 
       // Newest homework first — that's what a teacher wants to check.

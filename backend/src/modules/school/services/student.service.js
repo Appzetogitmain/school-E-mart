@@ -4,6 +4,10 @@ const studentRepository = require('../repositories/student.repository');
 const schoolUserRepository = require('../repositories/user.repository');
 const { generateStudentRefNo, generateUserRefId } = require('../utils/refId');
 
+// A child's name goes into a RegExp below, and names legitimately contain characters
+// with meaning in one ("O'Brien (Jr.)").
+const escapeRegex = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 // referralCode is globally unique on ParentProfile; the 4-digit space is small,
 // so retry until an unused code is found instead of trusting a single draw
 const generateUniqueReferralCode = async (ParentProfile, session) => {
@@ -149,6 +153,28 @@ const linkParentByPhone = async (schoolId, student, payload, session) => {
     studentId: student._id,
     'softDelete.isDeleted': { $ne: true },
   }).session(session);
+
+  if (!childProfile) {
+    // A parent who signed themselves up already has a profile for this child with no
+    // studentId on it (auth registerParent creates one). Adopting it — rather than
+    // adding a second profile for the same child — is what actually links them: their
+    // homework page stops being read-only, and they don't end up with the child listed
+    // twice. Matched on the child's name so a sibling's profile is never claimed.
+    childProfile = await ChildProfile.findOne({
+      parentUserId: parentUser._id,
+      studentId: null,
+      name: new RegExp(`^${escapeRegex(String(payload.name || student.name).trim())}$`, 'i'),
+      'softDelete.isDeleted': { $ne: true },
+    }).session(session);
+
+    if (childProfile) {
+      await ChildProfile.updateOne(
+        { _id: childProfile._id },
+        { $set: { studentId: student._id } }
+      ).session(session);
+    }
+  }
+
   if (!childProfile) {
     const createdChild = await ChildProfile.create(
       [
@@ -486,5 +512,10 @@ const studentService = {
     return updatedStudent || student;
   },
 };
+
+// Exposed alongside the service because it is a real operation in its own right —
+// "attach this parent account to this student" — that registerStudent and updateStudent
+// both delegate to. It expects to run inside a caller-provided session.
+studentService.linkParentByPhone = linkParentByPhone;
 
 module.exports = studentService;

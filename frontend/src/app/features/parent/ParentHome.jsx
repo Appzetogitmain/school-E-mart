@@ -133,12 +133,14 @@ const ParentHome = () => {
       if (!schoolId || schoolId === 'explore-schools') return;
 
       try {
-        const rows = await fetchParentHomework(schoolId, childInfo?.grade, studentId);
+        const res = await fetchParentHomework(schoolId, childInfo?.grade, studentId);
+        const rows = res?.homework || (Array.isArray(res) ? res : []);
         const mapped = rows.map(({ assignment, course, submission }) =>
           mapAssignmentForParentHomework(assignment, course, submission)
         );
         setPendingHomeworkCount(buildHomeworkStats(mapped).pending);
-      } catch {
+      } catch (err) {
+        console.error('Failed to load homework summary:', err);
         setPendingHomeworkCount(0);
       }
     };

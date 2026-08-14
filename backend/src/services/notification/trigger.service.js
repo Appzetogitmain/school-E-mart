@@ -4,6 +4,23 @@ const VendorProfile = require('../../database/models/VendorProfile');
 const ChildProfile = require('../../database/models/ChildProfile');
 const Order = require('../../database/models/Order');
 
+// classGrade and section are free text across the app ("5" / "Class 5", "A" /
+// "Section A"). Every audience match here goes through these rather than comparing the
+// raw strings, which is what used to drop whole classes from a broadcast.
+const normalizeGradeValue = (value) =>
+  String(value || '')
+    .toLowerCase()
+    .replace(/class|grade|std/g, '')
+    .replace(/\s+/g, '')
+    .trim();
+
+const normalizeSectionValue = (value) =>
+  String(value || '')
+    .toLowerCase()
+    .replace(/section/g, '')
+    .replace(/\s+/g, '')
+    .trim();
+
 const notifySafe = (fn, ...args) => {
   Promise.resolve()
     .then(() => fn(...args))
@@ -79,21 +96,57 @@ const getParentUserIdsForClasses = async (schoolId, targets = []) => {
   const Student = require('../../database/models/Student');
   if (!targets.length) return [];
 
-  const classFilters = targets.map((entry) => {
-    const filter = {
-      schoolId,
-      classGrade: entry.classGrade,
-      status: 'active',
-      'softDelete.isDeleted': { $ne: true },
-    };
-    if (entry.sections?.length) {
-      filter.section = { $in: entry.sections };
-    }
-    return filter;
-  });
+  // Grade and section are free text everywhere ("5" / "Class 5", "A" / "Section A"),
+  // so the match is made on the normalized form in memory. Querying them raw meant a
+  // whole class of parents was quietly left out of "new homework" notifications
+  // whenever the roster and the teacher's form spelled the class differently.
+  const wanted = targets.map((entry) => ({
+    grade: normalizeGradeValue(entry.classGrade),
+    sections: (entry.sections || []).map(normalizeSectionValue).filter(Boolean),
+  }));
 
-  const students = await Student.find({ $or: classFilters }).select('_id').lean();
-  return parentUserIdsForStudents(students.map((s) => s._id));
+  // A child with no section on record is in the grade but not in any one section, so
+  // they receive the grade's notifications rather than none — the same rule the
+  // homework feed applies when deciding what they can see.
+  const isTargeted = (grade, section) =>
+    wanted.some((target) => {
+      if (target.grade !== normalizeGradeValue(grade)) return false;
+      if (!target.sections.length) return true;
+      const normalized = normalizeSectionValue(section);
+      return !normalized || target.sections.includes(normalized);
+    });
+
+  const students = await Student.find({
+    schoolId,
+    status: 'active',
+    'softDelete.isDeleted': { $ne: true },
+  })
+    .select('_id classGrade section')
+    .lean();
+
+  const studentIds = students
+    .filter((student) => isTargeted(student.classGrade, student.section))
+    .map((student) => student._id);
+
+  const fromRoster = await parentUserIdsForStudents(studentIds);
+
+  // Parents whose child the school has not added to the register yet have no Student
+  // row to be found through — only their own ChildProfile. They can see the homework
+  // (see the LMS student repository), so they are told about it too.
+  const children = await ChildProfile.find({
+    schoolId,
+    studentId: null,
+    'softDelete.isDeleted': { $ne: true },
+  })
+    .select('parentUserId grade')
+    .lean();
+
+  const fromChildProfiles = children
+    .filter((child) => isTargeted(child.grade, null))
+    .map((child) => String(child.parentUserId))
+    .filter(Boolean);
+
+  return [...new Set([...fromRoster, ...fromChildProfiles])];
 };
 
 const getSchoolStaffUserIds = async (schoolId) => {
@@ -383,18 +436,29 @@ const triggerService = {
         { classGrade, sections: assignment.section ? [assignment.section] : [] },
       ]);
 
-      // Resolve student user accounts for this class/section as well
+      // Resolve student user accounts for this class/section as well. Filtered in
+      // memory on the normalized grade/section for the same reason as the parent
+      // lookup above — "Class 5" and "5" are one class.
       const Student = require('../../database/models/Student');
-      const studentFilter = {
+      const targetGrade = normalizeGradeValue(classGrade);
+      const targetSection = normalizeSectionValue(assignment.section);
+
+      const students = await Student.find({
         schoolId,
         status: 'active',
         'softDelete.isDeleted': { $ne: true },
-      };
-      if (classGrade) studentFilter.classGrade = classGrade;
-      if (assignment.section) studentFilter.section = assignment.section;
+      })
+        .select('userId classGrade section')
+        .lean();
 
-      const students = await Student.find(studentFilter).select('userId').lean();
-      const studentUserIds = students.map((s) => String(s.userId)).filter(Boolean);
+      const studentUserIds = students
+        .filter((student) => {
+          if (normalizeGradeValue(student.classGrade) !== targetGrade) return false;
+          const section = normalizeSectionValue(student.section);
+          return !targetSection || !section || section === targetSection;
+        })
+        .map((s) => String(s.userId))
+        .filter(Boolean);
 
       const recipientUserIds = [...new Set([...parentUserIds, ...studentUserIds])];
       if (!recipientUserIds.length) return;

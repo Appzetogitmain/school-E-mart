@@ -7,9 +7,13 @@ const { ROLES } = roles;
 
 const buildParentDiaryFilter = async (schoolId, userId, studentId) => {
   const studentLookup = require('../../lms/repositories/student.repository');
-  const resolved = await studentLookup.resolveStudentForUser(schoolId, userId, studentId);
+  // Same reasoning as the homework feed: a parent whose child the school has not yet
+  // added to its roster still gets their class's diary, matched on the grade from
+  // their own ChildProfile. Only a parent with no child at this school at all is
+  // refused.
+  const resolved = await studentLookup.resolveLearnerContext(schoolId, userId, studentId);
   if (!resolved?.student) {
-    throw new ForbiddenError('Student context is required', 'STUDENT_REQUIRED');
+    throw new ForbiddenError('No child of yours is registered at this school', 'STUDENT_REQUIRED');
   }
 
   const student = resolved.student;
@@ -28,18 +32,20 @@ const buildParentDiaryFilter = async (schoolId, userId, studentId) => {
     ? { $or: [{ section: { $exists: false } }, { section: null }, { section: '' }, { section: new RegExp(`^${student.section}$`, 'i') }] }
     : {};
 
+  const classEntries = {
+    classGrade: { $in: gradeVariants },
+    $and: [
+      sectionFilter,
+      { $or: [{ studentId: null }, { studentId: { $exists: false } }] },
+    ],
+  };
+
+  // Entries written for this child by name only exist once there is a roster row.
+  // Without the guard `{ studentId: null }` would match every unaddressed entry in
+  // the school, including other grades'.
   return {
     schoolId,
-    $or: [
-      { studentId: student._id },
-      {
-        classGrade: { $in: gradeVariants },
-        $and: [
-          sectionFilter,
-          { $or: [{ studentId: null }, { studentId: { $exists: false } }] },
-        ],
-      },
-    ],
+    $or: student._id ? [{ studentId: student._id }, classEntries] : [classEntries],
   };
 };
 

@@ -19,6 +19,36 @@ const normalizeGrade = (value) =>
     .replace(/\s+/g, '')
     .trim();
 
+// section is free text too — the teacher's form uppercases it ("A"), the roster may
+// hold "a" or "Section A". Comparing the raw strings silently hid a whole section's
+// homework, so every section comparison goes through this.
+const normalizeSection = (value) =>
+  String(value || '')
+    .toLowerCase()
+    .replace(/section/g, '')
+    .replace(/\s+/g, '')
+    .trim();
+
+// Content targeted at "All Grades" (or at nothing in particular) belongs to every
+// class, not to a grade of its own.
+const isUniversalGrade = (value) => {
+  const normalized = normalizeGrade(value);
+  return !normalized || normalized === 'allgrades' || normalized === 'all';
+};
+
+// Homework can legitimately hang off a platform course (`schoolId: null`): the access
+// policy already resolves one for staff (assertCourseInSchool falls back to it), so a
+// lookup here that refused it reported "Course not found" for homework the teacher was
+// authorized to file, and left any already filed that way unlistable and ungradeable.
+// This only decides whether the course row can be *found* — who may touch it is settled
+// by the policy before any of this runs.
+const COURSE_SCOPE = { includePlatform: true };
+
+// How much of a school's published homework the parent feed considers, newest first.
+// Well above a year of homework for one school, and low enough that the page cannot be
+// asked to render an unbounded list.
+const HOMEWORK_FEED_LIMIT = 500;
+
 // A submission is late if it arrives after the due date. Assignments without a due date
 // can never be late.
 const isSubmissionLate = (assignment, at) =>
@@ -26,7 +56,7 @@ const isSubmissionLate = (assignment, at) =>
 
 const assignmentService = {
   async createAssignment(schoolId, courseId, payload, actor = {}) {
-    const course = await courseService.getCourse(schoolId, courseId);
+    const course = await courseService.getCourse(schoolId, courseId, COURSE_SCOPE);
 
     let assignedByName = null;
     let assignedByUserId = null;
@@ -83,14 +113,14 @@ const assignmentService = {
   },
 
   async listAssignments(schoolId, courseId, query) {
-    await courseService.getCourse(schoolId, courseId);
+    await courseService.getCourse(schoolId, courseId, COURSE_SCOPE);
     const filter = { schoolId, courseId };
     if (query.status) filter.status = query.status;
     return assignmentRepository.paginateAssignments(filter, query);
   },
 
   async getAssignment(schoolId, courseId, assignmentId) {
-    await courseService.getCourse(schoolId, courseId);
+    await courseService.getCourse(schoolId, courseId, COURSE_SCOPE);
     const assignment = await assignmentRepository.findOnePopulated({ _id: assignmentId, schoolId, courseId });
     if (!assignment) throw new NotFoundError('Assignment not found', 'ASSIGNMENT_NOT_FOUND');
     return assignment;
@@ -135,7 +165,7 @@ const assignmentService = {
 
     // Homework drafted first and published later must still reach parents.
     if (before.status !== 'published' && assignment.status === 'published') {
-      const course = await courseService.getCourse(schoolId, courseId);
+      const course = await courseService.getCourse(schoolId, courseId, COURSE_SCOPE);
       triggerService.notifyHomeworkPublished(schoolId, assignment, course);
     }
 
@@ -302,22 +332,29 @@ const assignmentService = {
    */
   async getSubmissionRoster(schoolId, courseId, assignmentId) {
     const assignment = await this.getAssignment(schoolId, courseId, assignmentId);
-    const course = await courseService.getCourse(schoolId, courseId);
+    const course = await courseService.getCourse(schoolId, courseId, COURSE_SCOPE);
 
     const classGrade = assignment.classGrade || course.gradeClass;
     const students = await Student.find({
       schoolId,
       status: 'active',
       'softDelete.isDeleted': { $ne: true },
-      // An assignment with no section targets the whole grade.
-      ...(assignment.section ? { section: assignment.section } : {}),
     })
       .select('name rollNo classGrade section')
       .lean();
 
-    const roster = students.filter(
-      (student) => normalizeGrade(student.classGrade) === normalizeGrade(classGrade)
-    );
+    // Both filters run here rather than in the query: section is free text ("A" vs
+    // "a" vs "Section A"), and matching it raw dropped students the homework was
+    // actually set for — so the teacher graded a roster with people missing from it.
+    const targetSection = normalizeSection(assignment.section);
+    const roster = students.filter((student) => {
+      if (!isUniversalGrade(classGrade) && normalizeGrade(student.classGrade) !== normalizeGrade(classGrade)) {
+        return false;
+      }
+      // An assignment with no section targets the whole grade.
+      if (targetSection && normalizeSection(student.section) !== targetSection) return false;
+      return true;
+    });
 
     const submissions = await assignmentSubmissionRepository.findAllPopulated({
       schoolId,
@@ -340,46 +377,71 @@ const assignmentService = {
   /**
    * Every published homework for one student, with their submission attached.
    *
-   * Filtering by section happens here rather than on the client: a course spans a whole
-   * grade, so without it a child in 5-A is shown 5-B's homework. Doing the join server
-   * side also collapses what used to be one request per course plus one per assignment.
+   * Driven by the assignments, not by the courses. Starting from the course list meant
+   * a course the parent's feed could not enumerate — one owned by the platform rather
+   * than the school (`schoolId: null`), one still in draft, one targeted at "All
+   * Grades" — silently swallowed every piece of homework filed under it. The teacher
+   * saw the homework in Manage Homework and the parent saw an empty page. An
+   * assignment already carries its own `schoolId`, `classGrade` and `section`, so it
+   * can answer "is this for my child?" without its course being reachable at all.
+   *
+   * Targeting is treated as a filter, never as a gate: homework that does not say
+   * which grade or section it is for is school-wide, and a child whose grade is
+   * unknown is shown everything rather than nothing.
    */
   async getStudentHomeworkFeed(schoolId, student) {
-    const courses = await courseRepository.findMany({ schoolId, status: 'published' });
-
-    const studentGrade = normalizeGrade(student.classGrade);
-    const gradeCourses = courses.filter(
-      (course) => normalizeGrade(course.gradeClass) === studentGrade
+    // Newest first, and bounded: the whole school's published homework is considered
+    // (targeting is settled per assignment below, not by the query), and the client
+    // fetches a banner image per row. Years of accumulated homework would otherwise
+    // turn one page load into hundreds of requests.
+    const assignments = await assignmentRepository.findManyPopulated(
+      { schoolId, status: 'published' },
+      { sort: { assignedDate: -1, 'audit.createdAt': -1 }, limit: HOMEWORK_FEED_LIMIT }
     );
-    if (!gradeCourses.length) return [];
-
-    const courseById = new Map(gradeCourses.map((course) => [String(course._id), course]));
-
-    const assignments = await assignmentRepository.findManyPopulated({
-      schoolId,
-      courseId: { $in: gradeCourses.map((course) => course._id) },
-      status: 'published',
-      // Homework with no section is set for the whole grade; anything else must match
-      // the student's own section.
-      $or: [
-        { section: student.section },
-        { section: { $in: [null, ''] } },
-        { section: { $exists: false } },
-      ],
-    });
     if (!assignments.length) return [];
 
-    const submissions = await assignmentSubmissionRepository.findAllPopulated({
-      schoolId,
-      studentId: student._id,
-      assignmentId: { $in: assignments.map((a) => a._id) },
+    // Fetched by id — not by school — precisely because the course may be a platform
+    // course. It is only needed for display (subject, instructor), so homework whose
+    // course has since been deleted still reaches the parent.
+    const courseIds = [...new Set(assignments.map((a) => String(a.courseId)).filter(Boolean))];
+    const courses = courseIds.length
+      ? await courseRepository.findMany({ _id: { $in: courseIds } })
+      : [];
+    const courseById = new Map(courses.map((course) => [String(course._id), course]));
+
+    const studentGrade = normalizeGrade(student.classGrade);
+    const studentSection = normalizeSection(student.section);
+
+    const visible = assignments.filter((assignment) => {
+      const course = courseById.get(String(assignment.courseId));
+      const targetGrade = assignment.classGrade || course?.gradeClass;
+      if (studentGrade && !isUniversalGrade(targetGrade) && normalizeGrade(targetGrade) !== studentGrade) {
+        return false;
+      }
+
+      // Homework with no section is set for the whole grade; a child with no section
+      // on record sees all of the grade's homework rather than none of it.
+      const targetSection = normalizeSection(assignment.section);
+      if (targetSection && studentSection && targetSection !== studentSection) return false;
+
+      return true;
     });
+    if (!visible.length) return [];
+
+    // An unlinked parent has no roster row, so there is nothing of theirs to join to.
+    const submissions = student._id
+      ? await assignmentSubmissionRepository.findAllPopulated({
+          schoolId,
+          studentId: student._id,
+          assignmentId: { $in: visible.map((a) => a._id) },
+        })
+      : [];
 
     const byAssignment = new Map(
       submissions.map((submission) => [String(submission.assignmentId), submission])
     );
 
-    return assignments.map((assignment) => ({
+    return visible.map((assignment) => ({
       assignment,
       course: courseById.get(String(assignment.courseId)) || null,
       submission: byAssignment.get(String(assignment._id)) || null,

@@ -10,7 +10,7 @@ const SchoolGradePage = () => {
   const [selectedGrade, setSelectedGrade] = useState('');
 
   const allGrades = [
-    "Nursery", "LKG", "UKG",
+    "Play Group", "Nursery", "LKG", "UKG",
     "Class 1", "Class 2", "Class 3", "Class 4",
     "Class 5", "Class 6", "Class 7", "Class 8",
     "Class 9", "Class 10", "Class 11", "Class 12"
@@ -18,7 +18,7 @@ const SchoolGradePage = () => {
 
   const grades = useMemo(() => {
     if (!group) return allGrades;
-    if (group === 'Pre-Primary') return ["Nursery", "LKG", "UKG"];
+    if (group === 'Pre-Primary') return ["Play Group", "Nursery", "LKG", "UKG"];
     if (group === 'Primary') return ["Class 1", "Class 2", "Class 3", "Class 4", "Class 5"];
     if (group === 'Secondary') return ["Class 6", "Class 7", "Class 8", "Class 9", "Class 10"];
     return allGrades;

@@ -70,6 +70,7 @@ const SchoolCreateRequest = () => {
   const [quotationRequirements, setQuotationRequirements] = useState([]);
 
   const availableClasses = [
+    { id: 'playgroup', label: 'Play Group' },
     { id: 'nursery', label: 'Nursery' },
     { id: 'lkg', label: 'LKG' },
     { id: 'ukg', label: 'UKG' },

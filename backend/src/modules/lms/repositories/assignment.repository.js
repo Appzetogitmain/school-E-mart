@@ -29,11 +29,13 @@ class AssignmentRepository extends BaseRepository {
       .lean();
   }
 
-  findManyPopulated(filter) {
-    return LmsAssignment.find(this.mergeFilter(filter))
+  findManyPopulated(filter, { sort = null, limit = 0 } = {}) {
+    const query = LmsAssignment.find(this.mergeFilter(filter))
       .populate('attachments', ATTACHMENT_FIELDS)
-      .populate('bannerAttachmentId', ATTACHMENT_FIELDS)
-      .lean();
+      .populate('bannerAttachmentId', ATTACHMENT_FIELDS);
+    if (sort) query.sort(sort);
+    if (limit) query.limit(limit);
+    return query.lean();
   }
 }
 

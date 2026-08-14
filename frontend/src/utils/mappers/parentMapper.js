@@ -81,7 +81,15 @@ export const mapAssignmentForParentHomework = (assignment, course, submission = 
 
   return {
     id,
-    courseId: course?._id?.toString?.() || course?.id,
+    // The assignment's own courseId is the fallback: the feed can legitimately return
+    // homework whose course row it could not load (a platform course, or one since
+    // deleted), and without this the submit call had no course to post to.
+    courseId:
+      course?._id?.toString?.() ||
+      course?.id ||
+      assignment?.courseId?._id?.toString?.() ||
+      assignment?.courseId?.toString?.() ||
+      null,
     subject,
     title: assignment?.title,
     description: assignment?.description || assignment?.instructions || assignment?.title,

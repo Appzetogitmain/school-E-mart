@@ -7,14 +7,14 @@ import { getChildInfoFromStorage } from '../../../utils/parentContext';
 // Used to order whatever the school reports, and as the catalogue-wide list when
 // the user has no school linked (guests / "explore schools").
 const STANDARD_GRADES = [
-  "Nursery", "LKG", "UKG",
+  "Play Group", "Nursery", "LKG", "UKG",
   "Class 1", "Class 2", "Class 3", "Class 4",
   "Class 5", "Class 6", "Class 7", "Class 8",
   "Class 9", "Class 10", "Class 11", "Class 12"
 ];
 
 const GRADE_GROUPS = {
-  'Pre-Primary': ["Nursery", "LKG", "UKG"],
+  'Pre-Primary': ["Play Group", "Nursery", "LKG", "UKG"],
   Primary: ["Class 1", "Class 2", "Class 3", "Class 4", "Class 5"],
   Secondary: ["Class 6", "Class 7", "Class 8", "Class 9", "Class 10"],
 };

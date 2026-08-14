@@ -11,14 +11,24 @@ export const getAttendanceHistory = async (schoolId, params = {}) => {
   };
 };
 
+// A studentId only ever comes from stored client state, so it can be stale or the
+// literal strings "undefined"/"null". Sending one the API rejects turns the whole
+// homework page into a 400; leaving it off just lets the server resolve the child.
+const asObjectId = (value) =>
+  /^[0-9a-fA-F]{24}$/.test(String(value || '')) ? String(value) : null;
+
 /**
  * The server returns the child's homework already filtered to their class AND section,
  * with each submission joined on. Previously this walked every course and then every
  * assignment one request at a time, and — because it only ever filtered by grade — showed
  * a child the homework set for other sections.
+ *
+ * Resolves to `{ homework, canSubmit }`.
  */
-export const fetchParentHomework = async (schoolId, gradeLabel, studentId) =>
-  getStudentHomework(schoolId, studentId ? { studentId } : {});
+export const fetchParentHomework = async (schoolId, gradeLabel, studentId) => {
+  const id = asObjectId(studentId);
+  return getStudentHomework(schoolId, id ? { studentId: id } : {});
+};
 
 export const listParentNotices = async (schoolId, params = {}) => {
   const response = await apiClient.get(`/schools/${schoolId}/notices`, { params });
@@ -50,8 +60,13 @@ export const markParentDiaryRead = async (schoolId, entryId, params = {}) => {
   return response.data?.data?.entry;
 };
 
-export const submitHomework = async (schoolId, courseId, assignmentId, payload) =>
-  submitAssignment(schoolId, courseId, assignmentId, payload);
+export const submitHomework = async (schoolId, courseId, assignmentId, payload) => {
+  const studentId = asObjectId(payload?.studentId);
+  return submitAssignment(schoolId, courseId, assignmentId, {
+    ...payload,
+    ...(studentId ? { studentId } : { studentId: undefined }),
+  });
+};
 
 export const getMyProfile = async () => {
   const response = await apiClient.get('/users/me');
