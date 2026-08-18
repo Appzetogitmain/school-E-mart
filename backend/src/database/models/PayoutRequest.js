@@ -17,7 +17,10 @@ const payoutRequestSchema = new mongoose.Schema({
   bankDetailsSnapshot: {
     accountName: { type: String },
     bankName: { type: String },
+    branch: { type: String },
+    accountNumber: { type: String },
     accountNumberEnc: { type: String },
+    accountNumberMasked: { type: String },
     ifsc: { type: String }
   },
   status: {

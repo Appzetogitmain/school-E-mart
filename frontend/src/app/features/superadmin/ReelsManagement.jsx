@@ -1,9 +1,9 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import ReactDOM from 'react-dom';
 import { 
-  Video, Film, Plus, Edit3, Trash2, Heart, Eye, Play, X, ChevronRight, CheckCircle, Info, Upload, Image as ImageIcon, ShoppingBag, Globe, EyeOff, Camera
+  Video, Film, Plus, Edit3, Trash2, Heart, Eye, Play, X, ChevronRight, CheckCircle, Info, Upload, Image as ImageIcon, ShoppingBag, Globe, EyeOff, Camera, MessageCircle
 } from 'lucide-react';
-import { listVendors, listReels, createReel, updateReel, deleteReel, uploadAdminFile, uploadAdminMedia } from '../../../services/adminApi';
+import { listVendors, listReels, createReel, updateReel, deleteReel, uploadAdminFile, uploadAdminMedia, listAdminReelComments, deleteAdminReelComment } from '../../../services/adminApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 import { mapReelForAdmin, mapAdminReelToPayload } from '../../../utils/mappers/adminReelsMapper';
 
@@ -34,6 +34,7 @@ const ReelsManagement = () => {
   const [productUrl, setProductUrl] = useState('');
   const [isActive, setIsActive] = useState(true);
   const [category, setCategory] = useState('All');
+  const [targetApp, setTargetApp] = useState('both');
 
   // File Upload states (handles both raw files and local previews)
   const [videoFile, setVideoFile] = useState(null);
@@ -52,6 +53,41 @@ const ReelsManagement = () => {
 
   // Video portal state
   const [playingVideo, setPlayingVideo] = useState(null);
+
+  // Admin comments modal state
+  const [selectedReelForComments, setSelectedReelForComments] = useState(null);
+  const [reelCommentsList, setReelCommentsList] = useState([]);
+  const [commentsLoading, setCommentsLoading] = useState(false);
+
+  const handleOpenCommentsModal = async (reel) => {
+    setSelectedReelForComments(reel);
+    setCommentsLoading(true);
+    try {
+      const res = await listAdminReelComments(reel.mongoId || reel.id);
+      setReelCommentsList(res.data || []);
+    } catch {
+      setReelCommentsList([]);
+    } finally {
+      setCommentsLoading(false);
+    }
+  };
+
+  const handleAdminDeleteComment = async (commentId) => {
+    if (!selectedReelForComments || !window.confirm('Delete this user comment?')) return;
+    try {
+      await deleteAdminReelComment(selectedReelForComments.mongoId || selectedReelForComments.id, commentId);
+      setReelCommentsList((prev) => prev.filter((c) => c.id !== commentId));
+      setReels((prev) =>
+        prev.map((r) =>
+          (r.id === selectedReelForComments.id || r.mongoId === selectedReelForComments.id)
+            ? { ...r, commentsCount: Math.max(0, (r.commentsCount || 0) - 1) }
+            : r
+        )
+      );
+    } catch {
+      alert('Failed to delete comment.');
+    }
+  };
 
   // Handle Video File selection
   const handleVideoFileChange = (e) => {
@@ -182,6 +218,7 @@ const ReelsManagement = () => {
         thumbnailId,
         storeName,
         category,
+        targetApp,
         productTitle,
         productPrice,
         productMrp,
@@ -216,6 +253,7 @@ const ReelsManagement = () => {
     setReelDescription(reel.description);
     setStoreName(reel.storeName);
     setCategory(reel.category || 'All');
+    setTargetApp(reel.targetApp || 'both');
     setProductTitle(reel.productTitle);
     setProductPrice(reel.productPrice.toString());
     setProductMrp(reel.productMrp.toString());
@@ -247,6 +285,7 @@ const ReelsManagement = () => {
     setReelDescription('');
     setStoreName('School E-Mart Official');
     setCategory('All');
+    setTargetApp('both');
     setProductTitle('');
     setProductPrice('');
     setProductMrp('');
@@ -391,6 +430,20 @@ const ReelsManagement = () => {
                 {['All', 'Kits', 'Uniforms', 'Stationery', 'Activities'].map((cat, idx) => (
                   <option key={idx} value={cat}>{cat}</option>
                 ))}
+              </select>
+            </div>
+
+            {/* Target App Audience */}
+            <div className="space-y-1.5">
+              <label className="block text-gray-400 uppercase tracking-wide text-[9px] font-black select-none">Target App Audience *</label>
+              <select
+                value={targetApp}
+                onChange={(e) => setTargetApp(e.target.value)}
+                className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-500/25 font-bold cursor-pointer"
+              >
+                <option value="both">Both Apps (Parents & Schools)</option>
+                <option value="parent">Parent App Only</option>
+                <option value="school">School App Only</option>
               </select>
             </div>
 
@@ -703,6 +756,9 @@ const ReelsManagement = () => {
                     <span className="px-2.5 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider border bg-indigo-500/90 text-white border-transparent">
                       {r.category}
                     </span>
+                    <span className="px-2.5 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider border bg-purple-600/90 text-white border-transparent">
+                      {r.targetApp === 'parent' ? 'Parents App' : r.targetApp === 'school' ? 'School App' : 'Both Apps'}
+                    </span>
                   </div>
 
                   {/* Overlaid details mimicking user app styling */}
@@ -740,13 +796,22 @@ const ReelsManagement = () => {
                 {/* Card controls and stats logs */}
                 <div className="p-4 bg-gray-50 border-t border-gray-100 flex items-center justify-between select-none">
                   <div className="flex items-center gap-3 text-[10px] font-bold text-gray-500">
-                    <span className="flex items-center gap-1">
+                    <span className="flex items-center gap-1" title="Likes">
                       <Heart size={12} className="text-rose-500 fill-rose-500" />
-                      {(r.likes / 1000).toFixed(1)}K
+                      {r.likes || 0}
                     </span>
-                    <span className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => handleOpenCommentsModal(r)}
+                      className="flex items-center gap-1 text-indigo-600 hover:text-indigo-800 font-extrabold cursor-pointer"
+                      title="View & moderate user comments"
+                    >
+                      <MessageCircle size={12} className="text-indigo-500" />
+                      {r.commentsCount || 0} comments
+                    </button>
+                    <span className="flex items-center gap-1" title="Views">
                       <Eye size={12} className="text-sky-500" />
-                      {(r.views / 1000).toFixed(1)}K
+                      {r.views || 0}
                     </span>
                   </div>
 
@@ -902,6 +967,85 @@ const ReelsManagement = () => {
 
           </div>
 
+        </div>,
+        document.body
+      )}
+
+      {/* ADMIN REEL COMMENTS MODAL PORTAL */}
+      {selectedReelForComments && ReactDOM.createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs font-outfit">
+          <div className="bg-white rounded-3xl max-w-lg w-full overflow-hidden shadow-2xl border border-gray-100 flex flex-col max-h-[85vh]">
+            {/* Modal Header */}
+            <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-gray-50">
+              <div>
+                <h3 className="font-extrabold text-sm text-gray-900 line-clamp-1">
+                  Comments: {selectedReelForComments.title}
+                </h3>
+                <p className="text-[10px] text-gray-500 font-semibold">
+                  Moderate community feedback on this reel
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedReelForComments(null)}
+                className="w-8 h-8 rounded-full bg-gray-200 hover:bg-gray-300 text-gray-700 flex items-center justify-center transition-colors cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Modal Comments List */}
+            <div className="p-4 overflow-y-auto flex-1 space-y-3 min-h-[200px]">
+              {commentsLoading ? (
+                <div className="py-12 text-center text-xs font-semibold text-gray-400 animate-pulse">
+                  Loading comments...
+                </div>
+              ) : reelCommentsList.length === 0 ? (
+                <div className="py-12 text-center text-xs font-semibold text-gray-400">
+                  No comments posted on this reel yet.
+                </div>
+              ) : (
+                reelCommentsList.map((cmt) => (
+                  <div key={cmt.id} className="p-3 bg-gray-50 rounded-2xl border border-gray-150 flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-extrabold text-xs text-gray-900">{cmt.user?.name || 'User'}</span>
+                        <span className="px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600 text-[8px] font-black uppercase">
+                          {cmt.user?.role || 'parent'}
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-700 font-medium mt-1 leading-relaxed">
+                        {cmt.body}
+                      </p>
+                      <span className="text-[9px] text-gray-400 block mt-1">
+                        {new Date(cmt.createdAt).toLocaleString()}
+                      </span>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => handleAdminDeleteComment(cmt.id)}
+                      className="p-1.5 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 transition-colors cursor-pointer shrink-0"
+                      title="Delete Comment"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-3 border-t border-gray-100 bg-gray-50 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setSelectedReelForComments(null)}
+                className="px-4 py-2 bg-gray-900 text-white rounded-xl text-xs font-bold hover:bg-gray-800 transition-colors cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
         </div>,
         document.body
       )}

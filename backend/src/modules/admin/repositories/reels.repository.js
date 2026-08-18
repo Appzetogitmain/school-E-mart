@@ -10,6 +10,7 @@ class ReelsRepository extends BaseRepository {
   paginate(filter, queryString, options = {}) {
     const merged = this.mergeFilter(filter);
     if (queryString.status) merged.status = queryString.status;
+    if (queryString.targetApp) merged.targetApp = queryString.targetApp;
     if (queryString.category && queryString.category !== 'All') {
       merged.category = queryString.category;
     }
@@ -40,6 +41,13 @@ class ReelsRepository extends BaseRepository {
     const merged = { ...this.mergeFilter(filter) };
     if (queryString.category && queryString.category !== 'All') {
       merged.category = queryString.category;
+    }
+    if (queryString.targetApp) {
+      if (queryString.targetApp === 'parent' || queryString.targetApp === 'school') {
+        merged.targetApp = { $in: [queryString.targetApp, 'both'] };
+      } else {
+        merged.targetApp = queryString.targetApp;
+      }
     }
 
     const { parsePagination, buildPaginationMeta } = require('../../../common/pagination');

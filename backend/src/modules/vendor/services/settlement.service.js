@@ -50,8 +50,12 @@ const settlementService = {
         adminPaise += itemAdmin;
         schoolPaise += itemSchool;
         if (itemSchool > 0) {
-          const key = String(item.schoolId);
-          schoolMap.set(key, (schoolMap.get(key) || 0) + itemSchool);
+          const isKit = Boolean(item.kitId);
+          const type = isKit ? 'kit_commission_credit' : 'retail_commission_credit';
+          const key = `${item.schoolId}:${type}`;
+          const current = schoolMap.get(key) || { schoolId: item.schoolId, amountPaise: 0, transactionType: type, isKit };
+          current.amountPaise += itemSchool;
+          schoolMap.set(key, current);
         }
       }
 
@@ -59,7 +63,7 @@ const settlementService = {
         adminPaise,
         schoolPaise,
         vendorEarningPaise: grossPaise - adminPaise - schoolPaise,
-        schoolBreakdown: [...schoolMap].map(([schoolId, amountPaise]) => ({ schoolId, amountPaise })),
+        schoolBreakdown: [...schoolMap.values()],
       };
     }
 
@@ -68,16 +72,19 @@ const settlementService = {
     return { adminPaise: commissionPaise, schoolPaise: 0, vendorEarningPaise, schoolBreakdown: [] };
   },
 
-  async creditSchoolLedger(schoolId, amountPaise, orderId, orderNumber) {
+  async creditSchoolLedger(schoolId, amountPaise, orderId, orderNumber, transactionType = 'kit_commission_credit', customDescription = null) {
     const latest = await SchoolLedger.findOne({ schoolId }).sort({ 'audit.createdAt': -1 }).lean();
     const balancePaise = (latest?.balancePaise || 0) + amountPaise;
+    const defaultDesc = transactionType === 'retail_commission_credit'
+      ? `Marketplace product commission on order ${orderNumber}`
+      : `Kit commission on order ${orderNumber}`;
     return SchoolLedger.create({
       schoolId,
-      transactionType: 'kit_commission_credit',
+      transactionType,
       amountPaise,
       balancePaise,
       reference: { kind: 'Order', id: orderId },
-      description: `Kit commission on order ${orderNumber}`,
+      description: customDescription || defaultDesc,
     });
   },
 
@@ -125,7 +132,13 @@ const settlementService = {
     // Credit each school its share, and the platform its commission.
     for (const entry of split.schoolBreakdown) {
       if (entry.amountPaise > 0) {
-        await this.creditSchoolLedger(entry.schoolId, entry.amountPaise, orderId, order.orderNumber);
+        await this.creditSchoolLedger(
+          entry.schoolId,
+          entry.amountPaise,
+          orderId,
+          order.orderNumber,
+          entry.transactionType || 'kit_commission_credit'
+        );
       }
     }
 
@@ -206,13 +219,20 @@ const settlementService = {
       throw new BadRequestError('Add your bank details before requesting a payout');
     }
 
+    const accNum = bank.accountNumber || bank.accountNumberMasked || '';
     const payout = await PayoutRequest.create({
       vendorId,
+      ownerType: 'vendor',
+      payeeName: vendor.storeName,
+      payeeType: 'vendor',
       amountPaise: amount,
       bankDetailsSnapshot: {
         accountName: bank.accountName,
         bankName: bank.bankName,
+        branch: bank.branch,
+        accountNumber: accNum,
         accountNumberEnc: bank.accountNumberEnc,
+        accountNumberMasked: accNum,
         ifsc: bank.ifsc,
       },
       status: 'pending',

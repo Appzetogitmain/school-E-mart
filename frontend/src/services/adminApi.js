@@ -257,6 +257,16 @@ export const deleteReel = async (reelId) => {
   return unwrapData(response);
 };
 
+export const listAdminReelComments = async (reelId) => {
+  const response = await apiClient.get(`/admin/reels/${reelId}/comments`);
+  return unwrapData(response);
+};
+
+export const deleteAdminReelComment = async (reelId, commentId) => {
+  const response = await apiClient.delete(`/admin/reels/${reelId}/comments/${commentId}`);
+  return unwrapData(response);
+};
+
 // Platform Tutorials ("Learn more about platform")
 export const listTutorials = async (params = {}) => {
   const response = await apiClient.get('/admin/tutorials', { params });
@@ -466,6 +476,11 @@ export const approvePayoutRequest = async (payoutId, transactionReference) => {
 
 export const rejectPayoutRequest = async (payoutId, reason) => {
   const response = await apiClient.post(`/admin/wallet/payouts/${payoutId}/reject`, { reason });
+  return unwrapData(response)?.payout;
+};
+
+export const updatePayoutStatus = async (payoutId, payload) => {
+  const response = await apiClient.patch(`/admin/wallet/payouts/${payoutId}/status`, payload);
   return unwrapData(response)?.payout;
 };
 

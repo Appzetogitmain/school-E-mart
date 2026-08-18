@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const PayoutRequest = require('../../../database/models/PayoutRequest');
 const VendorLedger = require('../../../database/models/VendorLedger');
 const SchoolLedger = require('../../../database/models/SchoolLedger');
@@ -59,6 +60,12 @@ const adminWalletService = {
     if (query.vendorId && isValidObjectId(query.vendorId)) {
       filter.vendorId = query.vendorId;
     }
+    if (query.schoolId && isValidObjectId(query.schoolId)) {
+      filter.schoolId = query.schoolId;
+    }
+    if (query.ownerType && ['vendor', 'school'].includes(query.ownerType)) {
+      filter.ownerType = query.ownerType;
+    }
     const { data, pagination } = await executePaginatedQuery(
       PayoutRequest,
       filter,
@@ -78,6 +85,21 @@ const adminWalletService = {
     }
 
     const { data, pagination } = await executePaginatedQuery(VendorLedger, filter, query, {
+      defaultSort: '-audit.createdAt',
+    });
+    return { data: await attachOwners(data), pagination };
+  },
+
+  async listSchoolTransactions(query = {}) {
+    const filter = {};
+    if (query.schoolId && isValidObjectId(query.schoolId)) {
+      filter.schoolId = query.schoolId;
+    }
+    if (query.transactionType && !['All', 'all'].includes(query.transactionType)) {
+      filter.transactionType = query.transactionType;
+    }
+
+    const { data, pagination } = await executePaginatedQuery(SchoolLedger, filter, query, {
       defaultSort: '-audit.createdAt',
     });
     return { data: await attachOwners(data), pagination };
@@ -124,7 +146,7 @@ const adminWalletService = {
     const vendorCommissionPaise = Math.abs(vendorByType.commission_deduction || 0);
     const vendorPaidOutPaise = Math.abs(vendorByType.payout_debit || 0);
 
-    const schoolEarningsPaise = schoolByType.kit_commission_credit || 0;
+    const schoolEarningsPaise = (schoolByType.kit_commission_credit || 0) + (schoolByType.retail_commission_credit || 0);
     const schoolPaidOutPaise = Math.abs(schoolByType.payout_debit || 0);
 
     // Platform revenue is the admin's own commission ledger. Older orders settled
@@ -162,16 +184,22 @@ const adminWalletService = {
    * school) so the running balance stays consistent with settlements.
    */
   async approvePayout(payoutId, actorUserId, { transactionReference } = {}) {
-    const payout = await PayoutRequest.findById(payoutId);
-    if (!payout || payout.softDelete?.isDeleted) {
-      throw new NotFoundError('Payout request not found');
-    }
-    if (!['pending', 'processing'].includes(payout.status)) {
-      throw new BadRequestError(`Cannot approve a ${payout.status} payout`);
+    const payout = await PayoutRequest.findOne({
+      _id: payoutId,
+      status: { $in: ['pending', 'processing'] },
+      'softDelete.isDeleted': { $ne: true },
+    });
+
+    if (!payout) {
+      const existing = await PayoutRequest.findById(payoutId);
+      if (!existing || existing.softDelete?.isDeleted) {
+        throw new NotFoundError('Payout request not found');
+      }
+      throw new BadRequestError(`Cannot approve payout with status: ${existing.status}`);
     }
 
     const description = `Payout ${transactionReference || payout._id}`;
-    if (payout.ownerType === 'school') {
+    if (payout.ownerType === 'school' && payout.schoolId) {
       const latest = await SchoolLedger.findOne({ schoolId: payout.schoolId })
         .sort({ 'audit.createdAt': -1 })
         .lean();
@@ -184,7 +212,7 @@ const adminWalletService = {
         reference: { kind: 'PayoutRequest', id: payout._id },
         description,
       });
-    } else {
+    } else if (payout.vendorId) {
       const latest = await VendorLedger.findOne({ vendorId: payout.vendorId })
         .sort({ 'audit.createdAt': -1 })
         .lean();
@@ -253,6 +281,29 @@ const adminWalletService = {
     payout.rejectionReason = reason || 'Rejected by admin';
     await payout.save();
 
+    return payout.toObject();
+  },
+
+  async updatePayoutStatus(payoutId, actorUserId, { status, transactionReference, rejectionReason }) {
+    if (status === 'completed') {
+      return this.approvePayout(payoutId, actorUserId, { transactionReference });
+    }
+    if (status === 'rejected') {
+      return this.rejectPayout(payoutId, actorUserId, { reason: rejectionReason });
+    }
+
+    const payout = await PayoutRequest.findById(payoutId);
+    if (!payout || payout.softDelete?.isDeleted) {
+      throw new NotFoundError('Payout request not found');
+    }
+
+    payout.status = status;
+    payout.processedBy = actorUserId;
+    payout.processedAt = new Date();
+    if (transactionReference !== undefined) payout.transactionReference = transactionReference;
+    if (rejectionReason !== undefined) payout.rejectionReason = rejectionReason;
+
+    await payout.save();
     return payout.toObject();
   },
 };

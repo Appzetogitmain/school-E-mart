@@ -34,6 +34,11 @@ const reelSchema = new mongoose.Schema({
     enum: ['draft', 'published', 'archived'],
     required: true,
     default: 'draft'
+  },
+  targetApp: {
+    type: String,
+    enum: ['parent', 'school', 'both'],
+    default: 'both'
   }
 }, { collection: 'reels' });
 
@@ -43,6 +48,7 @@ reelSchema.plugin(softDeletePlugin);
 
 // Indexes
 // slug is unique
+reelSchema.index({ status: 1, targetApp: 1 });
 reelSchema.index({ status: 1, 'metrics.views': -1 });
 reelSchema.index({ status: 1, 'audit.createdAt': -1 });
 // Soft delete compound index

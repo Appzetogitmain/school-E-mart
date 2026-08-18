@@ -14,7 +14,8 @@ const sanitizeProfile = (profile, user) => {
         bankName: profile.bank.bankName,
         branch: profile.bank.branch,
         ifsc: profile.bank.ifsc,
-        accountNumberMasked: profile.bank.accountNumberEnc ? '****' : undefined,
+        accountNumber: profile.bank.accountNumber || profile.bank.accountNumberMasked || '',
+        accountNumberMasked: profile.bank.accountNumber || profile.bank.accountNumberMasked || (profile.bank.accountNumberEnc ? '' : undefined),
       }
     : undefined;
 
@@ -130,14 +131,19 @@ const profileService = {
     if (payload.branch) bank.branch = payload.branch;
     if (payload.ifsc) bank.ifsc = payload.ifsc;
     if (payload.accountNumber) {
-      bank.accountNumberEnc = encryptAccountNumber(payload.accountNumber);
+      const cleanAcc = String(payload.accountNumber).replace(/\s+/g, '');
+      bank.accountNumber = cleanAcc;
+      bank.accountNumberEnc = encryptAccountNumber(cleanAcc);
+      bank.accountNumberMasked = cleanAcc;
     }
 
     const updated = await vendorRepository.updateById(vendor._id, { $set: { bank } });
     const user = await User.findById(userId).lean();
     const result = sanitizeProfile(updated, user);
     if (payload.accountNumber) {
-      result.bank.accountNumberMasked = maskAccountNumber(payload.accountNumber);
+      const cleanAcc = String(payload.accountNumber).replace(/\s+/g, '');
+      result.bank.accountNumber = cleanAcc;
+      result.bank.accountNumberMasked = cleanAcc;
     }
     return result;
   },

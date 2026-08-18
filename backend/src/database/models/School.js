@@ -34,11 +34,10 @@ const schoolSchema = new mongoose.Schema({
     accountName: { type: String },
     bankName: { type: String },
     branch: { type: String },
+    accountNumber: { type: String },
     accountNumberEnc: { type: String },
-    ifsc: {
-      type: String,
-      match: /^[A-Z]{4}0[A-Z0-9]{6}$/
-    }
+    accountNumberMasked: { type: String },
+    ifsc: { type: String }
   },
   // Commission the school earns, set by the school admin. kitPercent applies to
   // the school's own kits; retailPercent is earned when a user linked to this

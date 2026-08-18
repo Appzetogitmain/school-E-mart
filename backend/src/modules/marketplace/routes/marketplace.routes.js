@@ -2,7 +2,7 @@ const express = require('express');
 const marketplaceController = require('../controllers/marketplace.controller');
 const validators = require('../validators/marketplace.validator');
 const { validateBody, validateParams, validateQuery } = require('../../../middlewares/validation');
-const { protectedRoute } = require('../../../middlewares/auth/guards');
+const { protectedRoute, optionalAuthRoute } = require('../../../middlewares/auth/guards');
 const { PERMISSIONS } = require('../../../constants/permissions');
 const { ROLES } = require('../../../constants/roles');
 
@@ -24,6 +24,10 @@ const customerAuth = protectedRoute({
 router.get('/header-categories', validateQuery(validators.paginationQuery), marketplaceController.listHeaderCategories);
 router.get('/banners', validateQuery(validators.publicBannerQuery), marketplaceController.listPublicBanners);
 router.get('/reels', validateQuery(validators.publicReelQuery), marketplaceController.listPublicReels);
+router.post('/reels/:reelId/like', ...optionalAuthRoute(), marketplaceController.toggleReelLike);
+router.get('/reels/:reelId/comments', marketplaceController.listReelComments);
+router.post('/reels/:reelId/comments', ...optionalAuthRoute(), marketplaceController.addReelComment);
+router.delete('/reels/:reelId/comments/:commentId', ...optionalAuthRoute(), marketplaceController.deleteReelComment);
 router.get('/categories/tree', marketplaceController.getCategoryTree);
 router.get('/categories', validateQuery(validators.paginationQuery), marketplaceController.listCategories);
 router.get('/subcategories', validateQuery(validators.paginationQuery), marketplaceController.listSubcategories);

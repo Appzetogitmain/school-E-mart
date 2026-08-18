@@ -7,7 +7,7 @@ const schoolLedgerSchema = new mongoose.Schema({
   schoolId: { type: mongoose.Schema.Types.ObjectId, ref: 'School', required: true },
   transactionType: {
     type: String,
-    enum: ['kit_commission_credit', 'payout_debit', 'adjustment', 'refund_debit'],
+    enum: ['kit_commission_credit', 'retail_commission_credit', 'payout_debit', 'adjustment', 'refund_debit'],
     required: true
   },
   amountPaise: { type: Number, required: true },

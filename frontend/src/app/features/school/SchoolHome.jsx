@@ -16,6 +16,7 @@ import SchoolCategories from './SchoolCategories';
 import CategoryEssentials from './CategoryEssentials';
 import VendorSpotlights from './VendorSpotlights';
 import SchoolCaseStudies from './SchoolCaseStudies';
+import ReelsRow from '../parent/ReelsRow';
 import { useDraggableScroll } from '../../hooks/useDraggableScroll';
 import AuthPrompt from '../../components/AuthPrompt';
 import { listStudents, listTeachers, listNotices } from '../../../services/schoolApi';
@@ -462,6 +463,7 @@ const SchoolHome = () => {
           )}
           <VendorSpotlights />
           <SchoolCaseStudies reelsRef={reelsRef} />
+          <ReelsRow targetApp="school" title="School Reels & Demos" />
         </div>
 
       </div>

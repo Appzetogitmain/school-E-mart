@@ -5,7 +5,7 @@ import {
   Play, Pause, ChevronLeft, ShoppingBag, Send, X, 
   Bookmark, CheckCircle2, Music, Sparkles
 } from 'lucide-react';
-import { listPublicReels } from '../../../services/catalogApi';
+import { listPublicReels, likeReel, listReelComments, addReelComment } from '../../../services/catalogApi';
 import { mapPublicReel } from '../../../utils/mappers/adminReelsMapper';
 
 const ParentReels = () => {
@@ -68,7 +68,67 @@ const ParentReels = () => {
 
   const currentReel = filteredReels[currentReelIndex] || filteredReels[0];
 
-  const handleLike = () => {};
+  useEffect(() => {
+    let active = true;
+    if (showComments && currentReel?.id) {
+      listReelComments(currentReel.id)
+        .then((res) => {
+          if (!active) return;
+          setReelsData((prev) =>
+            prev.map((r) =>
+              r.id === currentReel.id
+                ? {
+                    ...r,
+                    comments: res.data || [],
+                    commentsCount: res.commentsCount || res.total || (res.data || []).length,
+                  }
+                : r
+            )
+          );
+        })
+        .catch(() => {});
+    }
+    return () => {
+      active = false;
+    };
+  }, [showComments, currentReel?.id]);
+
+  const handleLike = async () => {
+    if (!currentReel?.id) return;
+
+    const newHeart = {
+      id: heartIdCounter.current++,
+      left: Math.random() * 40 + 30,
+      bottom: 20,
+    };
+    setFloatingHearts((prev) => [...prev, newHeart]);
+    setTimeout(() => {
+      setFloatingHearts((prev) => prev.filter((h) => h.id !== newHeart.id));
+    }, 1000);
+
+    try {
+      const res = await likeReel(currentReel.id);
+      setReelsData((prev) =>
+        prev.map((r) =>
+          r.id === currentReel.id
+            ? { ...r, isLiked: res.isLiked, likes: res.likesCount }
+            : r
+        )
+      );
+    } catch {
+      setReelsData((prev) =>
+        prev.map((r) =>
+          r.id === currentReel.id
+            ? {
+                ...r,
+                isLiked: !r.isLiked,
+                likes: r.isLiked ? Math.max(0, (r.likes || 0) - 1) : (r.likes || 0) + 1,
+              }
+            : r
+        )
+      );
+    }
+  };
 
   const handleShare = () => {
     navigator.clipboard.writeText(window.location.href);
@@ -90,8 +150,29 @@ const ParentReels = () => {
     }
   };
 
-  const handleAddComment = (e) => {
+  const handleAddComment = async (e) => {
     e.preventDefault();
+    if (!newComment.trim() || !currentReel?.id) return;
+    const text = newComment.trim();
+    setNewComment('');
+
+    try {
+      const res = await addReelComment(currentReel.id, text);
+      const posted = res.comment;
+      setReelsData((prev) =>
+        prev.map((r) => {
+          if (r.id !== currentReel.id) return r;
+          const updatedComments = [posted, ...(r.comments || [])];
+          return {
+            ...r,
+            comments: updatedComments,
+            commentsCount: res.commentsCount || updatedComments.length,
+          };
+        })
+      );
+    } catch {
+      alert('Failed to post comment. Please try again.');
+    }
   };
 
   if (loading) {
@@ -254,8 +335,44 @@ const ParentReels = () => {
       )}
 
       {/* Right-Side Action Icons Panel */}
-      <div className="absolute right-4 bottom-24 flex flex-col gap-6 items-center z-10 select-none">
+      <div className="absolute right-4 bottom-24 flex flex-col gap-5 items-center z-10 select-none">
         
+        {/* Like Action */}
+        <div className="flex flex-col items-center">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              handleLike();
+            }}
+            className={`w-12 h-12 rounded-full border backdrop-blur-md flex items-center justify-center shadow-lg active:scale-75 transition-all cursor-pointer ${
+              currentReel.isLiked
+                ? 'bg-red-500/20 border-red-500 text-red-500'
+                : 'bg-black/30 border-white/20 text-white hover:bg-black/50'
+            }`}
+          >
+            <Heart size={22} fill={currentReel.isLiked ? 'currentColor' : 'none'} />
+          </button>
+          <span className="text-[10px] font-bold text-white mt-1 text-shadow-md">
+            {currentReel.likes || 0}
+          </span>
+        </div>
+
+        {/* Comment Action */}
+        <div className="flex flex-col items-center">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowComments(true);
+            }}
+            className="w-12 h-12 rounded-full bg-black/30 border border-white/20 backdrop-blur-md text-white flex items-center justify-center shadow-lg active:scale-75 hover:bg-black/50 transition-all cursor-pointer"
+          >
+            <MessageCircle size={22} />
+          </button>
+          <span className="text-[10px] font-bold text-white mt-1 text-shadow-md">
+            {currentReel.commentsCount || currentReel.comments?.length || 0}
+          </span>
+        </div>
+
         {/* Share Action */}
         <div className="flex flex-col items-center">
           <button
@@ -387,26 +504,26 @@ const ParentReels = () => {
                   <p className="text-gray-500 text-xs">Be the first to share your thoughts!</p>
                 </div>
               ) : (
-                currentReel.comments.map((cmt) => (
-                  <div key={cmt.id} className="flex gap-3 items-start group">
-                    <div className="w-8.5 h-8.5 rounded-full bg-[#5B3FD6]/20 border border-[#5B3FD6]/20 flex items-center justify-center text-white font-black text-xs shrink-0 select-none">
-                      {cmt.user.slice(0, 2).toUpperCase()}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5 leading-none">
-                        <span className="text-gray-200 text-xs font-black truncate">{cmt.user}</span>
-                        {cmt.user.includes('You') && (
-                          <span className="px-1.5 py-0.5 bg-[#5B3FD6]/25 border border-[#5B3FD6]/35 text-[#a899ff] text-[8px] font-black rounded uppercase">
-                            You
-                          </span>
-                        )}
+                currentReel.comments.map((cmt) => {
+                  const userName = typeof cmt.user === 'object' ? (cmt.user?.name || 'School E-Mart Member') : (cmt.user || 'School E-Mart Member');
+                  const commentBody = cmt.body || cmt.text || '';
+                  const initial = (userName.slice(0, 2) || 'SE').toUpperCase();
+                  return (
+                    <div key={cmt.id} className="flex gap-3 items-start group">
+                      <div className="w-8.5 h-8.5 rounded-full bg-[#5B3FD6]/20 border border-[#5B3FD6]/20 flex items-center justify-center text-white font-black text-xs shrink-0 select-none">
+                        {initial}
                       </div>
-                      <p className="text-gray-300 text-xs font-medium leading-relaxed mt-1.5 select-text">
-                        {cmt.text}
-                      </p>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 leading-none">
+                          <span className="text-gray-200 text-xs font-black truncate">{userName}</span>
+                        </div>
+                        <p className="text-gray-300 text-xs font-medium leading-relaxed mt-1.5 select-text">
+                          {commentBody}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
 

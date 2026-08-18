@@ -321,15 +321,28 @@ const studentIdQuerySchema = Joi.object({
   studentId: objectId.optional().allow('', null, 'undefined'),
 }).unknown(true);
 
-// School finance: bank details for payouts and a withdrawal request.
 const schoolBankSchema = Joi.object({
-  accountName: Joi.string().trim().max(120).allow('').optional(),
-  bankName: Joi.string().trim().max(120).allow('').optional(),
-  branch: Joi.string().trim().max(120).allow('').optional(),
-  accountNumber: Joi.string().trim().pattern(/^\d{8,20}$/).optional()
-    .messages({ 'string.pattern.base': 'Account number must be 8-20 digits' }),
-  ifsc: Joi.string().trim().uppercase().pattern(/^[A-Z]{4}0[A-Z0-9]{6}$/).allow('').optional()
-    .messages({ 'string.pattern.base': 'IFSC must be 4 letters, a 0, then 6 characters' }),
+  accountName: Joi.string().trim().max(120).allow('', null).optional(),
+  bankName: Joi.string().trim().max(120).allow('', null).optional(),
+  branch: Joi.string().trim().max(120).allow('', null).optional(),
+  accountNumber: Joi.string().trim().allow('', null).optional()
+    .custom((val, helper) => {
+      if (!val || !String(val).trim()) return undefined;
+      const clean = String(val).replace(/\s+/g, '');
+      if (!/^\d{8,20}$/.test(clean)) {
+        return helper.message('Account number must be 8-20 digits');
+      }
+      return clean;
+    }),
+  ifsc: Joi.string().trim().uppercase().allow('', null).optional()
+    .custom((val, helper) => {
+      if (!val || !String(val).trim()) return undefined;
+      const clean = String(val).trim().toUpperCase().replace(/\s+/g, '');
+      if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(clean)) {
+        return helper.message('IFSC must be 11 characters (e.g. HDFC0001234)');
+      }
+      return clean;
+    }),
 }).min(1);
 
 const schoolPayoutSchema = Joi.object({

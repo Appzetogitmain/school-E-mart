@@ -28,8 +28,8 @@ const maskBank = (bank) => {
     accountName: bank.accountName,
     bankName: bank.bankName,
     branch: bank.branch,
-    ifsc: bank.ifsc,
-    accountNumberMasked: bank.accountNumberEnc ? '****' : undefined,
+    accountNumber: bank.accountNumber || bank.accountNumberMasked || '',
+    accountNumberMasked: bank.accountNumber || bank.accountNumberMasked || (bank.accountNumberEnc ? '' : undefined),
   };
 };
 

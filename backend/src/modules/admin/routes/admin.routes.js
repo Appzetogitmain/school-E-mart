@@ -621,6 +621,8 @@ router.delete(
   validateParams(validators.reelIdParam),
   adminController.deleteReel
 );
+router.get('/reels/:reelId/comments', ...adminOnly, adminController.listReelComments);
+router.delete('/reels/:reelId/comments/:commentId', ...adminOnly, adminController.deleteReelComment);
 
 // Platform Tutorials ("Learn more about platform")
 router.get('/tutorials', ...adminOnly, validateQuery(validators.paginationQuery), adminController.listTutorials);
@@ -679,6 +681,13 @@ router.post(
   validateParams(validators.payoutIdParam),
   validateBody(validators.rejectPayoutSchema),
   adminController.rejectPayout
+);
+router.patch(
+  '/wallet/payouts/:payoutId/status',
+  ...adminOnly,
+  validateParams(validators.payoutIdParam),
+  validateBody(validators.updatePayoutStatusSchema),
+  adminController.updatePayoutStatus
 );
 
 // Notification campaigns

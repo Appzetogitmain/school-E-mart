@@ -10,7 +10,7 @@ const SchoolLayout = () => {
   const { totalQuantity } = useCart();
   const location = useLocation();
   const isAuthPage = location.pathname.includes('/school/login') || location.pathname.includes('/school/signup');
-  const isProductDetailPage = location.pathname.includes('/school/product/');
+  const isProductDetailPage = location.pathname.includes('/school/product/') || location.pathname.includes('/school/reels');
 
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
 

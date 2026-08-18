@@ -2,7 +2,8 @@ const mongoose = require('mongoose');
 
 const reelInteractionSchema = new mongoose.Schema({
   reelId: { type: mongoose.Schema.Types.ObjectId, ref: 'Reel', required: true },
-  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  guestId: { type: String },
   interactionType: {
     type: String,
     enum: ['view', 'like', 'share'],

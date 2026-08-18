@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  ChevronRight, Info, Search, Calendar, Landmark, Check, X, ShieldAlert
+  ChevronRight, Info, Search, Calendar, Landmark, Check, X, ShieldAlert, Copy, CheckCircle2
 } from 'lucide-react';
 import {
   listPayoutRequests,
@@ -17,19 +17,39 @@ const STATUS_LABEL = {
   failed: 'Rejected',
 };
 
-const mapPayout = (p) => ({
-  id: p._id,
-  role: 'Vendor',
-  user: p.vendor?.storeName || 'Vendor',
-  dateTime: p.audit?.createdAt ? new Date(p.audit.createdAt).toLocaleString() : '—',
-  amount: (p.amountPaise || 0) / 100,
-  status: STATUS_LABEL[p.status] || 'Pending',
-  paymentMethod: 'Bank Transfer',
-  bankDetails: p.bankDetailsSnapshot
-    ? `${p.bankDetailsSnapshot.bankName || ''} ${p.bankDetailsSnapshot.ifsc || ''}`.trim() || 'Registered account'
-    : 'Registered account',
-  transactionReference: p.transactionReference || p.rejectionReason || '',
-});
+const mapPayout = (p) => {
+  const isSchool = (p.ownerType === 'school' || p.payeeType === 'school' || Boolean(p.schoolId));
+  const payeeName = isSchool
+    ? (p.school?.name || p.payeeName || 'School')
+    : (p.vendor?.storeName || p.payeeName || 'Vendor');
+
+  const b = p.bankDetailsSnapshot || {};
+  const bankAccountName = b.accountName || payeeName;
+  const bankName = b.bankName || '—';
+  const branch = b.branch || '';
+  const rawAccNum = b.accountNumber || b.accountNumberMasked || '—';
+  const bankAccNum = rawAccNum.replace(/^\*+/, '') || rawAccNum;
+  const ifsc = b.ifsc || '—';
+
+  return {
+    id: p._id,
+    isSchool,
+    role: isSchool ? 'School' : 'Vendor',
+    roleStyle: isSchool ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-purple-50 text-purple-600 border-purple-100',
+    title: isSchool ? 'School Withdrawal' : 'Vendor Withdrawal',
+    user: payeeName,
+    dateTime: p.audit?.createdAt ? new Date(p.audit.createdAt).toLocaleString() : '—',
+    amount: (p.amountPaise || 0) / 100,
+    status: STATUS_LABEL[p.status] || 'Pending',
+    paymentMethod: 'Bank Transfer',
+    accountName: bankAccountName,
+    bankName,
+    branch,
+    accountNumber: bankAccNum,
+    ifsc,
+    transactionReference: p.transactionReference || p.rejectionReason || '',
+  };
+};
 
 const WithdrawalsManagement = () => {
   // Status filter pill state
@@ -37,10 +57,18 @@ const WithdrawalsManagement = () => {
 
   // Input text references state
   const [txnRefs, setTxnRefs] = useState({});
+  const [copyNotice, setCopyNotice] = useState('');
 
   const [withdrawals, setWithdrawals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  const copyBankInfo = (w) => {
+    const text = `Name: ${w.accountName} | Bank: ${w.bankName}${w.branch ? ' (' + w.branch + ')' : ''} | Acc: ${w.accountNumber} | IFSC: ${w.ifsc}`;
+    navigator.clipboard.writeText(text);
+    setCopyNotice(`Bank details for ${w.user} copied!`);
+    setTimeout(() => setCopyNotice(''), 3000);
+  };
 
   const loadWithdrawals = useCallback(async () => {
     setLoading(true);
@@ -111,7 +139,7 @@ const WithdrawalsManagement = () => {
               FINANCE
             </span>
           </div>
-          <p className="text-xs text-gray-400 font-bold mt-1.5">Review, process, and reconcile cashout settlements to vendor hubs.</p>
+          <p className="text-xs text-gray-400 font-bold mt-1.5">Review, process, and reconcile cashout settlements to vendor hubs & school accounts.</p>
         </div>
 
         {/* Breadcrumb right align */}
@@ -142,6 +170,12 @@ const WithdrawalsManagement = () => {
           );
         })}
       </div>
+
+      {copyNotice && (
+        <div className="px-4 py-2.5 rounded-2xl bg-emerald-50 border border-emerald-100 text-xs font-bold text-emerald-700 flex items-center gap-2 animate-fade-in">
+          <CheckCircle2 size={16} /> {copyNotice}
+        </div>
+      )}
 
       {error && (
         <div className="px-4 py-3 rounded-2xl bg-rose-50 border border-rose-100 text-xs font-bold text-rose-600">
@@ -178,8 +212,8 @@ const WithdrawalsManagement = () => {
                   {/* Title / Description info */}
                   <div className="space-y-1">
                     <div className="flex items-center gap-2 select-none">
-                      <h4 className="text-sm font-black text-[#0B1528]">Vendor Withdrawal</h4>
-                      <span className="bg-purple-50 text-purple-600 border border-purple-100 text-[8px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full select-none">
+                      <h4 className="text-sm font-black text-[#0B1528]">{w.title}</h4>
+                      <span className={`border text-[8px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full select-none ${w.roleStyle}`}>
                         {w.role}
                       </span>
                     </div>
@@ -218,8 +252,21 @@ const WithdrawalsManagement = () => {
 
                   {/* Bank Details */}
                   <div className="space-y-1">
-                    <span className="text-[9px] font-black text-gray-400 uppercase tracking-wider block">Bank Details</span>
-                    <span className="font-extrabold text-[#0B1528]">{w.bankDetails}</span>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[9px] font-black text-gray-400 uppercase tracking-wider block">Bank Details</span>
+                      <button
+                        type="button"
+                        onClick={() => copyBankInfo(w)}
+                        className="text-[9px] font-extrabold text-indigo-600 hover:text-indigo-800 flex items-center gap-1"
+                      >
+                        <Copy size={10} /> Copy Info
+                      </button>
+                    </div>
+                    <div className="font-extrabold text-[#0B1528] space-y-0.5">
+                      <p><span className="text-gray-500 font-normal">Holder:</span> {w.accountName}</p>
+                      <p><span className="text-gray-500 font-normal">Bank:</span> {w.bankName} {w.branch && `(${w.branch})`}</p>
+                      <p className="font-mono text-indigo-900"><span className="text-gray-500 font-normal font-sans">A/C:</span> {w.accountNumber} | <span className="text-gray-500 font-normal font-sans">IFSC:</span> {w.ifsc}</p>
+                    </div>
                   </div>
 
                 </div>

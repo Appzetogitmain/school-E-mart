@@ -27,8 +27,9 @@ const schoolFinanceService = {
    * in-flight payout requests.
    */
   async getEarningsSummary(schoolId) {
-    const [credits, payouts, latest, pendingPayouts] = await Promise.all([
+    const [kitCredits, retailCredits, payouts, latest, pendingPayouts] = await Promise.all([
       sumByType(schoolId, 'kit_commission_credit'),
+      sumByType(schoolId, 'retail_commission_credit'),
       sumByType(schoolId, 'payout_debit'),
       findLatestBalance(schoolId),
       PayoutRequest.aggregate([
@@ -48,11 +49,13 @@ const schoolFinanceService = {
     const pendingSettlementPaise = pendingPayouts[0]?.total || 0;
 
     return {
-      totalEarningsPaise: credits,
+      kitEarningsPaise: kitCredits,
+      retailEarningsPaise: retailCredits,
+      totalEarningsPaise: kitCredits + retailCredits,
       totalPayoutsPaise: Math.abs(payouts),
       availableBalancePaise,
       pendingSettlementPaise,
-      withdrawablePaise: availableBalancePaise - pendingSettlementPaise,
+      withdrawablePaise: Math.max(0, availableBalancePaise - pendingSettlementPaise),
     };
   },
 
@@ -72,23 +75,30 @@ const schoolFinanceService = {
     const school = await School.findById(schoolId).select('bank').lean();
     if (!school) throw new NotFoundError('School not found');
     const bank = school.bank || {};
+    const accNum = bank.accountNumber || bank.accountNumberMasked || '';
     return {
       accountName: bank.accountName || '',
       bankName: bank.bankName || '',
       branch: bank.branch || '',
       ifsc: bank.ifsc || '',
-      // The number itself is one-way hashed; surface only whether one is set.
-      accountNumberSet: Boolean(bank.accountNumberEnc),
+      accountNumber: accNum,
+      accountNumberMasked: accNum,
+      accountNumberSet: Boolean(accNum || bank.accountNumberEnc),
     };
   },
 
   async updateBankDetails(schoolId, payload) {
     const set = {};
-    if (payload.accountName !== undefined) set['bank.accountName'] = payload.accountName;
-    if (payload.bankName !== undefined) set['bank.bankName'] = payload.bankName;
-    if (payload.branch !== undefined) set['bank.branch'] = payload.branch;
-    if (payload.ifsc !== undefined) set['bank.ifsc'] = payload.ifsc;
-    if (payload.accountNumber) set['bank.accountNumberEnc'] = encryptAccountNumber(payload.accountNumber);
+    if (payload.accountName !== undefined && payload.accountName !== null) set['bank.accountName'] = payload.accountName;
+    if (payload.bankName !== undefined && payload.bankName !== null) set['bank.bankName'] = payload.bankName;
+    if (payload.branch !== undefined && payload.branch !== null) set['bank.branch'] = payload.branch;
+    if (payload.ifsc !== undefined && payload.ifsc !== null) set['bank.ifsc'] = payload.ifsc;
+    if (payload.accountNumber) {
+      const cleanAcc = String(payload.accountNumber).replace(/\s+/g, '');
+      set['bank.accountNumber'] = cleanAcc;
+      set['bank.accountNumberEnc'] = encryptAccountNumber(cleanAcc);
+      set['bank.accountNumberMasked'] = cleanAcc;
+    }
 
     const school = await School.findByIdAndUpdate(schoolId, { $set: set }, { new: true })
       .select('bank')
@@ -103,32 +113,43 @@ const schoolFinanceService = {
    */
   async createPayoutRequest(schoolId, amountPaise) {
     const amount = Math.round(Number(amountPaise) || 0);
-    if (amount < 100) throw new BadRequestError('Minimum payout amount is ₹1');
+    if (amount < 100) {
+      throw new BadRequestError('Minimum payout amount is ₹1');
+    }
 
     const summary = await this.getEarningsSummary(schoolId);
     if (amount > summary.withdrawablePaise) {
-      throw new BadRequestError('Requested amount exceeds available balance');
+      throw new BadRequestError('Requested amount exceeds available withdrawable balance');
     }
 
     const school = await School.findById(schoolId).lean();
-    if (!school) throw new NotFoundError('School not found');
+    if (!school) {
+      throw new NotFoundError('School not found');
+    }
     const bank = school.bank || {};
-    if (!bank.accountNumberEnc || !bank.ifsc) {
-      throw new BadRequestError('Add your bank details before requesting a payout');
+    if ((!bank.accountNumber && !bank.accountNumberEnc) || !bank.ifsc) {
+      throw new BadRequestError('Configure your bank details before requesting a withdrawal');
     }
 
+    const accNum = bank.accountNumber || bank.accountNumberMasked || '';
+
     const payout = await PayoutRequest.create({
-      ownerType: 'school',
       schoolId,
+      ownerType: 'school',
+      payeeName: school.name,
+      payeeType: 'school',
       amountPaise: amount,
       bankDetailsSnapshot: {
         accountName: bank.accountName,
         bankName: bank.bankName,
+        branch: bank.branch,
+        accountNumber: accNum,
         accountNumberEnc: bank.accountNumberEnc,
+        accountNumberMasked: accNum,
         ifsc: bank.ifsc,
       },
-      status: 'pending',
     });
+
     return payout.toObject();
   },
 

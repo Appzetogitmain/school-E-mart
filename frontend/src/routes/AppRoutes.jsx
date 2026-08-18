@@ -98,6 +98,7 @@ const SchoolAddClass = React.lazy(() => import('../app/features/school/SchoolAdd
 const SchoolTeacherAssignments = React.lazy(() => import('../app/features/school/SchoolTeacherAssignments'));
 const SchoolPhonebookPage = React.lazy(() => import('../app/features/school/SchoolPhonebookPage'));
 const SchoolLearnPlatformPage = React.lazy(() => import('../app/features/school/SchoolLearnPlatformPage'));
+const SchoolReels = React.lazy(() => import('../app/features/school/SchoolReels'));
 
 
 // Teacher App Components
@@ -378,6 +379,7 @@ const AppRoutes = () => {
             <Route path="about" element={<SchoolAboutUsPage />} />
             <Route path="checkout" element={<SchoolCheckoutPage />} />
             <Route path="kit/:kitId" element={<SchoolKitDetailsPage />} />
+            <Route path="reels" element={<SchoolReels />} />
             <Route path="product/:productId" element={<ProductDetailsPage />} />
             <Route path="learn-platform" element={<SchoolLearnPlatformPage />} />
           </Route>

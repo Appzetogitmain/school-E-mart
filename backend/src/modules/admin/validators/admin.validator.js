@@ -168,6 +168,7 @@ const reelSchema = Joi.object({
   musicLabel: Joi.string().trim().max(200).optional(),
   linkedProduct: linkedProductSchema.optional(),
   status: Joi.string().valid('draft', 'published', 'archived').default('draft'),
+  targetApp: Joi.string().valid('parent', 'school', 'both').default('both'),
 });
 
 const updateReelSchema = reelSchema.fork(['title', 'videoId'], (s) => s.optional());
@@ -436,6 +437,12 @@ const schoolCommissionSchema = Joi.object({
   retailPercent: Joi.number().min(0).max(100).required(),
 });
 
+const updatePayoutStatusSchema = Joi.object({
+  status: Joi.string().valid('pending', 'processing', 'completed', 'rejected', 'failed').required(),
+  transactionReference: Joi.string().trim().allow('', null).optional(),
+  rejectionReason: Joi.string().trim().allow('', null).optional(),
+});
+
 module.exports = {
   paginationQuery,
   analyticsQuery,
@@ -486,6 +493,7 @@ module.exports = {
   payoutIdParam,
   approvePayoutSchema,
   rejectPayoutSchema,
+  updatePayoutStatusSchema,
   walletQuery,
   walletAdjustmentSchema,
   userWalletAdjustmentSchema,

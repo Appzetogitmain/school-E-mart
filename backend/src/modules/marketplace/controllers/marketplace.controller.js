@@ -430,6 +430,26 @@ const marketplaceController = {
     const { data, pagination } = await reelsService.listPublicReels(req.query);
     return paginated(res, { reels: data }, pagination, 'Reels fetched', req);
   }),
+
+  toggleReelLike: asyncHandler(async (req, res) => {
+    const result = await reelsService.toggleLike(req.params.reelId, req.auth?.userId);
+    return success(res, result, 'Reel like status updated', undefined, req);
+  }),
+
+  listReelComments: asyncHandler(async (req, res) => {
+    const result = await reelsService.listComments(req.params.reelId, req.query);
+    return success(res, result, 'Reel comments fetched', undefined, req);
+  }),
+
+  addReelComment: asyncHandler(async (req, res) => {
+    const result = await reelsService.addComment(req.params.reelId, req.auth?.userId, req.body.body);
+    return created(res, result, 'Comment posted successfully', req);
+  }),
+
+  deleteReelComment: asyncHandler(async (req, res) => {
+    const result = await reelsService.deleteComment(req.params.reelId, req.params.commentId, req.auth?.userId, false);
+    return success(res, result, 'Comment deleted successfully', undefined, req);
+  }),
 };
 
 module.exports = marketplaceController;

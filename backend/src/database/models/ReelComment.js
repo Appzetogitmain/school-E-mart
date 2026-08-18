@@ -4,7 +4,8 @@ const softDeletePlugin = require('../plugins/softDelete.plugin');
 
 const reelCommentSchema = new mongoose.Schema({
   reelId: { type: mongoose.Schema.Types.ObjectId, ref: 'Reel', required: true },
-  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  guestName: { type: String, default: 'School E-Mart Member' },
   body: { type: String, required: true },
   status: {
     type: String,

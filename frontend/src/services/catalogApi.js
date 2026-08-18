@@ -41,6 +41,26 @@ export const listPublicReels = async (params = {}) => {
   return extractPaginated(response);
 };
 
+export const likeReel = async (reelId) => {
+  const response = await apiClient.post(`/catalog/reels/${reelId}/like`);
+  return unwrapData(response);
+};
+
+export const listReelComments = async (reelId) => {
+  const response = await apiClient.get(`/catalog/reels/${reelId}/comments`);
+  return unwrapData(response);
+};
+
+export const addReelComment = async (reelId, body) => {
+  const response = await apiClient.post(`/catalog/reels/${reelId}/comments`, { body });
+  return unwrapData(response);
+};
+
+export const deleteReelComment = async (reelId, commentId) => {
+  const response = await apiClient.delete(`/catalog/reels/${reelId}/comments/${commentId}`);
+  return unwrapData(response);
+};
+
 const withSearchQuery = (params = {}) => {
   const { search, ...rest } = params;
   if (search) rest.q = search;

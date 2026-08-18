@@ -45,6 +45,7 @@ const publicBannerQuery = paginationQuery.keys({
 
 const publicReelQuery = paginationQuery.keys({
   category: Joi.string().trim().max(80).optional(),
+  targetApp: Joi.string().valid('parent', 'school', 'both').optional(),
 });
 
 const adminProductQuery = paginationQuery.keys({

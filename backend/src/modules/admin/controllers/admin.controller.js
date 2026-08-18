@@ -662,6 +662,16 @@ const adminController = {
     return success(res, null, 'Reel deleted', undefined, req);
   }),
 
+  listReelComments: asyncHandler(async (req, res) => {
+    const result = await reelsService.listComments(req.params.reelId, req.query);
+    return success(res, result, 'Reel comments fetched', undefined, req);
+  }),
+
+  deleteReelComment: asyncHandler(async (req, res) => {
+    const result = await reelsService.deleteComment(req.params.reelId, req.params.commentId, req.auth.userId, true);
+    return success(res, result, 'Comment deleted successfully', undefined, req);
+  }),
+
   // Platform Tutorials ("Learn more about platform")
   listTutorials: asyncHandler(async (req, res) => {
     const { data, pagination } = await tutorialsService.listTutorials(req.query);
@@ -724,6 +734,11 @@ const adminController = {
   rejectPayout: asyncHandler(async (req, res) => {
     const payout = await walletService.rejectPayout(req.params.payoutId, req.auth.userId, req.body);
     return success(res, { payout }, 'Payout rejected', undefined, req);
+  }),
+
+  updatePayoutStatus: asyncHandler(async (req, res) => {
+    const payout = await walletService.updatePayoutStatus(req.params.payoutId, req.auth.userId, req.body);
+    return success(res, { payout }, 'Payout status updated', undefined, req);
   }),
 
   // Notification campaigns
