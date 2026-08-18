@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { updateMyProfile } from '../../../services/parentApi';
 import useAuthStore from '../../../store/useAuthStore';
+import { toAbsoluteUrl } from '../../../utils/url';
 
 const EditProfilePage = () => {
   const navigate = useNavigate();
@@ -246,6 +247,7 @@ const compressImage = (file, maxWidth = 800, maxHeight = 800, quality = 0.85) =>
         {/* Avatar Section */}
         <div className="flex flex-col items-center gap-4">
           <input
+            id="gallery-input-parent"
             type="file"
             ref={fileInputRef}
             onChange={handleFileChange}
@@ -253,6 +255,7 @@ const compressImage = (file, maxWidth = 800, maxHeight = 800, quality = 0.85) =>
             className="hidden"
           />
           <input
+            id="camera-input-parent"
             type="file"
             ref={cameraInputRef}
             onChange={handleFileChange}
@@ -265,7 +268,7 @@ const compressImage = (file, maxWidth = 800, maxHeight = 800, quality = 0.85) =>
               <div className="w-full h-full rounded-[2.2rem] bg-gray-100 overflow-hidden relative flex items-center justify-center">
                 {formData.photo ? (
                   <img
-                    src={formData.photo}
+                    src={toAbsoluteUrl(formData.photo)}
                     alt="Avatar"
                     className="w-full h-full object-cover"
                   />
@@ -277,20 +280,20 @@ const compressImage = (file, maxWidth = 800, maxHeight = 800, quality = 0.85) =>
                 )}
               </div>
             </div>
-            <button
-              onClick={handleTakePhotoClick}
-              className="absolute bottom-0 left-0 w-10 h-10 bg-white text-primary rounded-2xl flex items-center justify-center shadow-lg border-4 border-white active:scale-90 transition-all hover:bg-primary hover:text-white"
+            <label
+              htmlFor="camera-input-parent"
+              className="absolute bottom-0 left-0 w-10 h-10 bg-white text-primary rounded-2xl flex items-center justify-center shadow-lg border-4 border-white active:scale-90 transition-all hover:bg-primary hover:text-white cursor-pointer"
               title="Take a photo"
             >
               <Camera size={18} />
-            </button>
-            <button
-              onClick={handlePhotoClick}
-              className="absolute bottom-0 right-0 w-10 h-10 bg-primary text-white rounded-2xl flex items-center justify-center shadow-lg border-4 border-white active:scale-90 transition-all hover:bg-deep-purple"
+            </label>
+            <label
+              htmlFor="gallery-input-parent"
+              className="absolute bottom-0 right-0 w-10 h-10 bg-primary text-white rounded-2xl flex items-center justify-center shadow-lg border-4 border-white active:scale-90 transition-all hover:bg-deep-purple cursor-pointer"
               title="Choose File"
             >
               <Upload size={18} />
-            </button>
+            </label>
           </div>
           <div className="text-center">
             <h2 className="text-lg font-black text-deep-purple">{formData.studentName || "New Student"}</h2>
