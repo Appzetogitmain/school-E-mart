@@ -176,8 +176,8 @@ const compressImage = (file, maxWidth = 800, maxHeight = 800, quality = 0.85) =>
 
   const validate = () => {
     const newErrors = {};
-    if (!formData.studentName.trim()) newErrors.studentName = "Student Name is required";
-    if (!formData.parentName.trim()) newErrors.parentName = "Parent Name is required";
+    const effectiveParent = formData.parentName.trim() || formData.studentName.trim();
+    if (!effectiveParent) newErrors.parentName = "Name is required";
     if (!formData.phone.trim()) newErrors.phone = "Phone is required";
     if (formData.email && !formData.email.includes('@')) newErrors.email = "Valid email is required";
     setErrors(newErrors);
@@ -189,12 +189,16 @@ const compressImage = (file, maxWidth = 800, maxHeight = 800, quality = 0.85) =>
 
     setLoading(true);
     try {
+      const pName = formData.parentName.trim() || formData.studentName.trim() || "Parent";
+      const sName = formData.studentName.trim() || pName || "Student";
+      const cleanPhone = formData.phone.trim().replace(/^\+?91/, '').replace(/\D/g, '');
+
       await updateMyProfile({
-        studentName: formData.studentName,
-        parentName: formData.parentName,
-        email: formData.email,
-        phone: formData.phone,
-        altPhone: formData.altPhone,
+        studentName: sName,
+        parentName: pName,
+        email: formData.email.trim(),
+        phone: cleanPhone || formData.phone.trim(),
+        altPhone: formData.altPhone ? formData.altPhone.trim().replace(/^\+?91/, '').replace(/\D/g, '') : '',
         address: formData.address,
         pinCode: formData.pinCode,
         city: formData.city,

@@ -26,7 +26,7 @@ const validate = (schema, source = 'body') => (req, _res, next) => {
 const schemas = {
   indianMobile: Joi.string()
     .trim()
-    .pattern(/^[6-9]\d{9}$/)
+    .pattern(/^(?:\+?91|0)?[6-9]\d{9}$/)
     .messages({ 'string.pattern.base': 'Phone must be a valid 10-digit Indian mobile number' }),
 
   email: Joi.string()

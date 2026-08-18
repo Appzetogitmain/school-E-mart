@@ -157,6 +157,9 @@ const compressImage = (file, maxWidth = 800, maxHeight = 800, quality = 0.85) =>
     if (!validate()) return;
     setLoading(true);
 
+    const cleanPhone = formData.phone.trim().replace(/^\+?91/, '').replace(/\D/g, '') || formData.phone.trim();
+    const cleanAltPhone = formData.altPhone ? formData.altPhone.trim().replace(/^\+?91/, '').replace(/\D/g, '') : '';
+
     const saved = localStorage.getItem('childInfo');
     const existing = saved ? JSON.parse(saved) : { role: 'school' };
 
@@ -166,8 +169,8 @@ const compressImage = (file, maxWidth = 800, maxHeight = 800, quality = 0.85) =>
       schoolLogo: formData.photo,
       name: formData.fullName,
       email: formData.email,
-      phone: formData.phone,
-      altPhone: formData.altPhone,
+      phone: cleanPhone,
+      altPhone: cleanAltPhone,
       address: formData.address,
       pinCode: formData.pinCode,
       city: formData.city,
@@ -182,8 +185,8 @@ const compressImage = (file, maxWidth = 800, maxHeight = 800, quality = 0.85) =>
         schoolName: formData.schoolName,
         name: formData.fullName,
         email: formData.email,
-        phone: formData.phone,
-        altPhone: formData.altPhone,
+        phone: cleanPhone,
+        altPhone: cleanAltPhone,
         address: formData.address,
         pinCode: formData.pinCode,
         city: formData.city,
