@@ -115,6 +115,39 @@ const EditProfilePage = () => {
     );
   };
 
+const compressImage = (file, maxWidth = 800, maxHeight = 800, quality = 0.85) => {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > height) {
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          }
+        } else {
+          if (height > maxHeight) {
+            width = Math.round((width * maxHeight) / height);
+            height = maxHeight;
+          }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = () => resolve(event.target.result);
+      img.src = event.target.result;
+    };
+    reader.onerror = () => resolve('');
+    reader.readAsDataURL(file);
+  });
+};
+
   const handlePhotoClick = () => {
     fileInputRef.current?.click();
   };
@@ -123,19 +156,21 @@ const EditProfilePage = () => {
     cameraInputRef.current?.click();
   };
 
-  const handleFileChange = (e) => {
+  const handleFileChange = async (e) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 2 * 1024 * 1024) {
-        alert("Image size should be less than 2MB");
-        return;
+      try {
+        const compressedDataUrl = await compressImage(file, 800, 800, 0.85);
+        setFormData(prev => ({ ...prev, photo: compressedDataUrl }));
+      } catch {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setFormData(prev => ({ ...prev, photo: reader.result }));
+        };
+        reader.readAsDataURL(file);
       }
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setFormData(prev => ({ ...prev, photo: reader.result }));
-      };
-      reader.readAsDataURL(file);
     }
+    if (e.target) e.target.value = '';
   };
 
   const validate = () => {
@@ -214,18 +249,15 @@ const EditProfilePage = () => {
             type="file"
             ref={fileInputRef}
             onChange={handleFileChange}
-            accept=".png,.jpg,.jpeg,.webp"
+            accept="image/*"
             className="hidden"
           />
-          {/* capture="environment" opens the device's camera app directly on
-              mobile; desktop browsers that don't support it fall back to the
-              normal file picker, same as the Upload input above. */}
           <input
             type="file"
             ref={cameraInputRef}
             onChange={handleFileChange}
-            accept=".png,.jpg,.jpeg,.webp"
-            capture="environment"
+            accept="image/*"
+            capture="user"
             className="hidden"
           />
           <div className="relative group">

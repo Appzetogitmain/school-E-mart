@@ -86,6 +86,39 @@ const SchoolEditProfilePage = () => {
     }
   };
 
+const compressImage = (file, maxWidth = 800, maxHeight = 800, quality = 0.85) => {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > height) {
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          }
+        } else {
+          if (height > maxHeight) {
+            width = Math.round((width * maxHeight) / height);
+            height = maxHeight;
+          }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = () => resolve(event.target.result);
+      img.src = event.target.result;
+    };
+    reader.onerror = () => resolve('');
+    reader.readAsDataURL(file);
+  });
+};
+
   const handlePhotoClick = () => {
     fileInputRef.current?.click();
   };
@@ -94,15 +127,21 @@ const SchoolEditProfilePage = () => {
     cameraInputRef.current?.click();
   };
 
-  const handleFileChange = (e) => {
+  const handleFileChange = async (e) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setFormData(prev => ({ ...prev, photo: reader.result }));
-      };
-      reader.readAsDataURL(file);
+      try {
+        const compressedDataUrl = await compressImage(file, 800, 800, 0.85);
+        setFormData(prev => ({ ...prev, photo: compressedDataUrl }));
+      } catch {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setFormData(prev => ({ ...prev, photo: reader.result }));
+        };
+        reader.readAsDataURL(file);
+      }
     }
+    if (e.target) e.target.value = '';
   };
 
   const validate = () => {
@@ -218,11 +257,8 @@ const SchoolEditProfilePage = () => {
         ) : (
         <>
         <div className="flex flex-col items-center gap-4">
-          <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".png,.jpg,.jpeg,.webp" className="hidden" />
-          {/* capture="environment" opens the device's camera app directly on
-              mobile; desktop browsers that don't support it fall back to the
-              normal file picker, same as the Upload input above. */}
-          <input type="file" ref={cameraInputRef} onChange={handleFileChange} accept=".png,.jpg,.jpeg,.webp" capture="environment" className="hidden" />
+          <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" className="hidden" />
+          <input type="file" ref={cameraInputRef} onChange={handleFileChange} accept="image/*" capture="user" className="hidden" />
           <div className="relative group">
             <div className="w-28 h-28 rounded-[2.5rem] bg-white p-1.5 shadow-xl border-2 border-primary/20">
               <div className="w-full h-full rounded-[2rem] bg-gray-100 overflow-hidden relative flex items-center justify-center">
