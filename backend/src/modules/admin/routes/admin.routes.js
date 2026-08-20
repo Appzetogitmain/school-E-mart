@@ -373,6 +373,16 @@ router.get(
   validateQuery(validators.paginationQuery),
   adminController.getInventoryReport
 );
+router.get(
+  '/reports/commissions',
+  ...adminOnly,
+  adminController.getComprehensiveCommissionReport
+);
+router.get(
+  '/reports/school-commissions',
+  ...adminOnly,
+  adminController.getComprehensiveCommissionReport
+);
 
 // CMS - Pages
 router.get('/cms/pages', ...adminOnly, validateQuery(validators.paginationQuery), adminController.listPages);

@@ -393,6 +393,11 @@ const adminController = {
     );
   }),
 
+  getComprehensiveCommissionReport: asyncHandler(async (req, res) => {
+    const report = await reportsService.getComprehensiveCommissionReport(req.query);
+    return success(res, report, 'Comprehensive commission report generated', undefined, req);
+  }),
+
   // CMS - Pages
   listPages: asyncHandler(async (req, res) => {
     const { data, pagination } = await cmsService.listPages(req.query);

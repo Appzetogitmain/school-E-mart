@@ -17,13 +17,20 @@ const orderAccessPolicy = {
   async assertOrderAccess(auth, order) {
     if (this.isPlatformAdmin(auth)) return;
 
-    if (auth.role === ROLES.PARENT || auth.role === ROLES.SCHOOL_ADMIN) {
+    if (auth.role === ROLES.PARENT) {
       if (String(order.userId) !== String(auth.userId)) {
         throw new ForbiddenError('You can only access your own orders', 'ORDER_ACCESS_DENIED');
       }
-      const expectedAudience = this.resolveAudience(auth);
-      if (expectedAudience && order.audience !== expectedAudience) {
-        throw new ForbiddenError('Invalid order audience for your role', 'ORDER_AUDIENCE_DENIED');
+      return;
+    }
+
+    if (auth.role === ROLES.SCHOOL_ADMIN) {
+      const isOwnUser = String(order.userId) === String(auth.userId);
+      const isSchoolPickup =
+        (order.schoolId && String(order.schoolId) === String(auth.schoolId)) ||
+        (order.schoolIdForPickup && String(order.schoolIdForPickup) === String(auth.schoolId));
+      if (!isOwnUser && !isSchoolPickup) {
+        throw new ForbiddenError('You can only access orders for your school', 'ORDER_ACCESS_DENIED');
       }
       return;
     }

@@ -38,7 +38,16 @@ const settingsService = {
     }
     const settings = await settingsRepository.getPlatformSettings();
     if (section === 'contact') {
-      return { ...DEFAULT_CONTACT_SETTINGS, ...(settings.contact || {}) };
+      const contact = settings.contact || {};
+      return {
+        phone: contact.phone !== undefined ? contact.phone : DEFAULT_CONTACT_SETTINGS.phone,
+        email: contact.email !== undefined ? contact.email : DEFAULT_CONTACT_SETTINGS.email,
+        address: contact.address !== undefined ? contact.address : DEFAULT_CONTACT_SETTINGS.address,
+        workingHours: contact.workingHours !== undefined ? contact.workingHours : DEFAULT_CONTACT_SETTINGS.workingHours,
+        whatsapp: contact.whatsapp !== undefined ? contact.whatsapp : DEFAULT_CONTACT_SETTINGS.whatsapp,
+        bulkPhone: contact.bulkPhone !== undefined ? contact.bulkPhone : DEFAULT_CONTACT_SETTINGS.bulkPhone,
+        bulkEmail: contact.bulkEmail !== undefined ? contact.bulkEmail : DEFAULT_CONTACT_SETTINGS.bulkEmail,
+      };
     }
     if (section === 'lms') {
       return { ...DEFAULT_LMS_SETTINGS, ...(settings.lms || {}) };

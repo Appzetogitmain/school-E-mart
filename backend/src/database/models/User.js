@@ -65,7 +65,17 @@ userSchema.index(
     },
   }
 );
-userSchema.index({ phone: 1 }, { unique: true, sparse: true });
+userSchema.index(
+  { phone: 1 },
+  {
+    unique: true,
+    sparse: true,
+    partialFilterExpression: {
+      phone: { $type: 'string' },
+      'softDelete.isDeleted': false,
+    },
+  }
+);
 userSchema.index({ role: 1, status: 1, 'audit.createdAt': -1 });
 userSchema.index({ tenantSchoolId: 1, role: 1 });
 userSchema.index({ name: 'text', email: 'text', phone: 'text' });
@@ -90,6 +100,17 @@ userSchema.statics.findEmailOwner = function findEmailOwner(email, { excludeUser
   };
   if (excludeUserId) filter._id = { $ne: excludeUserId };
   const query = this.findOne(filter).select('name role email');
+  return session ? query.session(session) : query;
+};
+
+userSchema.statics.findPhoneOwner = function findPhoneOwner(phone, { excludeUserId, session } = {}) {
+  if (!phone) return null;
+  const filter = {
+    phone: String(phone).trim(),
+    'softDelete.isDeleted': { $ne: true },
+  };
+  if (excludeUserId) filter._id = { $ne: excludeUserId };
+  const query = this.findOne(filter).select('name role phone email');
   return session ? query.session(session) : query;
 };
 

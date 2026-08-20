@@ -155,6 +155,7 @@ const AdminProfileManagement = React.lazy(() => import('../app/features/superadm
 const KitProductsManagement = React.lazy(() => import('../app/features/superadmin/KitProductsManagement'));
 const SchoolKitsManagement = React.lazy(() => import('../app/features/superadmin/SchoolKitsManagement'));
 const ContactManagement = React.lazy(() => import('../app/features/superadmin/ContactManagement'));
+const CommissionAnalyticsManagement = React.lazy(() => import('../app/features/superadmin/CommissionAnalyticsManagement'));
 
 
 
@@ -233,6 +234,8 @@ const AppRoutes = () => {
           <Route path="wallet" element={<WalletManagement />} />
           <Route path="withdrawals" element={<WithdrawalsManagement />} />
           <Route path="vendor-transactions" element={<VendorTransactions />} />
+          <Route path="commissions" element={<CommissionAnalyticsManagement />} />
+          <Route path="school-commissions" element={<Navigate to="/superadmin/commissions" replace />} />
 
           <Route path="users" element={<UserManagement />} />
           <Route path="notifications" element={<NotificationManagement />} />

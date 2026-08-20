@@ -10,12 +10,13 @@ class LessonRepository extends BaseRepository {
   paginateLessons(filter, queryString, options = {}) {
     return executePaginatedQuery(LmsLesson, this.mergeFilter(filter), queryString, {
       defaultSort: 'displayOrder',
+      populate: ['videoId', 'resources'],
       ...options,
     });
   }
 
   findByCourse(courseId, filter = {}) {
-    return this.findMany({ courseId, ...filter }, { sort: { displayOrder: 1 } });
+    return this.findMany({ courseId, ...filter }, { sort: { displayOrder: 1 }, populate: ['videoId', 'resources'] });
   }
 
   async reorder(courseId, orderedIds) {

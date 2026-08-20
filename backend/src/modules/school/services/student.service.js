@@ -465,51 +465,64 @@ const studentService = {
 
   async deleteStudent(schoolId, studentId, deletedBy) {
     const mongoose = require('mongoose');
+    const Student = require('../../../database/models/Student');
+    const ChildProfile = require('../../../database/models/ChildProfile');
+    const AttendanceRecord = require('../../../database/models/AttendanceRecord');
+    const DiaryEntry = require('../../../database/models/DiaryEntry');
+    const LmsAssignmentSubmission = require('../../../database/models/LmsAssignmentSubmission');
+    const LeaveApplication = require('../../../database/models/LeaveApplication');
+    const NoticeAcknowledgement = require('../../../database/models/NoticeAcknowledgement');
+    const Notification = require('../../../database/models/Notification');
+    const User = require('../../../database/models/User');
+
     let student = null;
 
     if (mongoose.Types.ObjectId.isValid(studentId)) {
-      student = await studentRepository.findOne({ _id: studentId, schoolId });
+      student = await Student.findOne({ _id: studentId, schoolId });
     }
 
     if (!student) {
-      student = await studentRepository.findOne({ schoolRefNo: studentId, schoolId });
+      student = await Student.findOne({ schoolRefNo: studentId, schoolId });
     }
 
     if (!student) {
       throw new NotFoundError('Student not found', 'STUDENT_NOT_FOUND');
     }
 
-    const originalRefNo = student.schoolRefNo;
-    const deletedRefNo = `${originalRefNo}_deleted_${Date.now()}`;
+    const targetId = student._id;
 
-    const Student = require('../../../database/models/Student');
-    const updatedStudent = await Student.findOneAndUpdate(
-      { _id: student._id, schoolId, 'softDelete.isDeleted': { $ne: true } },
-      {
-        $set: {
-          schoolRefNo: deletedRefNo,
-          'softDelete.isDeleted': true,
-          'softDelete.deletedAt': new Date(),
-          'softDelete.deletedBy': mongoose.Types.ObjectId.isValid(deletedBy) ? deletedBy : null,
-          'softDelete.originalRefId': originalRefNo,
-        },
-      },
-      { new: true }
-    ).lean();
+    await withTransaction(async (session) => {
+      // 1. Delete all attendance records for this student
+      await AttendanceRecord.deleteMany({ studentId: targetId }).session(session);
 
-    const ChildProfile = require('../../../database/models/ChildProfile');
-    await ChildProfile.updateMany(
-      { studentId: student._id, 'softDelete.isDeleted': { $ne: true } },
-      {
-        $set: {
-          'softDelete.isDeleted': true,
-          'softDelete.deletedAt': new Date(),
-          'softDelete.deletedBy': mongoose.Types.ObjectId.isValid(deletedBy) ? deletedBy : null,
-        },
+      // 2. Delete all diary entries for this student
+      await DiaryEntry.deleteMany({ studentId: targetId }).session(session);
+
+      // 3. Delete all assignment submissions for this student
+      await LmsAssignmentSubmission.deleteMany({ studentId: targetId }).session(session);
+
+      // 4. Delete all leave applications for this student
+      await LeaveApplication.deleteMany({ studentId: targetId }).session(session);
+
+      // 5. Delete all notice acknowledgements for this student
+      await NoticeAcknowledgement.deleteMany({ studentId: targetId }).session(session);
+
+      // 6. Delete all notifications for this student
+      await Notification.deleteMany({ recipientStudentId: targetId }).session(session);
+
+      // 7. Delete all child profiles for this student
+      await ChildProfile.deleteMany({ studentId: targetId }).session(session);
+
+      // 8. Delete user account if student has a standalone user record
+      if (student.userId) {
+        await User.deleteOne({ _id: student.userId }).session(session);
       }
-    );
 
-    return updatedStudent || student;
+      // 9. Hard delete the Student record completely from DB
+      await Student.deleteOne({ _id: targetId }).session(session);
+    });
+
+    return { success: true, deletedStudentId: targetId };
   },
 };
 

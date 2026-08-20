@@ -8,7 +8,7 @@ import {
   getWalletOverview, listVendorTransactions, listPayoutRequests,
   approvePayoutRequest, rejectPayoutRequest, updatePayoutStatus,
 } from '../../../services/adminApi';
-import { getErrorMessage } from '../../../utils/apiHelpers';
+import CommissionCalculationGuideModal from '../../components/CommissionCalculationGuideModal';
 
 const TYPE_DESC = {
   order_credit: 'Order earnings',
@@ -47,6 +47,7 @@ const KpiCard = ({ icon, tone, label, value, sub }) => (
 const WalletManagement = () => {
   const [activeTab, setActiveTab] = useState('Withdrawal Requests');
   const [typeFilter, setTypeFilter] = useState('All');
+  const [isGuideOpen, setIsGuideOpen] = useState(false);
 
   const [overview, setOverview] = useState(null);
   const [transactions, setTransactions] = useState([]);
@@ -180,9 +181,22 @@ const WalletManagement = () => {
 
   return (
     <div className="space-y-6 font-sans antialiased text-gray-800">
-      <div className="text-left select-none pb-2 border-b border-gray-200">
-        <h1 className="text-xl font-black text-[#0B1528] tracking-tight">Admin Wallet & Finance</h1>
-        <p className="text-xs text-gray-400 font-bold mt-1">Track earnings across vendors & schools and process withdrawals.</p>
+      <CommissionCalculationGuideModal isOpen={isGuideOpen} onClose={() => setIsGuideOpen(false)} />
+
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-left select-none pb-2 border-b border-gray-200">
+        <div>
+          <h1 className="text-xl font-black text-[#0B1528] tracking-tight">Admin Wallet & Finance</h1>
+          <p className="text-xs text-gray-400 font-bold mt-1">Track earnings across vendors & schools and process withdrawals.</p>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setIsGuideOpen(true)}
+          className="px-4 py-2 bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100 rounded-2xl text-xs font-black flex items-center gap-2 transition-all shrink-0 shadow-2xs"
+        >
+          <Info size={15} />
+          <span>How Calculation Works</span>
+        </button>
       </div>
 
       {error && (

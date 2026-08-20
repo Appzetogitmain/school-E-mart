@@ -9,7 +9,7 @@ const { validateAndNormalizeKitSelections } = require('../../marketplace/utils/k
 
 // Fallbacks used only if the admin has never saved a BillingConfig. Real values
 // come from the admin's Billing & Charges page and are resolved per checkout.
-const DEFAULT_DELIVERY_CHARGE_PAISE = 0;
+const DEFAULT_DELIVERY_CHARGE_PAISE = 4900; // Default ₹49 delivery charge
 const DEFAULT_PLATFORM_FEE_PAISE = 1000; // Default ₹10 platform fee
 const DEFAULT_HANDLING_CHARGE_PAISE = 0;
 
@@ -128,7 +128,7 @@ const checkoutService = {
     const config = await BillingConfig.findById('default').lean();
     if (!config) {
       return {
-        deliveryChargePaise: DEFAULT_DELIVERY_CHARGE_PAISE,
+        deliveryChargePaise: (deliveryType === 'school' || deliveryType === 'school_address') ? 0 : DEFAULT_DELIVERY_CHARGE_PAISE,
         platformFeePaise: DEFAULT_PLATFORM_FEE_PAISE,
         handlingChargePaise: DEFAULT_HANDLING_CHARGE_PAISE,
       };
@@ -173,12 +173,17 @@ const checkoutService = {
         deliveryChargePaise =
           config.schoolDeliveryChargePaise != null
             ? toNumber(config.schoolDeliveryChargePaise)
-            : toNumber(config.fixedDeliveryChargePaise);
+            : (config.fixedDeliveryChargePaise != null ? toNumber(config.fixedDeliveryChargePaise) : DEFAULT_DELIVERY_CHARGE_PAISE);
       }
     } else {
+      const fixedCharge =
+        config.fixedDeliveryChargePaise != null && Number(config.fixedDeliveryChargePaise) >= 0
+          ? toNumber(config.fixedDeliveryChargePaise)
+          : DEFAULT_DELIVERY_CHARGE_PAISE;
+
       const qualifiesForFreeDelivery =
         freeDeliveryThresholdPaise > 0 && subtotalPaise >= freeDeliveryThresholdPaise;
-      deliveryChargePaise = qualifiesForFreeDelivery ? 0 : toNumber(config.fixedDeliveryChargePaise);
+      deliveryChargePaise = qualifiesForFreeDelivery ? 0 : fixedCharge;
     }
 
     return { deliveryChargePaise, platformFeePaise, handlingChargePaise: DEFAULT_HANDLING_CHARGE_PAISE };

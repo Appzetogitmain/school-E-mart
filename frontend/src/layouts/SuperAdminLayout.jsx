@@ -144,6 +144,12 @@ const SuperAdminLayout = () => {
       icon: Users,
       path: '/superadmin/vendor-transactions'
     },
+    {
+      type: 'item',
+      label: 'Commission & Profit',
+      icon: IndianRupee,
+      path: '/superadmin/commissions'
+    },
 
     {
       type: 'section',

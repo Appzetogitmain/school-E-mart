@@ -143,19 +143,9 @@ const TeacherManageStudents = () => {
     setActiveActionsMenu(null);
   };
 
-  const handleDeleteStudent = async (id) => {
-    const student = students.find((s) => s.id === id || s.mongoId === id || s._id === id);
-    const targetId = student?.mongoId || student?._id || id;
-    if (!targetId || !schoolId) return;
-
+  const handleDeleteStudent = async () => {
     setActiveActionsMenu(null);
-    try {
-      await deleteStudent(schoolId, targetId);
-      triggerToast('Student Removed Successfully!');
-      await loadStudents();
-    } catch (err) {
-      triggerToast(getErrorMessage(err, 'Unable to remove student'));
-    }
+    triggerToast('Deletion Restricted: Only School Admins can delete student records.');
   };
 
   const handleSaveStudent = async (e) => {

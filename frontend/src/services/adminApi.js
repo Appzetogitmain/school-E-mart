@@ -516,3 +516,14 @@ export const updateLmsSettings = async (payload) => {
   const response = await apiClient.put('/admin/settings/lms', payload);
   return unwrapData(response)?.section || payload;
 };
+
+// Comprehensive Commission & Profit Earnings Report
+export const getComprehensiveCommissionReport = async (params = {}) => {
+  const response = await apiClient.get('/admin/reports/commissions', { params });
+  return unwrapData(response) || {};
+};
+
+export const getSchoolCommissionReport = async (params = {}) => {
+  const response = await apiClient.get('/admin/reports/school-commissions', { params });
+  return unwrapData(response) || {};
+};

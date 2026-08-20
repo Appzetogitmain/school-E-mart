@@ -251,17 +251,40 @@ const parentService = {
     if (!hasAccess) throw new NotFoundError('Parent not found under this school', 'PARENT_NOT_FOUND');
 
     const Student = require('../../../database/models/Student');
+    const Address = require('../../../database/models/Address');
+    const Cart = require('../../../database/models/Cart');
+    const Wishlist = require('../../../database/models/Wishlist');
+    const DeviceToken = require('../../../database/models/DeviceToken');
+    const AuthSession = require('../../../database/models/AuthSession');
+    const Notification = require('../../../database/models/Notification');
+    const Wallet = require('../../../database/models/Wallet');
+    const WalletTransaction = require('../../../database/models/WalletTransaction');
+
+    const parentUserId = profile.userId;
 
     await withTransaction(async (session) => {
-      // Remove references first so students and child profiles don't keep
-      // dangling links to the deleted parent
+      // 1. Remove parent references from Student records
       await Student.updateMany(
         { parentProfileIds: parentId },
         { $pull: { parentProfileIds: parentId } }
       ).session(session);
-      await ChildProfile.deleteMany({ parentUserId: profile.userId }).session(session);
+
+      // 2. Delete all ChildProfiles linked to this parent
+      await ChildProfile.deleteMany({ parentUserId }).session(session);
+
+      // 3. Delete parent profile data & token/session/cart/wallet records
+      await Address.deleteMany({ userId: parentUserId }).session(session);
+      await Cart.deleteMany({ userId: parentUserId }).session(session);
+      await Wishlist.deleteMany({ userId: parentUserId }).session(session);
+      await DeviceToken.deleteMany({ userId: parentUserId }).session(session);
+      await AuthSession.deleteMany({ userId: parentUserId }).session(session);
+      await Notification.deleteMany({ recipientUserId: parentUserId }).session(session);
+      await Wallet.deleteMany({ userId: parentUserId }).session(session);
+      await WalletTransaction.deleteMany({ userId: parentUserId }).session(session);
+
+      // 4. Permanently remove ParentProfile and User account
       await ParentProfile.deleteOne({ _id: parentId }).session(session);
-      await User.deleteOne({ _id: profile.userId }).session(session);
+      await User.deleteOne({ _id: parentUserId }).session(session);
     });
 
     return { success: true };

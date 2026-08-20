@@ -16,6 +16,27 @@ import { getChildInfoFromStorage } from '../../../utils/parentContext';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 import { mapCourseToLesson, mapResumeToContinueLesson } from '../../../utils/mappers/lmsMapper';
 
+const parseVideoSource = (url) => {
+  if (!url) return null;
+  const str = String(url).trim();
+  if (str.includes('youtube.com/watch?v=')) {
+    const id = str.split('v=')[1]?.split('&')[0];
+    return { type: 'iframe', src: `https://www.youtube.com/embed/${id}?autoplay=1` };
+  }
+  if (str.includes('youtu.be/')) {
+    const id = str.split('youtu.be/')[1]?.split('?')[0];
+    return { type: 'iframe', src: `https://www.youtube.com/embed/${id}?autoplay=1` };
+  }
+  if (str.includes('vimeo.com/')) {
+    const id = str.split('vimeo.com/')[1]?.split('?')[0];
+    return { type: 'iframe', src: `https://player.vimeo.com/video/${id}?autoplay=1` };
+  }
+  if (str.startsWith('http') || str.startsWith('/') || str.startsWith('blob:')) {
+    return { type: 'video', src: str };
+  }
+  return null;
+};
+
 const ParentLearningHubAll = () => {
   const navigate = useNavigate();
 
@@ -537,93 +558,106 @@ const ParentLearningHubAll = () => {
           >
             
             {/* Modal Screen / Video Container */}
-            <div className="aspect-video relative bg-black shrink-0">
-              {selectedVideo.videoUrl ? (
-                <>
-                  <video
-                    src={selectedVideo.videoUrl}
-                    poster={selectedVideo.image}
-                    controls
-                    autoPlay
-                    muted={isMuted}
-                    playsInline
-                    className="w-full h-full object-contain bg-black"
-                    onPlay={() => setIsPlaying(true)}
-                    onPause={() => setIsPlaying(false)}
-                    onTimeUpdate={(e) => {
-                      const { currentTime, duration } = e.currentTarget;
-                      if (duration) setVideoProgress(Math.round((currentTime / duration) * 100));
-                    }}
-                  />
-                  <button
-                    onClick={() => {
-                      setIsPlaying(false);
-                      setSelectedVideo(null);
-                    }}
-                    className="absolute top-3 right-3 z-10 w-8 h-8 rounded-full bg-black/50 backdrop-blur-sm text-white/90 hover:text-white flex items-center justify-center hover:bg-black/70 transition-colors"
-                  >
-                    <X size={14} />
-                  </button>
-                </>
-              ) : (
-              <>
-              <img 
-                src={selectedVideo.image} 
-                alt={selectedVideo.title}
-                className="w-full h-full object-cover opacity-85"
-              />
-              
-              {/* Playback HUD overlay controls */}
-              <div className="absolute inset-0 flex flex-col justify-between p-4 bg-gradient-to-b from-black/40 via-transparent to-black/60">
-                <div className="flex items-center justify-between">
-                  <span className="text-[9.5px] text-white/95 font-extrabold uppercase tracking-widest bg-white/10 backdrop-blur-md px-2.5 py-1 rounded-xl border border-white/10 leading-none">
-                    Class 5 Tutorial
-                  </span>
-                  <button 
-                    onClick={() => {
-                      setIsPlaying(false);
-                      setSelectedVideo(null);
-                    }}
-                    className="w-8 h-8 rounded-full bg-black/40 backdrop-blur-sm text-white/90 hover:text-white flex items-center justify-center hover:bg-black/60 transition-colors"
-                  >
-                    <X size={14} />
-                  </button>
-                </div>
+            <div className="aspect-video relative bg-black shrink-0 overflow-hidden">
+              {(() => {
+                const parsed = parseVideoSource(selectedVideo.videoUrl);
 
-                {/* Dynamic playback simulation state indicator */}
-                <div className="flex items-center justify-center">
-                  <button 
-                    onClick={() => setIsPlaying(!isPlaying)}
-                    className="w-12 h-12 rounded-full bg-white text-gray-800 flex items-center justify-center shadow-2xl active:scale-90 transition-transform scale-100 hover:scale-105"
-                  >
-                    {isPlaying ? <Pause size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" className="ml-1" />}
-                  </button>
-                </div>
+                if (parsed?.type === 'iframe') {
+                  return (
+                    <>
+                      <iframe
+                        src={parsed.src}
+                        title={selectedVideo.title}
+                        className="w-full h-full border-0 bg-black"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                      />
+                      <button
+                        onClick={() => {
+                          setIsPlaying(false);
+                          setSelectedVideo(null);
+                        }}
+                        className="absolute top-3 right-3 z-10 w-8 h-8 rounded-full bg-black/50 backdrop-blur-sm text-white/90 hover:text-white flex items-center justify-center hover:bg-black/70 transition-colors"
+                      >
+                        <X size={14} />
+                      </button>
+                    </>
+                  );
+                }
 
-                {/* Sound, duration and progress bar */}
-                <div className="flex items-center justify-between gap-3 text-white">
-                  <button 
-                    onClick={() => setIsMuted(!isMuted)}
-                    className="text-white hover:scale-105 active:scale-95 transition-all"
-                  >
-                    {isMuted ? <VolumeX size={15} /> : <Volume2 size={15} />}
-                  </button>
+                if (parsed?.type === 'video') {
+                  return (
+                    <>
+                      <video
+                        src={parsed.src}
+                        poster={selectedVideo.image}
+                        controls
+                        autoPlay
+                        muted={isMuted}
+                        playsInline
+                        className="w-full h-full object-contain bg-black"
+                        onPlay={() => setIsPlaying(true)}
+                        onPause={() => setIsPlaying(false)}
+                        onTimeUpdate={(e) => {
+                          const { currentTime, duration } = e.currentTarget;
+                          if (duration) setVideoProgress(Math.round((currentTime / duration) * 100));
+                        }}
+                      />
+                      <button
+                        onClick={() => {
+                          setIsPlaying(false);
+                          setSelectedVideo(null);
+                        }}
+                        className="absolute top-3 right-3 z-10 w-8 h-8 rounded-full bg-black/50 backdrop-blur-sm text-white/90 hover:text-white flex items-center justify-center hover:bg-black/70 transition-colors"
+                      >
+                        <X size={14} />
+                      </button>
+                    </>
+                  );
+                }
 
-                  {/* Scrubber slider bar */}
-                  <div className="flex-1 h-1 bg-white/30 rounded-full overflow-hidden relative cursor-pointer">
-                    <div 
-                      className="absolute left-0 top-0 bottom-0 bg-[#7F56D9] rounded-full transition-all duration-300"
-                      style={{ width: `${videoProgress}%` }}
+                return (
+                  <>
+                    <img
+                      src={selectedVideo.image}
+                      alt={selectedVideo.title}
+                      className="w-full h-full object-cover opacity-60"
                     />
-                  </div>
 
-                  <span className="text-[9px] font-black text-white/90 leading-none bg-black/35 px-1.5 py-0.5 rounded backdrop-blur-[1px]">
-                    {selectedVideo.duration}
-                  </span>
-                </div>
-              </div>
-              </>
-              )}
+                    <div className="absolute inset-0 flex flex-col justify-between p-4 bg-gradient-to-b from-black/60 via-black/40 to-black/80">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[9.5px] text-white/95 font-extrabold uppercase tracking-widest bg-white/15 backdrop-blur-md px-2.5 py-1 rounded-xl border border-white/10 leading-none">
+                          {selectedVideo.chapter || selectedVideo.subject}
+                        </span>
+                        <button
+                          onClick={() => {
+                            setIsPlaying(false);
+                            setSelectedVideo(null);
+                          }}
+                          className="w-8 h-8 rounded-full bg-black/50 backdrop-blur-sm text-white/90 hover:text-white flex items-center justify-center hover:bg-black/70 transition-colors"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+
+                      <div className="flex flex-col items-center justify-center text-center p-3">
+                        <div className="w-11 h-11 rounded-2xl bg-amber-500/20 text-amber-300 border border-amber-400/30 flex items-center justify-center mb-2 backdrop-blur-sm">
+                          <Video size={20} />
+                        </div>
+                        <h4 className="text-xs font-black text-white">Video Lesson Pending</h4>
+                        <p className="text-[10px] text-gray-300 font-medium max-w-[220px] mt-1 leading-snug">
+                          Your teacher has published this course topic, but the video media file is not attached yet.
+                        </p>
+                      </div>
+
+                      <div className="flex items-center justify-between text-white/80 text-[10px] font-bold">
+                        <span>Instructor: {selectedVideo.teacher}</span>
+                        <span>{selectedVideo.subject}</span>
+                      </div>
+                    </div>
+                  </>
+                );
+              })()}
             </div>
 
             {/* Video Meta Info Panel */}

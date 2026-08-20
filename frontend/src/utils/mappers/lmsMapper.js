@@ -21,11 +21,18 @@ export const mapCourseToLesson = (course, progress = 0, lessons = []) => {
   const lessonList = Array.isArray(lessons) ? lessons : [lessons].filter(Boolean);
   const primaryLesson = lessonList[0] || null;
 
+  const rawVideoUrl =
+    primaryLesson?.videoId?.url ||
+    primaryLesson?.videoId?.fileUrl ||
+    (primaryLesson?.videoId?.storageKey ? `/uploads/${primaryLesson.videoId.storageKey}` : '') ||
+    primaryLesson?.videoUrl ||
+    (typeof primaryLesson?.contentHtml === 'string' && (primaryLesson.contentHtml.startsWith('http') || primaryLesson.contentHtml.startsWith('/')) ? primaryLesson.contentHtml : '') ||
+    course?.videoUrl ||
+    course?.video ||
+    '';
+
   return {
     id: course?._id || course?.id,
-    // These cards render a course, but progress is recorded per lesson, so all
-    // of the course's lesson ids have to survive the mapping — "Mark Completed"
-    // and the resume bookmark both need them.
     courseId: course?._id || course?.id,
     lessonId: primaryLesson?._id || primaryLesson?.id || null,
     lessonIds: lessonList.map((l) => l?._id || l?.id).filter(Boolean),
@@ -33,12 +40,11 @@ export const mapCourseToLesson = (course, progress = 0, lessons = []) => {
     subject: course?.subject || category || 'General',
     chapter: gradeClass ? `${gradeClass} • ${category}` : category,
     progress: Number(progress) || 0,
-    duration: course?.durationLabel || course?.duration || '—',
+    duration: course?.durationLabel || course?.duration || (primaryLesson?.durationSec ? `${Math.round(primaryLesson.durationSec / 60)} mins` : '—'),
     image:
       toAbsoluteUrl(course?.thumbnailUrl || course?.thumbnail?.url || course?.imageUrl) ||
       DEFAULT_LESSON_IMAGE,
-    videoUrl:
-      toAbsoluteUrl(primaryLesson?.contentHtml || primaryLesson?.videoUrl || course?.videoUrl) || '',
+    videoUrl: toAbsoluteUrl(rawVideoUrl) || '',
     teacher: instructor,
     teacherImg: course?.instructorAvatarUrl || defaultAvatar(instructor),
     type: course?.contentType || 'Video',

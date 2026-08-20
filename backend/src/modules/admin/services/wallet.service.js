@@ -106,15 +106,15 @@ const adminWalletService = {
   },
 
   async getOverview() {
-    const [vendorLedgerTotals, schoolLedgerTotals, platformTotal, payoutTotals] = await Promise.all([
+    const Order = require('../../../database/models/Order');
+
+    const [vendorLedgerTotals, schoolLedgerTotals, platformTotal, payoutTotals, orderStats] = await Promise.all([
       VendorLedger.aggregate([{ $group: { _id: '$transactionType', total: { $sum: '$amountPaise' } } }]),
       SchoolLedger.aggregate([{ $group: { _id: '$transactionType', total: { $sum: '$amountPaise' } } }]),
       PlatformLedger.aggregate([
         { $match: { transactionType: 'commission_credit' } },
         { $group: { _id: null, total: { $sum: '$amountPaise' } } },
       ]),
-      // Payout stats split by owner type so pending vendor vs school requests can
-      // be surfaced separately.
       PayoutRequest.aggregate([
         { $match: { 'softDelete.isDeleted': { $ne: true } } },
         {
@@ -125,10 +125,52 @@ const adminWalletService = {
           },
         },
       ]),
+      Order.aggregate([
+        {
+          $match: {
+            'softDelete.isDeleted': { $ne: true },
+            orderStatus: { $ne: 'cancelled' },
+          },
+        },
+        { $unwind: '$items' },
+        {
+          $project: {
+            subtotalPaise: {
+              $ifNull: [
+                '$items.subtotalPaise',
+                { $multiply: ['$items.pricePaise', '$items.quantity'] },
+              ],
+            },
+            adminPercent: { $ifNull: ['$items.commission.adminPercent', 10] },
+            schoolPercent: { $ifNull: ['$items.commission.schoolPercent', 0] },
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            totalSalesPaise: { $sum: '$subtotalPaise' },
+            calcAdminPaise: {
+              $sum: {
+                $divide: [{ $multiply: ['$subtotalPaise', '$adminPercent'] }, 100],
+              },
+            },
+            calcSchoolPaise: {
+              $sum: {
+                $divide: [{ $multiply: ['$subtotalPaise', '$schoolPercent'] }, 100],
+              },
+            },
+          },
+        },
+      ]),
     ]);
 
     const vendorByType = Object.fromEntries(vendorLedgerTotals.map((r) => [r._id, r.total]));
     const schoolByType = Object.fromEntries(schoolLedgerTotals.map((r) => [r._id, r.total]));
+
+    const orderTotalSales = Math.round(orderStats[0]?.totalSalesPaise || 0);
+    const orderAdminCommission = Math.round(orderStats[0]?.calcAdminPaise || 0);
+    const orderSchoolCommission = Math.round(orderStats[0]?.calcSchoolPaise || 0);
+    const orderVendorNet = Math.max(0, orderTotalSales - orderAdminCommission - orderSchoolCommission);
 
     const sumPayouts = (predicate) =>
       payoutTotals.filter(predicate).reduce(
@@ -142,28 +184,31 @@ const adminWalletService = {
     const pendingVendor = sumPayouts((r) => r._id.status === 'pending' && r._id.ownerType !== 'school');
     const pendingSchool = sumPayouts((r) => r._id.status === 'pending' && r._id.ownerType === 'school');
 
-    const vendorEarningsPaise = vendorByType.order_credit || 0;
-    const vendorCommissionPaise = Math.abs(vendorByType.commission_deduction || 0);
-    const vendorPaidOutPaise = Math.abs(vendorByType.payout_debit || 0);
+    const ledgerVendorEarnings = vendorByType.order_credit || 0;
+    const ledgerVendorCommission = Math.abs(vendorByType.commission_deduction || 0);
+    const ledgerVendorPaidOut = Math.abs(vendorByType.payout_debit || 0);
 
-    const schoolEarningsPaise = (schoolByType.kit_commission_credit || 0) + (schoolByType.retail_commission_credit || 0);
-    const schoolPaidOutPaise = Math.abs(schoolByType.payout_debit || 0);
+    const ledgerSchoolEarnings = (schoolByType.kit_commission_credit || 0) + (schoolByType.retail_commission_credit || 0);
+    const ledgerSchoolPaidOut = Math.abs(schoolByType.payout_debit || 0);
 
-    // Platform revenue is the admin's own commission ledger. Older orders settled
-    // before PlatformLedger existed only recorded the vendor-side deduction, so
-    // fall back to that when the platform ledger is empty.
-    const platformRevenuePaise = platformTotal[0]?.total || vendorCommissionPaise;
+    const ledgerPlatformRevenue = platformTotal[0]?.total || ledgerVendorCommission;
+
+    const platformRevenuePaise = Math.max(ledgerPlatformRevenue, orderAdminCommission);
+    const schoolEarningsPaise = Math.max(ledgerSchoolEarnings, orderSchoolCommission);
+    const vendorEarningsPaise = Math.max(ledgerVendorEarnings > 0 ? ledgerVendorEarnings - ledgerVendorCommission : 0, orderVendorNet);
+    const vendorPaidOutPaise = ledgerVendorPaidOut;
+    const schoolPaidOutPaise = ledgerSchoolPaidOut;
 
     return {
       // Vendor side
       totalEarningsPaise: vendorEarningsPaise,
-      totalCommissionPaise: vendorCommissionPaise,
+      totalCommissionPaise: platformRevenuePaise,
       totalPaidOutPaise: vendorPaidOutPaise + schoolPaidOutPaise,
-      vendorOutstandingBalancePaise: vendorEarningsPaise - vendorCommissionPaise - vendorPaidOutPaise,
+      vendorOutstandingBalancePaise: Math.max(0, vendorEarningsPaise - vendorPaidOutPaise),
       // School side
       schoolEarningsPaise,
       schoolPaidOutPaise,
-      schoolOutstandingBalancePaise: schoolEarningsPaise - schoolPaidOutPaise,
+      schoolOutstandingBalancePaise: Math.max(0, schoolEarningsPaise - schoolPaidOutPaise),
       // Platform
       platformRevenuePaise,
       // Payouts
@@ -174,8 +219,8 @@ const adminWalletService = {
       processingPayoutPaise: processing.total,
       completedPayoutPaise: completed.total,
       outstandingBalancePaise:
-        vendorEarningsPaise - vendorCommissionPaise - vendorPaidOutPaise
-        + schoolEarningsPaise - schoolPaidOutPaise,
+        Math.max(0, vendorEarningsPaise - vendorPaidOutPaise) +
+        Math.max(0, schoolEarningsPaise - schoolPaidOutPaise),
     };
   },
 

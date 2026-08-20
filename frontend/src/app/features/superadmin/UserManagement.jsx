@@ -138,8 +138,13 @@ const UserManagement = () => {
   };
 
   const handleDeleteUser = async (u) => {
+    const role = (u.role || '').toLowerCase();
+    if (role === 'student' || role === 'parent') {
+      alert("Deletion Restricted: Only the student's associated School has the power to delete Student and Parent accounts.");
+      return;
+    }
     if (!confirm(
-      `Permanently delete "${u.name}"?\n\nThis also removes their linked student profile(s) and saved addresses. Past orders are kept. This cannot be undone.`
+      `Permanently delete "${u.name}"?\n\nThis cannot be undone.`
     )) return;
     setActionId(u.mongoId);
     try {
@@ -416,15 +421,26 @@ const UserManagement = () => {
                           >
                             <Edit size={12} className="stroke-[2.5]" />
                           </button>
-                          <button
-                            type="button"
-                            disabled={actionId === u.mongoId}
-                            onClick={() => handleDeleteUser(u)}
-                            title="Delete user"
-                            className="w-7 h-7 rounded-xl border border-red-200 text-red-500 hover:bg-red-50 flex items-center justify-center transition-all disabled:opacity-50"
-                          >
-                            {actionId === u.mongoId ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} className="stroke-[2.5]" />}
-                          </button>
+                          {['student', 'parent'].includes((u.role || '').toLowerCase()) ? (
+                            <button
+                              type="button"
+                              onClick={() => alert("Deletion Restricted: Only the student's associated School has the power to delete Student and Parent accounts.")}
+                              title="Only Schools can delete Student and Parent accounts"
+                              className="w-7 h-7 rounded-xl border border-gray-200 text-gray-300 hover:text-red-400 hover:bg-gray-50 flex items-center justify-center transition-all cursor-not-allowed"
+                            >
+                              <Trash2 size={12} className="stroke-[2]" />
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              disabled={actionId === u.mongoId}
+                              onClick={() => handleDeleteUser(u)}
+                              title="Delete user"
+                              className="w-7 h-7 rounded-xl border border-red-200 text-red-500 hover:bg-red-50 flex items-center justify-center transition-all disabled:opacity-50"
+                            >
+                              {actionId === u.mongoId ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} className="stroke-[2.5]" />}
+                            </button>
+                          )}
                         </div>
                       </td>
 

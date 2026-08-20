@@ -5,7 +5,7 @@ import {
   ChevronDown, Bell, Sparkles, Package,
   Shirt, Book, PenTool, Footprints,
   ArrowRight, Star, ShoppingCart, Filter, Play,
-  Grid, Layout, CheckCircle2, BookOpen, Check, Trophy
+  Grid, Layout, CheckCircle2, BookOpen, Check, Trophy, ChevronRight
 } from 'lucide-react';
 import AppHeader from '../../components/AppHeader';
 import { getAttendanceHistory, fetchParentHomework, listParentNotices } from '../../../services/parentApi';
@@ -27,6 +27,7 @@ import ReelsRow from './ReelsRow';
 import { useCategoryTree } from '../../../hooks/useCategoryTree';
 import { useProducts } from '../../../hooks/useProducts';
 import { findHeaderCategory } from '../../../utils/mappers/categoryMapper';
+import { toAbsoluteUrl } from '../../../utils/url';
 
 import useAuthStore from '../../../store/useAuthStore';
 
@@ -340,7 +341,10 @@ const ParentHome = () => {
         {/* Gamification Procurement Readiness Card (Matching MySchool page) */}
         {!isGuest && (
           <div className="px-6 mt-6">
-            <div className="bg-gradient-to-br from-[#3b2d7d] via-[#4a3a99] to-[#2c2060] rounded-[2.5rem] p-6 sm:p-7 text-white shadow-xl shadow-purple-900/15 relative overflow-hidden">
+            <div
+              onClick={() => navigate('/user/my-school')}
+              className="bg-gradient-to-br from-[#3b2d7d] via-[#4a3a99] to-[#2c2060] rounded-[2.5rem] p-6 sm:p-7 text-white shadow-xl shadow-purple-900/15 relative overflow-hidden cursor-pointer hover:shadow-2xl hover:scale-[1.01] active:scale-[0.98] transition-all duration-300 group"
+            >
               {/* Decorative background blurs */}
               <div className="absolute -right-10 -bottom-10 w-44 h-44 bg-purple-400/20 rounded-full blur-2xl pointer-events-none" />
               <div className="absolute right-12 top-0 w-24 h-24 bg-amber-400/15 rounded-full blur-xl pointer-events-none" />
@@ -349,22 +353,27 @@ const ParentHome = () => {
                 {/* Header line */}
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex items-center gap-3.5">
-                    <div className="w-12 h-12 bg-white/15 rounded-2xl flex items-center justify-center backdrop-blur-md text-amber-300 border border-white/20 shadow-inner shrink-0">
+                    <div className="w-12 h-12 bg-white/15 rounded-2xl flex items-center justify-center backdrop-blur-md text-amber-300 border border-white/20 shadow-inner shrink-0 group-hover:scale-105 transition-transform">
                       <Trophy size={24} />
                     </div>
                     <div>
                       <span className="text-[10px] font-black text-purple-200 uppercase tracking-widest block">
                         {childInfo.grade || 'Class Procurement'}
                       </span>
-                      <h2 className="text-lg font-black tracking-tight text-white leading-none">
+                      <h2 className="text-lg font-black tracking-tight text-white leading-none flex items-center gap-1.5">
                         Procurement Readiness
+                        <ChevronRight size={18} className="text-purple-300 group-hover:translate-x-1 transition-transform shrink-0" />
                       </h2>
                     </div>
                   </div>
 
-                  {kitStats.totalKits > 0 && kitStats.purchasedCount === kitStats.totalKits && (
+                  {kitStats.totalKits > 0 && kitStats.purchasedCount === kitStats.totalKits ? (
                     <span className="px-3 py-1 bg-emerald-400 text-emerald-950 text-[10px] font-black uppercase tracking-wider rounded-full shadow-md shrink-0 flex items-center gap-1">
                       <CheckCircle2 size={13} className="stroke-[3]" /> 100% Ready
+                    </span>
+                  ) : (
+                    <span className="px-3 py-1 bg-white/15 backdrop-blur-md text-white border border-white/20 text-[10px] font-extrabold uppercase tracking-wider rounded-full shadow-sm shrink-0 flex items-center gap-1 group-hover:bg-white/25 transition-colors">
+                      View Kits <ChevronRight size={12} className="group-hover:translate-x-0.5 transition-transform" />
                     </span>
                   )}
                 </div>
@@ -413,6 +422,125 @@ const ParentHome = () => {
         {/* Quick Actions Grid Section */}
         <QuickActions />
 
+        {/* Official School Procurement Kits Section on Dashboard */}
+        {!isGuest && kitStats.kits && kitStats.kits.length > 0 && (
+          <div className="mt-6 font-outfit">
+            <SectionHeader
+              title={`Class Kits ${childInfo.grade ? `(${childInfo.grade})` : ''}`}
+              onViewAll={() => navigate('/user/my-school')}
+            />
+            <div className="px-6 space-y-3.5 mt-3">
+              {kitStats.kits.slice(0, 4).map((kit) => {
+                const id = kit._id || kit.id;
+                const imageUrl = toAbsoluteUrl(kit.imageId?.storageKey || kit.imageUrl || kit.image?.url);
+                const avatar = imageUrl
+                  ? imageUrl
+                  : `https://ui-avatars.com/api/?background=3b2d7d&color=fff&bold=true&name=${encodeURIComponent(kit.name || 'Kit')}`;
+                const price = ((kit.pricePaise || 0) / 100).toFixed(0);
+                const mrp = kit.mrpPaise ? ((kit.mrpPaise || 0) / 100).toFixed(0) : null;
+                const isPurchased = kitStats.isPurchased(kit);
+                const itemsCount = (kit.items || []).length;
+
+                return (
+                  <div
+                    key={id}
+                    onClick={() => navigate(`/user/kit/${id}`)}
+                    className={`bg-white rounded-2xl p-3.5 border transition-all shadow-2xs hover:shadow-md flex items-center justify-between gap-3 relative overflow-hidden cursor-pointer active:scale-[0.99] ${
+                      isPurchased
+                        ? 'border-emerald-300 bg-emerald-50/20'
+                        : 'border-gray-200/80 hover:border-[#3b2d7d]/40'
+                    }`}
+                  >
+                    {/* Left Thumbnail + Info Stack */}
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <div className="w-16 h-16 rounded-xl bg-gray-50 border border-gray-150 p-1 shrink-0 overflow-hidden flex items-center justify-center">
+                        {avatar ? (
+                          <img src={avatar} alt={kit.name} className="w-full h-full object-contain" />
+                        ) : (
+                          <Package size={24} className="text-purple-300" />
+                        )}
+                      </div>
+
+                      <div className="min-w-0 flex-1">
+                        {/* Category & Status Badges */}
+                        <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+                          <span className="px-2 py-0.5 bg-purple-50 text-[#3b2d7d] border border-purple-100 rounded-md text-[9px] font-black uppercase tracking-wider">
+                            {kit.category || 'General Kit'}
+                          </span>
+                          {isPurchased ? (
+                            <span className="px-2 py-0.5 bg-emerald-500 text-white rounded-full text-[9px] font-black uppercase tracking-wider inline-flex items-center gap-0.5 shadow-2xs">
+                              <CheckCircle2 size={10} className="stroke-[3]" />
+                              Purchased
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 bg-amber-50 text-amber-800 border border-amber-200/80 rounded-full text-[8px] font-black uppercase tracking-wider">
+                              Required
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Kit Name */}
+                        <h3 className="text-xs font-black text-gray-900 leading-snug truncate">
+                          {kit.name}
+                        </h3>
+
+                        {/* Items & Grade */}
+                        <div className="flex items-center gap-2 mt-1 text-[10px] font-bold text-gray-400">
+                          <span className="flex items-center gap-0.5">
+                            <Package size={10} className="text-[#3b2d7d]" />
+                            {itemsCount} Items
+                          </span>
+                          <span>•</span>
+                          <span>{kit.classGrade || childInfo.grade || 'All Classes'}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Right Column: Price & CTA */}
+                    <div className="flex flex-col items-end justify-between self-stretch shrink-0 py-0.5 pl-3 border-l border-gray-100">
+                      <div className="text-right">
+                        <span className="text-[8px] font-black text-gray-400 uppercase tracking-wider block">Price</span>
+                        <div className="flex items-baseline gap-1">
+                          <span className="text-sm font-black text-[#3b2d7d] leading-none">₹{price}</span>
+                          {mrp && Number(mrp) > Number(price) && (
+                            <span className="text-[10px] text-gray-400 font-bold line-through">₹{mrp}</span>
+                          )}
+                        </div>
+                      </div>
+
+                      {isPurchased ? (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/user/kit/${id}`);
+                          }}
+                          className="mt-2 px-3 py-1.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 font-black text-[10px] uppercase rounded-lg transition-all flex items-center gap-1 active:scale-95"
+                        >
+                          <Check size={11} className="stroke-[3]" />
+                          <span>View</span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/user/kit/${id}`);
+                          }}
+                          className="mt-2 px-3.5 py-1.5 bg-[#3b2d7d] hover:bg-[#2c2060] text-white font-black text-[10px] uppercase rounded-lg shadow-xs transition-all flex items-center gap-1 active:scale-95"
+                        >
+                          <ShoppingCart size={11} />
+                          <span>Buy</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Learning Hub Section */}
         <ParentLearningHub />
 
@@ -439,6 +567,7 @@ const ParentHome = () => {
           </div>
         </div>
 
+        {/* Admin Uploaded Promo Banners (Placed Below Categories) */}
         <PromoCategoryBanners />
 
         <div className="mt-10 pb-6">
@@ -457,8 +586,8 @@ const ParentHome = () => {
 
         <div className="mt-4 px-6">
           <h2 className="text-lg font-semibold text-deep-purple mb-4">Uniforms</h2>
-          <div className="rounded-2xl h-36 overflow-hidden relative mb-4 shadow-md border border-gray-100">
-            <img src="/assets/category_banner1.png" className="w-full h-full object-cover" alt="Uniforms" />
+          <div className="rounded-2xl overflow-hidden mb-4 shadow-md border border-gray-100 bg-white">
+            <img src="/assets/category_banner1.png" className="w-full h-auto max-h-[280px] object-contain block mx-auto" alt="Uniforms" />
           </div>
           <div className="grid grid-cols-2 gap-3">
             {uniformProducts.map((product) => renderProductCard(product))}
@@ -467,8 +596,8 @@ const ParentHome = () => {
 
         <div className="mt-8 px-6 pb-12">
           <h2 className="text-lg font-semibold text-deep-purple mb-4">Stationery</h2>
-          <div className="rounded-2xl h-36 overflow-hidden relative mb-4 shadow-md border border-gray-100">
-            <img src="/assets/category_banner3.png" className="w-full h-full object-cover" alt="Stationery" />
+          <div className="rounded-2xl overflow-hidden mb-4 shadow-md border border-gray-100 bg-white">
+            <img src="/assets/category_banner3.png" className="w-full h-auto max-h-[280px] object-contain block mx-auto" alt="Stationery" />
           </div>
           <div className="grid grid-cols-2 gap-3">
             {stationeryProducts.map((product) => renderProductCard(product))}

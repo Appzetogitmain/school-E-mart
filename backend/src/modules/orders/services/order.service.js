@@ -242,7 +242,13 @@ const orderService = {
   },
 
   async getOrder(orderId) {
-    const order = await orderRepository.findById(orderId);
+    let order = null;
+    if (mongoose.Types.ObjectId.isValid(String(orderId))) {
+      order = await orderRepository.findById(orderId);
+    }
+    if (!order) {
+      order = await orderRepository.findByOrderNumber(orderId);
+    }
     if (!order) throw new NotFoundError('Order not found', 'ORDER_NOT_FOUND');
     return order;
   },

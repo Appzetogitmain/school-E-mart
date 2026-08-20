@@ -1,4 +1,4 @@
-const { NotFoundError, BadRequestError, ConflictError } = require('../../../common/errors');
+const { NotFoundError, BadRequestError, ConflictError, ForbiddenError } = require('../../../common/errors');
 const { ALL_ROLES } = require('../../../constants/roles');
 const { normalizePhone } = require('../../../utils');
 const adminUserRepository = require('../repositories/user.repository');
@@ -275,6 +275,14 @@ const userManagementService = {
   async deleteUser(userId, actor = {}, reason) {
     const user = await User.findById(userId).lean();
     if (!user) throw new NotFoundError('User not found', 'USER_NOT_FOUND');
+
+    const role = String(user.role || '').toLowerCase();
+    if (role === 'student' || role === 'parent') {
+      throw new ForbiddenError(
+        'Only schools can delete student and parent accounts',
+        'SCHOOL_ONLY_DELETION'
+      );
+    }
 
     const children = await ChildProfile.find({ parentUserId: userId }).select('_id').lean();
     const childIds = children.map((c) => c._id);

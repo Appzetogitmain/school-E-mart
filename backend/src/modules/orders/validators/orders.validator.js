@@ -55,7 +55,7 @@ const createOrderSchema = checkoutSummarySchema.keys({
   walletAmountPaise: Joi.number().integer().min(0).optional(),
 }).unknown(true);
 
-const orderIdParam = Joi.object({ orderId: objectId.required() });
+const orderIdParam = Joi.object({ orderId: Joi.string().trim().required() });
 const orderNumberParam = Joi.object({ orderNumber: Joi.string().trim().required() });
 const returnIdParam = Joi.object({ returnId: objectId.required() });
 const shipmentIdParam = orderIdParam.keys({ shipmentId: objectId.required() });

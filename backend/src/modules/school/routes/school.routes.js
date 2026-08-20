@@ -22,6 +22,10 @@ const schoolAdmin = protectedRoute({
   permissions: [PERMISSIONS.SCHOOLS_READ],
   tenant: { requireTenantId: false },
 });
+const schoolOnly = protectedRoute({
+  roles: [ROLES.SCHOOL_ADMIN],
+  tenant: { requireTenantId: false },
+});
 const schoolWrite = protectedRoute({
   roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN],
   permissions: [PERMISSIONS.SCHOOLS_WRITE],
@@ -262,7 +266,7 @@ router.patch(
 );
 router.delete(
   '/:schoolId/students/:studentId',
-  ...protectedRoute({ roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN, ROLES.TEACHER], permissions: [PERMISSIONS.STUDENTS_WRITE] }),
+  ...schoolOnly,
   resolveSchool(),
   validateParams(validators.studentIdParam),
   schoolController.deleteStudent
@@ -706,7 +710,7 @@ router.patch(
 
 router.delete(
   '/:schoolId/parents/:parentId',
-  ...schoolAdmin,
+  ...schoolOnly,
   resolveSchool(),
   validateParams(validators.parentIdParam),
   schoolController.deleteParent
