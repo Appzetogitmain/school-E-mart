@@ -214,12 +214,7 @@ const assertEnrollmentAccess = async (req, courseId, studentId = null) => {
 
 const assertManageAccess = async (req, course) => {
   if (tenantPolicy.isSuperAdmin(req.auth)) return;
-  if (req.auth.role === ROLES.SCHOOL_ADMIN) return;
-  if (req.auth.role === ROLES.TEACHER) {
-    await assertTeacherCourseAccess(req, course);
-    return;
-  }
-  throw new ForbiddenError('You cannot manage LMS content', 'LMS_MANAGE_DENIED');
+  throw new ForbiddenError('Only Super Admin can upload or manage Learning Hub content', 'LMS_MANAGE_DENIED');
 };
 
 module.exports = {

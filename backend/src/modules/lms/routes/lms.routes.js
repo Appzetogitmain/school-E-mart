@@ -12,11 +12,11 @@ const router = express.Router({ mergeParams: true });
 const withLms = (guards) => [...guards, resolveSchoolLms()];
 
 const lmsManage = protectedRoute({
-  roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN, ROLES.TEACHER],
+  roles: [ROLES.SUPER_ADMIN],
   permissions: [PERMISSIONS.LMS_MANAGE],
   tenant: {
     requireTenantId: false,
-    roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN, ROLES.TEACHER],
+    roles: [ROLES.SUPER_ADMIN],
   },
 });
 const lmsRead = protectedRoute({
@@ -24,11 +24,11 @@ const lmsRead = protectedRoute({
   permissions: [PERMISSIONS.LMS_READ],
 });
 const lmsWrite = protectedRoute({
-  roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN, ROLES.TEACHER],
+  roles: [ROLES.SUPER_ADMIN],
   permissions: [PERMISSIONS.LMS_WRITE],
   tenant: {
     requireTenantId: false,
-    roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN, ROLES.TEACHER],
+    roles: [ROLES.SUPER_ADMIN],
   },
 });
 const learner = protectedRoute({

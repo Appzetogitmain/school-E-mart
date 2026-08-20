@@ -38,16 +38,15 @@ const lmsController = {
   }),
 
   listCourses: asyncHandler(async (req, res) => {
-    const includePlatform = shouldIncludePlatformCourses(req.auth.role);
     const { data, pagination } = await courseService.listCourses(req.schoolId, req.query, {
-      includePlatform,
+      platformOnly: true,
     });
     return paginated(res, { courses: data }, pagination, 'Courses fetched successfully', req);
   }),
 
   getCourse: asyncHandler(async (req, res) => {
     const course = await courseService.getCourse(req.schoolId, req.params.courseId, {
-      includePlatform: shouldIncludePlatformCourses(req.auth.role),
+      platformOnly: true,
     });
     return success(res, { course }, 'Course fetched successfully', undefined, req);
   }),
@@ -128,18 +127,15 @@ const lmsController = {
   }),
 
   listLessons: asyncHandler(async (req, res) => {
-    // Same platform-course scoping listCourses/getCourse already apply — without
-    // it, a platform course's lessons 404 for every parent/teacher/school even
-    // though the course itself shows up fine in their course list.
     const { data, pagination } = await lessonService.listLessons(req.schoolId, req.params.courseId, req.query, {
-      includePlatform: shouldIncludePlatformCourses(req.auth.role),
+      platformOnly: true,
     });
     return paginated(res, { lessons: data }, pagination, 'Lessons fetched successfully', req);
   }),
 
   getLesson: asyncHandler(async (req, res) => {
     const lesson = await lessonService.getLesson(req.schoolId, req.params.courseId, req.params.lessonId, {
-      includePlatform: shouldIncludePlatformCourses(req.auth.role),
+      platformOnly: true,
     });
     return success(res, { lesson }, 'Lesson fetched successfully', undefined, req);
   }),
