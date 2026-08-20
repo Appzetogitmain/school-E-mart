@@ -44,9 +44,13 @@ const isUniversalGrade = (value) => {
 // by the policy before any of this runs.
 const COURSE_SCOPE = { includePlatform: true };
 
-// How much of a school's published homework the parent feed considers, newest first.
-// Well above a year of homework for one school, and low enough that the page cannot be
-// asked to render an unbounded list.
+// How much homework the parent feed returns for one child, newest first.
+//
+// Applied to the child's OWN class after targeting has been settled in the query, never
+// to the school as a whole. A school-wide cap applied before targeting quietly hid
+// whole classes: with enough homework on file, one class's postings pushed another
+// class's out of the window, so some parents saw their homework and others — same
+// school, same day — saw an empty page.
 const HOMEWORK_FEED_LIMIT = 500;
 
 // A submission is late if it arrives after the due date. Assignments without a due date
@@ -389,15 +393,36 @@ const assignmentService = {
    * which grade or section it is for is school-wide, and a child whose grade is
    * unknown is shown everything rather than nothing.
    */
-  async getStudentHomeworkFeed(schoolId, student) {
-    // Newest first, and bounded: the whole school's published homework is considered
-    // (targeting is settled per assignment below, not by the query), and the client
-    // fetches a banner image per row. Years of accumulated homework would otherwise
-    // turn one page load into hundreds of requests.
-    const assignments = await assignmentRepository.findManyPopulated(
-      { schoolId, status: 'published' },
-      { sort: { assignedDate: -1, 'audit.createdAt': -1 }, limit: HOMEWORK_FEED_LIMIT }
-    );
+  async getStudentHomeworkFeed(schoolId, student, { limit = HOMEWORK_FEED_LIMIT } = {}) {
+    const studentGrade = normalizeGrade(student.classGrade);
+
+    // Narrow to this child's grade in the query itself, so the row limit can only ever
+    // trim the oldest homework of their own class and can never hide one class behind
+    // another. classGrade is free text, so the spellings the school actually uses are
+    // read first and matched on the normalized form; homework filed with no grade (or
+    // at "All Grades") is school-wide and always joins the set.
+    const filter = { schoolId, status: 'published' };
+    if (studentGrade) {
+      const spellings = await assignmentRepository.distinctClassGrades({
+        schoolId,
+        status: 'published',
+      });
+      const matching = spellings.filter(
+        (value) => isUniversalGrade(value) || normalizeGrade(value) === studentGrade
+      );
+      // `distinct` reports a missing field as undefined, which no query can match — the
+      // explicit $exists arm is what keeps those rows (school-wide homework) in.
+      filter.$or = [
+        { classGrade: { $in: matching.filter((value) => value !== undefined && value !== null) } },
+        { classGrade: null },
+        { classGrade: { $exists: false } },
+      ];
+    }
+
+    const assignments = await assignmentRepository.findManyPopulated(filter, {
+      sort: { assignedDate: -1, 'audit.createdAt': -1 },
+      limit,
+    });
     if (!assignments.length) return [];
 
     // Fetched by id — not by school — precisely because the course may be a platform
@@ -409,9 +434,11 @@ const assignmentService = {
       : [];
     const courseById = new Map(courses.map((course) => [String(course._id), course]));
 
-    const studentGrade = normalizeGrade(student.classGrade);
     const studentSection = normalizeSection(student.section);
 
+    // Still the authority on what is visible: the query narrows on the assignment's own
+    // classGrade, while homework that carries none inherits its course's grade, which
+    // only this pass can see.
     const visible = assignments.filter((assignment) => {
       const course = courseById.get(String(assignment.courseId));
       const targetGrade = assignment.classGrade || course?.gradeClass;

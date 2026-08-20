@@ -90,14 +90,18 @@ const assertTeacherCourseAccess = async (req, course) => {
 
   const courseGrade = normalizeGrade(course.gradeClass);
   const courseSubject = String(course.subject || '').trim().toLowerCase();
-  const isAssigned = (profile.classAssignments || []).some(
-    (assignment) =>
-      normalizeGrade(assignment.class) === courseGrade &&
-      (!courseSubject ||
-        (assignment.subjects || []).some(
-          (subject) => String(subject).trim().toLowerCase() === courseSubject
-        ))
-  );
+  const isAssigned = (profile.classAssignments || []).some((assignment) => {
+    if (normalizeGrade(assignment.class) !== courseGrade) return false;
+    // The class teacher answers for the whole class, whatever the subject. They are
+    // routinely saved with no subject list of their own (the assignment screen allows
+    // exactly that), and requiring a subject match locked them out of setting any
+    // homework for the class they run.
+    if (assignment.isClassTeacher) return true;
+    if (!courseSubject) return true;
+    return (assignment.subjects || []).some(
+      (subject) => String(subject).trim().toLowerCase() === courseSubject
+    );
+  });
 
   if (!isAssigned) {
     throw new ForbiddenError(

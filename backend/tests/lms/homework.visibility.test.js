@@ -215,6 +215,93 @@ describe('parent homework visibility', () => {
     });
   });
 
+  describe('one class must never be able to crowd another out of the feed', () => {
+    // The feed used to read the newest N of the whole school's homework and only then
+    // work out who it was for. A busy class could fill that window on its own, so a
+    // quieter class's homework silently vanished — same school, same day, some parents
+    // saw their homework and others saw an empty page. Targeting now happens in the
+    // query, so the limit can only ever trim the oldest homework of the child's own
+    // class.
+    const publishMany = async (courseId, count, overrides) => {
+      for (let i = 0; i < count; i += 1) {
+        // Sequential, and back-dated, so "newest first" is well defined.
+        await publish(courseId, {
+          ...overrides,
+          title: `${overrides.classGrade} #${i}`,
+          assignedDate: new Date(Date.now() - i * 1000),
+        });
+      }
+    };
+
+    test("a busy class's homework does not push a quiet class's out", async () => {
+      const busy = await courseService.createCourse(schoolId, {
+        title: 'KG2 Maths',
+        gradeClass: 'KG2',
+        status: 'published',
+        targetAudience: 'students',
+      });
+      const quiet = await courseService.createCourse(schoolId, {
+        title: 'Play Group Rhymes',
+        gradeClass: 'PLAY GROUP',
+        status: 'published',
+        targetAudience: 'students',
+      });
+
+      // The quiet class's single, oldest piece of homework goes in first, so a
+      // school-wide newest-first window would drop it before anything else.
+      await publish(quiet._id, {
+        title: 'The only Play Group homework',
+        classGrade: 'PLAY GROUP',
+        section: undefined,
+        assignedDate: new Date(Date.now() - 60 * 60 * 1000),
+      });
+      await publishMany(busy._id, 12, { classGrade: 'KG2', section: undefined });
+
+      const playGroupChild = await makeStudent({
+        name: 'Prish',
+        classGrade: 'PLAY GROUP',
+        section: 'A',
+      });
+
+      // A limit far smaller than the school's total homework. Read school-wide first,
+      // this window holds nothing but KG2 and the Play Group parent gets an empty page;
+      // targeted in the query, the limit only ever applies to their own class.
+      const feed = await assignmentService.getStudentHomeworkFeed(schoolId, playGroupChild, {
+        limit: 3,
+      });
+
+      expect(feed.map((r) => r.assignment.title)).toEqual(['The only Play Group homework']);
+    });
+
+    test('a child whose grade is unknown still sees the whole school', async () => {
+      const course = await courseService.createCourse(schoolId, {
+        title: 'Assembly',
+        gradeClass: 'KG1',
+        status: 'published',
+        targetAudience: 'students',
+      });
+      await publish(course._id, { title: 'For KG1', classGrade: 'KG1', section: undefined });
+
+      const feed = await feedFor({ _id: null, classGrade: null, section: null });
+      expect(feed.map((r) => r.assignment.title)).toEqual(['For KG1']);
+    });
+
+    test('school-wide homework still reaches a child with a grade', async () => {
+      const course = await courseService.createCourse(schoolId, {
+        title: 'Whole school',
+        gradeClass: 'All Grades',
+        status: 'published',
+        targetAudience: 'students',
+      });
+      // Both shapes of "everyone": an explicit "All Grades" and no grade at all.
+      await publish(course._id, { title: 'All grades', classGrade: 'All Grades', section: undefined });
+      await publish(course._id, { title: 'No grade', classGrade: null, section: undefined });
+
+      const feed = await feedFor(await makeStudent({ classGrade: 'NURSERY', section: 'A' }));
+      expect(feed.map((r) => r.assignment.title).sort()).toEqual(['All grades', 'No grade']);
+    });
+  });
+
   describe('a child the school has not put on the register yet', () => {
     // How self-registration leaves things: a ChildProfile with a school and a grade,
     // and no Student row at all. Requiring one is what made the homework page 403.

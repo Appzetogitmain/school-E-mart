@@ -313,7 +313,18 @@ const lmsController = {
     const homework = await assignmentService.getStudentHomeworkFeed(req.schoolId, resolved.student);
     return success(
       res,
-      { homework, canSubmit: resolved.isLinked },
+      {
+        homework,
+        canSubmit: resolved.isLinked,
+        // Which child the feed was actually built for. An empty list is ordinary —
+        // the class may simply have no homework yet — but without naming the class it
+        // is indistinguishable from a fault, which is what parents were reporting.
+        student: {
+          name: resolved.student.name || null,
+          classGrade: resolved.student.classGrade || null,
+          section: resolved.student.section || null,
+        },
+      },
       'Homework fetched successfully',
       undefined,
       req

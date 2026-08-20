@@ -1,6 +1,46 @@
 const { NotFoundError, ConflictError } = require('../../../common/errors');
 const schoolRepository = require('../repositories/school.repository');
 const teacherRepository = require('../repositories/teacher.repository');
+const lookupRepository = require('../repositories/lookup.repository');
+
+/**
+ * The subjects a class teacher may set work in for their own class+section.
+ *
+ * A class teacher is responsible for the whole class, and the assignment screen
+ * deliberately lets them be saved with no subject list of their own ("pick at least
+ * one subject, OR mark as class teacher"). Reading only their own `subjects` then left
+ * them with an empty subject dropdown and no way to set homework for the class they
+ * run — the parents of that class saw a permanently empty homework page while every
+ * other class in the school was fine.
+ *
+ * Falls back outward: what the other teachers of this section actually teach, then the
+ * school's own subject catalogue.
+ */
+const resolveClassTeacherSubjects = async (schoolId, teachers, classGrade, section) => {
+  const fromColleagues = new Set();
+  teachers.forEach((teacher) => {
+    (teacher.classAssignments || []).forEach((assignment) => {
+      if (assignment.class !== classGrade || assignment.section !== section) return;
+      (assignment.subjects || []).forEach((subject) => fromColleagues.add(subject));
+    });
+  });
+  if (fromColleagues.size) return Array.from(fromColleagues);
+
+  // Nobody teaches a named subject here yet (a brand-new class), so offer the school's
+  // catalogue. Deduplicated on the label: `createSubject` only guarantees the code is
+  // unique, so the same subject can legitimately appear under several codes.
+  const catalogue = await lookupRepository.findMany({
+    type: 'subject',
+    group: String(schoolId),
+    status: 'active',
+  });
+  const byLabel = new Map();
+  catalogue.forEach((entry) => {
+    const label = String(entry.label || '').trim();
+    if (label && !byLabel.has(label.toLowerCase())) byLabel.set(label.toLowerCase(), label);
+  });
+  return Array.from(byLabel.values());
+};
 
 const buildClassMapFromAssignments = (classAssignments = []) => {
   const classMap = new Map();
@@ -62,18 +102,19 @@ const classService = {
     if (!school) throw new NotFoundError('School not found', 'SCHOOL_NOT_FOUND');
 
     const classMap = new Map();
+    let viewerProfile = null;
 
     if (userId) {
       // Teacher view: strictly the classes/sections they are assigned to —
       // an unassigned teacher gets an empty list, not the whole school
-      const profile = await teacherRepository.findOne({
+      viewerProfile = await teacherRepository.findOne({
         userId,
         schoolId,
         approvalStatus: 'approved',
         'softDelete.isDeleted': { $ne: true },
       });
 
-      buildClassMapFromAssignments(profile?.classAssignments || []).forEach((value, key) => {
+      buildClassMapFromAssignments(viewerProfile?.classAssignments || []).forEach((value, key) => {
         classMap.set(key, value);
       });
     } else {
@@ -117,6 +158,24 @@ const classService = {
       classTeacherEntries.forEach((entry) => {
         entry.name = nameById.get(String(entry.userId)) || '';
       });
+    }
+
+    // Backfill the subject list for any section this teacher runs as class teacher but
+    // holds no subjects of their own in. Done after `teachers` is loaded so the wider
+    // section can answer first; see resolveClassTeacherSubjects.
+    for (const assignment of viewerProfile?.classAssignments || []) {
+      if (!assignment.isClassTeacher || !assignment.section) continue;
+      if ((assignment.subjects || []).length) continue;
+      const item = classMap.get(assignment.class);
+      if (!item) continue;
+      if ((item.subjectsBySection?.[assignment.section] || []).length) continue;
+      item.subjectsBySection = item.subjectsBySection || {};
+      item.subjectsBySection[assignment.section] = await resolveClassTeacherSubjects(
+        schoolId,
+        teachers,
+        assignment.class,
+        assignment.section
+      );
     }
 
     return Array.from(classMap.values());

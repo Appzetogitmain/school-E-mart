@@ -39,6 +39,10 @@ const ParentHomework = () => {
   // False once the server tells us the child has no roster record at this school yet.
   // Homework is still readable; only handing work in needs the school to link them.
   const [canSubmit, setCanSubmit] = useState(true);
+  // The class the server actually built the feed for. An empty list is usually just
+  // "no homework set yet" — naming the class is what tells the parent that, instead of
+  // leaving a blank page that reads as a broken app.
+  const [feedClass, setFeedClass] = useState(null);
 
   const [showSortDropdown, setShowSortDropdown] = useState(false);
   const [sortOrder, setSortOrder] = useState('Newest');
@@ -73,12 +77,13 @@ const ParentHomework = () => {
     setLoading(true);
     setError('');
     try {
-      const { homework: rows, canSubmit: allowed } = await fetchParentHomework(
+      const { homework: rows, canSubmit: allowed, student } = await fetchParentHomework(
         schoolId,
         grade,
         studentId
       );
       setCanSubmit(allowed);
+      setFeedClass(student || null);
       const nextBannerUrls = [];
       const mapped = await Promise.all(
         rows.map(async ({ assignment, course, submission }) => {
@@ -138,6 +143,12 @@ const ParentHomework = () => {
 
     return items;
   }, [homeworkItems, activeTab, sortOrder]);
+
+  // "Class 5 A" / "Class 5" — whatever the server could resolve, for the empty state.
+  const classLabel = useMemo(() => {
+    const parts = [feedClass?.classGrade, feedClass?.section].filter(Boolean);
+    return parts.length ? parts.join(' ') : null;
+  }, [feedClass]);
 
   const handleScroll = (e) => {
     setScrolled(e.target.scrollTop > 10);
@@ -334,7 +345,7 @@ const ParentHomework = () => {
             {/* The child is at this school but the office has not added them to the
                 student register yet: the class's homework is readable, submitting is
                 not. Saying so beats a submit button that fails with a 403. */}
-            {!error && !canSubmit && homeworkItems.length > 0 && (
+            {!error && !canSubmit && (
               <div className="px-4 py-3 bg-amber-50 border border-amber-100 rounded-2xl text-[11px] font-bold text-amber-700">
                 Your child is not linked to the school's student records yet, so homework
                 can be viewed but not submitted. Ask the school office to add them.
@@ -428,13 +439,16 @@ const ParentHomework = () => {
                 <h4 className="text-[13px] font-black text-gray-700">
                   {!schoolId ? 'No School Selected' : `No ${activeTab} Homework`}
                 </h4>
-                <p className="text-[11px] font-semibold text-gray-400 mt-1 max-w-[220px] mx-auto leading-relaxed">
-                  {/* An empty list used to mean any of these three things. Guessing wrong
-                      is what made "the homework isn't showing" impossible to self-diagnose. */}
+                <p className="text-[11px] font-semibold text-gray-400 mt-1 max-w-[240px] mx-auto leading-relaxed">
+                  {/* An empty list used to mean any of these things. Guessing wrong is
+                      what made "the homework isn't showing" impossible to self-diagnose,
+                      so name the class the feed was actually built for. */}
                   {!schoolId
                     ? 'Pick your school to see the homework your teachers set.'
                     : activeTab === 'All'
-                      ? 'Published assignments from your school will appear here.'
+                      ? classLabel
+                        ? `No homework has been set for ${classLabel} yet. It will appear here as soon as a teacher publishes it.`
+                        : 'Published assignments from your school will appear here.'
                       : 'Switch tabs or check back when teachers assign new homework.'}
                 </p>
                 {!schoolId && (

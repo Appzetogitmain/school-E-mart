@@ -37,6 +37,18 @@ class AssignmentRepository extends BaseRepository {
     if (limit) query.limit(limit);
     return query.lean();
   }
+
+  /**
+   * The class-grade strings a school has actually filed homework under.
+   *
+   * classGrade is free text ("5", "Class 5", "PLAY GROUP"), so the only way to narrow
+   * the feed query on it — rather than reading the whole school's homework and
+   * discarding most of it in memory — is to see which spellings exist and match on the
+   * normalized form. The set is tiny: one entry per class the school teaches.
+   */
+  distinctClassGrades(filter) {
+    return LmsAssignment.distinct('classGrade', this.mergeFilter(filter));
+  }
 }
 
 class AssignmentSubmissionRepository extends BaseRepository {

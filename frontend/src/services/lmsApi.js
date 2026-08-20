@@ -106,14 +106,19 @@ export const getSubmissionRoster = async (schoolId, courseId, assignmentId) => {
 
 /** All published homework for one student, already filtered to their class AND section. */
 /**
- * Returns `{ homework, canSubmit }`. `canSubmit` is false when the school has not yet
- * linked the child to a roster student — the class's homework is still readable, only
- * handing work in needs the link.
+ * Returns `{ homework, canSubmit, student }`. `canSubmit` is false when the school has
+ * not yet linked the child to a roster student — the class's homework is still
+ * readable, only handing work in needs the link. `student` carries the class the feed
+ * was built for, so an empty list can name it instead of looking like a fault.
  */
 export const getStudentHomework = async (schoolId, params = {}) => {
   const response = await apiClient.get(lmsPath(schoolId, '/homework'), { params });
   const data = unwrapData(response);
-  return { homework: data?.homework || [], canSubmit: data?.canSubmit !== false };
+  return {
+    homework: data?.homework || [],
+    canSubmit: data?.canSubmit !== false,
+    student: data?.student || null,
+  };
 };
 
 /**

@@ -90,6 +90,52 @@ describe('lmsAccess.policy: assertTeacherCourseAccess', () => {
     ).resolves.toBeUndefined();
   });
 
+  // The class teacher runs the class. The assignment screen deliberately allows them to
+  // be saved with no subject list of their own ("pick at least one subject, OR mark as
+  // class teacher"), and requiring a subject match then locked them out of setting any
+  // homework at all for their own class — every parent of that class saw a permanently
+  // empty homework page while the rest of the school was fine.
+  test('allows the class teacher of the grade even with no subjects of their own', async () => {
+    await TeacherProfile.create({
+      userId: teacherUserId,
+      schoolId,
+      approvalStatus: 'approved',
+      classAssignments: [{ class: 'PLAY GROUP', section: 'A', subjects: [], isClassTeacher: true }],
+    });
+
+    await expect(
+      assertTeacherCourseAccess(req(), { gradeClass: 'PLAY GROUP', subject: 'Drawing' })
+    ).resolves.toBeUndefined();
+  });
+
+  test('being class teacher of one grade does not unlock another grade', async () => {
+    await TeacherProfile.create({
+      userId: teacherUserId,
+      schoolId,
+      approvalStatus: 'approved',
+      classAssignments: [{ class: 'PLAY GROUP', section: 'A', subjects: [], isClassTeacher: true }],
+    });
+
+    await expect(
+      assertTeacherCourseAccess(req(), { gradeClass: 'KG2', subject: 'Drawing' })
+    ).rejects.toMatchObject({ code: 'LMS_COURSE_NOT_ASSIGNED' });
+  });
+
+  test('a subject teacher (not class teacher) is still held to their subject list', async () => {
+    await TeacherProfile.create({
+      userId: teacherUserId,
+      schoolId,
+      approvalStatus: 'approved',
+      classAssignments: [
+        { class: 'Class 5', section: 'A', subjects: ['Science'], isClassTeacher: false },
+      ],
+    });
+
+    await expect(
+      assertTeacherCourseAccess(req(), { gradeClass: 'Class 5', subject: 'Mathematics' })
+    ).rejects.toMatchObject({ code: 'LMS_COURSE_NOT_ASSIGNED' });
+  });
+
   test('non-teacher roles are not checked here at all', async () => {
     await expect(
       assertTeacherCourseAccess(req({ auth: { role: 'school_admin', userId: teacherUserId } }), {

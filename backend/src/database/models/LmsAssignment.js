@@ -53,5 +53,15 @@ lmsAssignmentSchema.plugin(softDeletePlugin);
 
 lmsAssignmentSchema.index({ schoolId: 1, courseId: 1, status: 1, dueDate: 1 });
 lmsAssignmentSchema.index({ 'softDelete.isDeleted': 1, 'audit.updatedAt': -1 });
+// The parent homework feed: published homework for one school and grade, newest first.
+// Without this the feed had no usable index — it fell back to scanning every assignment
+// in the collection and sorting the survivors in memory on every page load.
+lmsAssignmentSchema.index({
+  schoolId: 1,
+  status: 1,
+  'softDelete.isDeleted': 1,
+  classGrade: 1,
+  assignedDate: -1,
+});
 
 module.exports = mongoose.model('LmsAssignment', lmsAssignmentSchema);
