@@ -16,7 +16,7 @@ import { useNavigate } from 'react-router-dom';
 import AppHeader from '../../components/AppHeader';
 import LoginRequired from '../../components/LoginRequired';
 import { getAttendanceHistory } from '../../../services/parentApi';
-import { getChildInfoFromStorage } from '../../../utils/parentContext';
+import { useChildInfo } from '../../../utils/parentContext';
 
 const formatSelectedDate = (date) => {
   const weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -62,7 +62,14 @@ const ParentAttendance = () => {
   const [showTrendDropdown, setShowTrendDropdown] = useState(false);
   const [trendFilter, setTrendFilter] = useState('Last 6 Months');
 
-  const [childInfo] = useState(() => getChildInfoFromStorage());
+  // The shared reactive identity, not a one-shot localStorage read. The stored blob
+  // routinely lacks studentId/schoolId right after login; frozen in state, the effect
+  // below bailed out before it ever called the API and — because `loading` stays false
+  // and nothing errors — the parent was left looking at an empty attendance history
+  // for every past day, permanently, with no way to retry short of a reinstall. The
+  // hook backfills those from the authenticated user and re-renders when they arrive.
+  // Same fix as ParentHomework; this was the last screen still reading it once.
+  const childInfo = useChildInfo();
 
   useEffect(() => {
     const fetchHistory = async () => {
@@ -331,7 +338,10 @@ const ParentAttendance = () => {
     'July', 'August', 'September', 'October', 'November', 'December'
   ];
 
-  const isGuest = !localStorage.getItem('childInfo');
+  // A signed-in parent whose `childInfo` was never written to this device still has an
+  // identity through the auth store, and must not be shown the login wall. useChildInfo
+  // returns null only when there is neither stored info nor an authenticated user.
+  const isGuest = !childInfo;
 
   if (isGuest) {
     return (
