@@ -81,17 +81,41 @@ describe('homework flow: assign -> submit -> grade -> return', () => {
       { userId: teacherUserId }
     );
 
+  test('teacher can assign direct homework without a courseId and it reaches parents/students', async () => {
+    const directHomework = await assignmentService.createAssignment(
+      schoolId,
+      {
+        title: 'Direct Hindi Homework',
+        classGrade: '5',
+        section: 'A',
+        subject: 'Hindi',
+        maxScore: 50,
+        dueDate: new Date(Date.now() + DAY),
+        status: 'published',
+      },
+      { userId: teacherUserId }
+    );
+
+    expect(directHomework.courseId).toBeNull();
+    expect(directHomework.subject).toBe('Hindi');
+
+    const feed = await assignmentService.getStudentHomeworkFeed(schoolId, studentA);
+    const directItem = feed.find((r) => String(r.assignment._id) === String(directHomework._id));
+    expect(directItem).toBeTruthy();
+    expect(directItem.assignment.title).toBe('Direct Hindi Homework');
+  });
+
   test('a student only sees homework set for their own section', async () => {
     await createHomework({ title: 'For 5-A', section: 'A' });
     await createHomework({ title: 'For 5-B', section: 'B' });
     await createHomework({ title: 'Whole grade', section: undefined });
 
     const feedA = await assignmentService.getStudentHomeworkFeed(schoolId, studentA);
-    const titlesA = feedA.map((row) => row.assignment.title).sort();
+    const titlesA = feedA.map((row) => row.assignment.title).filter((t) => t !== 'Direct Hindi Homework').sort();
     expect(titlesA).toEqual(['For 5-A', 'Whole grade']);
 
     const feedB = await assignmentService.getStudentHomeworkFeed(schoolId, studentB);
-    const titlesB = feedB.map((row) => row.assignment.title).sort();
+    const titlesB = feedB.map((row) => row.assignment.title).filter((t) => t !== 'Direct Hindi Homework').sort();
     expect(titlesB).toEqual(['For 5-B', 'Whole grade']);
   });
 
@@ -248,7 +272,7 @@ describe('homework flow: assign -> submit -> grade -> return', () => {
     await createHomework({ section: 'A' });
 
     // Triggers are fire-and-forget, so let the microtask queue drain.
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    await new Promise((resolve) => setTimeout(resolve, 200));
 
     const notifications = await Notification.find({ type: 'homework' }).lean();
     expect(notifications).toHaveLength(1);

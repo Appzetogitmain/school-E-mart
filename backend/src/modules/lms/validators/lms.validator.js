@@ -20,8 +20,10 @@ const courseIdParam = schoolIdParam.keys({ courseId: objectId.required() });
 const chapterIdParam = courseIdParam.keys({ chapterId: objectId.required() });
 const lessonIdParam = courseIdParam.keys({ lessonId: objectId.required() });
 const assignmentIdParam = courseIdParam.keys({ assignmentId: objectId.required() });
+const directAssignmentIdParam = schoolIdParam.keys({ assignmentId: objectId.required() });
 const quizIdParam = courseIdParam.keys({ quizId: objectId.required() });
 const submissionIdParam = assignmentIdParam.keys({ submissionId: objectId.required() });
+const directSubmissionIdParam = directAssignmentIdParam.keys({ submissionId: objectId.required() });
 const attemptIdParam = quizIdParam.keys({ attemptId: objectId.required() });
 const commentIdParam = lessonIdParam.keys({ commentId: objectId.required() });
 const noteIdParam = schoolIdParam.keys({ noteId: objectId.required() });
@@ -81,32 +83,29 @@ const createLessonSchema = Joi.object({
 const updateLessonSchema = createLessonSchema.fork(['title'], (s) => s.optional());
 
 const createAssignmentSchema = Joi.object({
-  chapterId: objectId.optional(),
-  lessonId: objectId.optional(),
-  title: Joi.string().trim().min(2).max(160).required(),
-  description: Joi.string().trim().max(5000).optional(),
-  instructions: Joi.string().trim().max(5000).optional(),
-  dueDate: Joi.date().optional(),
-  assignedDate: Joi.date().optional(),
-  classGrade: Joi.string().trim().max(40).optional(),
-  section: Joi.string().trim().max(20).optional(),
-  homeworkType: Joi.string().valid('Written', 'Reading', 'Project', 'Online Quiz').optional(),
-  priority: Joi.string().valid('High', 'Medium', 'Low').optional(),
+  courseId: objectId.allow('', null).optional(),
+  chapterId: objectId.allow('', null).optional(),
+  lessonId: objectId.allow('', null).optional(),
+  title: Joi.string().trim().min(1).max(160).required(),
+  description: Joi.string().trim().max(5000).allow('', null).optional(),
+  instructions: Joi.string().trim().max(5000).allow('', null).optional(),
+  dueDate: Joi.date().allow('', null).optional(),
+  assignedDate: Joi.date().allow('', null).optional(),
+  classGrade: Joi.string().trim().max(40).allow('', null).optional(),
+  section: Joi.string().trim().max(20).allow('', null).optional(),
+  subject: Joi.string().trim().max(100).allow('', null).optional(),
+  homeworkType: Joi.string().valid('Written', 'Reading', 'Project', 'Online Quiz').allow('', null).optional(),
+  priority: Joi.string().valid('High', 'Medium', 'Low').allow('', null).optional(),
   reference: Joi.object({
-    textbook: Joi.string().trim().max(160).allow('').optional(),
-    chapter: Joi.string().trim().max(160).allow('').optional(),
-  }).optional(),
+    textbook: Joi.string().trim().max(160).allow('', null).optional(),
+    chapter: Joi.string().trim().max(160).allow('', null).optional(),
+  }).allow(null).optional(),
   maxScore: Joi.number().min(0).default(100),
   status: Joi.string().valid('draft', 'published', 'archived').optional(),
   files: Joi.array().items(Joi.string().max(MAX_BASE64_FILE_CHARS)).max(5).optional(),
-  // The card/detail thumbnail. Kept as its own field — and its own base64 string,
-  // not folded into `files` — so it can never eat into the 5-attachment cap or be
-  // mistaken for one of the reference attachments.
-  bannerFile: Joi.string().max(MAX_BASE64_FILE_CHARS).optional(),
-  // Update-only in practice (create has nothing to remove yet), but harmless to accept
-  // on create too rather than maintaining two near-identical schemas.
+  bannerFile: Joi.string().max(MAX_BASE64_FILE_CHARS).allow('', null).optional(),
   removeBanner: Joi.boolean().optional(),
-});
+}).unknown(true);
 
 const updateAssignmentSchema = createAssignmentSchema.fork(['title'], (s) => s.optional());
 
@@ -223,8 +222,10 @@ module.exports = {
   chapterIdParam,
   lessonIdParam,
   assignmentIdParam,
+  directAssignmentIdParam,
   quizIdParam,
   submissionIdParam,
+  directSubmissionIdParam,
   attemptIdParam,
   commentIdParam,
   noteIdParam,

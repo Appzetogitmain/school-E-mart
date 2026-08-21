@@ -40,4 +40,27 @@ describe('courseService', () => {
     const deleted = await courseService.deleteCourse(schoolId, created._id, new mongoose.Types.ObjectId());
     expect(deleted.softDelete.isDeleted).toBe(true);
   });
+
+  test('creates a course with duplicate title or after soft deletion without slug collision 409', async () => {
+    const course1 = await courseService.createCourse(schoolId, {
+      title: 'Hindi - Class 5',
+      subject: 'Hindi',
+      gradeClass: 'Class 5',
+      targetAudience: 'students',
+    });
+    expect(course1.slug).toBe('hindi-class-5');
+
+    // Soft delete the first course
+    await courseService.deleteCourse(schoolId, course1._id, new mongoose.Types.ObjectId());
+
+    // Creating another course with the same title must succeed with a unique slug
+    const course2 = await courseService.createCourse(schoolId, {
+      title: 'Hindi - Class 5',
+      subject: 'Hindi',
+      gradeClass: 'Class 5',
+      targetAudience: 'students',
+    });
+    expect(course2.slug).not.toBe('hindi-class-5');
+    expect(course2.slug).toMatch(/^hindi-class-5/);
+  });
 });

@@ -12,11 +12,11 @@ const router = express.Router({ mergeParams: true });
 const withLms = (guards) => [...guards, resolveSchoolLms()];
 
 const lmsManage = protectedRoute({
-  roles: [ROLES.SUPER_ADMIN],
+  roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN, ROLES.TEACHER],
   permissions: [PERMISSIONS.LMS_MANAGE],
   tenant: {
     requireTenantId: false,
-    roles: [ROLES.SUPER_ADMIN],
+    roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN, ROLES.TEACHER],
   },
 });
 const lmsRead = protectedRoute({
@@ -24,11 +24,11 @@ const lmsRead = protectedRoute({
   permissions: [PERMISSIONS.LMS_READ],
 });
 const lmsWrite = protectedRoute({
-  roles: [ROLES.SUPER_ADMIN],
+  roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN, ROLES.TEACHER],
   permissions: [PERMISSIONS.LMS_WRITE],
   tenant: {
     requireTenantId: false,
-    roles: [ROLES.SUPER_ADMIN],
+    roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN, ROLES.TEACHER],
   },
 });
 const learner = protectedRoute({
@@ -230,6 +230,59 @@ router.patch(
   '/:schoolId/lms/courses/:courseId/assignments/:assignmentId/submissions/:submissionId/return',
   ...withLms(lmsManage),
   validateParams(validators.submissionIdParam),
+  validateBody(validators.returnSubmissionSchema),
+  lmsController.returnSubmission
+);
+
+// Standalone Direct Homework Routes for Teachers & School Staff
+router.get(
+  '/:schoolId/lms/assignments',
+  ...withLms(lmsRead),
+  validateQuery(validators.paginationQuery),
+  lmsController.listAssignments
+);
+router.post(
+  '/:schoolId/lms/assignments',
+  ...withLms(lmsManage),
+  validateBody(validators.createAssignmentSchema),
+  lmsController.createAssignment
+);
+router.get(
+  '/:schoolId/lms/assignments/:assignmentId',
+  ...withLms(lmsRead),
+  validateParams(validators.directAssignmentIdParam),
+  lmsController.getAssignment
+);
+router.patch(
+  '/:schoolId/lms/assignments/:assignmentId',
+  ...withLms(lmsManage),
+  validateParams(validators.directAssignmentIdParam),
+  validateBody(validators.updateAssignmentSchema),
+  lmsController.updateAssignment
+);
+router.delete(
+  '/:schoolId/lms/assignments/:assignmentId',
+  ...withLms(lmsManage),
+  validateParams(validators.directAssignmentIdParam),
+  lmsController.deleteAssignment
+);
+router.get(
+  '/:schoolId/lms/assignments/:assignmentId/roster',
+  ...withLms(lmsManage),
+  validateParams(validators.directAssignmentIdParam),
+  lmsController.getSubmissionRoster
+);
+router.patch(
+  '/:schoolId/lms/assignments/:assignmentId/submissions/:submissionId/evaluate',
+  ...withLms(lmsManage),
+  validateParams(validators.directSubmissionIdParam),
+  validateBody(validators.evaluateSubmissionSchema),
+  lmsController.evaluateSubmission
+);
+router.patch(
+  '/:schoolId/lms/assignments/:assignmentId/submissions/:submissionId/return',
+  ...withLms(lmsManage),
+  validateParams(validators.directSubmissionIdParam),
   validateBody(validators.returnSubmissionSchema),
   lmsController.returnSubmission
 );

@@ -19,7 +19,7 @@ const PRIVATE_UPLOADS_DIR = env.PRIVATE_UPLOADS_DIR
   ? path.resolve(env.PRIVATE_UPLOADS_DIR)
   : path.resolve(__dirname, '../../private-uploads');
 
-const DATA_URI_PATTERN = /^data:(image\/(?:png|jpe?g|webp|gif)|application\/pdf);base64,(.+)$/;
+const DATA_URI_PATTERN = /^data:(image\/(?:png|jpe?g|webp|gif)|application\/pdf);base64,([\s\S]+)$/;
 
 const DEFAULT_MAX_BYTES = 5 * 1024 * 1024;
 

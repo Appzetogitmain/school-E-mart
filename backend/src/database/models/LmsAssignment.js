@@ -4,7 +4,7 @@ const softDeletePlugin = require('../plugins/softDelete.plugin');
 
 const lmsAssignmentSchema = new mongoose.Schema({
   schoolId: { type: mongoose.Schema.Types.ObjectId, ref: 'School', required: true },
-  courseId: { type: mongoose.Schema.Types.ObjectId, ref: 'LmsCourse', required: true },
+  courseId: { type: mongoose.Schema.Types.ObjectId, ref: 'LmsCourse', default: null },
   chapterId: { type: mongoose.Schema.Types.ObjectId, ref: 'LmsChapter' },
   lessonId: { type: mongoose.Schema.Types.ObjectId, ref: 'LmsLesson' },
   title: { type: String, required: true },
@@ -14,10 +14,10 @@ const lmsAssignmentSchema = new mongoose.Schema({
   // When the teacher told students the work starts, which is not necessarily the
   // moment the record was created.
   assignedDate: { type: Date },
-  // Who the homework is for. The course is per grade+subject, so the section
-  // lives here.
+  // Who the homework is for.
   classGrade: { type: String },
   section: { type: String },
+  subject: { type: String },
   homeworkType: {
     type: String,
     enum: ['Written', 'Reading', 'Project', 'Online Quiz'],

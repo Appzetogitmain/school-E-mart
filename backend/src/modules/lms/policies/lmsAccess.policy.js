@@ -66,7 +66,7 @@ const assertCourseInSchool = async (schoolId, courseId) => {
 const isUniversalOrUngradedCourse = (gradeClass) =>
   !gradeClass || gradeClass.trim().toLowerCase() === 'all grades';
 
-const assertTeacherCourseAccess = async (req, course) => {
+const assertTeacherAssignmentAccess = async (req, { classGrade, subject } = {}) => {
   if (req.auth.role !== ROLES.TEACHER) return;
 
   const profile = await TeacherProfile.findOne({
@@ -82,24 +82,16 @@ const assertTeacherCourseAccess = async (req, course) => {
 
   req.teacherProfile = profile;
 
-  // Approval alone used to be enough to manage any course in the school — any teacher
-  // could edit/delete/grade a colleague's homework. A class-scoped course is that
-  // class's coursework, so only a teacher actually assigned to teach that class +
-  // subject (per their classAssignments) may manage it.
-  if (isUniversalOrUngradedCourse(course.gradeClass)) return;
+  if (isUniversalOrUngradedCourse(classGrade)) return;
 
-  const courseGrade = normalizeGrade(course.gradeClass);
-  const courseSubject = String(course.subject || '').trim().toLowerCase();
+  const targetGrade = normalizeGrade(classGrade);
+  const targetSubject = String(subject || '').trim().toLowerCase();
   const isAssigned = (profile.classAssignments || []).some((assignment) => {
-    if (normalizeGrade(assignment.class) !== courseGrade) return false;
-    // The class teacher answers for the whole class, whatever the subject. They are
-    // routinely saved with no subject list of their own (the assignment screen allows
-    // exactly that), and requiring a subject match locked them out of setting any
-    // homework for the class they run.
+    if (normalizeGrade(assignment.class) !== targetGrade) return false;
     if (assignment.isClassTeacher) return true;
-    if (!courseSubject) return true;
+    if (!targetSubject) return true;
     return (assignment.subjects || []).some(
-      (subject) => String(subject).trim().toLowerCase() === courseSubject
+      (sub) => String(sub).trim().toLowerCase() === targetSubject
     );
   });
 
@@ -109,6 +101,13 @@ const assertTeacherCourseAccess = async (req, course) => {
       'LMS_COURSE_NOT_ASSIGNED'
     );
   }
+};
+
+const assertTeacherCourseAccess = async (req, course) => {
+  return assertTeacherAssignmentAccess(req, {
+    classGrade: course.gradeClass,
+    subject: course.subject,
+  });
 };
 
 // classGrade is free text across the app ("5", "Class 5", "class  5"), so compare
@@ -221,6 +220,7 @@ module.exports = {
   assertSchoolLmsAccess,
   assertCourseInSchool,
   assertTeacherCourseAccess,
+  assertTeacherAssignmentAccess,
   assertEnrollmentAccess,
   assertManageAccess,
 };

@@ -26,29 +26,66 @@ export const updateCourse = async (schoolId, courseId, payload) => {
   return unwrapData(response)?.course;
 };
 
+export const listDirectAssignments = async (schoolId, params = {}) => {
+  const response = await apiClient.get(lmsPath(schoolId, '/assignments'), { params });
+  return extractPaginated(response, 'assignments');
+};
+
+export const createDirectAssignment = async (schoolId, payload) => {
+  const response = await apiClient.post(lmsPath(schoolId, '/assignments'), payload);
+  return unwrapData(response)?.assignment;
+};
+
+export const updateDirectAssignment = async (schoolId, assignmentId, payload) => {
+  const response = await apiClient.patch(lmsPath(schoolId, `/assignments/${assignmentId}`), payload);
+  return unwrapData(response)?.assignment;
+};
+
+export const deleteDirectAssignment = async (schoolId, assignmentId) => {
+  const response = await apiClient.delete(lmsPath(schoolId, `/assignments/${assignmentId}`));
+  return unwrapData(response);
+};
+
+export const getDirectSubmissionRoster = async (schoolId, assignmentId) => {
+  const response = await apiClient.get(lmsPath(schoolId, `/assignments/${assignmentId}/roster`));
+  const data = unwrapData(response);
+  return { assignment: data?.assignment || null, roster: data?.roster || [] };
+};
+
 export const listAssignments = async (schoolId, courseId, params = {}) => {
+  if (!courseId) return listDirectAssignments(schoolId, params);
   const response = await apiClient.get(lmsPath(schoolId, `/courses/${courseId}/assignments`), { params });
   return extractPaginated(response, 'assignments');
 };
 
-export const createAssignment = async (schoolId, courseId, payload) => {
-  const response = await apiClient.post(lmsPath(schoolId, `/courses/${courseId}/assignments`), payload);
+export const createAssignment = async (schoolId, courseIdOrPayload, payloadArg) => {
+  if (typeof courseIdOrPayload === 'object' && courseIdOrPayload !== null) {
+    return createDirectAssignment(schoolId, courseIdOrPayload);
+  }
+  if (!courseIdOrPayload) return createDirectAssignment(schoolId, payloadArg);
+  const response = await apiClient.post(lmsPath(schoolId, `/courses/${courseIdOrPayload}/assignments`), payloadArg);
   return unwrapData(response)?.assignment;
 };
 
-export const updateAssignment = async (schoolId, courseId, assignmentId, payload) => {
-  const response = await apiClient.patch(
-    lmsPath(schoolId, `/courses/${courseId}/assignments/${assignmentId}`),
-    payload
-  );
-  return unwrapData(response)?.assignment;
+export const updateAssignment = async (schoolId, courseIdOrAssignmentId, assignmentIdOrPayload, payloadArg) => {
+  if (payloadArg !== undefined) {
+    const response = await apiClient.patch(
+      lmsPath(schoolId, `/courses/${courseIdOrAssignmentId}/assignments/${assignmentIdOrPayload}`),
+      payloadArg
+    );
+    return unwrapData(response)?.assignment;
+  }
+  return updateDirectAssignment(schoolId, courseIdOrAssignmentId, assignmentIdOrPayload);
 };
 
-export const deleteAssignment = async (schoolId, courseId, assignmentId) => {
-  const response = await apiClient.delete(
-    lmsPath(schoolId, `/courses/${courseId}/assignments/${assignmentId}`)
-  );
-  return unwrapData(response);
+export const deleteAssignment = async (schoolId, courseIdOrAssignmentId, optionalAssignmentId) => {
+  if (optionalAssignmentId) {
+    const response = await apiClient.delete(
+      lmsPath(schoolId, `/courses/${courseIdOrAssignmentId}/assignments/${optionalAssignmentId}`)
+    );
+    return unwrapData(response);
+  }
+  return deleteDirectAssignment(schoolId, courseIdOrAssignmentId);
 };
 
 export const submitAssignment = async (schoolId, courseId, assignmentId, payload) => {

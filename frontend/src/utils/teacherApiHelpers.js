@@ -1,5 +1,5 @@
 import { getMyTeacherProfile } from '../services/schoolApi';
-import { listCourses } from '../services/lmsApi';
+import { listCourses, createCourse } from '../services/lmsApi';
 import { parseClassGrade, normalizeGrade } from './mappers/teacherMapper';
 
 export const gradeToScore = (grade) => {
@@ -23,7 +23,7 @@ const sameSubject = (a, b) =>
 
 export const ensureCourse = async (
   schoolId,
-  { classGrade, subject }
+  { classGrade, subject, instructorName, instructorUserId }
 ) => {
   const grade = parseClassGrade(classGrade);
   const matches = (item) =>
@@ -32,7 +32,18 @@ export const ensureCourse = async (
 
   try {
     const { data: courses } = await listCourses(schoolId, { limit: 100 });
-    return (courses || []).find(matches) || null;
+    const existing = (courses || []).find(matches);
+    if (existing) return existing;
+
+    return await createCourse(schoolId, {
+      title: `${subject} - ${grade}`,
+      subject,
+      gradeClass: grade,
+      status: 'published',
+      targetAudience: 'students',
+      ...(instructorName ? { instructorName } : {}),
+      ...(instructorUserId ? { instructorUserId } : {}),
+    });
   } catch {
     return null;
   }

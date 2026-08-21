@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const { NotFoundError, ConflictError, BadRequestError } = require('../../../common/errors');
 const Attachment = require('../../../database/models/Attachment');
 const Student = require('../../../database/models/Student');
@@ -59,8 +60,36 @@ const isSubmissionLate = (assignment, at) =>
   Boolean(assignment.dueDate) && at > new Date(assignment.dueDate);
 
 const assignmentService = {
-  async createAssignment(schoolId, courseId, payload, actor = {}) {
-    const course = await courseService.getCourse(schoolId, courseId, COURSE_SCOPE);
+  async createAssignment(schoolId, courseIdArg, payloadArg, actorArg) {
+    let courseId = null;
+    let payload = {};
+    let actor = {};
+
+    if (
+      courseIdArg &&
+      typeof courseIdArg === 'object' &&
+      (courseIdArg.title !== undefined ||
+        courseIdArg.classGrade !== undefined ||
+        courseIdArg.subject !== undefined ||
+        courseIdArg.description !== undefined)
+    ) {
+      payload = courseIdArg;
+      actor = payloadArg || {};
+      courseId = payload.courseId || null;
+    } else {
+      courseId = courseIdArg || null;
+      payload = payloadArg || {};
+      actor = actorArg || {};
+    }
+
+    let course = null;
+    if (courseId) {
+      try {
+        course = await courseService.getCourse(schoolId, courseId, COURSE_SCOPE);
+      } catch {
+        course = null;
+      }
+    }
 
     let assignedByName = null;
     let assignedByUserId = null;
@@ -81,8 +110,6 @@ const assignmentService = {
         })
       : [];
 
-    // The banner is stored the same way as any other homework attachment — same purpose,
-    // same private stream — but as its own field, never mixed into `attachments`.
     let bannerAttachmentId = null;
     if (bannerFile) {
       const [banner] = await attachmentService.createManyFromBase64({
@@ -97,10 +124,9 @@ const assignmentService = {
     const assignment = await assignmentRepository.create({
       ...assignmentData,
       schoolId,
-      courseId,
-      // Fall back to the course's grade/subject so the record is self-describing
-      // even if the client omits them.
-      classGrade: payload.classGrade || course.gradeClass,
+      courseId: course?._id || courseId || null,
+      classGrade: payload.classGrade || course?.gradeClass,
+      subject: payload.subject || course?.subject,
       assignedDate: payload.assignedDate || new Date(),
       assignedByUserId,
       assignedByName,
@@ -116,21 +142,79 @@ const assignmentService = {
     return assignment;
   },
 
-  async listAssignments(schoolId, courseId, query) {
-    await courseService.getCourse(schoolId, courseId, COURSE_SCOPE);
-    const filter = { schoolId, courseId };
+  async listAssignments(schoolId, courseIdArg, queryArg = {}) {
+    let courseId = null;
+    let query = {};
+
+    if (
+      courseIdArg &&
+      typeof courseIdArg === 'object' &&
+      (courseIdArg.page !== undefined ||
+        courseIdArg.limit !== undefined ||
+        courseIdArg.classGrade !== undefined ||
+        courseIdArg.section !== undefined ||
+        courseIdArg.status !== undefined)
+    ) {
+      query = courseIdArg;
+      courseId = query.courseId || null;
+    } else {
+      courseId = courseIdArg || null;
+      query = queryArg || {};
+    }
+
+    if (courseId) {
+      try {
+        await courseService.getCourse(schoolId, courseId, COURSE_SCOPE);
+      } catch {
+        // Tolerated if listing homework directly
+      }
+    }
+
+    const filter = { schoolId };
+    if (courseId) filter.courseId = courseId;
     if (query.status) filter.status = query.status;
+    if (query.classGrade) filter.classGrade = query.classGrade;
+    if (query.section) filter.section = query.section;
+    if (query.subject) filter.subject = query.subject;
+
     return assignmentRepository.paginateAssignments(filter, query);
   },
 
-  async getAssignment(schoolId, courseId, assignmentId) {
-    await courseService.getCourse(schoolId, courseId, COURSE_SCOPE);
-    const assignment = await assignmentRepository.findOnePopulated({ _id: assignmentId, schoolId, courseId });
+  async getAssignment(schoolId, courseIdArg, assignmentIdArg) {
+    let courseId = null;
+    let assignmentId = null;
+
+    if (!assignmentIdArg) {
+      assignmentId = courseIdArg;
+      courseId = null;
+    } else {
+      courseId = courseIdArg || null;
+      assignmentId = assignmentIdArg;
+    }
+
+    const filter = { _id: assignmentId, schoolId };
+    if (courseId) filter.courseId = courseId;
+
+    const assignment = await assignmentRepository.findOnePopulated(filter);
     if (!assignment) throw new NotFoundError('Assignment not found', 'ASSIGNMENT_NOT_FOUND');
     return assignment;
   },
 
-  async updateAssignment(schoolId, courseId, assignmentId, payload) {
+  async updateAssignment(schoolId, courseIdArg, assignmentIdArg, payloadArg) {
+    let courseId = null;
+    let assignmentId = null;
+    let payload = {};
+
+    if (payloadArg !== undefined) {
+      courseId = courseIdArg || null;
+      assignmentId = assignmentIdArg;
+      payload = payloadArg;
+    } else {
+      assignmentId = courseIdArg;
+      payload = assignmentIdArg || {};
+      courseId = payload.courseId || null;
+    }
+
     const before = await this.getAssignment(schoolId, courseId, assignmentId);
 
     const { files, bannerFile, removeBanner, ...updateData } = payload;
@@ -145,8 +229,6 @@ const assignmentService = {
       attachments = newAttachments.map((a) => a._id);
     }
 
-    // A new banner replaces the old one; an explicit removal clears it; otherwise the
-    // existing banner (if any) is left untouched.
     let bannerAttachmentId = before.bannerAttachmentId || null;
     if (bannerFile) {
       const [banner] = await attachmentService.createManyFromBase64({
@@ -160,23 +242,45 @@ const assignmentService = {
       bannerAttachmentId = null;
     }
 
+    const filter = { schoolId };
+    if (courseId) filter.courseId = courseId;
+
     const assignment = await assignmentRepository.updateById(
       assignmentId,
       { $set: { ...updateData, attachments, bannerAttachmentId } },
-      { schoolId, courseId }
+      filter
     );
     if (!assignment) throw new NotFoundError('Assignment not found', 'ASSIGNMENT_NOT_FOUND');
 
-    // Homework drafted first and published later must still reach parents.
     if (before.status !== 'published' && assignment.status === 'published') {
-      const course = await courseService.getCourse(schoolId, courseId, COURSE_SCOPE);
+      let course = null;
+      if (assignment.courseId) {
+        try {
+          course = await courseService.getCourse(schoolId, assignment.courseId, COURSE_SCOPE);
+        } catch {
+          course = null;
+        }
+      }
       triggerService.notifyHomeworkPublished(schoolId, assignment, course);
     }
 
     return assignment;
   },
 
-  async deleteAssignment(schoolId, courseId, assignmentId, deletedBy) {
+  async deleteAssignment(schoolId, courseIdOrAssignmentId, optionalAssignmentIdOrDeletedBy, deletedByArg) {
+    let assignmentId;
+    let courseId = null;
+    let deletedBy;
+
+    if (deletedByArg !== undefined) {
+      courseId = courseIdOrAssignmentId;
+      assignmentId = optionalAssignmentIdOrDeletedBy;
+      deletedBy = deletedByArg;
+    } else {
+      assignmentId = courseIdOrAssignmentId;
+      deletedBy = optionalAssignmentIdOrDeletedBy;
+    }
+
     await this.getAssignment(schoolId, courseId, assignmentId);
     const assignment = await assignmentRepository.softDeleteById(assignmentId, { deletedBy });
     if (!assignment) throw new NotFoundError('Assignment not found', 'ASSIGNMENT_NOT_FOUND');
@@ -428,7 +532,14 @@ const assignmentService = {
     // Fetched by id — not by school — precisely because the course may be a platform
     // course. It is only needed for display (subject, instructor), so homework whose
     // course has since been deleted still reaches the parent.
-    const courseIds = [...new Set(assignments.map((a) => String(a.courseId)).filter(Boolean))];
+    const courseIds = [
+      ...new Set(
+        assignments
+          .map((a) => a.courseId)
+          .filter((id) => id && mongoose.Types.ObjectId.isValid(id))
+          .map(String)
+      ),
+    ];
     const courses = courseIds.length
       ? await courseRepository.findMany({ _id: { $in: courseIds } })
       : [];
@@ -440,7 +551,7 @@ const assignmentService = {
     // classGrade, while homework that carries none inherits its course's grade, which
     // only this pass can see.
     const visible = assignments.filter((assignment) => {
-      const course = courseById.get(String(assignment.courseId));
+      const course = assignment.courseId ? courseById.get(String(assignment.courseId)) : null;
       const targetGrade = assignment.classGrade || course?.gradeClass;
       if (studentGrade && !isUniversalGrade(targetGrade) && normalizeGrade(targetGrade) !== studentGrade) {
         return false;
@@ -468,11 +579,18 @@ const assignmentService = {
       submissions.map((submission) => [String(submission.assignmentId), submission])
     );
 
-    return visible.map((assignment) => ({
-      assignment,
-      course: courseById.get(String(assignment.courseId)) || null,
-      submission: byAssignment.get(String(assignment._id)) || null,
-    }));
+    return visible.map((assignment) => {
+      const matchedCourse = assignment.courseId ? courseById.get(String(assignment.courseId)) || null : null;
+      const courseObj = matchedCourse || (assignment.courseId ? null : {
+        subject: assignment.subject || 'General',
+        gradeClass: assignment.classGrade || null,
+      });
+      return {
+        assignment,
+        course: courseObj,
+        submission: byAssignment.get(String(assignment._id)) || null,
+      };
+    });
   },
 
   async getMySubmission(req, schoolId, courseId, assignmentId) {

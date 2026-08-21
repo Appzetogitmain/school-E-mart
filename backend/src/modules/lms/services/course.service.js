@@ -30,13 +30,27 @@ const buildCourseScopeFilter = (schoolId, { includePlatform = false, platformOnl
 
 const courseService = {
   async createCourse(schoolId, payload) {
-    const slug = await uniqueSlug(LmsCourse, payload.title);
-    return courseRepository.create({
-      ...payload,
-      schoolId: toObjectId(schoolId),
-      slug,
-      status: payload.status || 'draft',
-    });
+    const scopedSchoolId = toObjectId(schoolId);
+    let slug = await uniqueSlug(LmsCourse, payload.title);
+    try {
+      return await courseRepository.create({
+        ...payload,
+        schoolId: scopedSchoolId,
+        slug,
+        status: payload.status || 'published',
+      });
+    } catch (error) {
+      if (error?.code === 11000) {
+        slug = `${slug}-${Date.now()}`;
+        return await courseRepository.create({
+          ...payload,
+          schoolId: scopedSchoolId,
+          slug,
+          status: payload.status || 'published',
+        });
+      }
+      throw error;
+    }
   },
 
   async getCourse(schoolId, courseId, options = {}) {

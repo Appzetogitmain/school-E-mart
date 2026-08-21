@@ -98,9 +98,9 @@ export const mapUiStatusToApi = (status) => UI_TO_API_STATUS[status] || null;
 export const mapAssignmentForHomework = (assignment, course) => ({
   id: assignment?._id?.toString?.(),
   mongoId: assignment?._id?.toString?.(),
-  courseId: course?._id?.toString?.() || course?.id,
+  courseId: assignment?.courseId?.toString?.() || course?._id?.toString?.() || course?.id,
   title: assignment?.title,
-  subject: course?.subject || 'General',
+  subject: assignment?.subject || course?.subject || 'General',
   classGrade: assignment?.classGrade || course?.gradeClass || '',
   section: assignment?.section || '',
   dateAssigned: assignment?.assignedDate || assignment?.audit?.createdAt || assignment?.createdAt,

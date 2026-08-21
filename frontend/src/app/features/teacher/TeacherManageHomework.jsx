@@ -70,37 +70,20 @@ const TeacherManageHomework = () => {
     setError('');
     try {
       const grade = parseClassGrade(selectedClass);
-      const normalizedGrade = normalizeGrade(grade);
       const section = parseSection(selectedSection);
-      const { data: courses } = await listCourses(schoolId, { limit: 100 });
-      // Exact normalized match only — a substring check here previously matched "Class 1"
-      // against courses titled "Class 10/11/12", leaking other grades' homework in.
-      const matchingCourses = (courses || []).filter(
-        (course) => normalizeGrade(course.gradeClass) === normalizedGrade
+
+      const { data: assignments } = await listAssignments(schoolId, null, {
+        limit: 100,
+        classGrade: grade,
+        section,
+      });
+
+      const mapped = (assignments || []).map((assignment) =>
+        mapAssignmentForHomework(assignment, null)
       );
 
-      // A course belonging to a colleague answers 403 — skip it rather than
-      // blanking out the whole list.
-      const results = await Promise.all(
-        matchingCourses.map(async (course) => {
-          const courseId = course._id || course.id;
-          try {
-            const { data: assignments } = await listAssignments(schoolId, courseId, { limit: 50 });
-            return (assignments || []).map((assignment) => mapAssignmentForHomework(assignment, course));
-          } catch {
-            return [];
-          }
-        })
-      );
-
-      // Section is free text ("A" / "a" / "Section A"), so compare it the same
-      // normalized way the parent feed does rather than on the raw strings.
-      const forSection = results
-        .flat()
-        .filter((row) => !row.section || parseSection(row.section) === section);
-
-      forSection.sort((a, b) => new Date(b.dateAssigned || 0) - new Date(a.dateAssigned || 0));
-      setHomeworks(forSection);
+      mapped.sort((a, b) => new Date(b.dateAssigned || 0) - new Date(a.dateAssigned || 0));
+      setHomeworks(mapped);
     } catch (err) {
       setHomeworks([]);
       setError(getErrorMessage(err, 'Unable to load homework'));

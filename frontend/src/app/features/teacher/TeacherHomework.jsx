@@ -242,7 +242,7 @@ const TeacherHomework = () => {
       if (isEdit) {
         // Class, section and subject pin down which course the homework
         // belongs to — those are fixed at creation, so only the rest changes.
-        await updateAssignment(schoolId, editingHomework.courseId, assignmentId, {
+        await updateAssignment(schoolId, assignmentId, {
           title: title.trim(),
           description: description.trim() || undefined,
           instructions: instructions.trim() || undefined,
@@ -266,18 +266,10 @@ const TeacherHomework = () => {
 
       const classGrade = parseClassGrade(selectedClass);
       const section = parseSection(selectedSection);
-      const course = await ensureCourse(schoolId, {
-        classGrade,
-        section,
-        subject,
-        instructorName: authUser?.name,
-        instructorUserId: authUser?.id,
-      });
-
       const attachmentFiles = attachments.map((att) => att.file).filter(Boolean);
       const files = await filesToCompressedDataUrls(attachmentFiles);
 
-      await createAssignment(schoolId, course._id || course.id, {
+      await createAssignment(schoolId, {
         title: title.trim(),
         description: description.trim() || undefined,
         instructions: instructions.trim() || undefined,
@@ -285,6 +277,7 @@ const TeacherHomework = () => {
         assignedDate: dateAssigned || undefined,
         classGrade,
         section,
+        subject,
         homeworkType,
         priority,
         ...(Object.keys(reference).length ? { reference } : {}),

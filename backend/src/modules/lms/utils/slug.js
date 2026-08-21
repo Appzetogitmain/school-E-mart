@@ -11,7 +11,12 @@ const uniqueSlug = async (model, base, extraFilter = {}) => {
   let candidate = root;
   let counter = 1;
 
-  while (await model.exists({ slug: candidate, ...extraFilter })) {
+  while (
+    await model
+      .findOne({ slug: candidate, ...extraFilter })
+      .setOptions({ includeDeleted: true })
+      .lean()
+  ) {
     candidate = `${root}-${counter}`;
     counter += 1;
   }

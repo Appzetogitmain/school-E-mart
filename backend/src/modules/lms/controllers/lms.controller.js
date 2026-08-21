@@ -6,6 +6,8 @@ const { ROLES } = require('../../../constants/roles');
 const { resolvePrivatePath } = require('../../../utils/fileStorage');
 const {
   assertCourseInSchool,
+  assertTeacherCourseAccess,
+  assertTeacherAssignmentAccess,
   assertManageAccess,
   assertEnrollmentAccess,
 } = require('../policies/lmsAccess.policy');
@@ -172,11 +174,18 @@ const lmsController = {
   }),
 
   createAssignment: asyncHandler(async (req, res) => {
-    const course = await withCourse(req);
-    await assertManageAccess(req, course);
+    if (req.params.courseId) {
+      const course = await withCourse(req);
+      await assertTeacherCourseAccess(req, course);
+    } else {
+      await assertTeacherAssignmentAccess(req, {
+        classGrade: req.body.classGrade,
+        subject: req.body.subject,
+      });
+    }
     const assignment = await assignmentService.createAssignment(
       req.schoolId,
-      req.params.courseId,
+      req.params.courseId || req.body.courseId || null,
       req.body,
       { userId: req.auth.userId }
     );
@@ -184,20 +193,46 @@ const lmsController = {
   }),
 
   listAssignments: asyncHandler(async (req, res) => {
+    if (req.params.courseId) {
+      const course = await withCourse(req);
+      await assertTeacherCourseAccess(req, course);
+    } else if (req.auth.role === ROLES.TEACHER) {
+      await assertTeacherAssignmentAccess(req, {
+        classGrade: req.query.classGrade,
+        subject: req.query.subject,
+      });
+    }
     const { data, pagination } = await assignmentService.listAssignments(
       req.schoolId,
-      req.params.courseId,
+      req.params.courseId || null,
       req.query
     );
     return paginated(res, { assignments: data }, pagination, 'Assignments fetched successfully', req);
   }),
 
+  getAssignment: asyncHandler(async (req, res) => {
+    const assignment = await assignmentService.getAssignment(
+      req.schoolId,
+      req.params.courseId || null,
+      req.params.assignmentId
+    );
+    return success(res, { assignment }, 'Assignment fetched successfully', undefined, req);
+  }),
+
   updateAssignment: asyncHandler(async (req, res) => {
-    const course = await withCourse(req);
-    await assertManageAccess(req, course);
+    if (req.params.courseId) {
+      const course = await withCourse(req);
+      await assertTeacherCourseAccess(req, course);
+    } else {
+      const existing = await assignmentService.getAssignment(req.schoolId, req.params.assignmentId);
+      await assertTeacherAssignmentAccess(req, {
+        classGrade: existing.classGrade,
+        subject: existing.subject,
+      });
+    }
     const assignment = await assignmentService.updateAssignment(
       req.schoolId,
-      req.params.courseId,
+      req.params.courseId || null,
       req.params.assignmentId,
       req.body
     );
@@ -205,11 +240,19 @@ const lmsController = {
   }),
 
   deleteAssignment: asyncHandler(async (req, res) => {
-    const course = await withCourse(req);
-    await assertManageAccess(req, course);
+    if (req.params.courseId) {
+      const course = await withCourse(req);
+      await assertTeacherCourseAccess(req, course);
+    } else {
+      const existing = await assignmentService.getAssignment(req.schoolId, req.params.assignmentId);
+      await assertTeacherAssignmentAccess(req, {
+        classGrade: existing.classGrade,
+        subject: existing.subject,
+      });
+    }
     await assignmentService.deleteAssignment(
       req.schoolId,
-      req.params.courseId,
+      req.params.courseId || null,
       req.params.assignmentId,
       req.auth.userId
     );
@@ -217,11 +260,13 @@ const lmsController = {
   }),
 
   submitAssignment: asyncHandler(async (req, res) => {
-    await assertEnrollmentAccess(req, req.params.courseId, req.body.studentId);
+    if (req.params.courseId) {
+      await assertEnrollmentAccess(req, req.params.courseId, req.body.studentId);
+    }
     const submission = await assignmentService.submitAssignment(
       req,
       req.schoolId,
-      req.params.courseId,
+      req.params.courseId || null,
       req.params.assignmentId,
       req.body
     );
@@ -229,11 +274,19 @@ const lmsController = {
   }),
 
   evaluateSubmission: asyncHandler(async (req, res) => {
-    const course = await withCourse(req);
-    await assertManageAccess(req, course);
+    if (req.params.courseId) {
+      const course = await withCourse(req);
+      await assertTeacherCourseAccess(req, course);
+    } else {
+      const existing = await assignmentService.getAssignment(req.schoolId, req.params.assignmentId);
+      await assertTeacherAssignmentAccess(req, {
+        classGrade: existing.classGrade,
+        subject: existing.subject,
+      });
+    }
     const submission = await assignmentService.evaluateSubmission(
       req.schoolId,
-      req.params.courseId,
+      req.params.courseId || null,
       req.params.assignmentId,
       req.params.submissionId,
       req.body,
@@ -243,11 +296,19 @@ const lmsController = {
   }),
 
   returnSubmission: asyncHandler(async (req, res) => {
-    const course = await withCourse(req);
-    await assertManageAccess(req, course);
+    if (req.params.courseId) {
+      const course = await withCourse(req);
+      await assertTeacherCourseAccess(req, course);
+    } else {
+      const existing = await assignmentService.getAssignment(req.schoolId, req.params.assignmentId);
+      await assertTeacherAssignmentAccess(req, {
+        classGrade: existing.classGrade,
+        subject: existing.subject,
+      });
+    }
     const submission = await assignmentService.returnSubmission(
       req.schoolId,
-      req.params.courseId,
+      req.params.courseId || null,
       req.params.assignmentId,
       req.params.submissionId,
       req.body,
@@ -257,11 +318,19 @@ const lmsController = {
   }),
 
   listSubmissions: asyncHandler(async (req, res) => {
-    const course = await withCourse(req);
-    await assertManageAccess(req, course);
+    if (req.params.courseId) {
+      const course = await withCourse(req);
+      await assertTeacherCourseAccess(req, course);
+    } else {
+      const existing = await assignmentService.getAssignment(req.schoolId, req.params.assignmentId);
+      await assertTeacherAssignmentAccess(req, {
+        classGrade: existing.classGrade,
+        subject: existing.subject,
+      });
+    }
     const { data, pagination } = await assignmentService.listSubmissions(
       req.schoolId,
-      req.params.courseId,
+      req.params.courseId || null,
       req.params.assignmentId,
       req.query
     );
@@ -269,11 +338,19 @@ const lmsController = {
   }),
 
   getSubmissionRoster: asyncHandler(async (req, res) => {
-    const course = await withCourse(req);
-    await assertManageAccess(req, course);
+    if (req.params.courseId) {
+      const course = await withCourse(req);
+      await assertTeacherCourseAccess(req, course);
+    } else {
+      const existing = await assignmentService.getAssignment(req.schoolId, req.params.assignmentId);
+      await assertTeacherAssignmentAccess(req, {
+        classGrade: existing.classGrade,
+        subject: existing.subject,
+      });
+    }
     const { assignment, rows } = await assignmentService.getSubmissionRoster(
       req.schoolId,
-      req.params.courseId,
+      req.params.courseId || null,
       req.params.assignmentId
     );
     return success(res, { assignment, roster: rows }, 'Roster fetched successfully', undefined, req);
