@@ -29,7 +29,11 @@ export const mapAssignmentForParentHomework = (assignment, course, submission = 
   const id = assignment?._id?.toString?.() || assignment?.id;
   const dueDate = assignment?.dueDate ? new Date(assignment.dueDate) : null;
   const now = new Date();
-  const subject = course?.subject || 'General';
+  // The assignment carries its own subject since homework stopped hanging off a
+  // course; only older rows have to fall back to the course for it. Reading the course
+  // first meant every course-less assignment — i.e. everything set after that change —
+  // showed up to parents as "General" instead of its real subject.
+  const subject = assignment?.subject || course?.subject || 'General';
 
   // The server is the only source of truth for submission state. Statuses arrive
   // lowercase ('submitted'), so never compare them against display labels.
