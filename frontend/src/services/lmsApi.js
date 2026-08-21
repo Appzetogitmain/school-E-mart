@@ -89,42 +89,48 @@ export const deleteAssignment = async (schoolId, courseIdOrAssignmentId, optiona
 };
 
 export const submitAssignment = async (schoolId, courseId, assignmentId, payload) => {
-  const response = await apiClient.post(
-    lmsPath(schoolId, `/courses/${courseId}/assignments/${assignmentId}/submissions`),
-    payload
-  );
+  const actualAssignmentId = assignmentId || courseId;
+  const actualPayload = payload !== undefined ? payload : assignmentId;
+  const url = (courseId && assignmentId)
+    ? lmsPath(schoolId, `/courses/${courseId}/assignments/${assignmentId}/submissions`)
+    : lmsPath(schoolId, `/assignments/${actualAssignmentId}/submissions`);
+  const response = await apiClient.post(url, actualPayload);
   return unwrapData(response)?.submission;
 };
 
 export const listSubmissions = async (schoolId, courseId, assignmentId, params = {}) => {
-  const response = await apiClient.get(
-    lmsPath(schoolId, `/courses/${courseId}/assignments/${assignmentId}/submissions`),
-    { params }
-  );
+  const actualAssignmentId = assignmentId || courseId;
+  const actualParams = typeof assignmentId === 'object' ? assignmentId : params;
+  const url = (courseId && assignmentId && typeof assignmentId !== 'object')
+    ? lmsPath(schoolId, `/courses/${courseId}/assignments/${assignmentId}/submissions`)
+    : lmsPath(schoolId, `/assignments/${actualAssignmentId}/submissions`);
+  const response = await apiClient.get(url, { params: actualParams });
   return extractPaginated(response, 'submissions');
 };
 
 export const getMySubmission = async (schoolId, courseId, assignmentId, params = {}) => {
-  const response = await apiClient.get(
-    lmsPath(schoolId, `/courses/${courseId}/assignments/${assignmentId}/submissions/mine`),
-    { params }
-  );
+  const actualAssignmentId = assignmentId || courseId;
+  const actualParams = typeof assignmentId === 'object' ? assignmentId : params;
+  const url = (courseId && assignmentId && typeof assignmentId !== 'object')
+    ? lmsPath(schoolId, `/courses/${courseId}/assignments/${assignmentId}/submissions/mine`)
+    : lmsPath(schoolId, `/assignments/${actualAssignmentId}/submissions/mine`);
+  const response = await apiClient.get(url, { params: actualParams });
   return unwrapData(response)?.submission || null;
 };
 
 export const evaluateSubmission = async (schoolId, courseId, assignmentId, submissionId, payload) => {
-  const response = await apiClient.patch(
-    lmsPath(schoolId, `/courses/${courseId}/assignments/${assignmentId}/submissions/${submissionId}/evaluate`),
-    payload
-  );
+  const url = (courseId && assignmentId)
+    ? lmsPath(schoolId, `/courses/${courseId}/assignments/${assignmentId}/submissions/${submissionId}/evaluate`)
+    : lmsPath(schoolId, `/assignments/${assignmentId}/submissions/${submissionId}/evaluate`);
+  const response = await apiClient.patch(url, payload);
   return unwrapData(response)?.submission;
 };
 
 export const returnSubmission = async (schoolId, courseId, assignmentId, submissionId, payload) => {
-  const response = await apiClient.patch(
-    lmsPath(schoolId, `/courses/${courseId}/assignments/${assignmentId}/submissions/${submissionId}/return`),
-    payload
-  );
+  const url = (courseId && assignmentId)
+    ? lmsPath(schoolId, `/courses/${courseId}/assignments/${assignmentId}/submissions/${submissionId}/return`)
+    : lmsPath(schoolId, `/assignments/${assignmentId}/submissions/${submissionId}/return`);
+  const response = await apiClient.patch(url, payload);
   return unwrapData(response)?.submission;
 };
 
@@ -134,9 +140,11 @@ export const returnSubmission = async (schoolId, courseId, assignmentId, submiss
  * lost to a page limit.
  */
 export const getSubmissionRoster = async (schoolId, courseId, assignmentId) => {
-  const response = await apiClient.get(
-    lmsPath(schoolId, `/courses/${courseId}/assignments/${assignmentId}/roster`)
-  );
+  const actualAssignmentId = assignmentId || courseId;
+  const url = (courseId && assignmentId)
+    ? lmsPath(schoolId, `/courses/${courseId}/assignments/${assignmentId}/roster`)
+    : lmsPath(schoolId, `/assignments/${actualAssignmentId}/roster`);
+  const response = await apiClient.get(url);
   const data = unwrapData(response);
   return { assignment: data?.assignment || null, roster: data?.roster || [] };
 };

@@ -168,7 +168,8 @@ const ParentHomeworkDetails = ({ homework, childInfo, canSubmit: isLinked = true
     }
 
     const schoolId = childInfo?.schoolId;
-    if (!schoolId || !homework?.courseId || !homework?.id) {
+    const homeworkId = homework?.id || homework?.mongoId || homework?._id;
+    if (!schoolId || !homeworkId) {
       setError('School or homework context is missing.');
       return;
     }
@@ -180,7 +181,7 @@ const ParentHomeworkDetails = ({ homework, childInfo, canSubmit: isLinked = true
       // files themselves rather than a placeholder note.
       const files = await filesToCompressedDataUrls(uploadedFiles.map((f) => f.raw));
 
-      const submission = await submitHomework(schoolId, homework.courseId, homework.id, {
+      const submission = await submitHomework(schoolId, homework.courseId || null, homeworkId, {
         studentId: childInfo?.studentId || undefined,
         content: note.trim() || undefined,
         files,

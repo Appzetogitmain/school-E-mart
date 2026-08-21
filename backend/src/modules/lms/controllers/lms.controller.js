@@ -10,6 +10,7 @@ const {
   assertTeacherAssignmentAccess,
   assertManageAccess,
   assertEnrollmentAccess,
+  assertDirectHomeworkAccess,
 } = require('../policies/lmsAccess.policy');
 const studentRepository = require('../repositories/student.repository');
 const courseService = require('../services/course.service');
@@ -262,6 +263,8 @@ const lmsController = {
   submitAssignment: asyncHandler(async (req, res) => {
     if (req.params.courseId) {
       await assertEnrollmentAccess(req, req.params.courseId, req.body.studentId);
+    } else {
+      await assertDirectHomeworkAccess(req, req.body.studentId);
     }
     const submission = await assignmentService.submitAssignment(
       req,
@@ -357,11 +360,15 @@ const lmsController = {
   }),
 
   getMySubmission: asyncHandler(async (req, res) => {
-    await assertEnrollmentAccess(req, req.params.courseId, req.query.studentId);
+    if (req.params.courseId) {
+      await assertEnrollmentAccess(req, req.params.courseId, req.query.studentId);
+    } else {
+      await assertDirectHomeworkAccess(req, req.query.studentId);
+    }
     const submission = await assignmentService.getMySubmission(
       req,
       req.schoolId,
-      req.params.courseId,
+      req.params.courseId || null,
       req.params.assignmentId
     );
     return success(res, { submission }, 'Submission fetched successfully', undefined, req);

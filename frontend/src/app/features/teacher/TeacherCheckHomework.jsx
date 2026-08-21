@@ -9,6 +9,7 @@ import {
 import {
   listCourses,
   listAssignments,
+  listDirectAssignments,
   getSubmissionRoster,
   evaluateSubmission,
   returnSubmission,
@@ -81,6 +82,9 @@ const TeacherCheckHomework = () => {
       // A teacher is only allowed to manage courses they're assigned to teach, so a
       // course belonging to a colleague answers 403. That must not blank out the whole
       // screen — skip it and show the homework this teacher can actually see.
+      const directAssignmentsRes = await listDirectAssignments(schoolId, { classGrade: grade, limit: 100 }).catch(() => ({ data: [] }));
+      const directRows = (directAssignmentsRes?.data || []).map((assignment) => mapAssignmentForHomework(assignment));
+
       const results = await Promise.all(
         matchingCourses.map(async (course) => {
           const courseId = course._id || course.id;
@@ -95,7 +99,11 @@ const TeacherCheckHomework = () => {
         })
       );
 
-      const assignmentRows = results.flat();
+      const assignmentMap = new Map();
+      [...directRows, ...results.flat()].forEach((row) => {
+        if (row.id) assignmentMap.set(row.id, row);
+      });
+      const assignmentRows = Array.from(assignmentMap.values());
 
       // A course covers the whole grade, so keep only the homework aimed at this
       // section. Older homework predates section tagging, so show it in every section
@@ -127,7 +135,7 @@ const TeacherCheckHomework = () => {
   }, [loadHomeworks]);
 
   const loadSubmissions = useCallback(async () => {
-    if (!schoolId || !selectedHomework?.id || !selectedHomework?.courseId) {
+    if (!schoolId || !selectedHomework?.id) {
       setSubmissionsList([]);
       return;
     }
@@ -138,7 +146,7 @@ const TeacherCheckHomework = () => {
       // is lost to a page limit and names always resolve.
       const { roster } = await getSubmissionRoster(
         schoolId,
-        selectedHomework.courseId,
+        selectedHomework.courseId || null,
         selectedHomework.id
       );
 

@@ -286,6 +286,27 @@ router.patch(
   validateBody(validators.returnSubmissionSchema),
   lmsController.returnSubmission
 );
+router.post(
+  '/:schoolId/lms/assignments/:assignmentId/submissions',
+  ...withLms(learner),
+  validateParams(validators.directAssignmentIdParam),
+  validateBody(validators.submitAssignmentSchema),
+  lmsController.submitAssignment
+);
+router.get(
+  '/:schoolId/lms/assignments/:assignmentId/submissions/mine',
+  ...withLms(learner),
+  validateParams(validators.directAssignmentIdParam),
+  validateQuery(validators.studentIdQuerySchema),
+  lmsController.getMySubmission
+);
+router.get(
+  '/:schoolId/lms/assignments/:assignmentId/submissions',
+  ...withLms(lmsManage),
+  validateParams(validators.directAssignmentIdParam),
+  validateQuery(validators.paginationQuery),
+  lmsController.listSubmissions
+);
 
 // The parent's homework feed. One call replaces a per-course + per-assignment fan-out,
 // and section filtering happens server side so a child only ever sees their own work.

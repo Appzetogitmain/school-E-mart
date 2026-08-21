@@ -211,6 +211,28 @@ const assertEnrollmentAccess = async (req, courseId, studentId = null) => {
   return enrollment;
 };
 
+const assertDirectHomeworkAccess = async (req, studentId = null) => {
+  if ([ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN, ROLES.TEACHER].includes(req.auth.role)) {
+    return null;
+  }
+
+  if (req.auth.role !== ROLES.PARENT) {
+    throw new ForbiddenError('Parent authorization required', 'PARENT_REQUIRED');
+  }
+
+  const resolved = await studentRepository.resolveStudentForUser(req.schoolId, req.auth.userId, studentId);
+  if (!resolved) {
+    throw new ForbiddenError(
+      'Your child is not linked to this school\'s student records yet. Ask the school office to add them, then you can submit work.',
+      'STUDENT_NOT_LINKED'
+    );
+  }
+
+  req.lmsStudent = resolved.student;
+  req.lmsUserId = resolved.userId;
+  return resolved;
+};
+
 const assertManageAccess = async (req, course) => {
   if (tenantPolicy.isSuperAdmin(req.auth)) return;
   throw new ForbiddenError('Only Super Admin can upload or manage Learning Hub content', 'LMS_MANAGE_DENIED');
@@ -222,5 +244,6 @@ module.exports = {
   assertTeacherCourseAccess,
   assertTeacherAssignmentAccess,
   assertEnrollmentAccess,
+  assertDirectHomeworkAccess,
   assertManageAccess,
 };
