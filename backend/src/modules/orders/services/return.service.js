@@ -1,4 +1,5 @@
 const { NotFoundError, BadRequestError } = require('../../../common/errors');
+const logger = require('../../../common/logger');
 const ReturnRequest = require('../../../database/models/ReturnRequest');
 const returnRepository = require('../repositories/return.repository');
 const orderService = require('./order.service');
@@ -103,13 +104,23 @@ const returnService = {
       if (order.paymentStatus === 'paid' && refundAmount > 0) {
         if (gatewayPaidPaise > 0) {
           try {
-            await paymentService.initiateRefund(
-              order._id,
-              { amountPaise: Math.min(refundAmount, gatewayPaidPaise), reason: 'Item returned' },
-              { actorUserId: actor.userId, session }
-            );
-          } catch {
-            // best effort refund initiation
+            // No session: this call moves real money at the gateway and must not
+            // be inside a transaction that can later abort.
+            await paymentService.initiateRefund(order._id, {
+              amountPaise: Math.min(refundAmount, gatewayPaidPaise),
+              reason: 'Item returned',
+              actorUserId: actor.userId,
+            });
+          } catch (refundError) {
+            // Logged, not discarded. A return whose refund never reached the
+            // gateway is money the customer is owed; initiateRefund also flags
+            // the payment so it surfaces in the admin reconciliation queue.
+            logger.error('Return: gateway refund failed', {
+              orderId: String(order._id),
+              orderNumber: order.orderNumber,
+              amountPaise: Math.min(refundAmount, gatewayPaidPaise),
+              error: refundError.message,
+            });
           }
         }
 

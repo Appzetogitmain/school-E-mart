@@ -9,6 +9,8 @@ const returnService = require('../services/return.service');
 const deliveryService = require('../services/delivery.service');
 const invoiceService = require('../services/invoice.service');
 const paymentService = require('../services/payment.service');
+const reconciliationService = require('../services/reconciliation.service');
+const paymentRepository = require('../repositories/payment.repository');
 const orderAccessPolicy = require('../policies/orderAccess.policy');
 const config = require('../../../config');
 
@@ -124,6 +126,54 @@ const ordersController = {
       await orderService.updatePaymentStatus(order._id, 'paid');
     }
     return success(res, { payment, order: activated }, 'Payment confirmed', undefined, req);
+  }),
+
+  /**
+   * Counts and totals for whatever the current admin filter selects, so the
+   * cards above the order table always describe the same set as the rows in it.
+   */
+  getOrderStats: asyncHandler(async (req, res) => {
+    const stats = await orderService.getAdminOrderStats(req.query);
+    return success(res, { stats }, 'Order statistics fetched', undefined, req);
+  }),
+
+  /**
+   * Every payment attached to an order, with what the gateway last said about
+   * it. The admin order view needs this to show the Razorpay payment id, the
+   * gateway's own status, and any reconciliation mismatch side by side with our
+   * own — a comparison that previously could only be made by opening two
+   * dashboards and eyeballing them.
+   */
+  listOrderPayments: asyncHandler(async (req, res) => {
+    const order = await orderService.getOrder(req.params.orderId);
+    await orderAccessPolicy.assertOrderAccess(req.auth, order);
+    const payments = await paymentRepository.findAllForOrder(order._id);
+    return success(res, { payments }, 'Order payments fetched', undefined, req);
+  }),
+
+  /** Force a fresh comparison against the gateway for one order. */
+  reconcileOrder: asyncHandler(async (req, res) => {
+    const order = await orderService.getOrder(req.params.orderId);
+    const result = await reconciliationService.syncOrder(order._id, {
+      actorUserId: req.auth.userId,
+    });
+    return success(res, result, 'Order reconciled with the payment gateway', undefined, req);
+  }),
+
+  /** The queue of payments whose gateway state and ours disagree. */
+  listPaymentMismatches: asyncHandler(async (req, res) => {
+    const mismatches = await reconciliationService.listMismatches({
+      limit: Number(req.query.limit) || 100,
+    });
+    return success(res, { mismatches }, 'Payment mismatches fetched', undefined, req);
+  }),
+
+  resolvePaymentMismatch: asyncHandler(async (req, res) => {
+    const payment = await reconciliationService.resolveMismatch(req.params.paymentId, {
+      note: req.body.note,
+      actorUserId: req.auth.userId,
+    });
+    return success(res, { payment }, 'Mismatch marked resolved', undefined, req);
   }),
 
   requestRefund: asyncHandler(async (req, res) => {

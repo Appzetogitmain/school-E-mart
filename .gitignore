@@ -36,3 +36,8 @@ frontend/.env.local
 branch_structure.json
 temp_auto_push.bat
 temp_interactive_push.bat
+
+# Financial reconciliation reports. These contain real customer names, phone
+# numbers and payment references, so they are generated on demand and never
+# committed.
+reports/

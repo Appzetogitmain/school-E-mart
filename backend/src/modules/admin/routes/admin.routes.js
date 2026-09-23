@@ -40,6 +40,10 @@ const validateSettingsBody = (req, res, next) => {
 router.get('/dashboard', ...adminOnly, validateQuery(validators.recentQuery), adminController.getDashboard);
 router.get('/dashboard/health', ...adminOnly, adminController.getSystemHealth);
 
+// Finance — money in, money owed, and where the books and the gateway differ.
+router.get('/finance/overview', ...adminOnly, adminController.getFinanceOverview);
+router.get('/finance/revenue-trend', ...adminOnly, adminController.getFinanceRevenueTrend);
+
 // Analytics
 router.get(
   '/analytics/users',

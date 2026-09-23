@@ -91,7 +91,21 @@ const orderSchema = new mongoose.Schema({
     type: String,
     // 'partially_paid': only the RFQ advance has been captured so far — the
     // remainder is still owed and collected later via a second payment.
-    enum: ['pending', 'authorized', 'paid', 'partially_paid', 'failed', 'refunded', 'partially_refunded'],
+    // 'refund_pending': a refund has been asked of the gateway but has not
+    // settled yet. Distinct from 'refunded', which asserts the customer has
+    // actually been paid back — an assertion that must never be made before the
+    // gateway confirms it, or the admin panel and the Razorpay dashboard part
+    // company exactly where it matters most.
+    enum: [
+      'pending',
+      'authorized',
+      'paid',
+      'partially_paid',
+      'failed',
+      'refund_pending',
+      'refunded',
+      'partially_refunded',
+    ],
     required: true,
     default: 'pending'
   },

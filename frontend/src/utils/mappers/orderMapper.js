@@ -147,19 +147,78 @@ export const mapTrackOrderResult = (payload) => {
 export const canCustomerCancelOrder = (status = '') =>
   ['placed', 'accepted'].includes(String(status).toLowerCase());
 
+export const PAYMENT_STATUS_LABELS = {
+  pending: 'Awaiting payment',
+  authorized: 'Authorized',
+  paid: 'Paid',
+  partially_paid: 'Part paid',
+  failed: 'Failed',
+  refund_pending: 'Refund pending',
+  refunded: 'Refunded',
+  partially_refunded: 'Part refunded',
+};
+
+export const formatPaymentStatus = (status = '') =>
+  PAYMENT_STATUS_LABELS[status] ||
+  String(status || 'pending')
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+
+/**
+ * Tone for a payment status.
+ *
+ * 'refund_pending' is deliberately a warning rather than a success: money has
+ * been asked for back but has not reached the customer, and showing it as
+ * settled is exactly the false reassurance that made the admin panel and the
+ * Razorpay dashboard tell different stories.
+ */
+export const getPaymentStatusStyle = (status = '') => {
+  if (status === 'paid') return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+  if (status === 'refunded') return 'bg-slate-100 text-slate-600 border-slate-200';
+  if (['pending', 'authorized', 'partially_paid'].includes(status)) {
+    return 'bg-amber-50 text-amber-700 border-amber-200';
+  }
+  if (['refund_pending', 'partially_refunded'].includes(status)) {
+    return 'bg-orange-50 text-orange-700 border-orange-200';
+  }
+  if (status === 'failed') return 'bg-red-50 text-red-600 border-red-200';
+  return 'bg-gray-50 text-gray-500 border-gray-200';
+};
+
 export const mapOrderForAdminList = (order) => {
   const items = order?.items || [];
+  const paymentStatus = order?.paymentStatus || 'pending';
+  const orderStatus = order?.orderStatus;
+
+  // An order that has shipped or been delivered while its money is still
+  // unconfirmed is the single most expensive thing this page can fail to show:
+  // production held 25 such orders, 11 already delivered. It is surfaced as a
+  // first-class flag so it can be sorted and filtered on, not buried in a
+  // column an operator has to notice.
+  const isFulfilledUnpaid =
+    ['accepted', 'processed', 'packed', 'shipped', 'out_for_delivery', 'delivered'].includes(
+      orderStatus
+    ) && !['paid', 'partially_paid', 'refunded', 'partially_refunded'].includes(paymentStatus);
 
   return {
     id: order?.orderNumber,
     mongoId: order?._id?.toString?.() || order?.id,
     customer: order?.address?.name || order?.address?.recipientName || 'Customer',
+    phone: order?.address?.phone || '',
     address: [order?.address?.line1, order?.address?.city].filter(Boolean).join(', '),
     date: formatOrderDateShort(order?.placedAt || order?.audit?.createdAt),
-    status: formatOrderStatus(order?.orderStatus),
-    statusRaw: order?.orderStatus,
-    deliveryStatus: formatOrderStatus(order?.orderStatus),
+    dateTime: formatOrderDate(order?.placedAt || order?.audit?.createdAt),
+    status: formatOrderStatus(orderStatus),
+    statusRaw: orderStatus,
+    deliveryStatus: formatOrderStatus(orderStatus),
+    paymentStatus,
+    paymentStatusLabel: formatPaymentStatus(paymentStatus),
+    paymentMethod: order?.paymentMethod || 'cod',
+    isFulfilledUnpaid,
     amount: paiseToRupees(order?.totalPaise),
+    // Kept in paise as well, so totals can be summed without rounding drift.
+    totalPaise: order?.totalPaise || 0,
+    walletAmountPaise: order?.walletAmountPaise || 0,
     seller: order?.vendorIds?.length ? `${order.vendorIds.length} vendor(s)` : '—',
     items: items.map((item) => ({
       name: item.name,

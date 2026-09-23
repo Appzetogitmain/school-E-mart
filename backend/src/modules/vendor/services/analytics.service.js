@@ -62,17 +62,40 @@ const analyticsService = {
     return { totalProducts: total, activeProducts: active };
   },
 
+  /**
+   * A vendor's order counts, and what those orders are actually worth to them.
+   *
+   * Two things were wrong here. An unpaid online order — one still sitting at
+   * 'pending_payment', which no vendor is ever shown and may never be paid for —
+   * was counted in `ordersReceived`, so the vendor's own figures disagreed with
+   * the order list in front of them. And "revenue" summed `totalPaise`, the
+   * whole order value including delivery, platform fee and other vendors' lines,
+   * which is not money the vendor is owed. Vendors settle on their own line
+   * items less commission, so that is what is reported.
+   */
   async getOrderStats(vendorId) {
-    const baseMatch = { vendorIds: vendorId, 'softDelete.isDeleted': { $ne: true } };
+    const baseMatch = {
+      vendorIds: vendorId,
+      'softDelete.isDeleted': { $ne: true },
+      // An order nobody has paid for is not an order the vendor has received.
+      orderStatus: { $ne: 'pending_payment' },
+    };
     const results = await Order.aggregate([
       { $match: baseMatch },
       {
         $group: {
           _id: '$orderStatus',
           count: { $sum: 1 },
-          revenuePaise: { $sum: '$totalPaise' },
         },
       },
+    ]);
+
+    // The vendor's own share of delivered orders: their line items only.
+    const [grossRow] = await Order.aggregate([
+      { $match: { ...baseMatch, orderStatus: 'delivered' } },
+      { $unwind: '$items' },
+      { $match: { 'items.vendorId': vendorId } },
+      { $group: { _id: null, grossPaise: { $sum: '$items.lineTotalPaise' } } },
     ]);
 
     const stats = {
@@ -80,14 +103,17 @@ const analyticsService = {
       ordersCompleted: 0,
       ordersCancelled: 0,
       ordersInProgress: 0,
-      revenuePaise: 0,
+      // Their line items on delivered orders, before commission.
+      grossSalesPaise: (grossRow && grossRow.grossPaise) || 0,
+      // Kept under the previous name so existing screens keep working, but now
+      // it means the vendor's own sales rather than the whole order value.
+      revenuePaise: (grossRow && grossRow.grossPaise) || 0,
     };
 
     results.forEach((row) => {
       stats.ordersReceived += row.count;
       if (row._id === 'delivered') {
         stats.ordersCompleted = row.count;
-        stats.revenuePaise += row.revenuePaise;
       } else if (row._id === 'cancelled') {
         stats.ordersCancelled = row.count;
       } else if (!['returned'].includes(row._id)) {

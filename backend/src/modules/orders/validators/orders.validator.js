@@ -60,6 +60,12 @@ const orderNumberParam = Joi.object({ orderNumber: Joi.string().trim().required(
 const returnIdParam = Joi.object({ returnId: objectId.required() });
 const shipmentIdParam = orderIdParam.keys({ shipmentId: objectId.required() });
 const refundIdParam = orderIdParam.keys({ refundId: Joi.string().trim().required() });
+
+// Resolving a payment mismatch is an accounting decision, so the note explaining
+// what was done about the money is required rather than optional.
+const resolveMismatchSchema = Joi.object({
+  note: Joi.string().trim().min(3).max(1000).required(),
+});
 const vendorIdBody = Joi.object({ vendorId: objectId.required() });
 
 const cancelOrderSchema = Joi.object({
@@ -123,6 +129,7 @@ module.exports = {
   returnIdParam,
   shipmentIdParam,
   refundIdParam,
+  resolveMismatchSchema,
   cancelOrderSchema,
   refundRequestSchema,
   refundActionSchema,

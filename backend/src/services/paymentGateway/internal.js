@@ -26,13 +26,36 @@ const internalGateway = {
     };
   },
 
+  /**
+   * There is no gateway holding this money — a COD refund is settled by hand
+   * (cash back, or a wallet credit), so the only honest thing to report is
+   * that a refund is owed, not that one has been paid out. Reporting
+   * 'processed' here is what let a cancelled COD order claim its money had
+   * been returned when nothing had moved.
+   */
   async initiateRefund({ gatewayPaymentId, amountPaise, reason }) {
     return {
       refundId: `INT-REF-${gatewayPaymentId}-${Date.now()}`,
       amountPaise,
       reason,
-      status: 'initiated',
+      status: 'pending',
+      manual: true,
     };
+  },
+
+  // Read side — the stub has no external truth to offer, so it reports nothing
+  // and the reconciler leaves internal payments alone.
+  async fetchPaymentsForOrder() {
+    return [];
+  },
+  async fetchOrder() {
+    return null;
+  },
+  async fetchPayment() {
+    return null;
+  },
+  async fetchRefundsForPayment() {
+    return [];
   },
 };
 

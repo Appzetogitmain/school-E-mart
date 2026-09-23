@@ -17,6 +17,39 @@ class PaymentRepository extends BaseRepository {
   }
 
   /**
+   * The payment for an order that actually holds money.
+   *
+   * Refunds must target this one, not whichever row findOne happens to return.
+   * An order can carry several Payment rows — an abandoned online attempt
+   * alongside the one that succeeded, or an RFQ advance alongside its
+   * remainder — and refunding against an uncaptured row fails at the gateway.
+   * Prefers the largest captured payment, then a partially refunded one.
+   */
+  async findCapturedForOrder(orderId) {
+    // Money actually taken outranks money merely held, so the two are queried in
+    // that order rather than sorted together — sorting on the status string
+    // would put 'authorized' ahead of 'captured' alphabetically and refund
+    // against a payment the gateway has not collected.
+    const settled = await this.model
+      .findOne({ orderId, status: { $in: ['captured', 'partially_refunded'] } })
+      .sort({ amountPaise: -1 })
+      .lean();
+    if (settled) return settled;
+
+    return this.model.findOne({ orderId, status: 'authorized' }).sort({ amountPaise: -1 }).lean();
+  }
+
+  /** The payment on an order that carries a given refund id. */
+  findByRefundId(orderId, refundId) {
+    return this.model.findOne({ orderId, 'refunds.refundId': refundId }).lean();
+  }
+
+  /** Every payment attached to an order, oldest first. */
+  findAllForOrder(orderId) {
+    return this.model.find({ orderId }).sort({ 'audit.createdAt': 1 }).lean();
+  }
+
+  /**
    * Total money actually captured against one order, in paise.
    *
    * The authority on whether an order is paid. Deciding that from the request body —
