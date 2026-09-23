@@ -2,9 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   User, Layers, Box, Clipboard, CheckCircle, XCircle, AlertTriangle, TrendingDown, MapPin, Award,
-  Eye, ChevronLeft, ChevronRight, Loader2
+  Eye, ChevronLeft, ChevronRight, Loader2, Wallet, RotateCcw, HelpCircle, Banknote, ArrowRight
 } from 'lucide-react';
-import { getDashboard, getOrderAnalytics } from '../../../services/adminApi';
+import { getDashboard, getOrderAnalytics, getFinanceOverview } from '../../../services/adminApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 import { formatRupee } from '../../../utils/mappers/productMapper';
 
@@ -16,8 +16,8 @@ const SuperAdminDashboard = () => {
   const [error, setError] = useState('');
   const [overview, setOverview] = useState(null);
   const [orderAnalytics, setOrderAnalytics] = useState(null);
-  const [recentRegistrations, setRecentRegistrations] = useState([]);
   const [recentOrders, setRecentOrders] = useState([]);
+  const [finance, setFinance] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -26,15 +26,18 @@ const SuperAdminDashboard = () => {
       setLoading(true);
       setError('');
       try {
-        const [dashboard, orders] = await Promise.all([
+        const [dashboard, orders, financeOverview] = await Promise.all([
           getDashboard({ limit: 5 }),
           getOrderAnalytics(),
+          // Never blocks the dashboard: if the finance view fails the rest of
+          // the page still renders, it simply hides the money section.
+          getFinanceOverview({ limit: 5 }).catch(() => null),
         ]);
         if (cancelled) return;
         setOverview(dashboard?.overview || null);
-        setRecentRegistrations(dashboard?.recentRegistrations || []);
         setRecentOrders(dashboard?.recentOrders || []);
         setOrderAnalytics(orders);
+        setFinance(financeOverview);
       } catch (err) {
         if (!cancelled) setError(getErrorMessage(err, 'Unable to load dashboard'));
       } finally {
@@ -60,10 +63,13 @@ const SuperAdminDashboard = () => {
     { key: 'schools', label: 'Total Schools', value: String(totals.schools ?? 0), icon: Layers, color: 'bg-amber-50 text-amber-600 border-amber-100', path: '/superadmin/school-list' },
     { key: 'vendors', label: 'Total Vendors', value: String(totals.vendors ?? 0), icon: Layers, color: 'bg-pink-50 text-pink-600 border-pink-100', path: '/superadmin/vendor-list' },
     { key: 'products', label: 'Total Product', value: String(totals.products ?? 0), icon: Box, color: 'bg-rose-50 text-rose-600 border-rose-100', path: '/superadmin/product-list' },
-    { key: 'orders', label: 'Total Orders', value: String(totals.orders ?? 0), icon: Clipboard, color: 'bg-sky-50 text-sky-600 border-sky-100', path: '/superadmin/orders' },
-    { key: 'completed', label: 'Completed Orders', value: String(statusBreakdown.delivered ?? 0), icon: CheckCircle, color: 'bg-emerald-50 text-emerald-600 border-emerald-100', path: '/superadmin/orders?status=delivered' },
-    { key: 'pending', label: 'Pending Orders', value: String(pendingOrders), icon: Clipboard, color: 'bg-purple-50 text-purple-600 border-purple-100', path: '/superadmin/orders?status=pending' },
-    { key: 'cancelled', label: 'Cancelled Orders', value: String(statusBreakdown.cancelled ?? 0), icon: XCircle, color: 'bg-red-50 text-red-600 border-red-100', path: '/superadmin/orders?status=cancelled' },
+    // 'orders' is now live orders only. It used to be a bare count of every
+    // record, so cancelled and abandoned checkouts were presented as though they
+    // were sales — 124 on a platform with 64 real orders.
+    { key: 'orders', label: 'Live Orders', value: String(totals.orders ?? 0), icon: Clipboard, color: 'bg-sky-50 text-sky-600 border-sky-100', path: '/superadmin/orders' },
+    { key: 'completed', label: 'Delivered Orders', value: String(totals.deliveredOrders ?? statusBreakdown.delivered ?? 0), icon: CheckCircle, color: 'bg-emerald-50 text-emerald-600 border-emerald-100', path: '/superadmin/orders?status=delivered' },
+    { key: 'pending', label: 'Orders In Progress', value: String(totals.inProgressOrders ?? pendingOrders), icon: Clipboard, color: 'bg-purple-50 text-purple-600 border-purple-100', path: '/superadmin/orders?status=pending' },
+    { key: 'cancelled', label: 'Cancelled Orders', value: String(totals.cancelledOrders ?? statusBreakdown.cancelled ?? 0), icon: XCircle, color: 'bg-red-50 text-red-600 border-red-100', path: '/superadmin/orders?status=cancelled' },
     { key: 'courses', label: 'Active Courses', value: String(totals.activeCourses ?? 0), icon: Box, color: 'bg-fuchsia-50 text-fuchsia-600 border-fuchsia-100', path: '/superadmin/lms' },
     { key: 'lowStock', label: 'Product low on Stock', value: String(totals.lowStockProducts ?? 0), icon: AlertTriangle, color: 'bg-yellow-50 text-yellow-600 border-yellow-100', path: '/superadmin/product-list?stock=low' },
   ];
@@ -108,6 +114,14 @@ const SuperAdminDashboard = () => {
 
       {!loading && (
       <>
+      {/* 0. FINANCE — money that actually moved. Every figure is computed on the
+          server from captured payments, not from order totals, so these can be
+          compared against the Razorpay dashboard rupee for rupee. */}
+      {finance && <FinanceSection finance={finance} navigate={navigate} />}
+
+      {/* Recent orders — already fetched on every load, previously discarded. */}
+      <RecentOrdersPanel orders={recentOrders} navigate={navigate} />
+
       {/* 1. GRID CARDS SECTION */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
         {stats.map((stat) => {
@@ -445,4 +459,307 @@ const SuperAdminDashboard = () => {
   );
 };
 
+/**
+ * The most recent orders, with payment state shown next to order state.
+ *
+ * The dashboard already fetched this and then threw it away — the data was
+ * requested on every load and never rendered. Payment status is included
+ * because an order's progress means very little without knowing whether it has
+ * been paid for.
+ */
+const RecentOrdersPanel = ({ orders, navigate }) => {
+  if (!orders?.length) return null;
+
+  const orderTone = (status) => {
+    if (status === 'delivered') return 'bg-emerald-50 text-emerald-700 border-emerald-100';
+    if (status === 'cancelled') return 'bg-red-50 text-red-700 border-red-100';
+    if (['shipped', 'out_for_delivery'].includes(status)) return 'bg-sky-50 text-sky-700 border-sky-100';
+    return 'bg-amber-50 text-amber-700 border-amber-100';
+  };
+
+  const payTone = (status) => {
+    if (status === 'paid') return 'bg-emerald-50 text-emerald-700 border-emerald-100';
+    if (status === 'refunded') return 'bg-slate-100 text-slate-600 border-slate-200';
+    if (status === 'failed') return 'bg-red-50 text-red-600 border-red-100';
+    if (['refund_pending', 'partially_refunded'].includes(status))
+      return 'bg-orange-50 text-orange-700 border-orange-200';
+    return 'bg-amber-50 text-amber-700 border-amber-100';
+  };
+
+  const label = (value) =>
+    String(value || '—')
+      .replace(/_/g, ' ')
+      .replace(/\b\w/g, (ch) => ch.toUpperCase());
+
+  return (
+    <div className="bg-white rounded-[1.25rem] border border-gray-200 shadow-sm overflow-hidden">
+      <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-gray-100">
+        <h3 className="text-[11px] font-black text-gray-400 uppercase tracking-wider">
+          Recent orders
+        </h3>
+        <button
+          type="button"
+          onClick={() => navigate('/superadmin/orders')}
+          className="flex items-center gap-1 text-[11px] font-extrabold text-indigo-600 hover:text-indigo-700 cursor-pointer"
+        >
+          View all
+          <ArrowRight size={12} />
+        </button>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-left border-collapse">
+          <thead>
+            <tr className="bg-gray-50 text-[10px] font-black uppercase text-gray-400 tracking-wider border-b border-gray-100">
+              <th className="px-5 py-3">Order</th>
+              <th className="px-5 py-3">Customer</th>
+              <th className="px-5 py-3">Status</th>
+              <th className="px-5 py-3">Payment</th>
+              <th className="px-5 py-3 text-right">Amount</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100 text-xs font-bold text-gray-700">
+            {orders.map((o) => (
+              <tr key={o._id || o.orderNumber} className="hover:bg-gray-50/50 transition-colors">
+                <td className="px-5 py-3 font-extrabold text-[#0B1528] tabular-nums whitespace-nowrap">
+                  {o.orderNumber}
+                </td>
+                <td className="px-5 py-3 text-gray-600 max-w-[180px] truncate">
+                  {o.address?.name || '—'}
+                </td>
+                <td className="px-5 py-3">
+                  <span
+                    className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border whitespace-nowrap ${orderTone(o.orderStatus)}`}
+                  >
+                    {label(o.orderStatus)}
+                  </span>
+                </td>
+                <td className="px-5 py-3">
+                  <span
+                    className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border whitespace-nowrap ${payTone(o.paymentStatus)}`}
+                  >
+                    {label(o.paymentStatus)}
+                  </span>
+                </td>
+                <td className="px-5 py-3 text-right font-black text-gray-950 tabular-nums whitespace-nowrap">
+                  {formatRupee(o.totalPaise || 0)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
+
+/**
+ * Money cards and the exception queue.
+ *
+ * Split into three bands on purpose: what came in, what is owed or disputed,
+ * and what is owed outwards. The middle band is the one that matters — it is
+ * money the business is holding that belongs to somebody else, and before this
+ * existed there was no screen anywhere that showed it.
+ */
+const FinanceSection = ({ finance, navigate }) => {
+  const money = finance?.money || {};
+  const exceptions = finance?.exceptions || {};
+  const payables = finance?.payables || {};
+  const owed = exceptions.owedToCustomers || {};
+  const unpaid = exceptions.fulfilledUnpaid || {};
+  const needsAttention = finance?.health?.needsAttention || 0;
+
+  const moneyCards = [
+    {
+      key: 'collected',
+      label: 'Collected',
+      value: formatRupee(money.grossCollectedPaise || 0),
+      icon: Banknote,
+      tone: 'bg-emerald-50 text-emerald-600 border-emerald-100',
+      note: `${formatRupee(money.gatewayCollectedPaise || 0)} online · ${formatRupee(money.codCollectedPaise || 0)} COD`,
+    },
+    {
+      key: 'refunded',
+      label: 'Refunded',
+      value: formatRupee(money.refundedPaise || 0),
+      icon: RotateCcw,
+      tone: 'bg-slate-50 text-slate-600 border-slate-200',
+      note:
+        money.refundInFlightPaise > 0
+          ? `${formatRupee(money.refundInFlightPaise)} still settling`
+          : 'All settled',
+    },
+    {
+      key: 'net',
+      label: 'Net Retained',
+      value: formatRupee(money.netRetainedPaise || 0),
+      icon: Wallet,
+      tone: 'bg-indigo-50 text-indigo-600 border-indigo-100',
+      note: 'Collected less settled refunds',
+    },
+    {
+      key: 'unresolved',
+      label: 'Unconfirmed',
+      value: formatRupee(money.unresolvedPaise || 0),
+      icon: HelpCircle,
+      tone:
+        money.unresolvedCount > 0
+          ? 'bg-amber-50 text-amber-600 border-amber-100'
+          : 'bg-gray-50 text-gray-400 border-gray-200',
+      note:
+        money.unresolvedCount > 0
+          ? `${money.unresolvedCount} payments never checked against the gateway`
+          : 'Everything reconciled',
+    },
+  ];
+
+  const payableRows = [
+    ['Vendor earnings', payables.vendorEarningsPaise],
+    ['School commission', payables.schoolCommissionPaise],
+    ['Platform commission', payables.platformCommissionPaise],
+    ['Paid out', payables.payouts?.paidPaise],
+    ['Withdrawals pending', payables.payouts?.pendingPaise],
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h2 className="text-sm font-black text-[#0B1528] uppercase tracking-wider">Finance</h2>
+          <p className="text-[11px] font-bold text-gray-400 mt-0.5">
+            From payments actually captured — comparable with the Razorpay dashboard.
+          </p>
+        </div>
+        {needsAttention > 0 && (
+          <span className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-red-700 bg-red-50 border border-red-200 px-3 py-1.5 rounded-xl">
+            <AlertTriangle size={12} />
+            {needsAttention} need attention
+          </span>
+        )}
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {moneyCards.map((c) => {
+          const Icon = c.icon;
+          return (
+            <div
+              key={c.key}
+              className="bg-white p-5 rounded-[1.25rem] border border-gray-200 shadow-sm flex flex-col justify-between min-h-[140px]"
+            >
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${c.tone}`}>
+                <Icon size={20} strokeWidth={2.2} />
+              </div>
+              <div className="mt-4 leading-tight">
+                <span className="text-[11px] font-extrabold text-gray-400 uppercase tracking-wider block">
+                  {c.label}
+                </span>
+                <span className="text-2xl font-black text-gray-950 block mt-1 tracking-tight">
+                  {c.value}
+                </span>
+                <span className="text-[10px] font-bold text-gray-400 block mt-1.5 leading-snug">
+                  {c.note}
+                </span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {(owed.count > 0 || unpaid.count > 0 || money.mismatchCount > 0) && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {owed.count > 0 && (
+            <button
+              type="button"
+              onClick={() => navigate('/superadmin/orders?paymentStatus=refund_pending')}
+              className="text-left bg-red-50 border border-red-200 rounded-[1.25rem] p-5 hover:border-red-300 transition-all cursor-pointer group"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <AlertTriangle size={18} className="text-red-600 shrink-0" />
+                <ArrowRight size={14} className="text-red-400 group-hover:translate-x-0.5 transition-transform" />
+              </div>
+              <span className="text-2xl font-black text-red-800 block mt-3 tracking-tight">
+                {formatRupee(owed.totalPaise || 0)}
+              </span>
+              <span className="text-[11px] font-black text-red-700 uppercase tracking-wider block mt-1">
+                Owed back to customers
+              </span>
+              <span className="text-[10px] font-bold text-red-600/80 block mt-1 leading-snug">
+                {owed.count} paid for an order that was cancelled and never refunded
+              </span>
+            </button>
+          )}
+
+          {unpaid.count > 0 && (
+            <button
+              type="button"
+              onClick={() => navigate('/superadmin/orders?paymentStatus=pending')}
+              className="text-left bg-amber-50 border border-amber-200 rounded-[1.25rem] p-5 hover:border-amber-300 transition-all cursor-pointer group"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <TrendingDown size={18} className="text-amber-700 shrink-0" />
+                <ArrowRight size={14} className="text-amber-500 group-hover:translate-x-0.5 transition-transform" />
+              </div>
+              <span className="text-2xl font-black text-amber-900 block mt-3 tracking-tight">
+                {formatRupee(unpaid.totalPaise || 0)}
+              </span>
+              <span className="text-[11px] font-black text-amber-800 uppercase tracking-wider block mt-1">
+                Fulfilled, not paid for
+              </span>
+              <span className="text-[10px] font-bold text-amber-700/80 block mt-1 leading-snug">
+                {unpaid.count} orders in fulfilment with no confirmed payment
+              </span>
+            </button>
+          )}
+
+          {money.mismatchCount > 0 && (
+            <button
+              type="button"
+              onClick={() => navigate('/superadmin/orders')}
+              className="text-left bg-orange-50 border border-orange-200 rounded-[1.25rem] p-5 hover:border-orange-300 transition-all cursor-pointer group"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <HelpCircle size={18} className="text-orange-700 shrink-0" />
+                <ArrowRight size={14} className="text-orange-500 group-hover:translate-x-0.5 transition-transform" />
+              </div>
+              <span className="text-2xl font-black text-orange-900 block mt-3 tracking-tight">
+                {money.mismatchCount}
+              </span>
+              <span className="text-[11px] font-black text-orange-800 uppercase tracking-wider block mt-1">
+                Gateway disagreements
+              </span>
+              <span className="text-[10px] font-bold text-orange-700/80 block mt-1 leading-snug">
+                Razorpay and this system report different outcomes
+              </span>
+            </button>
+          )}
+        </div>
+      )}
+
+      <div className="bg-white rounded-[1.25rem] border border-gray-200 shadow-sm p-5">
+        <h3 className="text-[11px] font-black text-gray-400 uppercase tracking-wider mb-4">
+          Owed to vendors &amp; schools
+        </h3>
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+          {payableRows.map(([label, value]) => (
+            <div key={label}>
+              <span className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider block leading-snug">
+                {label}
+              </span>
+              <span className="text-lg font-black text-gray-950 block mt-1 tracking-tight">
+                {formatRupee(value || 0)}
+              </span>
+            </div>
+          ))}
+        </div>
+        {unpaid.count > 0 && (
+          <p className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-4 leading-snug">
+            Commission above includes {unpaid.count} orders whose payment was never confirmed. Verify
+            those before approving further withdrawals.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+};
+
 export default SuperAdminDashboard;
+

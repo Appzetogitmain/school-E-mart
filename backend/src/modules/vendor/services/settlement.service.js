@@ -1,4 +1,5 @@
 const VendorProfile = require('../../../database/models/VendorProfile');
+const logger = require('../../../common/logger');
 const Order = require('../../../database/models/Order');
 const ledgerRepository = require('../repositories/ledger.repository');
 const payoutRepository = require('../repositories/payout.repository');
@@ -88,9 +89,33 @@ const settlementService = {
     });
   },
 
+  /**
+   * Statuses in which the platform actually holds the customer's money and can
+   * therefore pay a vendor out of it. COD is settled by the courier, so a
+   * delivered COD order counts even though no gateway was involved.
+   */
+  PAYABLE_STATUSES: ['paid', 'partially_paid'],
+
   async recordOrderSettlement(vendorId, orderId, actorUserId = null) {
     const order = await Order.findById(orderId).lean();
     if (!order || order.orderStatus !== 'delivered') return null;
+
+    // Delivery alone is not proof of payment.
+    //
+    // This gate used to be missing entirely: any order marked delivered credited
+    // the vendor and the school and booked platform commission, regardless of
+    // whether a rupee had ever been collected. In production that paid out
+    // against orders whose payments were never confirmed — and real payout
+    // requests were raised against that money. Settling an unpaid order creates
+    // a liability the platform cannot fund.
+    if (!this.PAYABLE_STATUSES.includes(order.paymentStatus)) {
+      logger.warn('Settlement skipped: order is not paid', {
+        orderNumber: order.orderNumber,
+        paymentStatus: order.paymentStatus,
+        vendorId: String(vendorId),
+      });
+      return null;
+    }
 
     const existing = await ledgerRepository.findOne({
       vendorId,

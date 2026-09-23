@@ -16,6 +16,7 @@ const logger = require('./common/logger');
 let server;
 let outboxWorkerTimer;
 let scheduledNoticeWorkerTimer;
+let paymentReconciliationTimer;
 let unpaidOrderSweeperTimer;
 let isShuttingDown = false;
 
@@ -38,6 +39,7 @@ const shutdown = async (signal, exitCode = 0) => {
     stopBirthdayScheduler();
     if (scheduledNoticeWorkerTimer) clearInterval(scheduledNoticeWorkerTimer);
     if (unpaidOrderSweeperTimer) clearInterval(unpaidOrderSweeperTimer);
+    if (paymentReconciliationTimer) clearInterval(paymentReconciliationTimer);
 
     if (server) {
       await new Promise((resolve, reject) => {
@@ -124,6 +126,25 @@ const bootstrap = async () => {
       })
       .catch((err) => {
         logger.error('Unpaid order sweep failed', { message: err.message });
+      });
+  }, 5 * 60 * 1000);
+
+  // Asks Razorpay what actually happened to payments this system never saw
+  // resolve. Nothing here previously ever queried the gateway, so a customer who
+  // paid and closed the tab left money captured at Razorpay and an order that
+  // looked unpaid — and the sweeper above then cancelled it. This closes that
+  // gap even when webhooks are misconfigured or undelivered.
+  const reconciliationService = require('./modules/orders/services/reconciliation.service');
+  paymentReconciliationTimer = setInterval(() => {
+    reconciliationService
+      .sweep()
+      .then((result) => {
+        if (result.recovered || result.mismatched) {
+          logger.info('Payment reconciliation sweep', result);
+        }
+      })
+      .catch((err) => {
+        logger.error('Payment reconciliation sweep failed', { message: err.message });
       });
   }, 5 * 60 * 1000);
 

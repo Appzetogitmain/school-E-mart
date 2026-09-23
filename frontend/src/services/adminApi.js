@@ -19,6 +19,21 @@ export const getOrderAnalytics = async (params = {}) => {
   return unwrapData(response)?.analytics;
 };
 
+/**
+ * The financial picture: money collected, refunded, owed, and anywhere the
+ * books and the payment gateway disagree. Everything is computed server-side
+ * from captured payments, so the browser never has to add up money itself.
+ */
+export const getFinanceOverview = async (params = {}) => {
+  const response = await apiClient.get('/admin/finance/overview', { params });
+  return unwrapData(response);
+};
+
+export const getRevenueTrend = async (params = {}) => {
+  const response = await apiClient.get('/admin/finance/revenue-trend', { params });
+  return unwrapData(response)?.trend || [];
+};
+
 export const listUsers = async (params = {}) => {
   const response = await apiClient.get('/admin/users', { params });
   return extractPaginated(response, 'users');

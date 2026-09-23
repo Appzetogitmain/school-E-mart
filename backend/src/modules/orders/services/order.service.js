@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const logger = require('../../../common/logger');
 const { NotFoundError, BadRequestError } = require('../../../common/errors');
 const Order = require('../../../database/models/Order');
 const OrderShipment = require('../../../database/models/OrderShipment');
@@ -21,6 +22,45 @@ const settlementService = require('../../vendor/services/settlement.service');
 const walletService = require('../../wallet/services/wallet.service');
 const { deliveryShipmentQueue } = require('../../../queues/deliveryQueues');
 const { triggerService } = require('../../../services/notification');
+
+/**
+ * Turn a status filter into a Mongo condition.
+ *
+ * The admin list offers an "in progress" shortcut covering several pipeline
+ * statuses at once, so a comma-separated list has to be accepted as well as a
+ * single value. Only an exact single status matched before, so anything else
+ * quietly returned nothing — a filter that looks like it works while hiding
+ * orders.
+ */
+const buildStatusFilter = (status) => {
+  const values = String(status)
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean);
+  if (values.length === 0) return null;
+  return values.length === 1 ? values[0] : { $in: values };
+};
+
+/**
+ * Build the search condition for an order lookup.
+ *
+ * Two problems with the previous `{ $regex: query.search }`:
+ *
+ *  - The raw string went into a regular expression unescaped, so a search
+ *    containing regex syntax either silently matched the wrong thing or, with a
+ *    pathological pattern, could pin the database on backtracking. User input is
+ *    now escaped and matched literally.
+ *  - It only ever looked at the order number. An operator handed a customer name
+ *    or a phone number — which is how support requests actually arrive — got
+ *    nothing back, even though the order carries both.
+ */
+const buildSearchFilter = (search) => {
+  const term = String(search).trim();
+  if (!term) return null;
+  const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const rx = { $regex: escaped, $options: 'i' };
+  return [{ orderNumber: rx }, { 'address.name': rx }, { 'address.phone': rx }];
+};
 
 const stripPaginationMeta = (query = {}) => {
   const paginationQuery = { ...query };
@@ -304,9 +344,15 @@ const orderService = {
   listCustomerOrders(userId, query, { audience } = {}) {
     const filter = { userId };
     if (audience) filter.audience = audience;
-    if (query.status) filter.orderStatus = query.status;
+    if (query.status) {
+      const customerStatusFilter = buildStatusFilter(query.status);
+      if (customerStatusFilter) filter.orderStatus = customerStatusFilter;
+    }
     if (query.paymentStatus) filter.paymentStatus = query.paymentStatus;
-    if (query.search) filter.orderNumber = { $regex: query.search, $options: 'i' };
+    if (query.search) {
+      const or = buildSearchFilter(query.search);
+      if (or) filter.$or = or;
+    }
     if (query.from || query.to) {
       filter['audit.createdAt'] = {};
       if (query.from) filter['audit.createdAt'].$gte = new Date(query.from);
@@ -315,34 +361,134 @@ const orderService = {
     return orderRepository.paginateOrders(filter, stripPaginationMeta(query));
   },
 
-  listAllOrders(query) {
+  /**
+   * The filter the admin order list runs on.
+   *
+   * Extracted so the statistics cards can be computed from *precisely* the same
+   * conditions as the rows beneath them. Building the two separately is how a
+   * header ends up claiming a total the table does not show.
+   */
+  buildAdminOrderFilter(query = {}) {
     const filter = {};
     // An unpaid online order is not a sale. It stays out of the operations list and
     // out of every total computed from it unless someone asks for it by name.
-    if (!query.status) filter.orderStatus = { $ne: AWAITING_PAYMENT };
-    if (query.status) filter.orderStatus = query.status;
+    const adminStatusFilter = query.status ? buildStatusFilter(query.status) : null;
+    filter.orderStatus = adminStatusFilter || { $ne: AWAITING_PAYMENT };
     if (query.audience) filter.audience = query.audience;
     if (query.userId) filter.userId = query.userId;
     if (query.vendorId) filter.vendorIds = query.vendorId;
     if (query.schoolId) filter.schoolIdForPickup = query.schoolId;
     if (query.paymentStatus) filter.paymentStatus = query.paymentStatus;
-    if (query.search) filter.orderNumber = { $regex: query.search, $options: 'i' };
+    if (query.search) {
+      const or = buildSearchFilter(query.search);
+      if (or) filter.$or = or;
+    }
     if (query.from || query.to) {
       filter['audit.createdAt'] = {};
       if (query.from) filter['audit.createdAt'].$gte = new Date(query.from);
       if (query.to) filter['audit.createdAt'].$lte = new Date(query.to);
     }
-    return orderRepository.paginateOrders(filter, stripPaginationMeta(query));
+    return filter;
+  },
+
+  listAllOrders(query) {
+    return orderRepository.paginateOrders(
+      this.buildAdminOrderFilter(query),
+      stripPaginationMeta(query)
+    );
+  },
+
+  /**
+   * Counts and money totals for the orders the current filter selects, so the
+   * cards above the admin order table describe the same set as the table.
+   */
+  async getAdminOrderStats(query = {}) {
+    const filter = this.buildAdminOrderFilter(query);
+    const [byOrderStatus, byPaymentStatus, totals] = await Promise.all([
+      Order.aggregate([
+        { $match: filter },
+        { $group: { _id: '$orderStatus', count: { $sum: 1 }, valuePaise: { $sum: '$totalPaise' } } },
+      ]),
+      Order.aggregate([
+        { $match: filter },
+        { $group: { _id: '$paymentStatus', count: { $sum: 1 }, valuePaise: { $sum: '$totalPaise' } } },
+      ]),
+      Order.aggregate([
+        { $match: filter },
+        {
+          $group: {
+            _id: null,
+            count: { $sum: 1 },
+            valuePaise: { $sum: '$totalPaise' },
+            walletPaise: { $sum: '$walletAmountPaise' },
+          },
+        },
+      ]),
+    ]);
+
+    const toMap = (rows) =>
+      rows.reduce((acc, r) => {
+        acc[r._id || 'unknown'] = { count: r.count, valuePaise: r.valuePaise };
+        return acc;
+      }, {});
+
+    const orderStatus = toMap(byOrderStatus);
+    const paymentStatus = toMap(byPaymentStatus);
+    const pick = (map, keys) =>
+      keys.reduce(
+        (acc, k) => {
+          acc.count += (map[k] && map[k].count) || 0;
+          acc.valuePaise += (map[k] && map[k].valuePaise) || 0;
+          return acc;
+        },
+        { count: 0, valuePaise: 0 }
+      );
+
+    // Value collected is only claimed for orders whose money is genuinely in
+    // hand — summing order totals regardless of payment state is what made the
+    // dashboard overstate what had been received.
+    const paid = pick(paymentStatus, ['paid', 'partially_paid']);
+    const awaitingPayment = pick(paymentStatus, ['pending', 'authorized']);
+    const refunded = pick(paymentStatus, ['refunded', 'partially_refunded', 'refund_pending']);
+    const delivered = pick(orderStatus, ['delivered']);
+    const cancelled = pick(orderStatus, ['cancelled']);
+    const inProgress = pick(orderStatus, [
+      'placed',
+      'accepted',
+      'processed',
+      'packed',
+      'shipped',
+      'out_for_delivery',
+    ]);
+
+    return {
+      total: {
+        count: (totals[0] && totals[0].count) || 0,
+        valuePaise: (totals[0] && totals[0].valuePaise) || 0,
+        walletPaise: (totals[0] && totals[0].walletPaise) || 0,
+      },
+      delivered,
+      inProgress,
+      cancelled,
+      paid,
+      awaitingPayment,
+      refunded,
+      orderStatus,
+      paymentStatus,
+    };
   },
 
   listSchoolPickupOrders(schoolId, query) {
     const filter = {};
     // Same rule as the admin list: a school must not be told to expect a delivery for
     // an order nobody has paid for.
-    if (!query.status) filter.orderStatus = { $ne: AWAITING_PAYMENT };
-    if (query.status) filter.orderStatus = query.status;
+    const pickupStatusFilter = query.status ? buildStatusFilter(query.status) : null;
+    filter.orderStatus = pickupStatusFilter || { $ne: AWAITING_PAYMENT };
     if (query.paymentStatus) filter.paymentStatus = query.paymentStatus;
-    if (query.search) filter.orderNumber = { $regex: query.search, $options: 'i' };
+    if (query.search) {
+      const or = buildSearchFilter(query.search);
+      if (or) filter.$or = or;
+    }
     if (query.from || query.to) {
       filter['audit.createdAt'] = {};
       if (query.from) filter['audit.createdAt'].$gte = new Date(query.from);
@@ -423,7 +569,53 @@ const orderService = {
       .lean();
 
     const expired = [];
+    const reconciliationService = require('./reconciliation.service');
+
     for (const order of stale) {
+      // Ask the gateway before destroying anything.
+      //
+      // This sweep used to cancel purely on a local timer, having never once
+      // asked Razorpay whether the money had arrived. A customer who completed a
+      // UPI collect request just as the timer ran out — or whose confirmation
+      // callback never fired because they closed the tab — had their paid order
+      // cancelled, their stock returned, and their money left sitting at the
+      // gateway with nothing in this system recording it. Fifty-two production
+      // orders were cancelled this way.
+      //
+      // syncPayment promotes the order itself when it finds a capture, so the
+      // re-read below simply sees an order that is no longer awaiting payment.
+      let syncResult;
+      try {
+        syncResult = await reconciliationService.syncOrder(order._id);
+      } catch (syncError) {
+        logger.warn('Unpaid sweep: gateway check failed, leaving order untouched', {
+          orderNumber: order.orderNumber,
+          error: syncError.message,
+        });
+        continue;
+      }
+
+      // syncPayment reports an unreachable gateway in its result rather than
+      // throwing, so the result has to be inspected. Not being able to ask is
+      // not evidence the customer failed to pay: cancelling on a failed lookup
+      // would destroy exactly the orders this check exists to protect.
+      const lookupFailed = (syncResult.payments || []).some((p) => p.error);
+      if (lookupFailed) {
+        logger.warn('Unpaid sweep: gateway did not answer, leaving order untouched', {
+          orderNumber: order.orderNumber,
+        });
+        continue;
+      }
+
+      const recheck = await Order.findById(order._id).lean();
+      if (!recheck || recheck.orderStatus !== AWAITING_PAYMENT) {
+        // The gateway confirmed a payment and the order has been activated.
+        logger.info('Unpaid sweep: order was actually paid, kept', {
+          orderNumber: order.orderNumber,
+        });
+        continue;
+      }
+
       // Conditional again: a payment landing at the same moment must win over the
       // sweeper, so the order is only cancelled while it is still unpaid.
       const cancelled = await Order.findOneAndUpdate(

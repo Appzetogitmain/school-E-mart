@@ -274,11 +274,21 @@ const analyticsRepository = {
     });
   },
 
+  /**
+   * The most recent real orders.
+   *
+   * Abandoned checkouts are excluded: an order sitting at 'pending_payment' is
+   * not an order anybody placed, and showing them in an activity feed made the
+   * platform look busier than it was. `address` comes along so the feed can
+   * name the customer rather than showing a bare id.
+   */
   getRecentOrders(limit = 10) {
-    return Order.find(activeFilter)
+    return Order.find({ ...activeFilter, orderStatus: { $ne: 'pending_payment' } })
       .sort({ 'audit.createdAt': -1 })
       .limit(limit)
-      .select('orderNumber userId orderStatus totalPaise paymentStatus audit.createdAt')
+      .select(
+        'orderNumber userId orderStatus totalPaise paymentStatus paymentMethod address.name audit.createdAt'
+      )
       .lean();
   },
 

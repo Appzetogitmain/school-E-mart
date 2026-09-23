@@ -218,6 +218,94 @@ describe('payment integrity: no online order without payment', () => {
       expect(expired.map((o) => String(o._id))).not.toContain(String(order._id));
       expect((await Order.findById(order._id).lean()).orderStatus).toBe('placed');
     });
+
+    test('the sweeper asks the gateway before cancelling, and keeps an order Razorpay was paid for', async () => {
+      const user = await createParentUser();
+      await seedCartForUser(user._id);
+      const order = await placeOnline(user._id);
+
+      // Simulate the production failure exactly: the customer paid, but the
+      // confirmation never reached us — no webhook, no client callback — so our
+      // payment row still says 'initiated' while Razorpay holds the money.
+      const gatewayOrderId = 'order_TEST_SWEEP_GUARD';
+      await Payment.updateOne(
+        { orderId: order._id },
+        { $set: { gateway: 'razorpay', gatewayOrderId, status: 'initiated' } }
+      );
+      const payment = await Payment.findOne({ orderId: order._id }).lean();
+
+      const paymentGateway = require('../../src/services/paymentGateway');
+      const enabledSpy = jest
+        .spyOn(paymentGateway, 'isRazorpayEnabled')
+        .mockReturnValue(true);
+      const fetchSpy = jest
+        .spyOn(paymentGateway, 'fetchPaymentsForOrder')
+        .mockResolvedValue([
+          {
+            id: 'pay_TEST_SWEEP_GUARD',
+            status: 'captured',
+            amount: payment.amountPaise,
+            amount_refunded: 0,
+            order_id: gatewayOrderId,
+          },
+        ]);
+
+      try {
+        await Order.updateOne(
+          { _id: order._id },
+          { $set: { paymentExpiresAt: new Date(Date.now() - 1000) } }
+        );
+
+        const expired = await orderService.expireUnpaidOrders();
+
+        // The gateway was consulted rather than the local clock trusted...
+        expect(fetchSpy).toHaveBeenCalledWith(gatewayOrderId, 'razorpay');
+        // ...so the paid order survived and became a real one.
+        expect(expired.map((o) => String(o._id))).not.toContain(String(order._id));
+        const kept = await Order.findById(order._id).lean();
+        expect(kept.orderStatus).toBe('placed');
+        expect(kept.paymentStatus).toBe('paid');
+        expect((await Payment.findById(payment._id).lean()).status).toBe('captured');
+      } finally {
+        enabledSpy.mockRestore();
+        fetchSpy.mockRestore();
+      }
+    });
+
+    test('an unreachable gateway cancels nothing, so stock is never taken from a paying customer', async () => {
+      const user = await createParentUser();
+      await seedCartForUser(user._id);
+      const order = await placeOnline(user._id);
+
+      await Payment.updateOne(
+        { orderId: order._id },
+        { $set: { gateway: 'razorpay', gatewayOrderId: 'order_TEST_UNREACHABLE' } }
+      );
+
+      const paymentGateway = require('../../src/services/paymentGateway');
+      const enabledSpy = jest
+        .spyOn(paymentGateway, 'isRazorpayEnabled')
+        .mockReturnValue(true);
+      const fetchSpy = jest
+        .spyOn(paymentGateway, 'fetchPaymentsForOrder')
+        .mockRejectedValue(new Error('gateway timeout'));
+
+      try {
+        await Order.updateOne(
+          { _id: order._id },
+          { $set: { paymentExpiresAt: new Date(Date.now() - 1000) } }
+        );
+
+        const expired = await orderService.expireUnpaidOrders();
+
+        // Not being able to ask is not evidence the customer failed to pay.
+        expect(expired.map((o) => String(o._id))).not.toContain(String(order._id));
+        expect((await Order.findById(order._id).lean()).orderStatus).toBe('pending_payment');
+      } finally {
+        enabledSpy.mockRestore();
+        fetchSpy.mockRestore();
+      }
+    });
   });
 
   describe('the stub gateway cannot hand out free captures in production', () => {

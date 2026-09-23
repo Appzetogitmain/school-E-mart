@@ -59,6 +59,23 @@ router.get(
 router.post('/', ...customerWrite, validateBody(validators.createOrderSchema), ordersController.createOrder);
 router.get('/', ...orderRead, validateQuery(validators.paginationQuery), ordersController.listOrders);
 
+// Literal admin paths. These MUST stay above the '/:orderId' route below:
+// Express matches in registration order, so registering them afterwards made
+// 'stats' and 'payments' parse as order ids and every request 404.
+router.get(
+  '/stats',
+  ...adminOrders,
+  validateQuery(validators.paginationQuery),
+  ordersController.getOrderStats
+);
+router.get('/payments/mismatches', ...adminOrders, ordersController.listPaymentMismatches);
+router.post(
+  '/payments/:paymentId/resolve',
+  ...adminOrders,
+  validateBody(validators.resolveMismatchSchema),
+  ordersController.resolvePaymentMismatch
+);
+
 router.get('/:orderId', ...orderRead, validateParams(validators.orderIdParam), ordersController.getOrder);
 router.get(
   '/:orderId/timeline',
@@ -86,6 +103,23 @@ router.patch(
   validateParams(validators.orderIdParam),
   validateBody(validators.statusUpdateSchema),
   ordersController.updateOrderStatus
+);
+
+// Payment reconciliation.
+//
+// Mounted before the '/:orderId/...' routes below so that 'payments' is not
+// swallowed as an order id.
+router.get(
+  '/:orderId/payments',
+  ...orderRead,
+  validateParams(validators.orderIdParam),
+  ordersController.listOrderPayments
+);
+router.post(
+  '/:orderId/reconcile',
+  ...adminOrders,
+  validateParams(validators.orderIdParam),
+  ordersController.reconcileOrder
 );
 
 // Refunds

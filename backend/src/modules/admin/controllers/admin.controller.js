@@ -1,6 +1,7 @@
 const { success, created, paginated } = require('../../../common/response');
 const asyncHandler = require('../../../utils/asyncHandler');
 const dashboardService = require('../services/dashboard.service');
+const financeService = require('../services/finance.service');
 const analyticsService = require('../services/analytics.service');
 const userManagementService = require('../services/userManagement.service');
 const teacherManagementService = require('../services/teacherManagement.service');
@@ -37,6 +38,25 @@ const adminController = {
       undefined,
       req
     );
+  }),
+
+  /**
+   * The financial picture, derived from money that actually moved rather than
+   * from order totals. This is what the admin finance view and the dashboard's
+   * money cards read; nothing here is computed in the browser.
+   */
+  getFinanceOverview: asyncHandler(async (req, res) => {
+    const overview = await financeService.getOverview({
+      limit: Number(req.query.limit) || 25,
+    });
+    return success(res, overview, 'Finance overview fetched', undefined, req);
+  }),
+
+  getFinanceRevenueTrend: asyncHandler(async (req, res) => {
+    const trend = await financeService.getRevenueTrend({
+      days: Number(req.query.days) || 30,
+    });
+    return success(res, { trend }, 'Revenue trend fetched', undefined, req);
   }),
 
   getSystemHealth: asyncHandler(async (req, res) => {
