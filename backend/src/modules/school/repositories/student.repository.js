@@ -3,6 +3,7 @@ const ChildProfile = require('../../../database/models/ChildProfile');
 const ParentProfile = require('../../../database/models/ParentProfile');
 const { BaseRepository } = require('../../../repositories');
 const { executePaginatedQuery } = require('../../../repositories/query');
+const { escapeRegex } = require('../../../utils/string');
 
 const notDeleted = { 'softDelete.isDeleted': { $ne: true } };
 
@@ -61,9 +62,9 @@ class StudentRepository extends BaseRepository {
     if (queryString.search) {
       const term = String(queryString.search).trim();
       merged.$or = [
-        { name: { $regex: term, $options: 'i' } },
-        { schoolRefNo: { $regex: term, $options: 'i' } },
-        { rollNo: { $regex: term, $options: 'i' } },
+        { name: { $regex: escapeRegex(term), $options: 'i' } },
+        { schoolRefNo: { $regex: escapeRegex(term), $options: 'i' } },
+        { rollNo: { $regex: escapeRegex(term), $options: 'i' } },
       ];
     }
     const { search, ...restQuery } = queryString;

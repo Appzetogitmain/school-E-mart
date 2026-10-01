@@ -5,6 +5,7 @@ const Order = require('../../../database/models/Order');
 const Product = require('../../../database/models/Product');
 const ReturnRequest = require('../../../database/models/ReturnRequest');
 const { executePaginatedQuery } = require('../../../repositories/query');
+const { escapeRegex } = require('../../../utils/string');
 
 const activeFilter = { 'softDelete.isDeleted': { $ne: true } };
 
@@ -38,9 +39,9 @@ const reportsService = {
     if (query.search || query.q) {
       const term = query.search || query.q;
       filter.$or = [
-        { name: { $regex: term, $options: 'i' } },
-        { email: { $regex: term, $options: 'i' } },
-        { refId: { $regex: term, $options: 'i' } },
+        { name: { $regex: escapeRegex(term), $options: 'i' } },
+        { email: { $regex: escapeRegex(term), $options: 'i' } },
+        { refId: { $regex: escapeRegex(term), $options: 'i' } },
       ];
     }
     const result = await executePaginatedQuery(User, filter, query, {
@@ -55,8 +56,8 @@ const reportsService = {
     if (query.search || query.q) {
       const term = query.search || query.q;
       filter.$or = [
-        { storeName: { $regex: term, $options: 'i' } },
-        { storeSlug: { $regex: term, $options: 'i' } },
+        { storeName: { $regex: escapeRegex(term), $options: 'i' } },
+        { storeSlug: { $regex: escapeRegex(term), $options: 'i' } },
       ];
     }
     const result = await executePaginatedQuery(VendorProfile, filter, query, {
@@ -71,8 +72,8 @@ const reportsService = {
     if (query.search || query.q) {
       const term = query.search || query.q;
       filter.$or = [
-        { name: { $regex: term, $options: 'i' } },
-        { code: { $regex: term, $options: 'i' } },
+        { name: { $regex: escapeRegex(term), $options: 'i' } },
+        { code: { $regex: escapeRegex(term), $options: 'i' } },
       ];
     }
     const result = await executePaginatedQuery(School, filter, query, {
@@ -86,7 +87,7 @@ const reportsService = {
     if (query.orderStatus) filter.orderStatus = query.orderStatus;
     if (query.paymentStatus) filter.paymentStatus = query.paymentStatus;
     if (query.search || query.q) {
-      filter.orderNumber = { $regex: query.search || query.q, $options: 'i' };
+      filter.orderNumber = { $regex: escapeRegex(query.search || query.q), $options: 'i' };
     }
     const result = await executePaginatedQuery(Order, filter, query, {
       defaultSort: '-audit.createdAt',
@@ -134,7 +135,7 @@ const reportsService = {
     if (query.approvalStatus) filter.approvalStatus = query.approvalStatus;
     if (query.search || query.q) {
       const term = query.search || query.q;
-      filter.$or = [{ name: { $regex: term, $options: 'i' } }, { sku: { $regex: term, $options: 'i' } }];
+      filter.$or = [{ name: { $regex: escapeRegex(term), $options: 'i' } }, { sku: { $regex: escapeRegex(term), $options: 'i' } }];
     }
     const result = await executePaginatedQuery(Product, filter, query, {
       defaultSort: '-audit.updatedAt',

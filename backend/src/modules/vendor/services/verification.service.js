@@ -4,6 +4,7 @@ const Attachment = require('../../../database/models/Attachment');
 const vendorRepository = require('../repositories/vendor.repository');
 const auditRepository = require('../../auth/repositories/audit.repository');
 const { mapVendorDisplayStatus } = require('../utils/status');
+const { escapeRegex } = require('../../../utils/string');
 
 // Decimal128 serializes to { $numberDecimal: "10" } over JSON, which renders as
 // "[object Object]" in a UI. Normalize to a plain number at the edge.
@@ -78,8 +79,8 @@ const verificationService = {
     if (query.approvalStatus) filter.approvalStatus = query.approvalStatus;
     if (query.search) {
       filter.$or = [
-        { storeName: { $regex: query.search, $options: 'i' } },
-        { storeSlug: { $regex: query.search, $options: 'i' } },
+        { storeName: { $regex: escapeRegex(query.search), $options: 'i' } },
+        { storeSlug: { $regex: escapeRegex(query.search), $options: 'i' } },
       ];
     }
     const { data, pagination } = await vendorRepository.listWithUsers(filter, query);

@@ -2,6 +2,7 @@ const MasterKitProduct = require('../../../database/models/MasterKitProduct');
 const { NotFoundError } = require('../../../common/errors');
 const { executePaginatedQuery } = require('../../../repositories/query');
 const { saveBase64File } = require('../../../utils/fileStorage');
+const { escapeRegex } = require('../../../utils/string');
 
 // Every product image must end up as a file under UPLOADS_DIR — never a
 // third-party URL or a raw base64 string sitting in the DB (the admin form
@@ -35,7 +36,7 @@ const masterKitProductService = {
       filter.subcategory = query.subcategory;
     }
     if (query.search) {
-      filter.name = { $regex: query.search.trim(), $options: 'i' };
+      filter.name = { $regex: escapeRegex(query.search), $options: 'i' };
     }
 
     return executePaginatedQuery(MasterKitProduct, filter, query, {

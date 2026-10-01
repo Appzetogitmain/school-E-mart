@@ -1,6 +1,7 @@
 const { NotFoundError, BadRequestError } = require('../../../common/errors');
 const returnRepository = require('../repositories/return.repository');
 const ReturnRequest = require('../../../database/models/ReturnRequest');
+const { escapeRegex } = require('../../../utils/string');
 
 const VENDOR_RETURN_TRANSITIONS = {
   requested: ['approved', 'rejected'],
@@ -15,7 +16,7 @@ const vendorReturnService = {
     const filter = {};
     if (query.status) filter.status = query.status;
     if (query.search) {
-      filter['productSnapshot.name'] = { $regex: query.search, $options: 'i' };
+      filter['productSnapshot.name'] = { $regex: escapeRegex(query.search), $options: 'i' };
     }
     return returnRepository.paginateVendorReturns(vendorId, query, filter);
   },

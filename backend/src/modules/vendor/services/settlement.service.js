@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const VendorProfile = require('../../../database/models/VendorProfile');
 const logger = require('../../../common/logger');
 const Order = require('../../../database/models/Order');
@@ -74,8 +75,13 @@ const settlementService = {
   },
 
   async creditSchoolLedger(schoolId, amountPaise, orderId, orderNumber, transactionType = 'kit_commission_credit', customDescription = null) {
-    const latest = await SchoolLedger.findOne({ schoolId }).sort({ 'audit.createdAt': -1 }).lean();
-    const balancePaise = (latest?.balancePaise || 0) + amountPaise;
+    // Summed, not read off the newest row: two kit sales settling together would
+    // otherwise both start from the same balance and one would be lost.
+    const [current] = await SchoolLedger.aggregate([
+      { $match: { schoolId: new mongoose.Types.ObjectId(String(schoolId)), affectsBalance: { $ne: false } } },
+      { $group: { _id: null, total: { $sum: '$amountPaise' } } },
+    ]);
+    const balancePaise = ((current && current.total) || 0) + amountPaise;
     const defaultDesc = transactionType === 'retail_commission_credit'
       ? `Marketplace product commission on order ${orderNumber}`
       : `Kit commission on order ${orderNumber}`;
@@ -129,8 +135,9 @@ const settlementService = {
     const grossPaise = vendorItems.reduce((sum, item) => sum + item.lineTotalPaise, 0);
     const split = await this.computeSettlementSplit(vendorItems, vendorId, grossPaise);
 
-    const latest = await ledgerRepository.findLatestBalance(vendorId);
-    const currentBalance = latest?.balancePaise || 0;
+    // Derived by summing the ledger rather than read off the newest row, so two
+    // settlements landing at once cannot both build on the same stale figure.
+    const currentBalance = await ledgerRepository.computeBalance(vendorId);
     const creditBalance = currentBalance + split.vendorEarningPaise;
 
     const credit = await VendorLedger.create({
@@ -148,6 +155,10 @@ const settlementService = {
         vendorId,
         transactionType: 'commission_deduction',
         amountPaise: -totalCommissionPaise,
+        // The credit above is already net of this commission, so this row is a
+        // record of what was taken, not a second deduction. Summing it into the
+        // balance would charge the vendor twice.
+        affectsBalance: false,
         balancePaise: creditBalance,
         reference: { kind: 'Order', id: orderId },
         description: `Commission on order ${order.orderNumber}`,
@@ -181,19 +192,19 @@ const settlementService = {
   },
 
   async getEarningsSummary(vendorId) {
-    const [credits, commissions, debits, pendingPayouts, latest] = await Promise.all([
+    const [credits, commissions, debits, pendingPayouts, balance] = await Promise.all([
       ledgerRepository.sumByType(vendorId, 'order_credit'),
       ledgerRepository.sumByType(vendorId, 'commission_deduction'),
       ledgerRepository.sumByType(vendorId, 'payout_debit'),
       payoutRepository.sumPendingAmount(vendorId),
-      ledgerRepository.findLatestBalance(vendorId),
+      ledgerRepository.computeBalance(vendorId),
     ]);
 
     const totalEarningsPaise = credits[0]?.total || 0;
     const totalCommissionPaise = Math.abs(commissions[0]?.total || 0);
     const totalPayoutsPaise = Math.abs(debits[0]?.total || 0);
     const pendingSettlementPaise = pendingPayouts[0]?.total || 0;
-    const availableBalancePaise = latest?.balancePaise || 0;
+    const availableBalancePaise = balance;
 
     return {
       totalEarningsPaise,
@@ -263,7 +274,60 @@ const settlementService = {
       status: 'pending',
     });
 
+    // Re-check now that this request exists.
+    //
+    // The balance check above reads, then writes. Two withdrawals submitted at
+    // the same moment both read the same available balance, both pass, and the
+    // platform ends up committed to paying out more than the vendor has earned.
+    // Re-reading once our own row is visible closes that window: whichever
+    // request tips the total over the balance is the one that withdraws itself.
+    await this.assertPayoutsWithinBalance(vendorId, payout._id);
+
     return payout.toObject();
+  },
+
+  /**
+   * Void a just-created payout if the in-flight total now exceeds the balance.
+   *
+   * Only ever cancels the request it was given, so a losing race is undone
+   * without touching anybody else's pending withdrawal.
+   */
+  async assertPayoutsWithinBalance(vendorId, payoutId) {
+    const balance = await ledgerRepository.computeBalance(vendorId);
+    const pending = await PayoutRequest.find({
+      vendorId,
+      status: { $in: ['pending', 'processing'] },
+      'softDelete.isDeleted': { $ne: true },
+    })
+      .sort({ _id: 1 })
+      .lean();
+
+    // Resolved in creation order so the outcome is deterministic. Simply asking
+    // "is the total over the balance?" makes every racing request cancel itself,
+    // and the vendor ends up with no withdrawal at all. Walking the queue means
+    // the requests that fit are kept and only the ones that overflow back out.
+    let running = 0;
+    for (const p of pending) {
+      running += p.amountPaise || 0;
+      if (String(p._id) !== String(payoutId)) continue;
+      if (running <= balance) return;
+
+      await PayoutRequest.findOneAndUpdate(
+        { _id: payoutId, status: 'pending' },
+        {
+          $set: {
+            status: 'rejected',
+            rejectionReason:
+              'Another withdrawal was submitted at the same time and the balance no longer covers both.',
+          },
+        }
+      );
+      throw new BadRequestError(
+        'Requested amount exceeds available balance',
+        null,
+        'PAYOUT_EXCEEDS_BALANCE'
+      );
+    }
   },
 
   async listPayoutRequests(vendorId, query) {

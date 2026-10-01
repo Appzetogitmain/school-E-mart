@@ -243,42 +243,78 @@ const adminWalletService = {
       throw new BadRequestError(`Cannot approve payout with status: ${existing.status}`);
     }
 
-    const description = `Payout ${transactionReference || payout._id}`;
-    if (payout.ownerType === 'school' && payout.schoolId) {
-      const latest = await SchoolLedger.findOne({ schoolId: payout.schoolId })
-        .sort({ 'audit.createdAt': -1 })
-        .lean();
-      const newBalance = (latest?.balancePaise || 0) - payout.amountPaise;
-      await SchoolLedger.create({
-        schoolId: payout.schoolId,
-        transactionType: 'payout_debit',
-        amountPaise: -payout.amountPaise,
-        balancePaise: newBalance,
-        reference: { kind: 'PayoutRequest', id: payout._id },
-        description,
-      });
-    } else if (payout.vendorId) {
-      const latest = await VendorLedger.findOne({ vendorId: payout.vendorId })
-        .sort({ 'audit.createdAt': -1 })
-        .lean();
-      const newBalance = (latest?.balancePaise || 0) - payout.amountPaise;
-      await VendorLedger.create({
-        vendorId: payout.vendorId,
-        transactionType: 'payout_debit',
-        amountPaise: -payout.amountPaise,
-        balancePaise: newBalance,
-        reference: { kind: 'PayoutRequest', id: payout._id },
-        description,
-      });
+    // Claim the payout before touching any ledger.
+    //
+    // The status check above and the save that used to follow it were separate
+    // steps, so two approvals arriving together both saw a pending payout, both
+    // posted a debit, and the payee was charged twice for one withdrawal. A
+    // conditional update makes the claim atomic: exactly one caller can move the
+    // payout out of 'pending', and only that caller goes on to post the debit.
+    const claimed = await PayoutRequest.findOneAndUpdate(
+      { _id: payout._id, status: { $in: ['pending', 'processing'] } },
+      {
+        $set: {
+          status: 'completed',
+          processedBy: actorUserId,
+          processedAt: new Date(),
+          ...(transactionReference ? { transactionReference } : {}),
+        },
+      },
+      { new: true }
+    );
+    if (!claimed) {
+      throw new BadRequestError('This payout has already been processed');
     }
 
-    payout.status = 'completed';
-    payout.processedBy = actorUserId;
-    payout.processedAt = new Date();
-    if (transactionReference) payout.transactionReference = transactionReference;
-    await payout.save();
+    const description = `Payout ${transactionReference || claimed._id}`;
+    const reference = { kind: 'PayoutRequest', id: claimed._id };
 
-    return payout.toObject();
+    // Posting is guarded on the reference as well, so a retry after a partial
+    // failure cannot write the debit a second time.
+    if (claimed.ownerType === 'school' && claimed.schoolId) {
+      const already = await SchoolLedger.findOne({
+        'reference.kind': 'PayoutRequest',
+        'reference.id': claimed._id,
+      }).lean();
+      if (!already) {
+        const [current] = await SchoolLedger.aggregate([
+          {
+            $match: {
+              schoolId: new mongoose.Types.ObjectId(String(claimed.schoolId)),
+              affectsBalance: { $ne: false },
+            },
+          },
+          { $group: { _id: null, total: { $sum: '$amountPaise' } } },
+        ]);
+        await SchoolLedger.create({
+          schoolId: claimed.schoolId,
+          transactionType: 'payout_debit',
+          amountPaise: -claimed.amountPaise,
+          balancePaise: ((current && current.total) || 0) - claimed.amountPaise,
+          reference,
+          description,
+        });
+      }
+    } else if (claimed.vendorId) {
+      const already = await VendorLedger.findOne({
+        'reference.kind': 'PayoutRequest',
+        'reference.id': claimed._id,
+      }).lean();
+      if (!already) {
+        const ledgerRepository = require('../../vendor/repositories/ledger.repository');
+        const balance = await ledgerRepository.computeBalance(claimed.vendorId);
+        await VendorLedger.create({
+          vendorId: claimed.vendorId,
+          transactionType: 'payout_debit',
+          amountPaise: -claimed.amountPaise,
+          balancePaise: balance - claimed.amountPaise,
+          reference,
+          description,
+        });
+      }
+    }
+
+    return claimed.toObject();
   },
 
   /** Manual admin credit/debit adjustment posted to the vendor ledger. */

@@ -10,6 +10,7 @@ require('../../../database/models/MasterKitProduct');
 require('../../../database/models/User');
 const { NotFoundError, BadRequestError } = require('../../../common/errors');
 const { executePaginatedQuery } = require('../../../repositories');
+const { escapeRegex } = require('../../../utils/string');
 const {
   getKitPurchaseWindow,
   openWindowCondition,
@@ -187,7 +188,7 @@ const kitsService = {
     }
     if (query.classGrade) filter.classGrade = query.classGrade;
     if (query.category) filter.category = query.category;
-    if (query.search) filter.name = { $regex: query.search.trim(), $options: 'i' };
+    if (query.search) filter.name = { $regex: escapeRegex(query.search), $options: 'i' };
 
     // The admin's kit sale window. Resolved for every caller — parents have kits
     // filtered by it, schools and admins are only told about it — and cheap

@@ -2,6 +2,7 @@ const PlatformTutorial = require('../../../database/models/PlatformTutorial');
 const { BaseRepository } = require('../../../repositories');
 const { executePaginatedQuery } = require('../../../repositories/query');
 const { parsePagination, buildPaginationMeta } = require('../../../common/pagination');
+const { escapeRegex } = require('../../../utils/string');
 
 class TutorialsRepository extends BaseRepository {
   constructor() {
@@ -15,8 +16,8 @@ class TutorialsRepository extends BaseRepository {
     if (queryString.search || queryString.q) {
       const term = queryString.search || queryString.q;
       merged.$or = [
-        { title: { $regex: term, $options: 'i' } },
-        { description: { $regex: term, $options: 'i' } },
+        { title: { $regex: escapeRegex(term), $options: 'i' } },
+        { description: { $regex: escapeRegex(term), $options: 'i' } },
       ];
     }
 

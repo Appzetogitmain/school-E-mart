@@ -1,6 +1,7 @@
 const User = require('../../../database/models/User');
 const { BaseRepository } = require('../../../repositories');
 const { executePaginatedQuery } = require('../../../repositories/query');
+const { escapeRegex } = require('../../../utils/string');
 
 class AdminUserRepository extends BaseRepository {
   constructor() {
@@ -12,10 +13,10 @@ class AdminUserRepository extends BaseRepository {
     if (queryString.search || queryString.q) {
       const term = queryString.search || queryString.q;
       merged.$or = [
-        { name: { $regex: term, $options: 'i' } },
-        { email: { $regex: term, $options: 'i' } },
-        { phone: { $regex: term, $options: 'i' } },
-        { refId: { $regex: term, $options: 'i' } },
+        { name: { $regex: escapeRegex(term), $options: 'i' } },
+        { email: { $regex: escapeRegex(term), $options: 'i' } },
+        { phone: { $regex: escapeRegex(term), $options: 'i' } },
+        { refId: { $regex: escapeRegex(term), $options: 'i' } },
       ];
     }
     if (queryString.role) merged.role = queryString.role;

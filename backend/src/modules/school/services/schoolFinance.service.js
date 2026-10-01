@@ -17,8 +17,24 @@ const sumByType = async (schoolId, transactionType) => {
   return rows[0]?.total || 0;
 };
 
-const findLatestBalance = (schoolId) =>
-  SchoolLedger.findOne({ schoolId }).sort({ 'audit.createdAt': -1 }).lean();
+/**
+ * The authoritative balance: the sum of every row that moves money.
+ *
+ * Reading `balancePaise` off the newest row meant the figure a school could
+ * withdraw against was the result of a read-modify-write — two commission
+ * credits landing together both start from the same value and one overwrites
+ * the other, permanently. Summing cannot drift.
+ *
+ * Rows flagged `affectsBalance: false` are records of what was taken rather than
+ * movements in their own right, so they are excluded.
+ */
+const computeBalance = async (schoolId) => {
+  const rows = await SchoolLedger.aggregate([
+    { $match: { schoolId: toObjectId(schoolId), affectsBalance: { $ne: false } } },
+    { $group: { _id: null, total: { $sum: '$amountPaise' } } },
+  ]);
+  return rows[0]?.total || 0;
+};
 
 const schoolFinanceService = {
   /**
@@ -27,11 +43,11 @@ const schoolFinanceService = {
    * in-flight payout requests.
    */
   async getEarningsSummary(schoolId) {
-    const [kitCredits, retailCredits, payouts, latest, pendingPayouts] = await Promise.all([
+    const [kitCredits, retailCredits, payouts, balance, pendingPayouts] = await Promise.all([
       sumByType(schoolId, 'kit_commission_credit'),
       sumByType(schoolId, 'retail_commission_credit'),
       sumByType(schoolId, 'payout_debit'),
-      findLatestBalance(schoolId),
+      computeBalance(schoolId),
       PayoutRequest.aggregate([
         {
           $match: {
@@ -45,7 +61,7 @@ const schoolFinanceService = {
       ]),
     ]);
 
-    const availableBalancePaise = latest?.balancePaise || 0;
+    const availableBalancePaise = balance;
     const pendingSettlementPaise = pendingPayouts[0]?.total || 0;
 
     return {
@@ -150,7 +166,54 @@ const schoolFinanceService = {
       },
     });
 
+    // Re-check now that this request exists. The balance check above reads then
+    // writes, so two withdrawals submitted together both read the same figure,
+    // both pass, and the platform is committed to paying out more than the
+    // school has earned. Whichever request tips the total over withdraws itself.
+    await this.assertPayoutsWithinBalance(schoolId, payout._id);
+
     return payout.toObject();
+  },
+
+  /**
+   * Void a just-created payout if the in-flight total now exceeds the balance.
+   * Only ever cancels the request it was given.
+   */
+  async assertPayoutsWithinBalance(schoolId, payoutId) {
+    const summary = await this.getEarningsSummary(schoolId);
+    const pending = await PayoutRequest.find({
+      ownerType: 'school',
+      schoolId: toObjectId(schoolId),
+      status: { $in: ['pending', 'processing'] },
+      'softDelete.isDeleted': { $ne: true },
+    })
+      .sort({ _id: 1 })
+      .lean();
+
+    // Creation order, so exactly the requests that overflow back out rather than
+    // every racing request cancelling itself and leaving the school with none.
+    let running = 0;
+    for (const p of pending) {
+      running += p.amountPaise || 0;
+      if (String(p._id) !== String(payoutId)) continue;
+      if (running <= summary.availableBalancePaise) return;
+
+      await PayoutRequest.findOneAndUpdate(
+        { _id: payoutId, status: 'pending' },
+        {
+          $set: {
+            status: 'rejected',
+            rejectionReason:
+              'Another withdrawal was submitted at the same time and the balance no longer covers both.',
+          },
+        }
+      );
+      throw new BadRequestError(
+        'Requested amount exceeds available withdrawable balance',
+        null,
+        'PAYOUT_EXCEEDS_BALANCE'
+      );
+    }
   },
 
   maskAccountNumber,

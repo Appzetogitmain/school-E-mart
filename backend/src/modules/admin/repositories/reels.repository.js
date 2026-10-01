@@ -1,6 +1,7 @@
 const Reel = require('../../../database/models/Reel');
 const { BaseRepository } = require('../../../repositories');
 const { executePaginatedQuery } = require('../../../repositories/query');
+const { escapeRegex } = require('../../../utils/string');
 
 class ReelsRepository extends BaseRepository {
   constructor() {
@@ -17,9 +18,9 @@ class ReelsRepository extends BaseRepository {
     if (queryString.search || queryString.q) {
       const term = queryString.search || queryString.q;
       merged.$or = [
-        { title: { $regex: term, $options: 'i' } },
-        { description: { $regex: term, $options: 'i' } },
-        { storeName: { $regex: term, $options: 'i' } },
+        { title: { $regex: escapeRegex(term), $options: 'i' } },
+        { description: { $regex: escapeRegex(term), $options: 'i' } },
+        { storeName: { $regex: escapeRegex(term), $options: 'i' } },
       ];
     }
 

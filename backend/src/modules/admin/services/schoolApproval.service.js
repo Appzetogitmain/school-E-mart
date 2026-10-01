@@ -9,6 +9,7 @@ const emailService = require('../../../common/email');
 const User = require('../../../database/models/User');
 const { runAtomic } = require('../../orders/utils/atomic');
 const { mapSchoolDisplayStatus } = require('../../school/utils/status');
+const { escapeRegex } = require('../../../utils/string');
 
 const SCHOOL_ACTIONS = ['school.approved', 'school.rejected', 'school.suspended', 'school.reactivated'];
 
@@ -340,10 +341,10 @@ const buildSearchFilter = (query) => {
   if (query.search || query.q) {
     const term = query.search || query.q;
     filter.$or = [
-      { name: { $regex: term, $options: 'i' } },
-      { code: { $regex: term, $options: 'i' } },
-      { schoolRefNo: { $regex: term, $options: 'i' } },
-      { adminEmail: { $regex: term, $options: 'i' } },
+      { name: { $regex: escapeRegex(term), $options: 'i' } },
+      { code: { $regex: escapeRegex(term), $options: 'i' } },
+      { schoolRefNo: { $regex: escapeRegex(term), $options: 'i' } },
+      { adminEmail: { $regex: escapeRegex(term), $options: 'i' } },
     ];
   }
   return filter;

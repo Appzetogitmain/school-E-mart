@@ -5,6 +5,7 @@ const PromoHomeSection = require('../../../database/models/PromoHomeSection');
 const LandingContent = require('../../../database/models/LandingContent');
 const { BaseRepository } = require('../../../repositories');
 const { executePaginatedQuery } = require('../../../repositories/query');
+const { escapeRegex } = require('../../../utils/string');
 
 class CmsPageRepository extends BaseRepository {
   constructor() {
@@ -15,7 +16,7 @@ class CmsPageRepository extends BaseRepository {
     const merged = this.mergeFilter(filter);
     if (queryString.search || queryString.q) {
       const term = queryString.search || queryString.q;
-      merged.$or = [{ title: { $regex: term, $options: 'i' } }, { slug: { $regex: term, $options: 'i' } }];
+      merged.$or = [{ title: { $regex: escapeRegex(term), $options: 'i' } }, { slug: { $regex: escapeRegex(term), $options: 'i' } }];
     }
     if (queryString.status) merged.status = queryString.status;
     return executePaginatedQuery(CmsPage, merged, queryString, {
@@ -39,8 +40,8 @@ class FaqRepository extends BaseRepository {
     if (queryString.search || queryString.q) {
       const term = queryString.search || queryString.q;
       merged.$or = [
-        { question: { $regex: term, $options: 'i' } },
-        { answer: { $regex: term, $options: 'i' } },
+        { question: { $regex: escapeRegex(term), $options: 'i' } },
+        { answer: { $regex: escapeRegex(term), $options: 'i' } },
       ];
     }
     if (queryString.status) merged.status = queryString.status;

@@ -4,6 +4,7 @@ const vendorAccessPolicy = require('../policies/vendorAccess.policy');
 const Order = require('../../../database/models/Order');
 const { triggerService } = require('../../../services/notification');
 const { AWAITING_PAYMENT } = require('../../orders/utils/statusMachine');
+const { escapeRegex } = require('../../../utils/string');
 
 // 'pending_payment' is deliberately absent: an unpaid online order is not the vendor's
 // to work on, so every transition out of it is refused here as well as being hidden
@@ -32,7 +33,7 @@ const vendorOrderService = {
       if (query.to) filter['audit.createdAt'].$lte = new Date(query.to);
     }
     if (query.search) {
-      filter.orderNumber = { $regex: query.search, $options: 'i' };
+      filter.orderNumber = { $regex: escapeRegex(query.search), $options: 'i' };
     }
     // Only paging and sorting are forwarded. The paginator runs every other query key
     // back through ApiFeatures.filter as a raw top-level equality match, and an Order

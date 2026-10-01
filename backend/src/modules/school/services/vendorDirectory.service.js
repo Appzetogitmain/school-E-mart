@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const vendorRepository = require('../../vendor/repositories/vendor.repository');
+const { escapeRegex } = require('../../../utils/string');
 
 const toPublicVendor = (vendor) => {
   const user = vendor.user || {};
@@ -52,8 +53,8 @@ const vendorDirectoryService = {
 
     if (query.search) {
       filter.$or = [
-        { storeName: { $regex: query.search, $options: 'i' } },
-        { storeSlug: { $regex: query.search, $options: 'i' } },
+        { storeName: { $regex: escapeRegex(query.search), $options: 'i' } },
+        { storeSlug: { $regex: escapeRegex(query.search), $options: 'i' } },
       ];
     }
 
