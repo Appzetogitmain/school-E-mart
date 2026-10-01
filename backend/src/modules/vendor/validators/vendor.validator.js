@@ -13,8 +13,8 @@ const paginationQuery = Joi.object({
   status: Joi.string().trim().optional(),
   approval: Joi.string().valid('pending', 'approved', 'rejected').optional(),
   publishStatus: Joi.string().valid('draft', 'published').optional(),
-  // Vendor product list filter: 'users' (retail) | 'schools' (bulk).
-  audience: Joi.string().valid('users', 'schools').optional(),
+  // Vendor product list filter: 'users' (retail) | 'schools' (bulk) | 'both'.
+  audience: Joi.string().valid('users', 'schools', 'both').optional(),
   from: Joi.date().iso().optional(),
   to: Joi.date().iso().optional(),
   approvalStatus: Joi.string().valid('pending', 'approved', 'suspended').optional(),
@@ -84,9 +84,9 @@ const createProductSchema = Joi.object({
   headerId: objectId.required(),
   categoryId: objectId.required(),
   subcategoryId: objectId.optional(),
-  // Who the vendor is selling this to: 'users' (retail, shown in the User app)
-  // or 'schools' (bulk, shown in the School module).
-  audience: Joi.string().valid('users', 'schools').default('users'),
+  // Who the vendor is selling this to: 'users' (retail, shown in the User app),
+  // 'schools' (bulk, shown in the School module), or 'both' (shown in both).
+  audience: Joi.string().valid('users', 'schools', 'both').default('users'),
   gradeTags: Joi.array().items(Joi.string().trim()).optional(),
   pricePaise: Joi.number().integer().min(0).required(),
   originalPricePaise: Joi.number().integer().min(0).optional(),

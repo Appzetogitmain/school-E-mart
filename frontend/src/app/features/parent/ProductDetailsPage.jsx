@@ -193,10 +193,24 @@ const ProductDetailsPage = () => {
         <h1 className="text-2xl font-bold text-deep-purple leading-tight mb-2">{product.name}</h1>
         <p className="text-gray-400 text-xs font-medium mb-4">{product.brand}</p>
 
-        <div className="flex items-baseline gap-3 mb-8">
-          <span className="text-3xl font-black text-black">₹{product.price}</span>
-          {product.originalPrice > product.price && (
-            <span className="text-sm text-gray-300 line-through font-bold">₹{product.originalPrice}</span>
+        <div className="space-y-2 mb-8">
+          <div className="flex items-baseline gap-3 flex-wrap">
+            <span className="text-3xl font-black text-black">₹{product.price}</span>
+            {product.originalPrice > product.price && (
+              <span className="text-base text-gray-400 line-through font-bold">
+                MRP ₹{product.originalPrice}
+              </span>
+            )}
+          </div>
+          {discount > 0 && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-black text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-3 py-1 rounded-full inline-flex items-center gap-1 shadow-sm">
+                Save ₹{Math.round(product.originalPrice - product.price).toLocaleString('en-IN')}
+              </span>
+              <span className="text-xs font-black text-rose-600 bg-rose-50 border border-rose-200/60 px-2.5 py-1 rounded-full">
+                {discount}% OFF
+              </span>
+            </div>
           )}
         </div>
 

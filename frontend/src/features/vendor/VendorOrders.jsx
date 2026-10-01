@@ -259,16 +259,28 @@ const VendorOrders = () => {
 
           <div className="flex flex-col md:flex-row justify-between gap-6 pt-2">
             <div className="space-y-3.5">
-              <h2 className="text-2xl font-black text-gray-900 tracking-tight">{selectedOrder.school}</h2>
-              <div className="text-xs text-gray-500 font-medium space-y-1.5 leading-relaxed">
-                <p><span className="text-gray-400 font-bold">Phone:</span> {selectedOrder.phone}</p>
-                <p><span className="text-gray-400 font-bold">Payment:</span> {selectedOrder.paymentMethod}</p>
+              <div>
+                <h2 className="text-2xl font-black text-gray-900 tracking-tight">{selectedOrder.parentName || selectedOrder.school}</h2>
+                <div className="flex items-center gap-2 mt-1">
+                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border ${selectedOrder.paymentStatusColor}`}>
+                    Payment: {selectedOrder.paymentStatusFormatted}
+                  </span>
+                  {selectedOrder.isRfqOrder && (
+                    <span className={`inline-flex text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full border ${selectedOrder.paymentSplitColor}`}>
+                      {selectedOrder.paymentSplitLabel}
+                    </span>
+                  )}
+                </div>
               </div>
-              {selectedOrder.isRfqOrder && (
-                <span className={`inline-block mt-1 text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full border ${selectedOrder.paymentSplitColor}`}>
-                  {selectedOrder.paymentSplitLabel}
-                </span>
-              )}
+
+              <div className="text-xs text-gray-600 font-medium space-y-1.5 leading-relaxed bg-gray-50/80 p-3.5 rounded-2xl border border-gray-100">
+                <p><span className="text-gray-400 font-bold">Parent / Buyer:</span> <span className="text-gray-900 font-semibold">{selectedOrder.parentName}</span></p>
+                {selectedOrder.studentName && selectedOrder.studentName !== '—' && (
+                  <p><span className="text-gray-400 font-bold">Student:</span> <span className="text-[#5B3FD6] font-bold">{selectedOrder.studentName} {selectedOrder.studentGrade ? `(${selectedOrder.studentGrade})` : ''}</span></p>
+                )}
+                <p><span className="text-gray-400 font-bold">Phone:</span> {selectedOrder.phone}</p>
+                <p><span className="text-gray-400 font-bold">Payment Mode:</span> {selectedOrder.paymentMethod}</p>
+              </div>
             </div>
 
             <div className="text-left md:text-right space-y-2 text-xs">
@@ -539,9 +551,10 @@ const VendorOrders = () => {
               <thead>
                 <tr className="border-b border-gray-100 text-[10px] font-black text-gray-400 uppercase tracking-widest bg-gray-50/50">
                   <th className="px-6 py-4">O. Id</th>
-                  <th className="px-6 py-4">D. Date</th>
-                  <th className="px-6 py-4">O. Date</th>
-                  <th className="px-6 py-4">Status</th>
+                  <th className="px-6 py-4">Customer & Student</th>
+                  <th className="px-6 py-4">Order Date</th>
+                  <th className="px-6 py-4">Delivery Status</th>
+                  <th className="px-6 py-4">Payment</th>
                   <th className="px-6 py-4">Amount</th>
                   <th className="px-6 py-4 text-center">ACTION</th>
                 </tr>
@@ -551,11 +564,23 @@ const VendorOrders = () => {
                   paginatedOrders.map((order) => (
                     <tr key={order.mongoId || order.id} className="hover:bg-gray-50/50 transition-colors">
                       <td className="px-6 py-4 font-black text-gray-900">{order.id}</td>
-                      <td className="px-6 py-4 text-gray-500">{order.deliveryDate}</td>
+                      <td className="px-6 py-4">
+                        <span className="font-bold text-gray-900 block">{order.parentName}</span>
+                        {order.studentName && order.studentName !== '—' && (
+                          <span className="text-[11px] font-semibold text-[#5B3FD6] block">
+                            Student: {order.studentName} {order.studentGrade ? `(${order.studentGrade})` : ''}
+                          </span>
+                        )}
+                      </td>
                       <td className="px-6 py-4 text-gray-500">{order.orderDate}</td>
                       <td className="px-6 py-4">
                         <span className={`inline-block text-[9px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full border ${order.statusColor}`}>
                           {order.status}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={`inline-block text-[9px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full border ${order.paymentStatusColor}`}>
+                          {order.paymentStatusFormatted}
                         </span>
                       </td>
                       <td className="px-6 py-4 font-black text-gray-900">
@@ -578,7 +603,7 @@ const VendorOrders = () => {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={6} className="px-6 py-12 text-center text-gray-400 font-bold bg-white">
+                    <td colSpan={7} className="px-6 py-12 text-center text-gray-400 font-bold bg-white">
                       No orders found matching the filter criteria.
                     </td>
                   </tr>

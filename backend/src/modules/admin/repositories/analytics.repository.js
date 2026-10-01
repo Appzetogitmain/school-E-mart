@@ -283,7 +283,7 @@ const analyticsRepository = {
    * name the customer rather than showing a bare id.
    */
   getRecentOrders(limit = 10) {
-    return Order.find({ ...activeFilter, orderStatus: { $ne: 'pending_payment' } })
+    return Order.find({ ...activeFilter, orderStatus: { $nin: ['pending_payment', 'payment_failed'] } })
       .sort({ 'audit.createdAt': -1 })
       .limit(limit)
       .select(

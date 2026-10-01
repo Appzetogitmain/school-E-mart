@@ -12,7 +12,7 @@ const cartService = require('../../marketplace/services/cart.service');
 const paymentRepository = require('../repositories/payment.repository');
 const { generateOrderNumber } = require('../utils/orderNumber');
 const { runAtomic } = require('../utils/atomic');
-const { canTransition, AWAITING_PAYMENT } = require('../utils/statusMachine');
+const { canTransition, AWAITING_PAYMENT, PAYMENT_FAILED } = require('../utils/statusMachine');
 
 // How long an unpaid online order holds its stock before the sweeper releases it.
 // Long enough for a customer to finish a UPI collect request, short enough that an
@@ -314,8 +314,23 @@ const orderService = {
     }
 
     try {
-      const hydrated = (await orderRepository.findById(order._id)) || order;
-      if (hydrated && hydrated.userId) {
+      const plainOrder = order.toObject ? order.toObject() : { ...order };
+      let hydrated = session
+        ? await Order.findById(order._id).session(session).lean()
+        : await orderRepository.findById(order._id);
+
+      if (!hydrated) {
+        hydrated = plainOrder;
+      }
+
+      if (!hydrated.vendorIds || !hydrated.vendorIds.length) {
+        hydrated.vendorIds = validVendorIds;
+      }
+      if (!hydrated.items || !hydrated.items.length) {
+        hydrated.items = items;
+      }
+
+      if (hydrated && (hydrated.userId || hydrated.vendorIds?.length)) {
         triggerService.notifyOrderPlaced(hydrated);
       }
     } catch (notifyErr) {
@@ -347,6 +362,12 @@ const orderService = {
     if (query.status) {
       const customerStatusFilter = buildStatusFilter(query.status);
       if (customerStatusFilter) filter.orderStatus = customerStatusFilter;
+    } else {
+      // Hide incomplete online orders the customer never placed, and expired
+      // abandoned checkouts. They are noise, not real orders. Without this the
+      // customer sees a confusing "Payment Failed" or "Cancelled" entry for
+      // something they never finished.
+      filter.orderStatus = { $nin: [AWAITING_PAYMENT, PAYMENT_FAILED] };
     }
     if (query.paymentStatus) filter.paymentStatus = query.paymentStatus;
     if (query.search) {
@@ -373,7 +394,7 @@ const orderService = {
     // An unpaid online order is not a sale. It stays out of the operations list and
     // out of every total computed from it unless someone asks for it by name.
     const adminStatusFilter = query.status ? buildStatusFilter(query.status) : null;
-    filter.orderStatus = adminStatusFilter || { $ne: AWAITING_PAYMENT };
+    filter.orderStatus = adminStatusFilter || { $nin: [AWAITING_PAYMENT, PAYMENT_FAILED] };
     if (query.audience) filter.audience = query.audience;
     if (query.userId) filter.userId = query.userId;
     if (query.vendorId) filter.vendorIds = query.vendorId;
@@ -483,7 +504,7 @@ const orderService = {
     // Same rule as the admin list: a school must not be told to expect a delivery for
     // an order nobody has paid for.
     const pickupStatusFilter = query.status ? buildStatusFilter(query.status) : null;
-    filter.orderStatus = pickupStatusFilter || { $ne: AWAITING_PAYMENT };
+    filter.orderStatus = pickupStatusFilter || { $nin: [AWAITING_PAYMENT, PAYMENT_FAILED] };
     if (query.paymentStatus) filter.paymentStatus = query.paymentStatus;
     if (query.search) {
       const or = buildSearchFilter(query.search);
@@ -617,26 +638,26 @@ const orderService = {
       }
 
       // Conditional again: a payment landing at the same moment must win over the
-      // sweeper, so the order is only cancelled while it is still unpaid.
-      const cancelled = await Order.findOneAndUpdate(
+      // sweeper, so the order is only expired while it is still unpaid.
+      const failed = await Order.findOneAndUpdate(
         { _id: order._id, orderStatus: AWAITING_PAYMENT },
         {
           $set: {
-            orderStatus: 'cancelled',
+            orderStatus: PAYMENT_FAILED,
             paymentStatus: 'failed',
             cancellation: { at: new Date(), reason: 'Payment was not completed in time' },
           },
           $push: {
             statusHistory: {
-              status: 'cancelled',
+              status: PAYMENT_FAILED,
               at: new Date(),
-              note: 'Payment not completed',
+              note: 'Payment not completed — checkout abandoned',
             },
           },
         },
         { new: true }
       ).lean();
-      if (!cancelled) continue;
+      if (!failed) continue;
 
       await inventoryService.restoreStock(order.items || []);
 
@@ -654,7 +675,7 @@ const orderService = {
           // A failed wallet return must not strand the rest of the sweep.
         }
       }
-      expired.push(cancelled);
+      expired.push(failed);
     }
 
     return expired;

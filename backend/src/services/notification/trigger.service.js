@@ -1,6 +1,7 @@
 const logger = require('../../common/logger');
 const notificationService = require('./notification.service');
 const VendorProfile = require('../../database/models/VendorProfile');
+const User = require('../../database/models/User');
 const ChildProfile = require('../../database/models/ChildProfile');
 const Order = require('../../database/models/Order');
 
@@ -42,10 +43,34 @@ const orderRoute = (order, audience) => {
 const vendorOrderRoute = (orderId) => `/vendor/orders/${orderId}`;
 
 const getVendorUserIds = async (vendorIds = []) => {
-  const profiles = await VendorProfile.find({ _id: { $in: vendorIds } })
-    .select('userId')
-    .lean();
-  return profiles.map((p) => p.userId).filter(Boolean);
+  if (!vendorIds || !vendorIds.length) return [];
+  const validIds = vendorIds
+    .map((v) => (v?._id ? String(v._id) : String(v)))
+    .filter(Boolean);
+  if (!validIds.length) return [];
+
+  const [profiles, directUsers] = await Promise.all([
+    VendorProfile.find({
+      $or: [{ _id: { $in: validIds } }, { userId: { $in: validIds } }],
+    })
+      .select('userId')
+      .lean(),
+    User.find({
+      _id: { $in: validIds },
+      role: 'vendor',
+    })
+      .select('_id')
+      .lean(),
+  ]);
+
+  const resolved = new Set();
+  for (const p of profiles) {
+    if (p.userId) resolved.add(String(p.userId));
+  }
+  for (const u of directUsers) {
+    resolved.add(String(u._id));
+  }
+  return [...resolved];
 };
 
 /**
@@ -266,28 +291,39 @@ const triggerService = {
   notifyOrderPlaced(order) {
     notifySafe(async () => {
       // 1. Notify Buyer
-      await notificationService.sendToUser(order.userId, {
-        type: 'order_update',
-        notification: {
-          title: 'Order Placed',
-          body: `Your order #${order.orderNumber} has been placed successfully.`,
-        },
-        data: {
-          type: 'order_placed',
-          route: orderRoute(order),
-          entityId: String(order._id),
-          orderNumber: order.orderNumber,
-        },
-      });
-
-      // 2. Notify Vendor(s)
-      const vendorUserIds = await getVendorUserIds(order.vendorIds || []);
-      if (vendorUserIds.length) {
-        await notificationService.sendToUsers(vendorUserIds, {
+      if (order.userId) {
+        await notificationService.sendToUser(order.userId, {
           type: 'order_update',
           notification: {
-            title: 'New Order Received',
-            body: `New order #${order.orderNumber} received.`,
+            title: 'Order Placed',
+            body: `Your order #${order.orderNumber} has been placed successfully.`,
+          },
+          data: {
+            type: 'order_placed',
+            route: orderRoute(order),
+            entityId: String(order._id),
+            orderNumber: order.orderNumber,
+          },
+        });
+      }
+
+      // 2. Notify Vendor(s) (FCM Push & In-app System Notification)
+      const allVendorIds = [
+        ...(Array.isArray(order.vendorIds) ? order.vendorIds : []),
+        ...(Array.isArray(order.items) ? order.items.map((it) => it.vendorId) : []),
+      ].filter(Boolean);
+
+      const vendorUserIds = await getVendorUserIds(allVendorIds);
+      if (vendorUserIds.length) {
+        const totalRupees = ((order.totalPaise || 0) / 100).toFixed(2);
+        const buyerName = order.address?.name || 'Customer';
+
+        await notificationService.sendToUsers(vendorUserIds, {
+          type: 'order_update',
+          channel: 'push',
+          notification: {
+            title: 'New Order Received! 📦',
+            body: `New order #${order.orderNumber} placed by ${buyerName} (₹${totalRupees}).`,
           },
           data: {
             type: 'order_new',
@@ -366,19 +402,26 @@ const triggerService = {
         },
       });
 
-      const vendorUserIds = await getVendorUserIds(order.vendorIds || []);
-      await notificationService.sendToUsers(vendorUserIds, {
-        type: 'order_update',
-        notification: {
-          title: 'Order Cancelled',
-          body: `Order #${order.orderNumber} was cancelled.`,
-        },
-        data: {
-          type: 'order_cancelled',
-          route: vendorOrderRoute(order._id),
-          entityId: String(order._id),
-        },
-      });
+      const allVendorIds = [
+        ...(Array.isArray(order.vendorIds) ? order.vendorIds : []),
+        ...(Array.isArray(order.items) ? order.items.map((it) => it.vendorId) : []),
+      ].filter(Boolean);
+
+      const vendorUserIds = await getVendorUserIds(allVendorIds);
+      if (vendorUserIds.length) {
+        await notificationService.sendToUsers(vendorUserIds, {
+          type: 'order_update',
+          notification: {
+            title: 'Order Cancelled',
+            body: `Order #${order.orderNumber} was cancelled.`,
+          },
+          data: {
+            type: 'order_cancelled',
+            route: vendorOrderRoute(order._id),
+            entityId: String(order._id),
+          },
+        });
+      }
     });
   },
 
@@ -877,9 +920,30 @@ const triggerService = {
             status: statusRaw,
             studentId: String(record.studentId),
             schoolId: String(schoolId),
-            route: '/school/parent/attendance',
+            route: '/user/attendance',
           },
         });
+
+        // Trigger SMS alert to parent(s) when student is marked ABSENT
+        if (statusRaw === 'absent' && parentUserIds.length > 0) {
+          try {
+            const smsService = require('../../common/sms');
+            const parentUsers = await User.find({ _id: { $in: parentUserIds } }).select('phone').lean();
+            for (const pu of parentUsers) {
+              if (pu?.phone) {
+                smsService.sendAbsentAlert({
+                  phone: pu.phone,
+                  studentName,
+                  dateStr: dateFormatted,
+                }).catch((smsErr) => {
+                  logger.warn('Absent SMS background dispatch failed', { error: smsErr.message });
+                });
+              }
+            }
+          } catch (smsErr) {
+            logger.warn('Failed to resolve parent phones for absent SMS', { error: smsErr.message });
+          }
+        }
       }
     });
   },

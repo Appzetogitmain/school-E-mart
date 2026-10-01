@@ -135,7 +135,10 @@ const orderSchema = new mongoose.Schema({
     // It becomes 'placed' only when a payment is actually captured, and is swept away
     // (with its stock restored) if that never happens. Creating online orders straight
     // into 'placed' is what let an unpaid order enter fulfilment.
-    enum: ['pending_payment', 'placed', 'accepted', 'processed', 'packed', 'shipped', 'out_for_delivery', 'delivered', 'cancelled', 'returned'],
+    // 'payment_failed': an online order whose payment never arrived. Distinct from
+    // 'cancelled' (a real order deliberately cancelled by customer/vendor/admin) so
+    // the two never confuse each other in lists, counts, or notifications.
+    enum: ['pending_payment', 'placed', 'accepted', 'processed', 'packed', 'shipped', 'out_for_delivery', 'delivered', 'cancelled', 'payment_failed', 'returned'],
     required: true,
     default: 'placed'
   },

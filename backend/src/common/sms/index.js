@@ -72,6 +72,36 @@ const smsService = {
       return { success: true, delivered: false, error: error.message };
     }
   },
+
+  async sendAbsentAlert({ phone, studentName, dateStr }) {
+    if (!phone) return { success: false, reason: 'missing_phone' };
+    const provider = providers[env.SMS_PROVIDER];
+    if (!provider) return { success: false, reason: 'no_provider' };
+
+    const message = `Attendance Alert: ${studentName} has been marked ABSENT for ${dateStr}. - ${env.SMS_ENTITY_NAME}`;
+
+    if (!env.SMSINDIAHUB_API_KEY || !env.SMSINDIAHUB_SENDER_ID) {
+      logger.info(`📱 [SMS MOCK] Absent notification for ${maskPhone(phone)}: ${message}`);
+      return { success: true, delivered: false, mock: true };
+    }
+
+    try {
+      const result = await provider.send({ phone, message });
+      logger.info('Absent SMS sent successfully', {
+        phone: maskPhone(phone),
+        studentName,
+        jobId: result.jobId,
+      });
+      return { success: true, delivered: true, ...result };
+    } catch (error) {
+      logger.warn('Absent SMS dispatch failed (non-critical)', {
+        phone: maskPhone(phone),
+        studentName,
+        error: error.message,
+      });
+      return { success: false, error: error.message };
+    }
+  },
 };
 
 module.exports = smsService;

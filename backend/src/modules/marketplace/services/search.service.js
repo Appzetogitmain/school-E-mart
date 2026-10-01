@@ -22,9 +22,11 @@ const buildProductFilter = (query = {}, { publicOnly = true, vendorId = null } =
   // Storefront audience: User app passes 'users', School module passes 'schools'.
   // Legacy products predate the field, so 'users' also matches missing audience.
   if (query.audience === 'schools') {
-    filter.audience = 'schools';
+    filter.audience = { $in: ['schools', 'both'] };
   } else if (query.audience === 'users') {
     filter.audience = { $ne: 'schools' };
+  } else if (query.audience === 'both') {
+    filter.audience = 'both';
   }
   if (query.headerId) filter.headerId = query.headerId;
   if (query.categoryId) filter.categoryId = query.categoryId;

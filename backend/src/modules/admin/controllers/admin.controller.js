@@ -215,6 +215,33 @@ const adminController = {
     return created(res, { vendor }, 'Vendor created', req);
   }),
 
+  bulkImportVendors: asyncHandler(async (req, res) => {
+    const rawVendors = Array.isArray(req.body.vendors)
+      ? req.body.vendors
+      : Array.isArray(req.body)
+      ? req.body
+      : [];
+
+    if (!rawVendors.length) {
+      const { BadRequestError } = require('../../../common/errors');
+      throw new BadRequestError('No vendor records provided for import', 'EMPTY_IMPORT');
+    }
+
+    const results = await vendorApprovalService.bulkImportVendors(rawVendors, actorFrom(req), {
+      ipAddress: req.ip,
+      userAgent: req.get('user-agent'),
+      requestId: req.id,
+    });
+
+    return success(
+      res,
+      results,
+      `Import complete: ${results.successCount} succeeded, ${results.failedCount} failed`,
+      undefined,
+      req
+    );
+  }),
+
   updateVendor: asyncHandler(async (req, res) => {
     const vendor = await vendorApprovalService.updateVendor(
       req.params.vendorId,

@@ -20,8 +20,8 @@ const paginationQuery = Joi.object({
   availability: Joi.string().valid('in_stock', 'out_of_stock', 'low_stock').optional(),
   featured: Joi.string().valid('true', 'false').optional(),
   offers: Joi.string().valid('true', 'false').optional(),
-  // Storefront audience: 'users' = retail (User app), 'schools' = bulk (School module)
-  audience: Joi.string().valid('users', 'schools').optional(),
+  // Storefront audience: 'users' = retail (User app), 'schools' = bulk (School module), 'both'
+  audience: Joi.string().valid('users', 'schools', 'both').optional(),
 });
 
 const idParam = Joi.object({ id: objectId.required() });

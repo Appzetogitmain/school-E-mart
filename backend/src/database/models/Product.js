@@ -16,7 +16,7 @@ const productSchema = new mongoose.Schema({
   // 'schools' = bulk (shown in the School module). A vendor may list both kinds.
   audience: {
     type: String,
-    enum: ['users', 'schools'],
+    enum: ['users', 'schools', 'both'],
     required: true,
     default: 'users'
   },

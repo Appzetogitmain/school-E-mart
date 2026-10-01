@@ -2,8 +2,11 @@ const { NotFoundError, BadRequestError, ForbiddenError } = require('../../../com
 const orderRepository = require('../repositories/order.repository');
 const vendorAccessPolicy = require('../policies/vendorAccess.policy');
 const Order = require('../../../database/models/Order');
+const User = require('../../../database/models/User');
+const ParentProfile = require('../../../database/models/ParentProfile');
+const ChildProfile = require('../../../database/models/ChildProfile');
 const { triggerService } = require('../../../services/notification');
-const { AWAITING_PAYMENT } = require('../../orders/utils/statusMachine');
+const { AWAITING_PAYMENT, PAYMENT_FAILED } = require('../../orders/utils/statusMachine');
 
 // 'pending_payment' is deliberately absent: an unpaid online order is not the vendor's
 // to work on, so every transition out of it is refused here as well as being hidden
@@ -17,15 +20,66 @@ const VENDOR_TRANSITIONS = {
   out_for_delivery: ['delivered'],
 };
 
+async function enrichOrdersWithCustomerDetails(orders) {
+  if (!orders || orders.length === 0) return orders;
+
+  const userIds = [...new Set(orders.map((o) => (o.userId ? String(o.userId) : null)).filter(Boolean))];
+  const [users, parentProfiles, childProfiles] = await Promise.all([
+    userIds.length > 0 ? User.find({ _id: { $in: userIds } }).select('name phone email role').lean() : [],
+    userIds.length > 0 ? ParentProfile.find({ userId: { $in: userIds } }).lean() : [],
+    userIds.length > 0 ? ChildProfile.find({ parentUserId: { $in: userIds } }).lean() : [],
+  ]);
+
+  const userMap = new Map(users.map((u) => [String(u._id), u]));
+  const parentProfileMap = new Map(parentProfiles.map((p) => [String(p.userId), p]));
+  const childByParentUser = new Map();
+  const childById = new Map();
+
+  for (const c of childProfiles) {
+    childById.set(String(c._id), c);
+    if (!childByParentUser.has(String(c.parentUserId))) {
+      childByParentUser.set(String(c.parentUserId), c);
+    }
+  }
+
+  return orders.map((order) => {
+    const plainOrder = order.toObject ? order.toObject() : { ...order };
+    const uId = plainOrder.userId ? String(plainOrder.userId) : null;
+    const user = uId ? userMap.get(uId) : null;
+    const parentProfile = uId ? parentProfileMap.get(uId) : null;
+
+    let child = null;
+    if (parentProfile?.activeChildId) {
+      child = childById.get(String(parentProfile.activeChildId));
+    }
+    if (!child && uId) {
+      child = childByParentUser.get(uId);
+    }
+
+    const isSchoolOrder = plainOrder.audience === 'school';
+    const parentName = plainOrder.address?.name || user?.name || (isSchoolOrder ? 'School Buyer' : 'Customer');
+    const studentName = isSchoolOrder ? 'Institutional Order' : (child?.name || '—');
+    const studentGrade = child?.grade ? `Class ${child.grade}` : null;
+
+    return {
+      ...plainOrder,
+      parentName,
+      studentName,
+      studentGrade,
+      paymentStatus: plainOrder.paymentStatus || 'pending',
+    };
+  });
+}
+
 const vendorOrderService = {
-  listOrders(vendorId, query) {
+  async listOrders(vendorId, query) {
     const filter = {};
     // A vendor must never be shown an order that has not been paid for — it would put
     // stock aside and start packing against money that may never arrive.
     filter.orderStatus =
-      query.status && query.status !== AWAITING_PAYMENT
+      query.status && query.status !== AWAITING_PAYMENT && query.status !== PAYMENT_FAILED
         ? query.status
-        : { $ne: AWAITING_PAYMENT };
+        : { $nin: [AWAITING_PAYMENT, PAYMENT_FAILED] };
     if (query.from || query.to) {
       filter['audit.createdAt'] = {};
       if (query.from) filter['audit.createdAt'].$gte = new Date(query.from);
@@ -40,7 +94,11 @@ const vendorOrderService = {
     // through ANDed `{ status: 'placed' }` onto the filter built above and the vendor's
     // filtered list came back empty every time.
     const { page, limit, sort, fields } = query;
-    return orderRepository.paginateVendorOrders(vendorId, { page, limit, sort, fields }, filter);
+    const result = await orderRepository.paginateVendorOrders(vendorId, { page, limit, sort, fields }, filter);
+    if (result && Array.isArray(result.data)) {
+      result.data = await enrichOrdersWithCustomerDetails(result.data);
+    }
+    return result;
   },
 
   async getOrder(vendorId, orderId) {
@@ -48,12 +106,13 @@ const vendorOrderService = {
     if (!order) throw new NotFoundError('Order not found', 'ORDER_NOT_FOUND');
     // Unpaid online orders do not exist as far as a vendor is concerned, so knowing an
     // id is not a way around the list filter above.
-    if (order.orderStatus === AWAITING_PAYMENT) {
+    if (order.orderStatus === AWAITING_PAYMENT || order.orderStatus === PAYMENT_FAILED) {
       throw new NotFoundError('Order not found', 'ORDER_NOT_FOUND');
     }
 
-    const vendorItems = order.items.filter((item) => String(item.vendorId) === String(vendorId));
-    return { ...order, vendorItems };
+    const [enriched] = await enrichOrdersWithCustomerDetails([order]);
+    const vendorItems = (enriched.items || []).filter((item) => String(item.vendorId) === String(vendorId));
+    return { ...enriched, vendorItems };
   },
 
   async updateOrderStatus(vendorId, orderId, { status, note, courierName, awbNumber, trackingUrl }, actor = {}) {

@@ -6,6 +6,7 @@ import {
 import { listEvents, deleteEvent } from '../../../services/schoolApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 import { useSchoolId } from '../../../utils/schoolContext';
+import TodayBirthdaysWidget from '../../components/TodayBirthdaysWidget';
 
 // Events could previously only be created — the "Events & Calendar" menu promised
 // management but linked straight to the create form, so nothing could be
@@ -157,6 +158,13 @@ const SchoolEventsPage = () => {
       </div>
 
       <div className="px-5 pt-5">
+        {/* Today's Birthdays & Celebrations Widget */}
+        <TodayBirthdaysWidget
+          schoolId={schoolId}
+          variant="events"
+          className="mb-5"
+        />
+
         {error && (
           <p className="text-[11px] font-bold text-red-600 bg-red-50 border border-red-100 rounded-2xl px-4 py-3 mb-4">
             {error}

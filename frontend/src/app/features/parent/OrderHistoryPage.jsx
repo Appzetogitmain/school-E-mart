@@ -104,6 +104,7 @@ const OrderHistoryPage = () => {
     const normalized = String(status).toLowerCase();
     if (normalized === 'delivered') return <CheckCircle2 size={12} />;
     if (['shipped', 'out_for_delivery'].includes(normalized)) return <Package size={12} />;
+    if (['cancelled', 'payment_failed'].includes(normalized)) return <AlertCircle size={12} />;
     return <Clock size={12} />;
   };
 
