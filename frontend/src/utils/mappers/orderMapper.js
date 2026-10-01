@@ -15,6 +15,7 @@ const resolveOrderItemImage = (image) => {
 };
 
 export const ORDER_STATUS_LABELS = {
+  pending_payment: 'Awaiting Payment',
   placed: 'Order Placed',
   accepted: 'Accepted',
   processed: 'Processing',
@@ -23,6 +24,7 @@ export const ORDER_STATUS_LABELS = {
   out_for_delivery: 'Out for Delivery',
   delivered: 'Delivered',
   cancelled: 'Cancelled',
+  payment_failed: 'Payment Failed',
   returned: 'Returned',
 };
 
@@ -239,6 +241,7 @@ export const getOrderStatusStyle = (status = '') => {
     return 'bg-deep-purple text-white border-deep-purple/20';
   }
   if (normalized === 'cancelled') return 'bg-red-100 text-red-600 border-red-200';
+  if (normalized === 'payment_failed') return 'bg-orange-100 text-orange-600 border-orange-200';
   return 'bg-gray-100 text-gray-500 border-gray-200';
 };
 

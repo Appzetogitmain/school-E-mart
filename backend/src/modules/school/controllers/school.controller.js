@@ -16,6 +16,7 @@ const schoolFinanceService = require('../services/schoolFinance.service');
 const rfqService = require('../../rfq/services/rfq.service');
 const parentService = require('../services/parent.service');
 const attachmentService = require('../../admin/services/attachment.service');
+const birthdayService = require('../services/birthday.service');
 const schoolAccessPolicy = require('../policies/schoolAccess.policy');
 const { ROLES } = require('../../../constants/roles');
 
@@ -509,6 +510,11 @@ const schoolController = {
       file: req.file,
     });
     return created(res, { attachment }, 'File uploaded successfully', req);
+  }),
+
+  getTodayBirthdays: asyncHandler(async (req, res) => {
+    const data = await birthdayService.getTodayBirthdays(req.schoolId, req.query);
+    return success(res, data, "Today's birthdays fetched successfully", undefined, req);
   }),
 };
 

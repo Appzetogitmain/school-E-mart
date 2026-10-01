@@ -125,6 +125,11 @@ export const reactivateVendor = async (vendorId, payload = {}) => {
   return unwrapData(response)?.vendor;
 };
 
+export const bulkImportVendors = async (vendors) => {
+  const response = await apiClient.post('/admin/vendors/bulk-import', { vendors });
+  return unwrapData(response);
+};
+
 export const listSchools = async (params = {}) => {
   const response = await apiClient.get('/admin/schools', { params });
   return extractPaginated(response, 'schools');

@@ -197,7 +197,7 @@ describe('payment integrity: no online order without payment', () => {
 
       expect(expired.map((o) => String(o._id))).toContain(String(order._id));
       const swept = await Order.findById(order._id).lean();
-      expect(swept.orderStatus).toBe('cancelled');
+      expect(swept.orderStatus).toBe('payment_failed');
       // ...and handed back when they never do.
       expect((await Product.findById(product._id)).stock).toBe(stockBefore);
     });

@@ -212,6 +212,98 @@ const vendorApprovalService = {
       query
     );
   },
+
+  async bulkImportVendors(vendors = [], actor = {}, requestMeta = {}) {
+    const results = {
+      total: vendors.length,
+      successCount: 0,
+      failedCount: 0,
+      created: [],
+      errors: [],
+    };
+
+    for (let i = 0; i < vendors.length; i += 1) {
+      const row = vendors[i];
+      const rowNum = i + 1;
+
+      try {
+        const storeName = String(row.storeName || row['Store Name'] || '').trim();
+        const name = String(row.name || row.ownerName || row['Owner Name'] || '').trim();
+        const email = String(row.email || row.Email || '').trim().toLowerCase();
+        let phone = String(row.phone || row.Phone || row.mobile || row.Mobile || '').replace(/\D/g, '');
+
+        if (!storeName) {
+          throw new Error('Store Name is required');
+        }
+        if (!name) {
+          throw new Error('Owner Name is required');
+        }
+        if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+          throw new Error('Valid Email address is required');
+        }
+        // Normalize 10-digit Indian phone (strip leading 91 or 0 if 12/11 digits)
+        if (phone.length === 12 && phone.startsWith('91')) phone = phone.slice(2);
+        if (phone.length === 11 && phone.startsWith('0')) phone = phone.slice(1);
+        if (!/^[6-9]\d{9}$/.test(phone)) {
+          throw new Error('Valid 10-digit Indian mobile number starting with 6-9 is required');
+        }
+
+        const rawCommission = row.commissionPercent ?? row['Commission %'] ?? row.commission;
+        const parsedCommission = parseFloat(rawCommission);
+        const commissionPercent = !Number.isNaN(parsedCommission) && parsedCommission >= 0 && parsedCommission <= 100
+          ? parsedCommission
+          : 10;
+
+        const password = String(row.password || row.Password || 'Vendor@1234').trim();
+
+        // Optional address fields with graceful fallbacks
+        const address = {
+          line1: String(row.line1 || row.address || row.Address || '').trim() || undefined,
+          city: String(row.city || row.City || '').trim() || undefined,
+          state: String(row.state || row.State || '').trim() || undefined,
+          country: String(row.country || row.Country || 'India').trim(),
+          pinCode: String(row.pinCode || row.pincode || row.Pincode || row.PinCode || '').replace(/\D/g, '') || undefined,
+        };
+
+        const gstin = String(row.gstin || row.GSTIN || '').trim().toUpperCase() || undefined;
+        const panCard = String(row.panCard || row.pan || row.PAN || '').trim().toUpperCase() || undefined;
+
+        const payload = {
+          name,
+          storeName,
+          email,
+          phone,
+          password,
+          commissionPercent,
+          address,
+          gstin: gstin && /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z][Z][0-9A-Z]$/.test(gstin) ? gstin : undefined,
+          panCard: panCard && /^[A-Z]{5}[0-9]{4}[A-Z]$/.test(panCard) ? panCard : undefined,
+          autoApprove: true,
+        };
+
+        const vendor = await this.createVendor(payload, actor, requestMeta);
+        results.successCount += 1;
+        results.created.push({
+          row: rowNum,
+          id: vendor.id,
+          storeName: vendor.storeName,
+          email: vendor.email,
+          phone: vendor.phone,
+          refId: vendor.refId,
+        });
+      } catch (err) {
+        results.failedCount += 1;
+        results.errors.push({
+          row: rowNum,
+          storeName: row.storeName || row['Store Name'] || 'Unknown Store',
+          email: row.email || row.Email || '',
+          error: err.message || 'Failed to create vendor',
+        });
+      }
+    }
+
+    return results;
+  },
 };
 
 module.exports = vendorApprovalService;

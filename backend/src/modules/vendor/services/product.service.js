@@ -15,8 +15,9 @@ const vendorProductService = {
     const filter = { vendorId };
     if (query.approval) filter.approvalStatus = query.approval;
     if (query.publishStatus) filter.publishStatus = query.publishStatus;
-    if (query.audience === 'schools') filter.audience = 'schools';
+    if (query.audience === 'schools') filter.audience = { $in: ['schools', 'both'] };
     else if (query.audience === 'users') filter.audience = { $ne: 'schools' };
+    else if (query.audience === 'both') filter.audience = 'both';
     const options = {
       defaultSort: resolveSort(query.sort),
       populate: productService.ADMIN_PRODUCT_POPULATE,

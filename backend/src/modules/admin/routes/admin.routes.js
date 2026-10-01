@@ -192,6 +192,11 @@ router.post(
   validateBody(validators.createVendorSchema),
   adminController.createVendor
 );
+router.post(
+  '/vendors/bulk-import',
+  ...adminOnly,
+  adminController.bulkImportVendors
+);
 router.get(
   '/vendors/:vendorId',
   ...adminOnly,

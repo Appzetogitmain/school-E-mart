@@ -1,7 +1,8 @@
 import React, { useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, Link } from 'react-router-dom';
 import { Search, ShoppingBag, Star, Filter, Sparkles } from 'lucide-react';
 import SchoolHeader from '../../components/SchoolHeader';
+import { useCart } from '../../context/CartContext';
 import { useCategoryTree } from '../../../hooks/useCategoryTree';
 import { useProducts } from '../../../hooks/useProducts';
 import {
@@ -13,7 +14,9 @@ import {
 const SchoolSubcategoryPage = () => {
   const navigate = useNavigate();
   const { categoryName } = useParams();
+  const { addToCart } = useCart();
   const [activeSub, setActiveSub] = useState('All');
+  const [orderingId, setOrderingId] = useState(null);
   const schoolInfo = { name: 'Adarsh Public School', code: 'APS-1024' };
   const { tree, loading: treeLoading } = useCategoryTree();
 
@@ -27,29 +30,54 @@ const SchoolSubcategoryPage = () => {
     mapperKey: 'subcategory',
   });
 
+  const handleOrderBulk = async (e, product) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setOrderingId(product.id);
+    try {
+      await addToCart(product);
+      navigate('/school/cart');
+    } catch (err) {
+      console.error('Failed to add to bulk cart:', err);
+    } finally {
+      setOrderingId(null);
+    }
+  };
+
   const renderProductCard = (product) => (
     <div key={product.id} className="bg-white rounded-[2.5rem] shadow-xl shadow-gray-200/40 border border-gray-100 flex flex-col overflow-hidden group active:scale-[0.98] transition-all">
-      <div className="relative aspect-square bg-gray-50 p-4">
+      <Link to={`/school/product/${product.id}`} className="relative aspect-square bg-gray-50 p-4 block">
         <div className="absolute top-4 left-4 bg-primary/90 backdrop-blur-md px-3 py-1.5 rounded-full text-[8px] font-black text-white uppercase tracking-wider z-10 shadow-lg">
           Bulk Deal
         </div>
-        <button className="absolute top-4 right-4 text-gray-300 hover:text-red-500 transition-colors z-10 bg-white/80 backdrop-blur-md w-8 h-8 rounded-full flex items-center justify-center">
+        <button
+          type="button"
+          onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+          className="absolute top-4 right-4 text-gray-300 hover:text-red-500 transition-colors z-10 bg-white/80 backdrop-blur-md w-8 h-8 rounded-full flex items-center justify-center cursor-pointer"
+        >
           <Star size={16} />
         </button>
         <img src={product.image} alt={product.name} className="w-full h-full object-contain mix-blend-multiply group-hover:scale-110 transition-transform duration-700" />
-      </div>
+      </Link>
       <div className="p-5 flex flex-col flex-1">
-        <h3 className="text-sm font-bold text-deep-purple leading-tight line-clamp-2 h-10 mb-2">
-          {product.name}
-        </h3>
+        <Link to={`/school/product/${product.id}`}>
+          <h3 className="text-sm font-bold text-deep-purple leading-tight line-clamp-2 h-10 mb-2 hover:text-primary transition-colors">
+            {product.name}
+          </h3>
+        </Link>
         <p className="text-[10px] text-gray-400 font-medium mb-4">Institutional Quality Guaranteed</p>
         <div className="flex flex-col mb-4">
           <span className="text-primary font-black text-lg leading-none">{product.price}</span>
           <span className="text-[9px] text-gray-400 mt-1">per batch order</span>
         </div>
-        <button className="w-full py-3 bg-[#ffc107] text-black rounded-2xl text-[11px] font-black shadow-lg shadow-yellow-100 active:scale-95 transition-all flex items-center justify-center gap-2">
+        <button
+          type="button"
+          disabled={orderingId === product.id}
+          onClick={(e) => handleOrderBulk(e, product)}
+          className="w-full py-3 bg-[#ffc107] hover:bg-[#ffb300] text-black rounded-2xl text-[11px] font-black shadow-lg shadow-yellow-100 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
+        >
           <ShoppingBag size={14} />
-          ORDER BULK
+          {orderingId === product.id ? 'Adding to Bulk Cart...' : 'ORDER BULK'}
         </button>
       </div>
     </div>

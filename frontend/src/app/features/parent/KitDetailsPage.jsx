@@ -405,10 +405,22 @@ const KitDetailsPage = () => {
             <div className="bg-purple-50/60 rounded-2xl p-4 border border-purple-100/80 flex items-center justify-between mt-3">
               <div>
                 <p className="text-[9px] font-black text-gray-400 uppercase tracking-wider">Total Kit Price</p>
-                <span className="text-2xl font-black text-[#3b2d7d]">₹{currentTotal.toLocaleString()}</span>
+                <div className="flex items-baseline gap-2 flex-wrap">
+                  <span className="text-2xl font-black text-[#3b2d7d]">₹{currentTotal.toLocaleString()}</span>
+                  {currentKitData.mrp > currentTotal && (
+                    <span className="text-xs text-gray-400 font-bold line-through">MRP ₹{currentKitData.mrp.toLocaleString()}</span>
+                  )}
+                </div>
               </div>
               {currentKitData.mrp > currentTotal && (
-                <span className="text-xs text-gray-400 font-bold line-through">₹{currentKitData.mrp.toLocaleString()}</span>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-xs font-black text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-2.5 py-1 rounded-full">
+                    Save ₹{(currentKitData.mrp - currentTotal).toLocaleString()}
+                  </span>
+                  <span className="text-xs font-black text-rose-600 bg-rose-50 border border-rose-200/60 px-2 py-1 rounded-full">
+                    {Math.round(((currentKitData.mrp - currentTotal) / currentKitData.mrp) * 100)}% OFF
+                  </span>
+                </div>
               )}
             </div>
           </div>
@@ -543,7 +555,14 @@ const KitDetailsPage = () => {
         <div className="max-w-md mx-auto flex items-center justify-between gap-4">
           <div>
             <span className="text-[9px] font-black text-gray-400 uppercase tracking-wider block">Payable Amount</span>
-            <span className="text-xl font-black text-[#3b2d7d]">₹{currentTotal.toLocaleString()}</span>
+            <div className="flex items-baseline gap-2 flex-wrap">
+              <span className="text-xl font-black text-[#3b2d7d]">₹{currentTotal.toLocaleString()}</span>
+              {currentKitData?.mrp > currentTotal && (
+                <span className="text-[11px] text-gray-400 font-bold line-through">
+                  MRP ₹{currentKitData.mrp.toLocaleString()}
+                </span>
+              )}
+            </div>
           </div>
 
           <button

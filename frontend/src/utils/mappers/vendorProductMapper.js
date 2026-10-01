@@ -8,7 +8,7 @@ const APPROVAL_LABELS = {
   rejected: 'Rejected',
 };
 
-const resolveImageUrl = (img) => {
+export const resolveImageUrl = (img) => {
   if (!img) return null;
   if (typeof img === 'string') {
     return toAbsoluteUrl(img) || null;
@@ -20,6 +20,15 @@ const resolveImageUrl = (img) => {
 export const mapVendorProductForList = (product) => {
   const stock = Number(product?.stock ?? product?.inventory?.stock ?? 0);
   const lowStockThreshold = Number(product?.lowStockThreshold ?? 5);
+  const images = (product?.images || [])
+    .map((img) => ({
+      attachmentId:
+        img?.attachmentId?._id?.toString?.() ||
+        (typeof img?.attachmentId === 'string' ? img.attachmentId : img?._id?.toString?.() || ''),
+      url: resolveImageUrl(img) || '',
+      alt: img?.alt || '',
+    }))
+    .filter((img) => img.attachmentId || img.url);
 
   return {
     id: product?._id?.toString?.() || product?.id,
@@ -36,8 +45,11 @@ export const mapVendorProductForList = (product) => {
     lowStockThreshold,
     stockStatus: stock === 0 ? 'out' : stock <= lowStockThreshold ? 'low' : 'ok',
     price: paiseToRupees(product?.pricePaise),
+    originalPrice: product?.originalPricePaise ? paiseToRupees(product.originalPricePaise) : null,
+    originalPricePaise: product?.originalPricePaise,
     salesCount: product?.salesCount || 0,
     imageUrl: resolveImageUrl(product?.images?.[0]),
+    images,
     imgBg: 'bg-purple-100 text-purple-700',
     audience: product?.audience || 'users',
     raw: product,

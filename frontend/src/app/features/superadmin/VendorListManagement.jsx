@@ -3,7 +3,9 @@ import { createPortal } from 'react-dom';
 import {
   Search, Edit, Trash2, X, Download, Plus, Store, Eye, FileText, ExternalLink,
   Check, AlertCircle, RefreshCw, Loader2, BadgeCheck, MapPin, Percent, ShieldCheck,
+  FileSpreadsheet,
 } from 'lucide-react';
+import VendorImportModal from './VendorImportModal';
 import {
   listVendors,
   createVendor,
@@ -154,8 +156,9 @@ const VendorListManagement = () => {
   const [actionId, setActionId] = useState(null);
   const [saving, setSaving] = useState(false);
 
-  // Create modal
+  // Create & Import modals
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [createForm, setCreateForm] = useState(EMPTY_CREATE);
 
   // Edit modal
@@ -492,6 +495,13 @@ const VendorListManagement = () => {
               className="w-full bg-[#F8F9FB]/60 border border-gray-200 rounded-xl pl-9 pr-4 py-2.5 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 placeholder-gray-400 font-medium"
             />
           </div>
+          <button
+            onClick={() => setIsImportModalOpen(true)}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl px-4 py-2.5 text-xs font-extrabold flex items-center gap-1.5 transition-all shadow-sm shadow-emerald-700/10 active:scale-95 cursor-pointer"
+          >
+            <FileSpreadsheet size={13} className="stroke-[2.5]" />
+            <span>IMPORT VENDORS (.XLSX)</span>
+          </button>
           <button
             onClick={handleExport}
             disabled={visibleVendors.length === 0}
@@ -1161,6 +1171,13 @@ const VendorListManagement = () => {
         </div>,
         document.body
       )}
+
+      {/* VENDOR BULK IMPORT MODAL */}
+      <VendorImportModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        onImportSuccess={loadVendors}
+      />
 
     </div>
   );
