@@ -13,7 +13,9 @@ import {
 } from '../../services/vendorApi';
 import { getCategoryTree } from '../../services/catalogApi';
 import { getErrorMessage } from '../../utils/apiHelpers';
-import { mapVendorProductForList } from '../../utils/mappers/vendorProductMapper';
+import { mapVendorProductForList, resolveImageUrl } from '../../utils/mappers/vendorProductMapper';
+
+const MAX_PRODUCT_IMAGES = 6;
 
 const VendorProducts = () => {
   const location = useLocation();
@@ -37,6 +39,7 @@ const VendorProducts = () => {
   const [newVariant, setNewVariant] = useState('');
   const [newStock, setNewStock] = useState('35');
   const [newPrice, setNewPrice] = useState('499');
+  const [newOriginalPrice, setNewOriginalPrice] = useState('');
   const [newStatus, setNewStatus] = useState('PUBLISHED');
   const [newAudience, setNewAudience] = useState('users'); // 'users' (retail) | 'schools' (bulk)
   const [newAdded, setNewAdded] = useState(false);
@@ -46,6 +49,7 @@ const VendorProducts = () => {
   const [newHeaderId, setNewHeaderId] = useState('');
   const [newCategoryId, setNewCategoryId] = useState('');
   const [newSubcategoryId, setNewSubcategoryId] = useState('');
+  const [newImages, setNewImages] = useState([]); // [{ attachmentId, url, name }]
   const [imageAttachmentId, setImageAttachmentId] = useState('');
   const [imagePreview, setImagePreview] = useState('');
   const [uploadingImage, setUploadingImage] = useState(false);
@@ -90,31 +94,74 @@ const VendorProducts = () => {
 
   const resetProductForm = () => {
     setNewName(''); setNewDescription(''); setNewBrand(''); setNewCode('');
-    setNewVariant(''); setNewStock('35'); setNewPrice('499'); setNewStatus('PUBLISHED');
+    setNewVariant(''); setNewStock('35'); setNewPrice('499'); setNewOriginalPrice(''); setNewStatus('PUBLISHED');
     setNewAudience('users'); setNewHeaderId(''); setNewCategoryId(''); setNewSubcategoryId('');
     setImageAttachmentId(''); setImagePreview('');
+    setNewImages([]);
   };
 
   const handleImageUpload = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (file.size > 5 * 1024 * 1024) {
-      setError('Image must be under 5MB');
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+
+    if (newImages.length + files.length > MAX_PRODUCT_IMAGES) {
+      setError(`You can upload a maximum of ${MAX_PRODUCT_IMAGES} images (${newImages.length} already uploaded).`);
+      if (e.target) e.target.value = '';
       return;
     }
+
+    const oversized = files.find((f) => f.size > 5 * 1024 * 1024);
+    if (oversized) {
+      setError('Each image must be under 5MB');
+      if (e.target) e.target.value = '';
+      return;
+    }
+
     setError('');
     setUploadingImage(true);
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-      const attachment = await uploadVendorDocument(formData);
-      setImageAttachmentId(attachment?._id || attachment?.id || '');
-      setImagePreview(URL.createObjectURL(file));
+      const uploaded = [];
+      for (const file of files) {
+        const formData = new FormData();
+        formData.append('file', file);
+        const attachment = await uploadVendorDocument(formData);
+        const id = attachment?._id || attachment?.id || '';
+        if (id) {
+          uploaded.push({
+            attachmentId: id,
+            url: URL.createObjectURL(file),
+            name: file.name,
+          });
+        }
+      }
+      setNewImages((prev) => {
+        const combined = [...prev, ...uploaded].slice(0, MAX_PRODUCT_IMAGES);
+        if (combined.length > 0) {
+          setImageAttachmentId(combined[0].attachmentId);
+          setImagePreview(combined[0].url);
+        }
+        return combined;
+      });
     } catch (err) {
       setError(getErrorMessage(err, 'Image upload failed'));
     } finally {
       setUploadingImage(false);
+      if (e.target) e.target.value = '';
     }
+  };
+
+  const removeNewImage = (indexToRemove) => {
+    setNewImages((prev) => {
+      const updated = prev.filter((_, idx) => idx !== indexToRemove);
+      if (updated.length > 0) {
+        setImageAttachmentId(updated[0].attachmentId);
+        setImagePreview(updated[0].url);
+      } else {
+        setImageAttachmentId('');
+        setImagePreview('');
+      }
+      return updated;
+    });
   };
 
   const handlePublish = async (e) => {
@@ -125,10 +172,17 @@ const VendorProducts = () => {
     if (!newCategoryId) { setActiveFormTab('Groups'); return setError('Select a category'); }
     const pricePaise = Math.round(Number(newPrice) * 100);
     if (!pricePaise || pricePaise < 0) { setActiveFormTab('Item Variants'); return setError('Enter a valid price'); }
-    if (!imageAttachmentId) { setActiveFormTab('Photos'); return setError('Upload at least one product image'); }
+    if (!newImages.length && !imageAttachmentId) { setActiveFormTab('Photos'); return setError('Upload at least one product image'); }
 
     setPublishing(true);
     try {
+      const finalImages = newImages.length > 0
+        ? newImages.map((img, idx) => ({
+            attachmentId: img.attachmentId,
+            alt: `${newName.trim()}${idx > 0 ? ` photo ${idx + 1}` : ''}`,
+          }))
+        : [{ attachmentId: imageAttachmentId }];
+
       await createVendorProduct({
         name: newName.trim(),
         sku: newCode.trim() || `SKU-${Date.now().toString(36).toUpperCase()}`,
@@ -139,8 +193,9 @@ const VendorProducts = () => {
         subcategoryId: newSubcategoryId || undefined,
         audience: newAudience,
         pricePaise,
+        originalPricePaise: newOriginalPrice && Number(newOriginalPrice) > 0 ? Math.round(Number(newOriginalPrice) * 100) : undefined,
         stock: Number(newStock) || 0,
-        images: [{ attachmentId: imageAttachmentId }],
+        images: finalImages,
         publishStatus: newStatus === 'PUBLISHED' ? 'published' : 'draft',
       });
       setNewAdded(true);
@@ -163,12 +218,12 @@ const VendorProducts = () => {
   const [editBrand, setEditBrand] = useState('');
   const [editDescription, setEditDescription] = useState('');
   const [editPrice, setEditPrice] = useState('');
+  const [editOriginalPrice, setEditOriginalPrice] = useState('');
   const [editStock, setEditStock] = useState('');
   const [editHeaderId, setEditHeaderId] = useState('');
   const [editCategoryId, setEditCategoryId] = useState('');
   const [editSubcategoryId, setEditSubcategoryId] = useState('');
-  const [editImageAttachmentId, setEditImageAttachmentId] = useState(null);
-  const [editImagePreview, setEditImagePreview] = useState(null);
+  const [editImages, setEditImages] = useState([]); // [{ attachmentId, url, alt }]
   const [editPublishStatus, setEditPublishStatus] = useState('published');
   const [editAudience, setEditAudience] = useState('users');
   const [updating, setUpdating] = useState(false);
@@ -179,29 +234,69 @@ const VendorProducts = () => {
     setEditBrand(product.raw?.brand || '');
     setEditDescription(product.raw?.description || '');
     setEditPrice(product.price ? product.price.toString() : '');
+    setEditOriginalPrice(product.originalPrice ? product.originalPrice.toString() : product.raw?.originalPricePaise ? (product.raw.originalPricePaise / 100).toString() : '');
     setEditStock(product.stock ? product.stock.toString() : '0');
     setEditPublishStatus(product.publishStatus || 'published');
     setEditAudience(product.audience || product.raw?.audience || 'users');
     setEditHeaderId(product.raw?.headerId?._id || product.raw?.headerId || '');
     setEditCategoryId(product.raw?.categoryId?._id || product.raw?.categoryId || '');
     setEditSubcategoryId(product.raw?.subcategoryId?._id || product.raw?.subcategoryId || '');
-    setEditImagePreview(product.imageUrl || null);
-    setEditImageAttachmentId(null);
+
+    const existingImages = (product.images || product.raw?.images || []).map((img, idx) => {
+      const id = img?.attachmentId?._id?.toString?.() ||
+                 (typeof img?.attachmentId === 'string' ? img.attachmentId : img?._id?.toString?.() || '');
+      const url = img?.url || resolveImageUrl(img) || (idx === 0 ? product.imageUrl : '');
+      return { attachmentId: id, url: url || product.imageUrl, alt: img?.alt || '' };
+    }).filter((img) => img.attachmentId || img.url);
+
+    setEditImages(existingImages.length ? existingImages : product.imageUrl ? [{ attachmentId: null, url: product.imageUrl }] : []);
   };
 
   const handleEditImageUpload = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+
+    if (editImages.length + files.length > MAX_PRODUCT_IMAGES) {
+      setError(`You can upload a maximum of ${MAX_PRODUCT_IMAGES} images (${editImages.length} already added).`);
+      if (e.target) e.target.value = '';
+      return;
+    }
+
+    const oversized = files.find((f) => f.size > 5 * 1024 * 1024);
+    if (oversized) {
+      setError('Each image must be under 5MB');
+      if (e.target) e.target.value = '';
+      return;
+    }
+
+    setError('');
     setUploadingImage(true);
     try {
-      const att = await uploadVendorDocument(file);
-      setEditImageAttachmentId(att.id || att._id);
-      setEditImagePreview(URL.createObjectURL(file));
+      const uploaded = [];
+      for (const file of files) {
+        const formData = new FormData();
+        formData.append('file', file);
+        const att = await uploadVendorDocument(formData);
+        const id = att?._id || att?.id || '';
+        if (id) {
+          uploaded.push({
+            attachmentId: id,
+            url: URL.createObjectURL(file),
+            name: file.name,
+          });
+        }
+      }
+      setEditImages((prev) => [...prev, ...uploaded].slice(0, MAX_PRODUCT_IMAGES));
     } catch (err) {
       setError(getErrorMessage(err, 'Image upload failed'));
     } finally {
       setUploadingImage(false);
+      if (e.target) e.target.value = '';
     }
+  };
+
+  const removeEditImage = (indexToRemove) => {
+    setEditImages((prev) => prev.filter((_, idx) => idx !== indexToRemove));
   };
 
   const handleUpdateSubmit = async (e) => {
@@ -215,6 +310,7 @@ const VendorProducts = () => {
         brand: editBrand.trim() || undefined,
         description: editDescription.trim() || undefined,
         pricePaise: Math.round(Number(editPrice) * 100),
+        originalPricePaise: editOriginalPrice && Number(editOriginalPrice) > 0 ? Math.round(Number(editOriginalPrice) * 100) : null,
         stock: Number(editStock) || 0,
         publishStatus: editPublishStatus,
         audience: editAudience,
@@ -222,7 +318,15 @@ const VendorProducts = () => {
       if (editHeaderId) payload.headerId = editHeaderId;
       if (editCategoryId) payload.categoryId = editCategoryId;
       if (editSubcategoryId) payload.subcategoryId = editSubcategoryId;
-      if (editImageAttachmentId) payload.images = [{ attachmentId: editImageAttachmentId }];
+      if (editImages.length > 0) {
+        const validImages = editImages.filter((img) => img.attachmentId);
+        if (validImages.length > 0) {
+          payload.images = validImages.map((img, idx) => ({
+            attachmentId: img.attachmentId,
+            alt: img.alt || `${editName.trim()} photo ${idx + 1}`,
+          }));
+        }
+      }
 
       await updateVendorProduct(editingProduct.id, payload);
       await loadProducts();
@@ -320,6 +424,7 @@ const VendorProducts = () => {
               { key: 'All', label: 'All Products' },
               { key: 'users', label: 'Users (Retail)' },
               { key: 'schools', label: 'Schools (Bulk)' },
+              { key: 'both', label: 'Both (Shared)' },
             ].map((tab) => (
               <button
                 key={tab.key}
@@ -486,11 +591,16 @@ const VendorProducts = () => {
                             )}
                             <div>
                               <p className="font-extrabold text-gray-900 tracking-tight leading-tight">{product.name}</p>
-                              <div className="flex items-center gap-2 mt-1">
+                              <div className="flex items-center gap-1.5 flex-wrap mt-1">
                                 <span className="text-[10px] font-black text-[#5B3FD6] bg-purple-50 px-1.5 py-0.5 rounded border border-purple-100">
                                   ₹{product.price}
                                 </span>
-                                <span className="text-[9px] font-bold text-gray-400 uppercase">Stock: {product.stock}</span>
+                                {product.originalPrice && (
+                                  <span className="text-[9px] text-gray-400 line-through font-semibold">
+                                    MRP ₹{product.originalPrice}
+                                  </span>
+                                )}
+                                <span className="text-[9px] font-bold text-gray-400 uppercase ml-1">Stock: {product.stock}</span>
                               </div>
                             </div>
                           </div>
@@ -508,9 +618,11 @@ const VendorProducts = () => {
                           <span className={`inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border ${
                             product.audience === 'schools'
                               ? 'bg-blue-50 text-blue-600 border-blue-100'
+                              : product.audience === 'both'
+                              ? 'bg-purple-50 text-[#5B3FD6] border-purple-200'
                               : 'bg-gray-50 text-gray-600 border-gray-150'
                           }`}>
-                            {product.audience === 'schools' ? 'Schools' : 'Users'}
+                            {product.audience === 'schools' ? 'Schools' : product.audience === 'both' ? 'Both' : 'Users'}
                           </span>
                         </td>
 
@@ -626,9 +738,15 @@ const VendorProducts = () => {
 
                 <div className="flex-1 overflow-y-auto p-6 space-y-6">
                   <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100 flex gap-3.5 items-center">
-                    <div className={`w-12 h-12 rounded-xl ${selectedProduct.imgBg} flex items-center justify-center font-black text-xl shrink-0`}>
-                      {selectedProduct.name.charAt(0)}
-                    </div>
+                    {selectedProduct.imageUrl ? (
+                      <div className="w-12 h-12 rounded-xl border border-gray-200 overflow-hidden bg-white shrink-0 shadow-xs">
+                        <img src={selectedProduct.imageUrl} alt={selectedProduct.name} className="w-full h-full object-cover" />
+                      </div>
+                    ) : (
+                      <div className={`w-12 h-12 rounded-xl ${selectedProduct.imgBg} flex items-center justify-center font-black text-xl shrink-0`}>
+                        {selectedProduct.name.charAt(0)}
+                      </div>
+                    )}
                     <div>
                       <h4 className="font-extrabold text-sm text-gray-900 leading-tight">{selectedProduct.name}</h4>
                       <span className="inline-flex items-center gap-1.5 mt-1.5 text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100">
@@ -637,13 +755,33 @@ const VendorProducts = () => {
                     </div>
                   </div>
 
+                  {selectedProduct.images?.length > 1 && (
+                    <div className="space-y-2">
+                      <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block font-sans">
+                        Product Photos ({selectedProduct.images.length})
+                      </span>
+                      <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                        {selectedProduct.images.map((img, idx) => (
+                          <div key={idx} className="relative w-14 h-14 rounded-xl border border-gray-200 overflow-hidden shrink-0 shadow-2xs">
+                            <img src={img.url} alt={`Photo ${idx + 1}`} className="w-full h-full object-cover" />
+                            {idx === 0 && (
+                              <span className="absolute bottom-0 inset-x-0 bg-[#5B3FD6]/90 text-white text-[7px] font-black text-center py-0.5 uppercase tracking-wider">
+                                Cover
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   <div className="space-y-3">
                     <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block font-sans">Details</span>
                     <div className="border border-gray-100 rounded-2xl p-4 space-y-3 bg-white shadow-sm text-xs font-semibold">
                       <div className="flex justify-between items-center">
                         <span className="text-gray-400">Sell To</span>
-                        <span className={selectedProduct.audience === 'schools' ? 'text-blue-600 font-bold' : 'text-gray-800 font-bold'}>
-                          {selectedProduct.audience === 'schools' ? 'Schools (Bulk)' : 'Users (Retail)'}
+                        <span className={selectedProduct.audience === 'schools' ? 'text-blue-600 font-bold' : selectedProduct.audience === 'both' ? 'text-[#5B3FD6] font-bold' : 'text-gray-800 font-bold'}>
+                          {selectedProduct.audience === 'schools' ? 'Schools (Bulk)' : selectedProduct.audience === 'both' ? 'Both (Users & Schools)' : 'Users (Retail)'}
                         </span>
                       </div>
                       <div className="flex justify-between items-center">
@@ -787,10 +925,11 @@ const VendorProducts = () => {
               {/* Audience — who this product is sold to */}
               <div className="bg-white border border-gray-100 rounded-2xl p-4.5 space-y-2.5 shadow-sm">
                 <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block">Sell To</span>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-3 gap-2">
                   {[
                     { key: 'users', label: 'Users', hint: 'Retail' },
                     { key: 'schools', label: 'Schools', hint: 'Bulk' },
+                    { key: 'both', label: 'Both', hint: 'Retail & Bulk' },
                   ].map((opt) => {
                     const active = newAudience === opt.key;
                     return (
@@ -798,7 +937,7 @@ const VendorProducts = () => {
                         key={opt.key}
                         type="button"
                         onClick={() => setNewAudience(opt.key)}
-                        className={`rounded-xl px-3 py-2.5 text-left border transition-all ${
+                        className={`rounded-xl px-2.5 py-2.5 text-left border transition-all ${
                           active ? 'bg-[#0E0E2C] border-[#0E0E2C] text-white' : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300'
                         }`}
                       >
@@ -809,7 +948,7 @@ const VendorProducts = () => {
                   })}
                 </div>
                 <span className="block text-[8px] text-gray-400 font-medium">
-                  Users → shown in the parent app. Schools → shown in the school module.
+                  Users → parent app. Schools → school module. Both → visible in both applications.
                 </span>
               </div>
 
@@ -913,12 +1052,26 @@ const VendorProducts = () => {
 
                       {/* Price Input */}
                       <div className="space-y-2">
-                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider block">Unit Price (₹)</label>
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider block">Selling Price (₹)</label>
                         <input 
                           type="number"
                           value={newPrice}
                           onChange={(e) => setNewPrice(e.target.value)}
                           placeholder="499"
+                          className="w-full px-4 py-3 bg-gray-50/50 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2"
+                        />
+                      </div>
+
+                      {/* MRP / Original Price Input */}
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider block">
+                          MRP / Original Price (₹) <span className="text-gray-400 normal-case font-normal">(optional, for discount badge)</span>
+                        </label>
+                        <input 
+                          type="number"
+                          value={newOriginalPrice}
+                          onChange={(e) => setNewOriginalPrice(e.target.value)}
+                          placeholder="699"
                           className="w-full px-4 py-3 bg-gray-50/50 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2"
                         />
                       </div>
@@ -1000,53 +1153,92 @@ const VendorProducts = () => {
 
                 {activeFormTab === 'Photos' && (
                   <div className="space-y-6">
-                    <h3 className="font-extrabold text-sm text-gray-900 border-b border-gray-50 pb-2">Product Images</h3>
+                    <div className="border-b border-gray-100 pb-3 flex items-center justify-between">
+                      <div>
+                        <h3 className="font-extrabold text-sm text-gray-900">Product Images</h3>
+                        <p className="text-[11px] text-gray-400 font-medium mt-0.5">
+                          Upload 1 to {MAX_PRODUCT_IMAGES} photos. The first image will be used as the primary cover photo.
+                        </p>
+                      </div>
+                      <span className={`text-[11px] font-black px-2.5 py-1 rounded-full ${
+                        newImages.length >= MAX_PRODUCT_IMAGES
+                          ? 'bg-amber-50 text-amber-600 border border-amber-200'
+                          : 'bg-purple-50 text-[#5B3FD6] border border-purple-100'
+                      }`}>
+                        {newImages.length} / {MAX_PRODUCT_IMAGES} Images
+                      </span>
+                    </div>
 
-                    {imagePreview ? (
-                      <div className="flex items-center gap-4">
-                        <div className="w-28 h-28 rounded-2xl border border-gray-200 overflow-hidden bg-gray-50 shrink-0">
-                          <img src={imagePreview} alt="Product" className="w-full h-full object-cover" />
-                        </div>
-                        <div className="space-y-2">
-                          <p className="text-xs font-black text-emerald-600 flex items-center gap-1"><CheckCircle2 size={14} /> Image uploaded</p>
-                          <div className="flex items-center gap-3">
-                            <label className="inline-flex items-center gap-1 text-[11px] font-black text-[#5B3FD6] cursor-pointer">
-                              <Camera size={12} /> Take photo
-                              {/* capture="environment" opens the device's camera app
-                                  directly on mobile; desktop browsers that don't
-                                  support it fall back to the normal file picker. */}
-                              <input type="file" accept=".png,.jpg,.jpeg,.webp" capture="environment" className="hidden" onChange={handleImageUpload} />
-                            </label>
-                            <label className="inline-flex items-center gap-1 text-[11px] font-black text-[#5B3FD6] cursor-pointer">
-                              <UploadCloud size={12} /> Replace image
-                              <input type="file" accept=".png,.jpg,.jpeg,.webp" className="hidden" onChange={handleImageUpload} />
-                            </label>
+                    {/* Image Grid */}
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                      {newImages.map((img, idx) => (
+                        <div
+                          key={idx}
+                          className="relative group aspect-square rounded-2xl border-2 border-gray-200 hover:border-[#5B3FD6] overflow-hidden bg-gray-50 shadow-xs transition-all"
+                        >
+                          <img src={img.url} alt={`Product ${idx + 1}`} className="w-full h-full object-cover" />
+                          <div className="absolute top-2 left-2 right-2 flex items-center justify-between">
+                            {idx === 0 ? (
+                              <span className="px-2 py-0.5 rounded-md bg-[#5B3FD6] text-white text-[9px] font-black uppercase tracking-wider shadow-sm flex items-center gap-1">
+                                <CheckCircle2 size={10} /> Cover
+                              </span>
+                            ) : (
+                              <span className="px-1.5 py-0.5 rounded-md bg-black/60 text-white text-[9px] font-bold">
+                                Photo {idx + 1}
+                              </span>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => removeNewImage(idx)}
+                              className="w-6 h-6 rounded-full bg-red-500 hover:bg-red-600 text-white flex items-center justify-center shadow-md transition-all cursor-pointer hover:scale-110 active:scale-95"
+                              title="Delete photo"
+                            >
+                              <X size={12} />
+                            </button>
                           </div>
                         </div>
-                      </div>
-                    ) : (
-                      <div className="border-2 border-dashed border-purple-200 hover:border-[#5B3FD6]/30 bg-purple-50/10 rounded-2xl p-12 text-center transition-all">
-                        <div className="flex flex-col items-center justify-center space-y-3">
-                          <div className="w-12 h-12 rounded-xl bg-purple-50 text-[#5B3FD6] flex items-center justify-center border border-purple-100">
-                            {uploadingImage ? <Loader2 size={24} className="animate-spin" /> : <UploadCloud size={24} />}
-                          </div>
-                          <div>
-                            <p className="text-xs font-black text-gray-900">{uploadingImage ? 'Uploading…' : 'Add a product image'}</p>
-                            <p className="text-[10px] font-bold text-gray-400 mt-1">PNG, JPG formats supported up to 5MB.</p>
-                          </div>
-                          <div className="flex items-center gap-2.5 pt-1">
-                            <label className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white border border-purple-200 hover:border-[#5B3FD6]/40 text-[#5B3FD6] text-[11px] font-black cursor-pointer transition-all">
-                              <Camera size={13} /> Take Photo
-                              <input type="file" accept=".png,.jpg,.jpeg,.webp" capture="environment" className="hidden" onChange={handleImageUpload} />
-                            </label>
-                            <label className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white border border-purple-200 hover:border-[#5B3FD6]/40 text-[#5B3FD6] text-[11px] font-black cursor-pointer transition-all">
-                              <UploadCloud size={13} /> Browse to Upload
-                              <input type="file" accept=".png,.jpg,.jpeg,.webp" className="hidden" onChange={handleImageUpload} />
-                            </label>
-                          </div>
+                      ))}
+
+                      {/* Add Image Slot (Visible if < MAX_PRODUCT_IMAGES) */}
+                      {newImages.length < MAX_PRODUCT_IMAGES && (
+                        <div className={`aspect-square rounded-2xl border-2 border-dashed ${
+                          newImages.length === 0
+                            ? 'border-purple-200 hover:border-[#5B3FD6]/40 bg-purple-50/15 col-span-2 sm:col-span-3 py-10'
+                            : 'border-gray-300 hover:border-[#5B3FD6]/40 bg-gray-50/50'
+                        } flex flex-col items-center justify-center p-4 text-center transition-all`}>
+                          {uploadingImage ? (
+                            <div className="flex flex-col items-center gap-2">
+                              <Loader2 size={24} className="animate-spin text-[#5B3FD6]" />
+                              <span className="text-[11px] font-bold text-gray-500">Uploading photos…</span>
+                            </div>
+                          ) : (
+                            <div className="space-y-3 flex flex-col items-center justify-center">
+                              <div className="w-10 h-10 rounded-xl bg-purple-50 text-[#5B3FD6] flex items-center justify-center border border-purple-100">
+                                <UploadCloud size={20} />
+                              </div>
+                              <div>
+                                <p className="text-xs font-black text-gray-900">
+                                  {newImages.length === 0 ? 'Add Product Photos' : 'Add More Photos'}
+                                </p>
+                                <p className="text-[10px] font-bold text-gray-400 mt-0.5">
+                                  PNG, JPG up to 5MB ({MAX_PRODUCT_IMAGES - newImages.length} slots left)
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-2 pt-1">
+                                <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-purple-200 hover:border-[#5B3FD6]/40 text-[#5B3FD6] text-[11px] font-black cursor-pointer transition-all shadow-2xs">
+                                  <Camera size={12} /> Camera
+                                  <input type="file" accept=".png,.jpg,.jpeg,.webp" capture="environment" className="hidden" onChange={handleImageUpload} />
+                                </label>
+                                <label className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-[#5B3FD6] hover:bg-[#4C31BD] text-white text-[11px] font-black cursor-pointer transition-all shadow-2xs">
+                                  <UploadCloud size={12} /> Browse Files
+                                  <input type="file" accept=".png,.jpg,.jpeg,.webp" multiple className="hidden" onChange={handleImageUpload} />
+                                </label>
+                              </div>
+                            </div>
+                          )}
                         </div>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
                 )}
 
@@ -1163,10 +1355,11 @@ const VendorProducts = () => {
               {/* Sell To — who this product is sold to */}
               <div className="space-y-1.5">
                 <label className="text-[11px] font-black text-gray-600 uppercase tracking-wider block">Sell To</label>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-3 gap-2">
                   {[
                     { key: 'users', label: 'Users', hint: 'Retail' },
                     { key: 'schools', label: 'Schools', hint: 'Bulk' },
+                    { key: 'both', label: 'Both', hint: 'Retail & Bulk' },
                   ].map((opt) => {
                     const active = editAudience === opt.key;
                     return (
@@ -1174,7 +1367,7 @@ const VendorProducts = () => {
                         key={opt.key}
                         type="button"
                         onClick={() => setEditAudience(opt.key)}
-                        className={`rounded-xl px-3 py-2.5 text-left border transition-all ${
+                        className={`rounded-xl px-2.5 py-2.5 text-left border transition-all ${
                           active ? 'bg-[#0E0E2C] border-[#0E0E2C] text-white' : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300'
                         }`}
                       >
@@ -1197,7 +1390,7 @@ const VendorProducts = () => {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="space-y-1.5">
                   <label className="text-[11px] font-black text-gray-600 uppercase tracking-wider block">Brand</label>
                   <input 
@@ -1209,7 +1402,7 @@ const VendorProducts = () => {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-[11px] font-black text-gray-600 uppercase tracking-wider block">Price (₹)</label>
+                  <label className="text-[11px] font-black text-gray-600 uppercase tracking-wider block">Selling Price (₹)</label>
                   <input 
                     type="number"
                     step="0.01"
@@ -1217,6 +1410,21 @@ const VendorProducts = () => {
                     value={editPrice}
                     onChange={(e) => setEditPrice(e.target.value)}
                     required
+                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#5B3FD6]/20 focus:border-[#5B3FD6]"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-black text-gray-600 uppercase tracking-wider block">
+                    MRP / Orig. (₹) <span className="text-gray-400 normal-case font-normal">(optional)</span>
+                  </label>
+                  <input 
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={editOriginalPrice}
+                    onChange={(e) => setEditOriginalPrice(e.target.value)}
+                    placeholder="e.g. 699"
                     className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#5B3FD6]/20 focus:border-[#5B3FD6]"
                   />
                 </div>
@@ -1256,6 +1464,67 @@ const VendorProducts = () => {
                   onChange={(e) => setEditDescription(e.target.value)}
                   className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-semibold text-gray-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#5B3FD6]/20 focus:border-[#5B3FD6]"
                 />
+              </div>
+
+              {/* Product Photos Section */}
+              <div className="space-y-2 pt-2 border-t border-gray-100">
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-black text-gray-600 uppercase tracking-wider block">
+                    Product Photos ({editImages.length} / {MAX_PRODUCT_IMAGES})
+                  </label>
+                  <span className="text-[10px] text-gray-400 font-medium">1st photo is Cover photo</span>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2.5">
+                  {editImages.map((img, idx) => (
+                    <div
+                      key={idx}
+                      className="relative group aspect-square rounded-xl border border-gray-200 overflow-hidden bg-gray-50 shadow-xs"
+                    >
+                      <img src={img.url} alt={`Product ${idx + 1}`} className="w-full h-full object-cover" />
+                      <div className="absolute top-1.5 left-1.5 right-1.5 flex items-center justify-between">
+                        {idx === 0 ? (
+                          <span className="px-1.5 py-0.5 rounded bg-[#5B3FD6] text-white text-[8px] font-black uppercase tracking-wider shadow-sm">
+                            Cover
+                          </span>
+                        ) : (
+                          <span className="px-1 py-0.5 rounded bg-black/60 text-white text-[8px] font-bold">
+                            #{idx + 1}
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => removeEditImage(idx)}
+                          className="w-5 h-5 rounded-full bg-red-500 hover:bg-red-600 text-white flex items-center justify-center shadow-md transition-all cursor-pointer hover:scale-110 active:scale-95"
+                          title="Remove photo"
+                        >
+                          <X size={10} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+
+                  {/* Add more button in edit modal */}
+                  {editImages.length < MAX_PRODUCT_IMAGES && (
+                    <div className="aspect-square rounded-xl border-2 border-dashed border-gray-200 hover:border-[#5B3FD6]/40 bg-gray-50/50 flex flex-col items-center justify-center p-2 text-center transition-all">
+                      {uploadingImage ? (
+                        <div className="flex flex-col items-center gap-1">
+                          <Loader2 size={16} className="animate-spin text-[#5B3FD6]" />
+                          <span className="text-[8px] text-gray-500">Uploading…</span>
+                        </div>
+                      ) : (
+                        <label className="w-full h-full flex flex-col items-center justify-center gap-1 cursor-pointer">
+                          <div className="w-7 h-7 rounded-lg bg-purple-50 text-[#5B3FD6] flex items-center justify-center border border-purple-100">
+                            <Plus size={14} />
+                          </div>
+                          <span className="text-[10px] font-bold text-gray-700">Add Photo</span>
+                          <span className="text-[8px] text-gray-400">({MAX_PRODUCT_IMAGES - editImages.length} left)</span>
+                          <input type="file" accept=".png,.jpg,.jpeg,.webp" multiple className="hidden" onChange={handleEditImageUpload} />
+                        </label>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">

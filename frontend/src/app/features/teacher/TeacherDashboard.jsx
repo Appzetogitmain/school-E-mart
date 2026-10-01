@@ -14,6 +14,7 @@ import { useAuthUser, useTeacherSchoolId } from '../../../utils/teacherContext';
 import { useTeacherClassOptions } from '../../../hooks/useTeacherClassOptions';
 import { toAbsoluteUrl } from '../../../utils/url';
 import { resolveTeacherProfile } from '../../../utils/teacherApiHelpers';
+import TodayBirthdaysWidget from '../../components/TodayBirthdaysWidget';
 
 const TeacherDashboard = () => {
   const navigate = useNavigate();
@@ -401,8 +402,14 @@ const TeacherDashboard = () => {
       </div>
 
       {/* Widgets Layout */}
-      <div className="grid grid-cols-1 gap-8 mt-8 px-6">
-        
+      <div className="grid grid-cols-1 gap-6 mt-8 px-6">
+        {/* Today's Birthdays Celebration Widget */}
+        <TodayBirthdaysWidget 
+          schoolId={schoolId}
+          classGrade={selectedClass ? parseClassGrade(selectedClass) : ''}
+          section={selectedSection ? parseSection(selectedSection) : ''}
+          variant="dashboard"
+        />
 
         {/* 6. Recent Activity Widget */}
         <div className="bg-white border border-gray-200 p-6 rounded-[2.2rem] shadow-xl shadow-gray-100/40">

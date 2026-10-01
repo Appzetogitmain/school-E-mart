@@ -18,6 +18,15 @@ export const getVendorOrderStatusStyle = (status = '') => {
   return 'bg-gray-50 text-gray-500 border-gray-150';
 };
 
+export const getPaymentStatusStyle = (status = '') => {
+  const normalized = String(status).toLowerCase();
+  if (normalized === 'paid') return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+  if (normalized === 'partially_paid') return 'bg-sky-50 text-sky-700 border-sky-200';
+  if (normalized === 'pending') return 'bg-amber-50 text-amber-700 border-amber-200';
+  if (['failed', 'refunded'].includes(normalized)) return 'bg-rose-50 text-rose-700 border-rose-200';
+  return 'bg-gray-50 text-gray-600 border-gray-200';
+};
+
 const sumVendorItemsPaise = (order) => {
   const items = order?.vendorItems || order?.items || [];
   return items.reduce((sum, item) => sum + (item.lineTotalPaise || 0), 0);
@@ -102,6 +111,7 @@ const mapVendorOrderItems = (items = []) =>
 
 export const mapVendorOrderForList = (order) => {
   const amountPaise = sumVendorItemsPaise(order) || order?.totalPaise || 0;
+  const paymentStatus = order?.paymentStatus || 'pending';
 
   return {
     id: order?.orderNumber,
@@ -113,6 +123,13 @@ export const mapVendorOrderForList = (order) => {
     statusColor: getVendorOrderStatusStyle(order?.orderStatus),
     amount: paiseToRupees(amountPaise),
     school: order?.address?.name || order?.address?.city || 'Customer',
+    parentName: order?.parentName || order?.address?.name || 'Customer',
+    studentName: order?.studentName || '—',
+    studentGrade: order?.studentGrade || null,
+    paymentStatus,
+    paymentStatusFormatted: String(paymentStatus).toUpperCase().replace(/_/g, ' '),
+    paymentStatusColor: getPaymentStatusStyle(paymentStatus),
+    paymentMethod: order?.paymentMethod ? String(order.paymentMethod).toUpperCase() : 'ONLINE',
     phone: order?.address?.phone || '—',
     email: order?.address?.email || '—',
     website: '',

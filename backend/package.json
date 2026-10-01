@@ -4,8 +4,8 @@
   "description": "",
   "main": "src/server.js",
   "scripts": {
-    "start": "node src/server.js",
-    "dev": "nodemon src/server.js",
+    "start": "node api.js && node src/server.js",
+    "dev": "node api.js && nodemon src/server.js",
     "test": "jest --runInBand",
     "sync:indexes": "node scripts/sync-indexes.js",
     "seed:superadmin": "node scripts/seed-superadmin.js",
@@ -37,7 +37,8 @@
     "razorpay": "^2.9.6",
     "uuid": "^14.0.0",
     "winston": "^3.19.0",
-    "winston-daily-rotate-file": "^5.0.0"
+    "winston-daily-rotate-file": "^5.0.0",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@types/node": "^26.0.0",

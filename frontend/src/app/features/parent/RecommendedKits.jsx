@@ -74,6 +74,11 @@ const RecommendedKits = ({ isGuest, onAuthRequired }) => {
             className="min-w-[280px] bg-white rounded-[2.5rem] overflow-hidden shadow-xl shadow-gray-200/40 group active:scale-95 transition-all border border-gray-100 block"
           >
             <div className="h-48 relative">
+              {kit.originalPricePaise && kit.pricePaise && kit.originalPricePaise > kit.pricePaise && (
+                <div className="absolute top-3 left-3 bg-gradient-to-r from-rose-500 to-red-600 text-white text-[9px] font-black px-2 py-0.5 rounded-lg z-10 shadow-sm">
+                  {Math.round(((kit.originalPricePaise - kit.pricePaise) / kit.originalPricePaise) * 100)}% OFF
+                </div>
+              )}
               <img
                 src={kit.image}
                 alt={kit.name}
@@ -87,9 +92,16 @@ const RecommendedKits = ({ isGuest, onAuthRequired }) => {
 
               <div className="flex items-center justify-between">
                 <div className="flex flex-col">
-                  <span className="text-primary font-bold text-lg">{kit.price}</span>
-                  {kit.originalPrice && (
-                    <span className="text-[10px] text-gray-400 line-through">{kit.originalPrice}</span>
+                  <div className="flex items-baseline gap-1.5 flex-wrap">
+                    <span className="text-primary font-bold text-lg">{kit.price}</span>
+                    {kit.originalPrice && (
+                      <span className="text-[10px] text-gray-400 line-through font-semibold">MRP {kit.originalPrice}</span>
+                    )}
+                  </div>
+                  {kit.originalPricePaise && kit.pricePaise && kit.originalPricePaise > kit.pricePaise && (
+                    <span className="text-[9px] font-black text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-2 py-0.5 rounded-full inline-flex items-center w-fit mt-1">
+                      Save ₹{Math.round((kit.originalPricePaise - kit.pricePaise) / 100).toLocaleString('en-IN')}
+                    </span>
                   )}
                 </div>
 

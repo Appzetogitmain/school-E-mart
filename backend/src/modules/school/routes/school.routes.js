@@ -273,6 +273,13 @@ router.delete(
 );
 
 router.get(
+  '/:schoolId/birthdays/today',
+  ...schoolRead,
+  resolveSchool(),
+  schoolController.getTodayBirthdays
+);
+
+router.get(
   '/:schoolId/subjects',
   ...protectedRoute({ roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN, ROLES.TEACHER, ROLES.PARENT, 'user', ROLES.USER] }),
   resolveSchool(),

@@ -62,6 +62,11 @@ export const listStudents = async (schoolId, params = {}) => {
   return extractPaginated(response, 'students');
 };
 
+export const getTodayBirthdays = async (schoolId, params = {}) => {
+  const response = await apiClient.get(schoolPath(schoolId, '/birthdays/today'), { params });
+  return unwrapData(response) || { students: [], teachers: [], totalToday: 0 };
+};
+
 export const registerStudent = async (schoolId, payload) => {
   const response = await apiClient.post(schoolPath(schoolId, '/students'), payload);
   return unwrapData(response)?.student;

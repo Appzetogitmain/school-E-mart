@@ -45,13 +45,18 @@ const InstitutionalPackages = ({ packages, kitsRef, onBuyClick }) => {
               
               <div className="flex items-center justify-between pt-1">
                 <div className="flex flex-col">
-                  <span className="text-primary font-black text-lg leading-none">{kit.price}</span>
+                  <div className="flex items-baseline gap-1.5 flex-wrap">
+                    <span className="text-primary font-black text-lg leading-none">{kit.price}</span>
+                    {kit.originalPrice && (
+                      <span className="text-[10px] text-gray-400 line-through font-semibold">MRP {kit.originalPrice}</span>
+                    )}
+                  </div>
                   <span className="text-[9px] text-gray-450 font-bold mt-1">per unit avg.</span>
                 </div>
                 <button
                   type="button"
-                  onClick={(e) => onBuyClick(e)}
-                  className="px-5 py-2.5 bg-amber-400 text-deep-purple hover:bg-amber-500 rounded-2xl text-xs font-black shadow-lg shadow-amber-100 flex items-center gap-2 active:scale-90 transition-all relative z-10"
+                  onClick={(e) => onBuyClick(e, kit)}
+                  className="px-5 py-2.5 bg-amber-400 text-deep-purple hover:bg-amber-500 rounded-2xl text-xs font-black shadow-lg shadow-amber-100 flex items-center gap-2 active:scale-90 transition-all relative z-10 cursor-pointer"
                 >
                   Order Bulk
                 </button>

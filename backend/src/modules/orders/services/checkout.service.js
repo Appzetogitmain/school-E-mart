@@ -160,7 +160,7 @@ const checkoutService = {
     if (isSchoolDelivery) {
       const freeDaysLimit = toNumber(config.schoolDeliveryFreeDays ?? 7);
       const kitItems = (lineItems || []).filter(
-        (item) => item.kitId || item.kitCreatedAt || item.productAudience === 'schools'
+        (item) => item.kitId || item.kitCreatedAt || item.productAudience === 'schools' || item.productAudience === 'both'
       );
 
       let isFreeWindow = true;

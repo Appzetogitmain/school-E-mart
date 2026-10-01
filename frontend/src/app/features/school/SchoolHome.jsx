@@ -20,15 +20,18 @@ import ReelsRow from '../parent/ReelsRow';
 import { useDraggableScroll } from '../../hooks/useDraggableScroll';
 import AuthPrompt from '../../components/AuthPrompt';
 import { listStudents, listTeachers, listNotices } from '../../../services/schoolApi';
+import TodayBirthdaysWidget from '../../components/TodayBirthdaysWidget';
 import { listOrders } from '../../../services/ordersApi';
 import { useCategoryTree } from '../../../hooks/useCategoryTree';
 import { useProducts } from '../../../hooks/useProducts';
 import { useSchoolId } from '../../../utils/schoolContext';
 import { useChildInfo } from '../../../utils/parentContext';
 import { getErrorMessage } from '../../../utils/apiHelpers';
+import { useCart } from '../../context/CartContext';
 
 const SchoolHome = () => {
   const navigate = useNavigate();
+  const { addToCart } = useCart();
   const notifRef = useDraggableScroll();
   const kitsRef = useDraggableScroll();
   const catsRef = useDraggableScroll();
@@ -139,12 +142,20 @@ const SchoolHome = () => {
     };
   }, [schoolId]);
 
-  const handleBuyKit = (e) => {
+  const handleBuyKit = async (e, kit) => {
     e.preventDefault();
     e.stopPropagation();
     if (isGuest) {
       setIsAuthPromptOpen(true);
       return;
+    }
+    if (kit) {
+      try {
+        await addToCart(kit);
+        navigate('/school/cart');
+      } catch (err) {
+        console.error('Failed to add kit to bulk cart:', err);
+      }
     }
   };
 
@@ -355,6 +366,12 @@ const SchoolHome = () => {
               </button>
             </div>
           </div>
+
+          {/* Today's Birthdays Celebration Widget */}
+          <TodayBirthdaysWidget
+            schoolId={schoolId}
+            variant="dashboard"
+          />
 
           {/* Recent Activity List */}
           <div className="space-y-3.5">

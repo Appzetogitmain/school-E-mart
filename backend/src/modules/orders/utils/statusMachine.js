@@ -2,7 +2,7 @@ const ORDER_TRANSITIONS = {
   // An unpaid online order can only become a real order by being paid for, or go away.
   // Every fulfilment step is unreachable from here, so no vendor or admin action can
   // move an unpaid order down the pipeline.
-  pending_payment: ['placed', 'cancelled'],
+  pending_payment: ['placed', 'payment_failed', 'cancelled'],
   placed: ['accepted', 'cancelled'],
   accepted: ['processed', 'cancelled'],
   processed: ['packed', 'cancelled'],
@@ -11,6 +11,9 @@ const ORDER_TRANSITIONS = {
   out_for_delivery: ['delivered', 'cancelled'],
   delivered: ['returned'],
   cancelled: [],
+  // Terminal: the checkout was abandoned and payment never arrived. Distinct from
+  // 'cancelled' so it doesn't inflate real cancellation counts or confuse customers.
+  payment_failed: [],
   returned: [],
 };
 
@@ -24,6 +27,10 @@ const RETURN_ELIGIBLE = new Set(['delivered']);
 // Statuses that are not yet a real order. Fulfilment surfaces (vendor, school pickup,
 // admin operations) filter these out, and reporting must not count them as sales.
 const AWAITING_PAYMENT = 'pending_payment';
+
+// Terminal status for orders whose online payment was never completed. The sweeper
+// uses this instead of 'cancelled' so reports and customer lists stay clean.
+const PAYMENT_FAILED = 'payment_failed';
 
 const isAwaitingPayment = (status) => status === AWAITING_PAYMENT;
 
@@ -42,6 +49,7 @@ module.exports = {
   VENDOR_CANCELLABLE,
   RETURN_ELIGIBLE,
   AWAITING_PAYMENT,
+  PAYMENT_FAILED,
   isAwaitingPayment,
   canTransition,
   canCustomerCancel,

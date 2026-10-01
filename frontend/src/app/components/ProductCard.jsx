@@ -15,9 +15,10 @@ const ProductCard = ({ product, showBuyNow = true }) => {
   const quantity = getProductQuantity(product.id);
   // School module renders this same card for bulk products — route detail
   // views back into the school portal instead of dropping into the User app.
-  const detailBasePath = getMarketplaceAudience() === 'school' ? '/school' : '/user';
+  const isSchool = getMarketplaceAudience() === 'school';
+  const detailBasePath = isSchool ? '/school' : '/user';
 
-  const isGuest = !localStorage.getItem('childInfo');
+  const isGuest = isSchool ? false : !localStorage.getItem('childInfo');
 
   const handleAdd = (e) => {
     e.preventDefault();
@@ -47,6 +48,20 @@ const ProductCard = ({ product, showBuyNow = true }) => {
     updateQuantity(product.id, delta);
   };
 
+  const numericPrice = typeof product.price === 'string' 
+    ? parseFloat(product.price.replace(/[^\d.]/g, '')) 
+    : Number(product.price || 0);
+
+  const numericOriginalPrice = product.originalPrice 
+    ? (typeof product.originalPrice === 'string' 
+        ? parseFloat(product.originalPrice.replace(/[^\d.]/g, '')) 
+        : Number(product.originalPrice || 0)) 
+    : 0;
+
+  const hasDiscount = Boolean(numericOriginalPrice && numericPrice && numericOriginalPrice > numericPrice);
+  const savings = hasDiscount ? Math.round(numericOriginalPrice - numericPrice) : 0;
+  const discount = hasDiscount ? Math.round(((numericOriginalPrice - numericPrice) / numericOriginalPrice) * 100) : 0;
+
   const price = typeof product.price === 'string' 
     ? product.price 
     : `₹${product.price}`;
@@ -54,15 +69,6 @@ const ProductCard = ({ product, showBuyNow = true }) => {
   const originalPrice = product.originalPrice 
     ? (typeof product.originalPrice === 'string' ? product.originalPrice : `₹${product.originalPrice}`)
     : null;
-
-  const calculateDiscount = () => {
-    const p = typeof product.price === 'string' ? parseFloat(product.price.replace(/[^\d.]/g, '')) : product.price;
-    const op = typeof product.originalPrice === 'string' ? parseFloat(product.originalPrice.replace(/[^\d.]/g, '')) : product.originalPrice;
-    if (!p || !op || op <= p) return null;
-    return Math.round(((op - p) / op) * 100);
-  };
-
-  const discount = calculateDiscount();
 
   return (
     <div className="relative group/card">
@@ -82,9 +88,11 @@ const ProductCard = ({ product, showBuyNow = true }) => {
       >
         {/* Image & Actions */}
         <div className="relative aspect-square bg-gray-50/50 p-4">
-          <div className="absolute top-3 left-3 bg-[#ef4444] text-white text-[9px] font-black px-2 py-1 rounded-lg z-10 shadow-sm">
-            {discount ? `${discount}% OFF` : 'SALE'}
-          </div>
+          {discount > 0 && (
+            <div className="absolute top-3 left-3 bg-gradient-to-r from-rose-500 to-red-600 text-white text-[9px] font-black px-2 py-0.5 rounded-lg z-10 shadow-sm flex items-center gap-0.5">
+              <span>{discount}% OFF</span>
+            </div>
+          )}
           <button 
             onClick={handleWishlist}
             className={`absolute top-3 right-3 w-8 h-8 rounded-full bg-white/80 backdrop-blur-md flex items-center justify-center transition-all z-20 shadow-sm active:scale-75 ${isWishlisted ? 'text-red-500' : 'text-gray-300 hover:text-red-400'}`}
@@ -110,10 +118,25 @@ const ProductCard = ({ product, showBuyNow = true }) => {
           </h3>
 
           <div className="mt-auto">
-            <div className="flex items-baseline gap-2 mb-3">
-              <span className="text-base font-black text-black">{price}</span>
-              {originalPrice && (
-                <span className="text-[10px] text-gray-300 line-through font-medium">{originalPrice}</span>
+            <div className="space-y-1 mb-3">
+              <div className="flex items-baseline gap-2 flex-wrap">
+                <span className="text-base font-black text-black">{price}</span>
+                {hasDiscount && (
+                  <span className="text-[10px] text-gray-400 line-through font-semibold">
+                    MRP {originalPrice}
+                  </span>
+                )}
+              </div>
+              {hasDiscount && (
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-[9px] font-black text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-2 py-0.5 rounded-full inline-flex items-center">
+                    Save ₹{savings.toLocaleString('en-IN')}
+                    {isSchool && <span className="text-[8px] font-bold text-emerald-600/80 ml-0.5">/unit</span>}
+                  </span>
+                  <span className="text-[9px] font-black text-rose-600">
+                    ({discount}% OFF)
+                  </span>
+                </div>
               )}
             </div>
 

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { ShoppingCart, ArrowRight, MessageSquareQuote } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import useAuthStore from '../../store/useAuthStore';
+import { useCart } from '../../app/context/CartContext';
 import { ROUTES } from '../../constants/routes';
 import LoginPromptModal from '../shared/LoginPromptModal';
 
@@ -11,7 +12,9 @@ const ProductCard = ({
 }) => {
   const navigate = useNavigate();
   const { isAuthenticated } = useAuthStore();
+  const { addToCart } = useCart();
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const [adding, setAdding] = useState(false);
 
   if (!product) {
     return null;
@@ -36,14 +39,33 @@ const ProductCard = ({
     }).format(price);
   };
 
-  const handleAction = (actionType) => {
+  const handleAction = async (actionType) => {
     if (!isAuthenticated) {
       setShowLoginModal(true);
       return;
     }
     
-    // Proceed with action if authenticated
-    console.log(`${actionType} for product:`, title);
+    if (actionType === 'Add to Cart') {
+      setAdding(true);
+      try {
+        await addToCart(product);
+        if (role === 'school') {
+          navigate('/school/cart');
+        }
+      } catch (err) {
+        console.error('Failed to add to cart:', err);
+      } finally {
+        setAdding(false);
+      }
+    } else if (actionType === 'Bulk Quote') {
+      const qParams = new URLSearchParams({
+        title: `Bulk Quote Request - ${title || product.name || ''}`,
+      });
+      if (product.id || product._id) {
+        qParams.set('productId', String(product.id || product._id));
+      }
+      navigate(`/school/create-request?${qParams.toString()}`);
+    }
   };
 
   return (
@@ -52,6 +74,11 @@ const ProductCard = ({
         
         {/* 1. Image Area */}
         <div className="relative aspect-[4/3] bg-[#F9FAFB] flex items-center justify-center overflow-hidden">
+          {discount > 0 && (
+            <div className="absolute top-3 left-3 bg-gradient-to-r from-rose-500 to-red-600 text-white text-[9px] font-black px-2 py-0.5 rounded-lg z-10 shadow-sm">
+              {discount}% OFF
+            </div>
+          )}
           <img 
             src={image} 
             alt={title} 
@@ -84,34 +111,45 @@ const ProductCard = ({
           )}
 
           {/* Pricing */}
-          <div className="flex flex-col mb-6">
-            <span className="text-[17px] font-medium text-text-primary">
+          <div className="flex flex-col mb-6 space-y-1">
+            <span className="text-[17px] font-black text-text-primary">
               {formattedPrice(currentPrice)}
             </span>
-            <div className="flex items-center gap-2 mt-0.5">
-              <span className="text-[11px] text-gray-300 line-through">
-                {formattedPrice(originalPrice)}
-              </span>
-              <span className="text-[11px] font-bold text-accent-orange">
-                {discount}% OFF
-              </span>
-            </div>
+            {originalPrice && originalPrice > currentPrice && (
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-[11px] text-gray-400 line-through font-semibold">
+                  MRP {formattedPrice(originalPrice)}
+                </span>
+                <span className="text-[10px] font-black text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-2 py-0.5 rounded-full">
+                  Save {formattedPrice(originalPrice - currentPrice)}
+                </span>
+                <span className="text-[10px] font-black text-rose-600">
+                  ({discount}% OFF)
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Hybrid Actions */}
           <div className="mt-auto space-y-4">
             {/* Primary CTA: Add to Cart (Reduced height) */}
             <button 
+              type="button"
+              disabled={adding}
               onClick={() => handleAction('Add to Cart')}
-              className="w-full py-2.5 bg-accent-orange text-deep-purple font-semibold rounded-lg text-[13px] flex items-center justify-center gap-2 hover:bg-accent-gold hover:shadow-[0_8px_20px_-6px_rgba(244,180,0,0.4)] transition-all shadow-sm active:scale-95"
+              className="w-full py-2.5 bg-accent-orange text-deep-purple font-semibold rounded-lg text-[13px] flex items-center justify-center gap-2 hover:bg-accent-gold hover:shadow-[0_8px_20px_-6px_rgba(244,180,0,0.4)] transition-all shadow-sm active:scale-95 cursor-pointer disabled:opacity-60"
             >
               <ShoppingCart size={16} />
-              Add to Cart
+              {adding ? 'Adding...' : 'Add to Cart'}
             </button>
             
             <div className="flex items-center justify-between px-1">
               {/* Secondary CTA: View Details (Clean text link) */}
-              <button className="flex items-center gap-1 text-[11px] font-medium text-text-secondary hover:text-primary transition-all group/link">
+              <button 
+                type="button"
+                onClick={() => navigate((role === 'school' ? '/school' : '/user') + '/product/' + (product.id || product._id))}
+                className="flex items-center gap-1 text-[11px] font-medium text-text-secondary hover:text-primary transition-all group/link cursor-pointer"
+              >
                 View Details
                 <ArrowRight size={12} className="transition-transform group-hover/link:translate-x-1" />
               </button>

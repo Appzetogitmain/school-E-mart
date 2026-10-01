@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Bell, Package, School, ShoppingBag,
   Info, ChevronLeft, CheckCheck, Trash2,
-  Clock, ArrowRight, Loader2
+  Clock, ArrowRight, Loader2, CalendarCheck
 } from 'lucide-react';
 import {
   listNotifications,
@@ -101,6 +101,7 @@ const NotificationsPage = () => {
   const getIcon = (type) => {
     switch (type) {
       case 'order_update': return <Package className="text-blue-500" size={20} />;
+      case 'attendance': return <CalendarCheck className="text-emerald-500" size={20} />;
       case 'school_notice': return <School className="text-primary" size={20} />;
       case 'event': return <School className="text-primary" size={20} />;
       case 'promo': return <ShoppingBag className="text-golden-yellow" size={20} />;
