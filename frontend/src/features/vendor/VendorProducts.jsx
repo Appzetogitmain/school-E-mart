@@ -16,6 +16,7 @@ import { getErrorMessage } from '../../utils/apiHelpers';
 import { mapVendorProductForList, resolveImageUrl } from '../../utils/mappers/vendorProductMapper';
 
 const MAX_PRODUCT_IMAGES = 6;
+const PRODUCT_PAGE_SIZE = 100;
 
 const VendorProducts = () => {
   const location = useLocation();
@@ -28,6 +29,9 @@ const VendorProducts = () => {
   const [selectedAudience, setSelectedAudience] = useState('All'); // 'All' | 'users' | 'schools'
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [products, setProducts] = useState([]);
+  const [pagination, setPagination] = useState(null);
+  const [page, setPage] = useState(1);
+  const [sort, setSort] = useState('newest');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -50,6 +54,7 @@ const VendorProducts = () => {
   const [newCategoryId, setNewCategoryId] = useState('');
   const [newSubcategoryId, setNewSubcategoryId] = useState('');
   const [newImages, setNewImages] = useState([]); // [{ attachmentId, url, name }]
+  const [newSizeChart, setNewSizeChart] = useState(null);
   const [imageAttachmentId, setImageAttachmentId] = useState('');
   const [imagePreview, setImagePreview] = useState('');
   const [uploadingImage, setUploadingImage] = useState(false);
@@ -59,18 +64,22 @@ const VendorProducts = () => {
     setLoading(true);
     setError('');
     try {
-      const { data } = await listVendorProducts({
-        limit: 100,
+      const { data, pagination: pageMeta } = await listVendorProducts({
+        page,
+        limit: PRODUCT_PAGE_SIZE,
+        sort,
         ...(selectedAudience !== 'All' ? { audience: selectedAudience } : {}),
       });
       setProducts((data || []).map(mapVendorProductForList));
+      setPagination(pageMeta);
     } catch (err) {
       setProducts([]);
+      setPagination(null);
       setError(getErrorMessage(err, 'Unable to load products'));
     } finally {
       setLoading(false);
     }
-  }, [selectedAudience]);
+  }, [selectedAudience, page, sort]);
 
   useEffect(() => {
     loadProducts();
@@ -98,6 +107,31 @@ const VendorProducts = () => {
     setNewAudience('users'); setNewHeaderId(''); setNewCategoryId(''); setNewSubcategoryId('');
     setImageAttachmentId(''); setImagePreview('');
     setNewImages([]);
+    setNewSizeChart(null);
+  };
+
+  const uploadSizeChart = async (event, setter) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      setError('Size chart must be under 5MB');
+      event.target.value = '';
+      return;
+    }
+    setUploadingImage(true);
+    setError('');
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('purpose', 'product_image');
+      const attachment = await uploadVendorDocument(formData);
+      setter({ attachmentId: attachment?._id || attachment?.id, url: URL.createObjectURL(file) });
+    } catch (err) {
+      setError(getErrorMessage(err, 'Size chart upload failed'));
+    } finally {
+      setUploadingImage(false);
+      event.target.value = '';
+    }
   };
 
   const handleImageUpload = async (e) => {
@@ -124,6 +158,7 @@ const VendorProducts = () => {
       for (const file of files) {
         const formData = new FormData();
         formData.append('file', file);
+        formData.append('purpose', 'product_image');
         const attachment = await uploadVendorDocument(formData);
         const id = attachment?._id || attachment?.id || '';
         if (id) {
@@ -196,6 +231,7 @@ const VendorProducts = () => {
         originalPricePaise: newOriginalPrice && Number(newOriginalPrice) > 0 ? Math.round(Number(newOriginalPrice) * 100) : undefined,
         stock: Number(newStock) || 0,
         images: finalImages,
+        sizeChartAttachmentId: newSizeChart?.attachmentId || undefined,
         publishStatus: newStatus === 'PUBLISHED' ? 'published' : 'draft',
       });
       setNewAdded(true);
@@ -224,6 +260,9 @@ const VendorProducts = () => {
   const [editCategoryId, setEditCategoryId] = useState('');
   const [editSubcategoryId, setEditSubcategoryId] = useState('');
   const [editImages, setEditImages] = useState([]); // [{ attachmentId, url, alt }]
+  const [editImagesChanged, setEditImagesChanged] = useState(false);
+  const [editSizeChart, setEditSizeChart] = useState(null);
+  const editImagePreview = editImages[0]?.url || '';
   const [editPublishStatus, setEditPublishStatus] = useState('published');
   const [editAudience, setEditAudience] = useState('users');
   const [updating, setUpdating] = useState(false);
@@ -250,14 +289,24 @@ const VendorProducts = () => {
     }).filter((img) => img.attachmentId || img.url);
 
     setEditImages(existingImages.length ? existingImages : product.imageUrl ? [{ attachmentId: null, url: product.imageUrl }] : []);
+    setEditImagesChanged(false);
+    const chart = product.raw?.sizeChartAttachmentId;
+    setEditSizeChart(chart ? { attachmentId: chart._id || chart, url: resolveImageUrl({ attachmentId: chart }) } : null);
   };
 
-  const handleEditImageUpload = async (e) => {
+  const handleEditImageUpload = async (e, { replaceCover = false } = {}) => {
     const files = Array.from(e.target.files || []);
     if (!files.length) return;
 
-    if (editImages.length + files.length > MAX_PRODUCT_IMAGES) {
+    const resultingCount = replaceCover ? Math.max(editImages.length, 1) : editImages.length + files.length;
+    if (resultingCount > MAX_PRODUCT_IMAGES) {
       setError(`You can upload a maximum of ${MAX_PRODUCT_IMAGES} images (${editImages.length} already added).`);
+      if (e.target) e.target.value = '';
+      return;
+    }
+
+    if (replaceCover && files.length > 1) {
+      setError('Select one image to replace the cover photo.');
       if (e.target) e.target.value = '';
       return;
     }
@@ -276,6 +325,7 @@ const VendorProducts = () => {
       for (const file of files) {
         const formData = new FormData();
         formData.append('file', file);
+        formData.append('purpose', 'product_image');
         const att = await uploadVendorDocument(formData);
         const id = att?._id || att?.id || '';
         if (id) {
@@ -286,7 +336,12 @@ const VendorProducts = () => {
           });
         }
       }
-      setEditImages((prev) => [...prev, ...uploaded].slice(0, MAX_PRODUCT_IMAGES));
+      if (uploaded.length) {
+        setEditImages((prev) => replaceCover
+          ? [uploaded[0], ...prev.slice(1)]
+          : [...prev, ...uploaded].slice(0, MAX_PRODUCT_IMAGES));
+        setEditImagesChanged(true);
+      }
     } catch (err) {
       setError(getErrorMessage(err, 'Image upload failed'));
     } finally {
@@ -297,6 +352,7 @@ const VendorProducts = () => {
 
   const removeEditImage = (indexToRemove) => {
     setEditImages((prev) => prev.filter((_, idx) => idx !== indexToRemove));
+    setEditImagesChanged(true);
   };
 
   const handleUpdateSubmit = async (e) => {
@@ -314,18 +370,17 @@ const VendorProducts = () => {
         stock: Number(editStock) || 0,
         publishStatus: editPublishStatus,
         audience: editAudience,
+        sizeChartAttachmentId: editSizeChart?.attachmentId || null,
       };
       if (editHeaderId) payload.headerId = editHeaderId;
       if (editCategoryId) payload.categoryId = editCategoryId;
       if (editSubcategoryId) payload.subcategoryId = editSubcategoryId;
-      if (editImages.length > 0) {
+      if (editImagesChanged) {
         const validImages = editImages.filter((img) => img.attachmentId);
-        if (validImages.length > 0) {
-          payload.images = validImages.map((img, idx) => ({
-            attachmentId: img.attachmentId,
-            alt: img.alt || `${editName.trim()} photo ${idx + 1}`,
-          }));
-        }
+        payload.images = validImages.map((img, idx) => ({
+          attachmentId: img.attachmentId,
+          alt: img.alt || `${editName.trim()} photo ${idx + 1}`,
+        }));
       }
 
       await updateVendorProduct(editingProduct.id, payload);
@@ -365,7 +420,7 @@ const VendorProducts = () => {
   };
 
   // Metrics calculators
-  const totalItemsCount = useMemo(() => products.length, [products]);
+  const totalItemsCount = pagination?.total ?? products.length;
   const activeItemsCount = useMemo(() => products.filter(p => p.approval === 'Approved' || p.approval === 'Pending').length, [products]);
   const lowStockCount = useMemo(() => products.filter(p => p.stock > 0 && p.stock <= (p.lowStockThreshold || 5)).length, [products]);
   const outOfStockCount = useMemo(() => products.filter(p => p.stock === 0).length, [products]);
@@ -429,7 +484,7 @@ const VendorProducts = () => {
               <button
                 key={tab.key}
                 type="button"
-                onClick={() => setSelectedAudience(tab.key)}
+                onClick={() => { setPage(1); setSelectedAudience(tab.key); }}
                 className={`px-4 py-2 rounded-xl text-xs font-black transition-all ${
                   selectedAudience === tab.key
                     ? 'bg-white text-[#5B3FD6] shadow-sm border border-purple-100'
@@ -542,6 +597,8 @@ const VendorProducts = () => {
 
               <div className="relative">
                 <select
+                  value={sort}
+                  onChange={(e) => { setPage(1); setSort(e.target.value); }}
                   className="appearance-none pl-4 pr-9 py-2.5 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#5B3FD6]/10 focus:border-[#5B3FD6] shadow-sm cursor-pointer"
                 >
                   <option value="newest">Newest first</option>
@@ -702,16 +759,20 @@ const VendorProducts = () => {
           {/* Pagination Footer */}
           <div className="flex items-center justify-between pt-2">
             <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">
-              Showing 1 to {filteredProducts.length} of {products.length} entries
+              {searchQuery || selectedCategory !== 'All' || selectedApproval !== 'All'
+                ? `${filteredProducts.length} matches on page ${page} of ${pagination?.total ?? 0} products`
+                : pagination?.total
+                  ? `Showing ${(page - 1) * PRODUCT_PAGE_SIZE + 1} to ${Math.min(page * PRODUCT_PAGE_SIZE, pagination.total)} of ${pagination.total} entries`
+                  : 'Showing 0 entries'}
             </span>
             <div className="flex items-center gap-1">
-              <button className="px-3 py-1.5 rounded-xl border border-gray-100 text-xs font-bold text-gray-400 hover:bg-gray-50 transition-all cursor-not-allowed">
+              <button type="button" disabled={page <= 1 || loading} onClick={() => setPage((current) => Math.max(1, current - 1))} className="px-3 py-1.5 rounded-xl border border-gray-100 text-xs font-bold text-gray-600 hover:bg-gray-50 transition-all disabled:opacity-40 disabled:cursor-not-allowed">
                 Previous
               </button>
               <button className="w-8 h-8 rounded-xl bg-[#5B3FD6] text-white text-xs font-bold flex items-center justify-center shadow-md shadow-purple-200">
-                1
+                {page}
               </button>
-              <button className="px-3 py-1.5 rounded-xl border border-gray-100 text-xs font-bold text-gray-600 hover:bg-gray-50 transition-all">
+              <button type="button" disabled={loading || page >= (pagination?.totalPages || 1)} onClick={() => setPage((current) => current + 1)} className="px-3 py-1.5 rounded-xl border border-gray-100 text-xs font-bold text-gray-600 hover:bg-gray-50 transition-all disabled:opacity-40 disabled:cursor-not-allowed">
                 Next
               </button>
             </div>
@@ -1239,6 +1300,15 @@ const VendorProducts = () => {
                         </div>
                       )}
                     </div>
+                    <div className="rounded-2xl border border-gray-200 p-4 space-y-2">
+                      <p className="text-xs font-bold text-gray-800">Size chart (optional)</p>
+                      {newSizeChart?.url && <img src={newSizeChart.url} alt="Size chart preview" className="max-h-48 w-full object-contain" />}
+                      <label className="inline-block cursor-pointer rounded-xl bg-purple-50 px-3 py-2 text-xs font-bold text-[#5B3FD6]">
+                        {newSizeChart ? 'Replace chart' : 'Upload chart'}
+                        <input type="file" accept=".png,.jpg,.jpeg,.webp" className="hidden" onChange={(event) => uploadSizeChart(event, setNewSizeChart)} />
+                      </label>
+                      {newSizeChart && <button type="button" onClick={() => setNewSizeChart(null)} className="ml-3 text-xs font-bold text-red-600">Remove</button>}
+                    </div>
                   </div>
                 )}
 
@@ -1303,12 +1373,12 @@ const VendorProducts = () => {
                     <label className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-purple-50 hover:bg-purple-100 text-[#5B3FD6] text-xs font-bold border border-purple-100 cursor-pointer transition-colors">
                       <Camera size={14} />
                       <span>Take Photo</span>
-                      <input type="file" accept=".png,.jpg,.jpeg,.webp" capture="environment" className="hidden" onChange={handleEditImageUpload} />
+                      <input type="file" accept=".png,.jpg,.jpeg,.webp" capture="environment" className="hidden" onChange={(event) => handleEditImageUpload(event, { replaceCover: true })} />
                     </label>
                     <label className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-purple-50 hover:bg-purple-100 text-[#5B3FD6] text-xs font-bold border border-purple-100 cursor-pointer transition-colors">
                       {uploadingImage ? <Loader2 size={14} className="animate-spin" /> : <UploadCloud size={14} />}
                       <span>{editImagePreview ? 'Change Image' : 'Upload Image'}</span>
-                      <input type="file" accept=".png,.jpg,.jpeg,.webp" className="hidden" onChange={handleEditImageUpload} />
+                      <input type="file" accept=".png,.jpg,.jpeg,.webp" className="hidden" onChange={(event) => handleEditImageUpload(event, { replaceCover: true })} />
                     </label>
                   </div>
                 </div>
@@ -1525,6 +1595,16 @@ const VendorProducts = () => {
                     </div>
                   )}
                 </div>
+              </div>
+
+              <div className="space-y-2 pt-2 border-t border-gray-100">
+                <p className="text-xs font-bold text-gray-700">Size chart (optional)</p>
+                {editSizeChart?.url && <img src={editSizeChart.url} alt="Size chart preview" className="max-h-48 w-full object-contain" />}
+                <label className="inline-block cursor-pointer rounded-xl bg-purple-50 px-3 py-2 text-xs font-bold text-[#5B3FD6]">
+                  {editSizeChart ? 'Replace chart' : 'Upload chart'}
+                  <input type="file" accept=".png,.jpg,.jpeg,.webp" className="hidden" onChange={(event) => uploadSizeChart(event, setEditSizeChart)} />
+                </label>
+                {editSizeChart && <button type="button" onClick={() => setEditSizeChart(null)} className="ml-3 text-xs font-bold text-red-600">Remove</button>}
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">

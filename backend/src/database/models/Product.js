@@ -30,6 +30,7 @@ const productSchema = new mongoose.Schema({
     attachmentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Attachment', required: true },
     alt: { type: String }
   }],
+  sizeChartAttachmentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Attachment' },
   sizes: [{ type: String }],
   specs: [{
     key: { type: String },

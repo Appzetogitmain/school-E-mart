@@ -67,6 +67,11 @@ export const getTodayBirthdays = async (schoolId, params = {}) => {
   return unwrapData(response) || { students: [], teachers: [], totalToday: 0 };
 };
 
+export const wishBirthday = async (schoolId, recipientType, recipientId) => {
+  const response = await apiClient.post(schoolPath(schoolId, `/birthdays/${recipientType}/${recipientId}/wish`));
+  return unwrapData(response);
+};
+
 export const registerStudent = async (schoolId, payload) => {
   const response = await apiClient.post(schoolPath(schoolId, '/students'), payload);
   return unwrapData(response)?.student;

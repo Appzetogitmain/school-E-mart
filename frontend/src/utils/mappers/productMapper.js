@@ -62,6 +62,7 @@ export const mapProductForCard = (product, meta = {}) => {
     brand: product?.brand || 'School E-Mart Essentials',
     description: product?.description || '',
     sizes: product?.sizes || [],
+    sizeChartUrl: toAbsoluteUrl(product?.sizeChartAttachmentId?.storageKey || product?.sizeChartUrl),
     specs: (product?.specs || []).map((spec) =>
       spec.label ? spec : { label: spec.key, value: spec.value }
     ),

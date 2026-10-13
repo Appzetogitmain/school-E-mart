@@ -19,7 +19,7 @@ import SchoolCaseStudies from './SchoolCaseStudies';
 import ReelsRow from '../parent/ReelsRow';
 import { useDraggableScroll } from '../../hooks/useDraggableScroll';
 import AuthPrompt from '../../components/AuthPrompt';
-import { listStudents, listTeachers, listNotices } from '../../../services/schoolApi';
+import { listStudents, listTeachers, listNotices, listVendors } from '../../../services/schoolApi';
 import TodayBirthdaysWidget from '../../components/TodayBirthdaysWidget';
 import { listOrders } from '../../../services/ordersApi';
 import { useCategoryTree } from '../../../hooks/useCategoryTree';
@@ -65,6 +65,7 @@ const SchoolHome = () => {
     notices: 0,
     orders: 0,
     ordersPending: 0,
+    vendors: null,
   });
   const [statsLoading, setStatsLoading] = useState(true);
   const [statsError, setStatsError] = useState('');
@@ -105,12 +106,14 @@ const SchoolHome = () => {
           noticesResult,
           ordersResult,
           recentNoticesResult,
+          vendorsResult,
         ] = await Promise.all([
           listStudents(schoolId, { limit: 1 }),
           listTeachers(schoolId, { limit: 1 }),
           listNotices(schoolId, { limit: 1 }),
           listOrders({ limit: 1, schoolId }, { audience: 'school' }),
           listNotices(schoolId, { limit: 4 }),
+          listVendors(schoolId, { limit: 1 }).catch(() => null),
         ]);
 
         if (cancelled) return;
@@ -125,6 +128,7 @@ const SchoolHome = () => {
           notices: noticesResult.pagination?.total ?? noticesResult.data?.length ?? 0,
           orders: ordersResult.pagination?.total ?? ordersResult.data?.length ?? 0,
           ordersPending: pendingOrders,
+          vendors: vendorsResult?.pagination?.total ?? vendorsResult?.data?.length ?? null,
         });
         setRecentNotices(recentNoticesResult.data || []);
       } catch (err) {
@@ -262,7 +266,7 @@ const SchoolHome = () => {
                     <Store size={16} />
                   </div>
                   <div className="mt-2.5">
-                    <span className="text-xl font-black text-deep-purple block leading-none">0</span>
+                    <span className="text-xl font-black text-deep-purple block leading-none">{stats.vendors ?? '—'}</span>
                     <span className="text-xs text-gray-455 font-bold block mt-1">Active Vendors</span>
                   </div>
                 </div>

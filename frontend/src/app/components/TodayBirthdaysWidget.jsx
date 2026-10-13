@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Cake, Sparkles, Gift, PartyPopper, Users, GraduationCap, ChevronRight, Check } from 'lucide-react';
-import { getTodayBirthdays } from '../../services/schoolApi';
+import { getTodayBirthdays, wishBirthday } from '../../services/schoolApi';
 import { toAbsoluteUrl } from '../../utils/url';
+import { getErrorMessage } from '../../utils/apiHelpers';
 
 const TodayBirthdaysWidget = ({ 
   schoolId, 
@@ -13,6 +14,8 @@ const TodayBirthdaysWidget = ({
   const [birthdays, setBirthdays] = useState({ students: [], teachers: [], totalToday: 0 });
   const [loading, setLoading] = useState(true);
   const [wishedMap, setWishedMap] = useState({});
+  const [sendingMap, setSendingMap] = useState({});
+  const [wishError, setWishError] = useState('');
 
   useEffect(() => {
     let active = true;
@@ -26,6 +29,10 @@ const TodayBirthdaysWidget = ({
       .then((res) => {
         if (!active) return;
         setBirthdays(res || { students: [], teachers: [], totalToday: 0 });
+        setWishedMap(Object.fromEntries([
+          ...(res?.students || []).map((student) => [`student:${student.id}`, Boolean(student.wished)]),
+          ...(res?.teachers || []).map((teacher) => [`teacher:${teacher.id}`, Boolean(teacher.wished)]),
+        ]));
       })
       .catch((err) => {
         if (!active) return;
@@ -41,8 +48,19 @@ const TodayBirthdaysWidget = ({
     };
   }, [schoolId]);
 
-  const handleWish = (id) => {
-    setWishedMap((prev) => ({ ...prev, [id]: true }));
+  const handleWish = async (type, id) => {
+    const key = `${type}:${id}`;
+    if (sendingMap[key] || wishedMap[key]) return;
+    setSendingMap((prev) => ({ ...prev, [key]: true }));
+    setWishError('');
+    try {
+      await wishBirthday(schoolId, type, id);
+      setWishedMap((prev) => ({ ...prev, [key]: true }));
+    } catch (error) {
+      setWishError(getErrorMessage(error, 'Unable to send birthday wish'));
+    } finally {
+      setSendingMap((prev) => ({ ...prev, [key]: false }));
+    }
   };
 
   const { students, teachers, totalToday } = birthdays;
@@ -139,11 +157,12 @@ const TodayBirthdaysWidget = ({
       </div>
 
       {/* Cards List */}
+      {wishError && <p role="alert" className="mb-3 text-xs font-semibold text-red-600">{wishError}</p>}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 relative z-10">
         {/* Student Birthdays */}
         {students.map((student) => {
           const inClass = isClassMatch(student);
-          const isWished = wishedMap[student.id];
+          const isWished = wishedMap[`student:${student.id}`];
 
           return (
             <div 
@@ -187,8 +206,8 @@ const TodayBirthdaysWidget = ({
 
               <button
                 type="button"
-                onClick={() => handleWish(student.id)}
-                disabled={isWished}
+                onClick={() => handleWish('student', student.id)}
+                disabled={isWished || sendingMap[`student:${student.id}`]}
                 className={`px-3 py-1.5 rounded-xl text-[10px] font-black shrink-0 transition-all flex items-center gap-1 active:scale-95 ${
                   isWished 
                     ? 'bg-emerald-50 text-emerald-600 border border-emerald-200' 
@@ -211,7 +230,7 @@ const TodayBirthdaysWidget = ({
 
         {/* Teacher Birthdays */}
         {teachers.map((teacher) => {
-          const isWished = wishedMap[teacher.id];
+          const isWished = wishedMap[`teacher:${teacher.id}`];
 
           return (
             <div 
@@ -253,8 +272,8 @@ const TodayBirthdaysWidget = ({
 
               <button
                 type="button"
-                onClick={() => handleWish(teacher.id)}
-                disabled={isWished}
+                onClick={() => handleWish('teacher', teacher.id)}
+                disabled={isWished || sendingMap[`teacher:${teacher.id}`]}
                 className={`px-3 py-1.5 rounded-xl text-[10px] font-black shrink-0 transition-all flex items-center gap-1 active:scale-95 ${
                   isWished 
                     ? 'bg-emerald-50 text-emerald-600 border border-emerald-200' 

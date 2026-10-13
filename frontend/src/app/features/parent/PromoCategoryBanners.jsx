@@ -62,7 +62,7 @@ const PromoCategoryBanners = () => {
 
   return (
     <div className="mt-6 px-5 sm:px-6 relative z-10 select-none text-left w-full font-outfit">
-      <div className="relative w-full h-44 sm:h-56 md:h-64 overflow-hidden rounded-[1.75rem] shadow-md border border-gray-150 bg-gray-900">
+      <div className="relative w-full aspect-[16/9] sm:aspect-[3/1] overflow-hidden rounded-[1.75rem] shadow-md border border-gray-150 bg-gray-900">
         {/* Banner Slider Container - Fixed Frame Size */}
         <div
           ref={scrollRef}
@@ -83,7 +83,7 @@ const PromoCategoryBanners = () => {
               <img
                 src={banner.image}
                 alt={banner.title}
-                className="w-full h-full object-cover sm:object-contain block mx-auto transition-transform duration-500 group-hover:scale-[1.01]"
+                className="w-full h-full object-contain block mx-auto"
               />
             </div>
           ))}

@@ -516,6 +516,13 @@ const schoolController = {
     const data = await birthdayService.getTodayBirthdays(req.schoolId, req.query);
     return success(res, data, "Today's birthdays fetched successfully", undefined, req);
   }),
+
+  wishBirthday: asyncHandler(async (req, res) => {
+    const data = await birthdayService.wish(
+      req.schoolId, req.params.recipientType, req.params.recipientId, req.auth.userId
+    );
+    return success(res, data, 'Birthday wish sent', undefined, req);
+  }),
 };
 
 module.exports = schoolController;

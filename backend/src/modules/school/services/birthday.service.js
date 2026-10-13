@@ -1,28 +1,55 @@
 const Student = require('../../../database/models/Student');
 const TeacherProfile = require('../../../database/models/TeacherProfile');
 const User = require('../../../database/models/User');
+const ChildProfile = require('../../../database/models/ChildProfile');
+const ParentProfile = require('../../../database/models/ParentProfile');
+const BirthdayWish = require('../../../database/models/BirthdayWish');
+const Notification = require('../../../database/models/Notification');
+const notificationService = require('../../../services/notification/notification.service');
+const { BadRequestError, ConflictError, NotFoundError } = require('../../../common/errors');
+
+const indiaDateParts = (date) => {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(date);
+  return Object.fromEntries(parts.filter((part) => part.type !== 'literal').map((part) => [part.type, part.value]));
+};
+
+const indiaDateKey = (date) => {
+  const { year, month, day } = indiaDateParts(date);
+  return `${year}-${month}-${day}`;
+};
+
+const recipientUserIdsForStudent = async (student) => {
+  const children = await ChildProfile.find({
+    studentId: student._id,
+    'softDelete.isDeleted': { $ne: true },
+  }).select('parentUserId').lean();
+  const profiles = await ParentProfile.find({
+    _id: { $in: student.parentProfileIds || [] },
+    'softDelete.isDeleted': { $ne: true },
+  }).select('userId').lean();
+  return [...new Set([
+    ...children.map((child) => String(child.parentUserId)),
+    ...profiles.map((profile) => String(profile.userId)),
+  ].filter(Boolean))];
+};
 
 const birthdayService = {
   async getTodayBirthdays(schoolId, query = {}) {
     const targetDate = query.date ? new Date(query.date) : new Date();
-    const month = targetDate.getMonth() + 1;
-    const day = targetDate.getDate();
-    const utcMonth = targetDate.getUTCMonth() + 1;
-    const utcDay = targetDate.getUTCDate();
+    const targetParts = indiaDateParts(targetDate);
+    const month = Number(targetParts.month);
+    const day = Number(targetParts.day);
 
     const isBirthdayToday = (dobDate) => {
       if (!dobDate) return false;
       const d = new Date(dobDate);
       if (Number.isNaN(d.getTime())) return false;
-      const m = d.getMonth() + 1;
-      const dy = d.getDate();
-      const um = d.getUTCMonth() + 1;
-      const udy = d.getUTCDate();
+      const localParts = indiaDateParts(d);
       return (
-        (m === month && dy === day) ||
-        (um === utcMonth && udy === utcDay) ||
-        (m === utcMonth && dy === utcDay) ||
-        (um === month && udy === day)
+        (d.getUTCMonth() + 1 === month && d.getUTCDate() === day) ||
+        (Number(localParts.month) === month && Number(localParts.day) === day)
       );
     };
 
@@ -75,12 +102,108 @@ const birthdayService = {
         type: 'teacher',
       }));
 
+    const dateKey = indiaDateKey(targetDate);
+    const wishes = await BirthdayWish.find({ schoolId, dateKey, status: 'sent' }).select('recipientType recipientId').lean();
+    const wished = new Set(wishes.map((wish) => `${wish.recipientType}:${wish.recipientId}`));
+
     return {
-      students: todayStudents,
-      teachers: todayTeachers,
+      students: todayStudents.map((student) => ({ ...student, wished: wished.has(`student:${student.id}`) })),
+      teachers: todayTeachers.map((teacher) => ({ ...teacher, wished: wished.has(`teacher:${teacher.id}`) })),
       totalToday: todayStudents.length + todayTeachers.length,
-      date: targetDate.toISOString().slice(0, 10),
+      date: dateKey,
     };
+  },
+
+  async wish(schoolId, recipientType, recipientId, senderUserId) {
+    if (!['student', 'teacher'].includes(recipientType)) {
+      throw new BadRequestError('Invalid birthday recipient');
+    }
+    const today = await this.getTodayBirthdays(schoolId);
+    const person = (recipientType === 'student' ? today.students : today.teachers)
+      .find((item) => String(item.id) === String(recipientId));
+    if (!person) throw new NotFoundError('No birthday for this person today');
+    if (person.wished) throw new ConflictError('Birthday wish already sent today');
+
+    let recipientUserIds;
+    if (recipientType === 'student') {
+      const student = await Student.findOne({ _id: recipientId, schoolId })
+        .select('parentProfileIds').lean();
+      recipientUserIds = student ? await recipientUserIdsForStudent(student) : [];
+    } else {
+      const teacher = await TeacherProfile.findOne({ _id: recipientId, schoolId })
+        .select('userId').lean();
+      recipientUserIds = teacher?.userId ? [String(teacher.userId)] : [];
+    }
+    if (!recipientUserIds.length) {
+      throw new BadRequestError('No linked account can receive this birthday wish');
+    }
+
+    const key = { schoolId, recipientType, recipientId, dateKey: today.date };
+    let wish = await BirthdayWish.findOne(key);
+    if (wish?.status === 'sent') throw new ConflictError('Birthday wish already sent today');
+    if (wish?.status === 'sending') {
+      await BirthdayWish.updateOne(
+        { ...key, status: 'sending', updatedAt: { $lt: new Date(Date.now() - 2 * 60 * 1000) } },
+        { $set: { status: 'partial' } }
+      );
+      wish = await BirthdayWish.findOne(key);
+      if (wish?.status === 'sending') throw new ConflictError('Birthday wish is already being sent');
+    }
+    if (wish?.status === 'partial') {
+      wish = await BirthdayWish.findOneAndUpdate(
+        { ...key, status: 'partial' },
+        { $set: { status: 'sending', updatedAt: new Date() } },
+        { returnDocument: 'after' }
+      );
+      if (!wish) throw new ConflictError('Birthday wish is already being sent');
+    } else {
+      try {
+        wish = await BirthdayWish.create({
+          ...key, senderUserId, status: 'sending', deliveredUserIds: [],
+        });
+      } catch (error) {
+        if (error.code === 11000) throw new ConflictError('Birthday wish is already being sent');
+        throw error;
+      }
+    }
+
+    const delivered = new Set(wish.deliveredUserIds.map(String));
+    for (const userId of recipientUserIds) {
+      if (delivered.has(userId)) continue;
+      const alreadyRecorded = await Notification.exists({
+        userId,
+        'payload.data.wishId': String(wish._id),
+      });
+      if (alreadyRecorded) {
+        delivered.add(userId);
+        continue;
+      }
+      try {
+        const result = await notificationService.sendToUser(userId, {
+          notification: {
+            title: 'Happy Birthday! 🎉',
+            body: `Your school wishes ${person.name} a very happy birthday!`,
+          },
+          type: 'event',
+          data: {
+            type: 'birthday_wish', wishId: String(wish._id),
+            schoolId: String(schoolId), recipientId: String(recipientId),
+            route: '/notifications',
+          },
+        });
+        if (result.record) delivered.add(userId);
+      } catch (_) {
+        // Keep the wish partial so the school can retry failed recipients.
+      }
+    }
+    const complete = recipientUserIds.every((userId) => delivered.has(userId));
+    await BirthdayWish.updateOne({ _id: wish._id }, {
+      $set: {
+        deliveredUserIds: [...delivered], status: complete ? 'sent' : 'partial', updatedAt: new Date(),
+      },
+    });
+    if (!complete) throw new BadRequestError('Some recipients did not receive the birthday wish. Please retry.');
+    return { wished: true, recipientCount: recipientUserIds.length };
   },
 };
 

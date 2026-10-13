@@ -15,7 +15,10 @@ require('../../../database/models/Attachment');
 // Every product image is a ref to an Attachment doc holding the real storageKey —
 // without this, image.attachmentId stays an unpopulated ObjectId and the customer
 // catalog silently loses every product photo.
-const PRODUCT_IMAGE_POPULATE = [{ path: 'images.attachmentId', select: 'storageKey' }];
+const PRODUCT_IMAGE_POPULATE = [
+  { path: 'images.attachmentId', select: 'storageKey' },
+  { path: 'sizeChartAttachmentId', select: 'storageKey' },
+];
 
 // Refs the admin product list renders by name rather than by id.
 const ADMIN_PRODUCT_POPULATE = [

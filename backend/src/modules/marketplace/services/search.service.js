@@ -1,5 +1,7 @@
 const SORT_MAP = {
-  newest: '-audit.createdAt',
+  newest: '-audit.createdAt -_id',
+  oldest: 'audit.createdAt _id',
+  alphabetical: 'name _id',
   price_asc: 'pricePaise',
   price_desc: '-pricePaise',
   rating: '-ratingAvg',

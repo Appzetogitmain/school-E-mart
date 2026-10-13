@@ -14,15 +14,29 @@ const SubcategoryPage = () => {
   const { categoryId } = useParams();
   const navigate = useNavigate();
   const [activeSub, setActiveSub] = useState('All');
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch] = useState('');
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [availability, setAvailability] = useState('all');
+  const [priceRange, setPriceRange] = useState('all');
   const { tree, loading: treeLoading } = useCategoryTree();
 
   const taxonomy = useMemo(() => resolveTaxonomyFromParam(tree, categoryId), [tree, categoryId]);
   const subcategories = useMemo(() => getSubcategoryOptions(taxonomy), [taxonomy]);
   const productQuery = useMemo(
-    () => buildProductQueryForSubcategory(taxonomy, activeSub, subcategories),
-    [taxonomy, activeSub, subcategories]
+    () => {
+      const query = buildProductQueryForSubcategory(taxonomy, activeSub, subcategories);
+      if (search.trim()) query.q = search.trim();
+      if (availability !== 'all') query.availability = availability;
+      if (priceRange === 'under_1000') query.maxPrice = 99999;
+      if (priceRange === '1000_5000') { query.minPrice = 100000; query.maxPrice = 500000; }
+      if (priceRange === 'over_5000') query.minPrice = 500001;
+      return query;
+    },
+    [taxonomy, activeSub, subcategories, search, availability, priceRange]
   );
-  const { products, loading: productsLoading, pagination } = useProducts(productQuery, {
+  const { products, loading: productsLoading, pagination, error } = useProducts(productQuery, {
     mapperKey: 'subcategory',
   });
 
@@ -45,7 +59,7 @@ const SubcategoryPage = () => {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 active:scale-90 transition-all">
+          <button type="button" aria-label="Search products" onClick={() => setSearchOpen((value) => !value)} className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 active:scale-90 transition-all">
             <Search size={20} />
           </button>
           <button className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 active:scale-90 transition-all relative">
@@ -54,6 +68,14 @@ const SubcategoryPage = () => {
           </button>
         </div>
       </div>
+
+      {searchOpen && (
+        <form onSubmit={(event) => { event.preventDefault(); setSearch(searchInput); }} className="flex gap-2 px-4 py-3 border-b border-gray-100">
+          <input autoFocus aria-label="Search products" value={searchInput} onChange={(event) => setSearchInput(event.target.value)} placeholder="Search products..." className="min-w-0 flex-1 rounded-xl border border-gray-200 px-3 py-2 text-sm" />
+          <button type="submit" className="rounded-xl bg-primary px-4 py-2 text-xs font-bold text-white">Search</button>
+          {search && <button type="button" onClick={() => { setSearch(''); setSearchInput(''); }} className="text-xs font-bold text-primary">Clear</button>}
+        </form>
+      )}
 
       <div className="flex flex-1 overflow-hidden">
         <div className="w-20 bg-gray-50/50 border-r border-gray-100 overflow-y-auto scrollbar-hide py-4">
@@ -98,14 +120,34 @@ const SubcategoryPage = () => {
 
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-sm font-bold text-deep-purple uppercase tracking-wider">{activeSub} Products</h2>
-            <button className="flex items-center gap-1.5 text-primary text-[11px] font-bold bg-primary/10 px-3 py-1.5 rounded-full">
+            <button type="button" onClick={() => setFilterOpen((value) => !value)} aria-expanded={filterOpen} className="flex items-center gap-1.5 text-primary text-[11px] font-bold bg-primary/10 px-3 py-1.5 rounded-full">
               <Filter size={14} />
               FILTER
             </button>
           </div>
 
+          {filterOpen && (
+            <div className="mb-4 rounded-2xl border border-gray-200 p-3 space-y-3">
+              <label className="block text-xs font-bold text-deep-purple">Availability
+                <select value={availability} onChange={(event) => setAvailability(event.target.value)} className="mt-1 w-full rounded-xl border border-gray-200 p-2 text-sm">
+                  <option value="all">All products</option><option value="in_stock">In stock</option><option value="out_of_stock">Out of stock</option>
+                </select>
+              </label>
+              <label className="block text-xs font-bold text-deep-purple">Price
+                <select value={priceRange} onChange={(event) => setPriceRange(event.target.value)} className="mt-1 w-full rounded-xl border border-gray-200 p-2 text-sm">
+                  <option value="all">Any price</option><option value="under_1000">Under ₹1,000</option><option value="1000_5000">₹1,000–₹5,000</option><option value="over_5000">Over ₹5,000</option>
+                </select>
+              </label>
+              <button type="button" onClick={() => { setAvailability('all'); setPriceRange('all'); }} className="text-xs font-bold text-primary">Reset filters</button>
+            </div>
+          )}
+
           {productsLoading ? (
             <p className="text-center text-sm text-gray-400 py-10">Loading products...</p>
+          ) : error ? (
+            <p role="alert" className="text-center text-sm text-red-500 py-10">{error}</p>
+          ) : products.length === 0 ? (
+            <p className="text-center text-sm text-gray-400 py-10">No products match your search or filters.</p>
           ) : (
             <div className="grid grid-cols-2 gap-3">
               {products.map((product) => renderProductCard(product))}

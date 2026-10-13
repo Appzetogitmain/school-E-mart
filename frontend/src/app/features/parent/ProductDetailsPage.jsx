@@ -24,6 +24,7 @@ const ProductDetailsPage = () => {
   // keep post-purchase navigation inside whichever portal the shopper is in.
   const basePath = getMarketplaceAudience() === 'school' ? '/school' : '/user';
   const [activeImage, setActiveImage] = useState(0);
+  const [chartLoadFailed, setChartLoadFailed] = useState(false);
   const [selectedSize, setSelectedSize] = useState('');
   const [isWishlisted, setIsWishlisted] = useState(false);
   const [isAuthPromptOpen, setIsAuthPromptOpen] = useState(false);
@@ -50,6 +51,7 @@ const ProductDetailsPage = () => {
         if (cancelled) return;
         const mapped = mapProductForDetailView(detail);
         setProduct(mapped);
+        setChartLoadFailed(false);
         setSelectedSize(mapped.sizes?.[0] || 'One Size');
         setSimilarProducts((related || []).map((item) => mapProductForCard(item)));
       } catch (err) {
@@ -265,16 +267,17 @@ const ProductDetailsPage = () => {
           </div>
         </div>
 
-        <div className="mb-12">
+        {product.sizeChartUrl && !chartLoadFailed && <div className="mb-12">
           <h3 className="text-sm font-bold text-deep-purple mb-4 px-2">Size Chart</h3>
           <div className="rounded-3xl border border-gray-100 overflow-hidden shadow-sm">
             <img
-              src="https://images.unsplash.com/photo-1551288049-bbbda5366391?q=80&w=600&h=400&fit=crop"
+              src={product.sizeChartUrl}
+              onError={() => setChartLoadFailed(true)}
               alt="Size Chart"
-              className="w-full h-auto"
+              className="block w-full h-auto object-contain"
             />
           </div>
-        </div>
+        </div>}
 
         <div className="grid grid-cols-3 gap-3 mb-12">
           <PolicyFeature icon={Truck} label="Free Delivery" />

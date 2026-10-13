@@ -64,7 +64,7 @@ const vendorController = {
   uploadDocument: asyncHandler(async (req, res) => {
     const attachment = await attachmentService.createFromUpload({
       ownerUserId: req.auth.userId,
-      purpose: 'kyc_doc',
+      purpose: req.body.purpose === 'product_image' ? 'product_image' : 'kyc_doc',
       file: req.file,
     });
     return created(res, { attachment }, 'File uploaded', req);

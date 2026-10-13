@@ -94,14 +94,16 @@ const createProductSchema = Joi.object({
   stock: Joi.number().integer().min(0).default(0),
   lowStockThreshold: Joi.number().integer().min(0).default(5),
   images: Joi.array().items(imageSchema).min(1).required(),
+  sizeChartAttachmentId: objectId.allow(null).optional(),
   sizes: Joi.array().items(Joi.string().trim()).optional(),
   publishStatus: Joi.string().valid('draft', 'published').optional(),
 });
 
 const updateProductSchema = createProductSchema.fork(
-  ['name', 'sku', 'headerId', 'categoryId', 'images', 'pricePaise'],
+  ['name', 'sku', 'headerId', 'categoryId', 'images', 'pricePaise', 'originalPricePaise'],
   (s) => s.optional()
-);
+).fork(['images'], (s) => s.min(0))
+  .fork(['originalPricePaise'], (s) => s.allow(null));
 
 const publishStatusSchema = Joi.object({
   publishStatus: Joi.string().valid('draft', 'published').required(),

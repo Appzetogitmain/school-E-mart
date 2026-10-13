@@ -278,6 +278,12 @@ router.get(
   resolveSchool(),
   schoolController.getTodayBirthdays
 );
+router.post(
+  '/:schoolId/birthdays/:recipientType/:recipientId/wish',
+  ...protectedRoute({ roles: [ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN, ROLES.TEACHER], tenant: { requireTenantId: false } }),
+  resolveSchool(),
+  schoolController.wishBirthday
+);
 
 router.get(
   '/:schoolId/subjects',

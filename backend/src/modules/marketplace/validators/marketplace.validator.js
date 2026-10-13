@@ -129,6 +129,7 @@ const createProductSchema = Joi.object({
   stock: Joi.number().integer().min(0).default(0),
   lowStockThreshold: Joi.number().integer().min(0).default(5),
   images: Joi.array().items(imageSchema).min(1).required(),
+  sizeChartAttachmentId: objectId.allow(null).optional(),
   sizes: Joi.array().items(Joi.string().trim()).optional(),
   specs: Joi.array().items(specSchema).optional(),
   publishStatus: Joi.string().valid('draft', 'published').optional(),
