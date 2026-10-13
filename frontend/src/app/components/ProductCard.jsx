@@ -87,19 +87,23 @@ const ProductCard = ({ product, showBuyNow = true }) => {
         className="bg-white rounded-3xl shadow-sm border border-gray-100 flex flex-col overflow-hidden group active:scale-[0.98] transition-all cursor-pointer h-full"
       >
         {/* Image & Actions */}
-        <div className="relative aspect-square bg-gray-50/50 p-4">
+        <div className="relative h-36 w-full bg-gray-50/60 p-2.5 flex items-center justify-center overflow-hidden">
           {discount > 0 && (
-            <div className="absolute top-3 left-3 bg-gradient-to-r from-rose-500 to-red-600 text-white text-[9px] font-black px-2 py-0.5 rounded-lg z-10 shadow-sm flex items-center gap-0.5">
+            <div className="absolute top-2.5 left-2.5 bg-gradient-to-r from-rose-500 to-red-600 text-white text-[9px] font-black px-2 py-0.5 rounded-lg z-10 shadow-sm flex items-center gap-0.5">
               <span>{discount}% OFF</span>
             </div>
           )}
           <button 
             onClick={handleWishlist}
-            className={`absolute top-3 right-3 w-8 h-8 rounded-full bg-white/80 backdrop-blur-md flex items-center justify-center transition-all z-20 shadow-sm active:scale-75 ${isWishlisted ? 'text-red-500' : 'text-gray-300 hover:text-red-400'}`}
+            className={`absolute top-2.5 right-2.5 w-7 h-7 rounded-full bg-white/90 backdrop-blur-md flex items-center justify-center transition-all z-20 shadow-sm active:scale-75 ${isWishlisted ? 'text-red-500' : 'text-gray-300 hover:text-red-400'}`}
           >
-            <Heart size={16} fill={isWishlisted ? "currentColor" : "none"} />
+            <Heart size={14} fill={isWishlisted ? "currentColor" : "none"} />
           </button>
-          <img src={product.image} alt={product.name} className="w-full h-full object-contain mix-blend-multiply group-hover:scale-110 transition-transform duration-700" />
+          <img
+            src={product.image}
+            alt={product.name}
+            className="max-h-full max-w-full object-contain group-hover:scale-105 transition-transform duration-500 select-none"
+          />
         </div>
 
         {/* Details */}

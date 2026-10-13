@@ -52,6 +52,17 @@ const cancellationService = {
 
     const walletApplied = order.walletAmountPaise || 0;
 
+    // For online orders, sync with the gateway before checking captured total so that
+    // any payment captured before cancellation is recognized and refunded.
+    if (order.paymentMethod !== 'cod') {
+      try {
+        const reconciliationService = require('./reconciliation.service');
+        await reconciliationService.syncOrder(orderId);
+      } catch (syncErr) {
+        // Non-blocking sync attempt
+      }
+    }
+
     // What has actually been collected, read from the Payment rows rather than
     // assumed from the order total. An order can be cancelled before its payment
     // ever captured, in which case there is nothing to refund at all.

@@ -46,18 +46,22 @@ const SchoolSubcategoryPage = () => {
 
   const renderProductCard = (product) => (
     <div key={product.id} className="bg-white rounded-[2.5rem] shadow-xl shadow-gray-200/40 border border-gray-100 flex flex-col overflow-hidden group active:scale-[0.98] transition-all">
-      <Link to={`/school/product/${product.id}`} className="relative aspect-square bg-gray-50 p-4 block">
-        <div className="absolute top-4 left-4 bg-primary/90 backdrop-blur-md px-3 py-1.5 rounded-full text-[8px] font-black text-white uppercase tracking-wider z-10 shadow-lg">
+      <Link to={`/school/product/${product.id}`} className="relative h-36 w-full bg-gray-50/60 p-2.5 flex items-center justify-center overflow-hidden block">
+        <div className="absolute top-2.5 left-2.5 bg-primary/90 backdrop-blur-md px-2.5 py-1 rounded-full text-[8px] font-black text-white uppercase tracking-wider z-10 shadow-lg">
           Bulk Deal
         </div>
         <button
           type="button"
           onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
-          className="absolute top-4 right-4 text-gray-300 hover:text-red-500 transition-colors z-10 bg-white/80 backdrop-blur-md w-8 h-8 rounded-full flex items-center justify-center cursor-pointer"
+          className="absolute top-2.5 right-2.5 text-gray-300 hover:text-red-500 transition-colors z-10 bg-white/80 backdrop-blur-md w-7 h-7 rounded-full flex items-center justify-center cursor-pointer"
         >
-          <Star size={16} />
+          <Star size={14} />
         </button>
-        <img src={product.image} alt={product.name} className="w-full h-full object-contain mix-blend-multiply group-hover:scale-110 transition-transform duration-700" />
+        <img
+          src={product.image}
+          alt={product.name}
+          className="max-h-full max-w-full object-contain group-hover:scale-105 transition-transform duration-500 select-none"
+        />
       </Link>
       <div className="p-5 flex flex-col flex-1">
         <Link to={`/school/product/${product.id}`}>

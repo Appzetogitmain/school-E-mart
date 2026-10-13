@@ -26,6 +26,26 @@ const APPROVAL_TABS = [
   { label: 'Rejected', value: 'rejected' },
 ];
 
+const ALL_GRADE_OPTIONS = [
+  'All Grades',
+  'Play Group',
+  'Nursery',
+  'LKG',
+  'UKG',
+  'Class 1',
+  'Class 2',
+  'Class 3',
+  'Class 4',
+  'Class 5',
+  'Class 6',
+  'Class 7',
+  'Class 8',
+  'Class 9',
+  'Class 10',
+  'Class 11',
+  'Class 12',
+];
+
 const ProductListManagement = () => {
   const [searchParams] = useSearchParams();
   const initialStockFilter = searchParams.get('stock') === 'low' ? 'Low Stock' : 'All';
@@ -58,8 +78,24 @@ const ProductListManagement = () => {
   const [editImage, setEditImage] = useState('');
   const [editImageFile, setEditImageFile] = useState(null);
   const [editImagePreview, setEditImagePreview] = useState('');
+  const [editGradeTags, setEditGradeTags] = useState(['All Grades']);
   const editImageInputRef = React.useRef(null);
   const editImageCameraInputRef = React.useRef(null);
+
+  const toggleEditGradeTag = (grade) => {
+    if (grade === 'All Grades') {
+      setEditGradeTags(['All Grades']);
+      return;
+    }
+    setEditGradeTags((prev) => {
+      const withoutAll = prev.filter((g) => g !== 'All Grades');
+      if (withoutAll.includes(grade)) {
+        const next = withoutAll.filter((g) => g !== grade);
+        return next.length === 0 ? ['All Grades'] : next;
+      }
+      return [...withoutAll, grade];
+    });
+  };
 
   const [products, setProducts] = useState([]);
   const [categoryTree, setCategoryTree] = useState([]);
@@ -170,6 +206,10 @@ const ProductListManagement = () => {
     setEditImage(p.image);
     setEditImageFile(null);
     setEditImagePreview('');
+    const initialGrades = Array.isArray(p.gradeTags) && p.gradeTags.length > 0
+      ? p.gradeTags
+      : ['All Grades'];
+    setEditGradeTags(initialGrades);
     setActiveFormTab('General Info');
     setIsEditModalOpen(true);
   };
@@ -192,6 +232,7 @@ const ProductListManagement = () => {
       pricePaise: Math.round((parseFloat(editPrice) || 0) * 100),
       stock: parseInt(editStock, 10) || 0,
       sizes: editVariant.trim() ? [editVariant.trim()] : [],
+      gradeTags: editGradeTags,
     };
     if (editHeaderId) payload.headerId = editHeaderId;
     if (editCategoryId) payload.categoryId = editCategoryId;
@@ -484,6 +525,11 @@ const ProductListManagement = () => {
                             {p.name}
                           </span>
                           <span className="text-[9px] text-gray-400 font-bold block mt-1">SKU: {p.sku}</span>
+                          {p.gradeTags && p.gradeTags.length > 0 && !p.gradeTags.includes('All Grades') && (
+                            <span className="inline-block mt-0.5 text-[8px] font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100/60 truncate max-w-full">
+                              {p.gradeTags.slice(0, 2).join(', ')}{p.gradeTags.length > 2 ? ` +${p.gradeTags.length - 2}` : ''}
+                            </span>
+                          )}
                         </div>
                       </div>
                     </td>
@@ -830,6 +876,41 @@ const ProductListManagement = () => {
                           return <option key={id} value={id}>{v.storeName || v.name}</option>;
                         })}
                       </select>
+                    </div>
+
+                    {/* Target Grades / Classes */}
+                    <div className="space-y-2 pt-3 border-t border-gray-150">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider block">
+                          Target Grades / Classes (Interlink With School Grades)
+                        </label>
+                        <span className="text-[10px] text-indigo-600 font-bold">
+                          {editGradeTags.includes('All Grades') ? 'All Grades' : `${editGradeTags.length} selected`}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-gray-400 font-medium">
+                        Interlink this product with school grades. When parents or schools browse by grade, matching products will appear.
+                      </p>
+                      <div className="flex flex-wrap gap-1.5 pt-1">
+                        {ALL_GRADE_OPTIONS.map((grade) => {
+                          const isSelected = editGradeTags.includes(grade);
+                          return (
+                            <button
+                              key={grade}
+                              type="button"
+                              onClick={() => toggleEditGradeTag(grade)}
+                              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                                isSelected
+                                  ? 'bg-[#0B1528] text-white shadow-sm ring-1 ring-[#0B1528]'
+                                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border border-transparent'
+                              }`}
+                            >
+                              {isSelected && <Check size={11} className="inline mr-1 stroke-[3]" />}
+                              {grade}
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
                   </div>
                 )}

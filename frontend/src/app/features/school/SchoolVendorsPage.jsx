@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Search, Filter, ChevronDown, Check, X,
   Store, Shirt, FileText, CheckCircle,
-  Star, ChevronRight, UserPlus, Send, Mail, Phone, MapPin,
+  ChevronRight, UserPlus, Send, Mail, Phone, MapPin,
   Tag, Landmark, HelpCircle, ShieldCheck, Loader2
 } from 'lucide-react';
 import { listVendors } from '../../../services/schoolApi';
@@ -248,7 +248,6 @@ const SchoolVendorsPage = () => {
           >
             <option value="Name (A - Z)">Name (A - Z)</option>
             <option value="Completed Orders">Orders Volume</option>
-            <option value="Rating">Rating</option>
           </select>
           <ChevronDown size={12} className="absolute right-0 text-deep-purple pointer-events-none" />
         </div>
@@ -299,16 +298,9 @@ const SchoolVendorsPage = () => {
                 {/* Info Detail stack */}
                 <div className="min-w-0">
                   <h3 className="text-sm font-black text-deep-purple leading-tight truncate">{vendor.name}</h3>
-                  
-                  {/* Rating & Reviews */}
-                  <div className="flex items-center gap-1 text-[11px] font-bold text-amber-500 mt-1">
-                    <Star size={12} className="fill-amber-400 stroke-amber-500" />
-                    <span>{vendor.rating}</span>
-                    <span className="text-gray-400">({vendor.reviews})</span>
-                  </div>
 
                   {/* Location Pin */}
-                  <div className="flex items-center gap-1 text-[11px] font-bold text-gray-400 mt-0.5">
+                  <div className="flex items-center gap-1 text-[11px] font-bold text-gray-400 mt-1.5">
                     <MapPin size={11} className="text-gray-400 shrink-0" />
                     <span>{vendor.location}</span>
                   </div>
@@ -426,14 +418,6 @@ const SchoolVendorsPage = () => {
                 />
                 <div className="min-w-0">
                   <h4 className="text-base font-black text-deep-purple leading-tight truncate">{selectedVendor.name}</h4>
-                  
-                  {/* Rating row */}
-                  <div className="flex items-center gap-1 text-[11px] font-bold text-amber-500 mt-1">
-                    <Star size={12} className="fill-amber-400 stroke-amber-500" />
-                    <span>{selectedVendor.rating}</span>
-                    <span className="text-gray-400">({selectedVendor.reviews} reviews)</span>
-                  </div>
-
                   <span className="text-[10px] text-gray-400 font-bold block mt-1">GSTIN: {selectedVendor.gstin}</span>
                 </div>
               </div>

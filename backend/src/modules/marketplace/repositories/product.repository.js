@@ -38,10 +38,20 @@ class ProductRepository extends BaseRepository {
       'publishStatus',
     ].forEach((key) => delete featureQuery[key]);
 
-    let baseQuery = Product.find(mergedFilter);
-    if (queryString.q) {
-      baseQuery = Product.find({ ...mergedFilter, $text: { $search: queryString.q } });
+    let searchFilter = mergedFilter;
+    if (queryString.q && String(queryString.q).trim()) {
+      const escaped = String(queryString.q).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      searchFilter = {
+        ...mergedFilter,
+        $or: [
+          { name: { $regex: escaped, $options: 'i' } },
+          { sku: { $regex: escaped, $options: 'i' } },
+          { brand: { $regex: escaped, $options: 'i' } },
+        ],
+      };
     }
+
+    let baseQuery = Product.find(searchFilter);
 
     const features = new ApiFeatures(baseQuery, featureQuery);
     features.filter().sort(options.defaultSort).limitFields(options.defaultFields);
@@ -52,7 +62,7 @@ class ProductRepository extends BaseRepository {
     const [data, total] = await Promise.all([
       features.query.clone().skip(skip).limit(limit).lean(),
       queryString.q
-        ? Product.countDocuments({ ...mergedFilter, $text: { $search: queryString.q } })
+        ? Product.countDocuments(searchFilter)
         : Product.countDocuments(mergedFilter),
     ]);
 

@@ -2,7 +2,7 @@ const Payment = require('../../../database/models/Payment');
 const Order = require('../../../database/models/Order');
 const paymentGateway = require('../../../services/paymentGateway');
 const logger = require('../../../common/logger');
-const { NotFoundError } = require('../../../common/errors');
+const { NotFoundError, BadRequestError } = require('../../../common/errors');
 
 /**
  * Reconciliation: ask the gateway what actually happened, and make our books
@@ -428,6 +428,82 @@ const reconciliationService = {
       { new: true }
     ).lean();
     if (!updated) throw new NotFoundError('Payment not found', 'PAYMENT_NOT_FOUND');
+    return updated;
+  },
+
+  /**
+   * Reinstate a cancelled order whose money was captured by the gateway.
+   * Promotes order status from 'cancelled' back to 'placed', sets paymentStatus to 'paid',
+   * reserves stock, and marks associated mismatches resolved.
+   */
+  async reinstateCancelledOrder(orderId, { actorUserId = null, note = 'Reinstated by admin after confirming gateway payment' } = {}) {
+    const order = await Order.findById(orderId).lean();
+    if (!order) throw new NotFoundError('Order not found', 'ORDER_NOT_FOUND');
+    if (order.orderStatus !== 'cancelled') {
+      throw new BadRequestError('Only cancelled orders can be reinstated', null, 'ORDER_NOT_CANCELLED');
+    }
+
+    const paymentRepository = require('../repositories/payment.repository');
+    const capturedPaise = await paymentRepository.sumCapturedForOrder(orderId);
+    const owedPaise = Math.max(0, (order.totalPaise || 0) - (order.walletAmountPaise || 0));
+    if (capturedPaise < owedPaise) {
+      throw new BadRequestError('Cannot reinstate: captured amount is less than amount owed', null, 'PAYMENT_SHORT');
+    }
+
+    const inventoryService = require('./inventory.service');
+    try {
+      await inventoryService.deductStock(order.items || []);
+    } catch (stockErr) {
+      logger.warn('Reinstating order: inventory deduction warning', {
+        orderNumber: order.orderNumber,
+        error: stockErr.message,
+      });
+    }
+
+    const updated = await Order.findByIdAndUpdate(
+      orderId,
+      {
+        $set: {
+          orderStatus: 'placed',
+          paymentStatus: 'paid',
+          placedAt: order.placedAt || new Date(),
+          cancellation: null,
+        },
+        $push: {
+          statusHistory: {
+            status: 'placed',
+            at: new Date(),
+            note: note || 'Reinstated by admin after gateway reconciliation',
+            byUserId: actorUserId || undefined,
+          },
+        },
+      },
+      { new: true }
+    ).lean();
+
+    const orderService = require('./order.service');
+    try {
+      await orderService.applyPlacementEffects(updated, updated.items || []);
+    } catch (effectsErr) {
+      logger.warn('Reinstating order: placement effects warning', {
+        orderNumber: order.orderNumber,
+        error: effectsErr.message,
+      });
+    }
+
+    // Mark any associated mismatch as resolved
+    await Payment.updateMany(
+      { orderId, 'reconciliation.status': 'mismatch' },
+      {
+        $set: {
+          'reconciliation.status': 'resolved',
+          'reconciliation.resolvedAt': new Date(),
+          'reconciliation.resolvedBy': actorUserId,
+          'reconciliation.resolutionNote': `Reinstated: ${note}`,
+        },
+      }
+    );
+
     return updated;
   },
 };

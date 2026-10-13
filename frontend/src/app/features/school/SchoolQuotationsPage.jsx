@@ -654,10 +654,12 @@ const SchoolQuotationsPage = () => {
                       </div>
                       <div>
                         <h4 className="text-sm font-black text-deep-purple leading-tight">{quote.vendorName}</h4>
-                        <div className="flex items-center gap-1 text-[10px] font-bold text-amber-500 mt-0.5">
-                          <Star size={11} className="fill-amber-400 stroke-amber-500" />
-                          <span>{quote.rating} Rating</span>
-                        </div>
+                        {Number(quote.rating) > 0 && (
+                          <div className="flex items-center gap-1 text-[10px] font-bold text-amber-500 mt-0.5">
+                            <Star size={11} className="fill-amber-400 stroke-amber-500" />
+                            <span>{quote.rating} Rating</span>
+                          </div>
+                        )}
                       </div>
                     </div>
 

@@ -10,6 +10,7 @@ const paginationQuery = Joi.object({
   search: Joi.string().trim().max(120).optional(),
   status: Joi.string().trim().optional(),
   paymentStatus: Joi.string().trim().optional(),
+  paymentMethod: Joi.string().valid('online', 'cod').optional(),
   audience: Joi.string().valid('parent', 'school').optional(),
   userId: objectId.optional(),
   vendorId: objectId.optional(),

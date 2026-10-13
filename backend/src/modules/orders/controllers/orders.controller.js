@@ -176,6 +176,14 @@ const ordersController = {
     return success(res, { payment }, 'Mismatch marked resolved', undefined, req);
   }),
 
+  reinstateOrder: asyncHandler(async (req, res) => {
+    const reinstated = await reconciliationService.reinstateCancelledOrder(req.params.orderId, {
+      actorUserId: req.auth.userId,
+      note: req.body?.note,
+    });
+    return success(res, { order: reinstated }, 'Order reinstated successfully', undefined, req);
+  }),
+
   requestRefund: asyncHandler(async (req, res) => {
     const order = await orderService.getOrder(req.params.orderId);
     await orderAccessPolicy.assertOrderAccess(req.auth, order);

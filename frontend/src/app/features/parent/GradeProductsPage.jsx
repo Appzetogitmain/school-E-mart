@@ -68,7 +68,7 @@ const GradeProductsPage = () => {
               <h1 className="text-xl font-bold text-white leading-none">{grade}</h1>
             </div>
           </div>
-          <button className="w-10 h-10 rounded-full bg-white/10 backdrop-blur-md border border-white/10 flex items-center justify-center text-white relative active:scale-90 transition-all">
+          <button type="button" aria-label="Shopping Cart" onClick={() => navigate('/user/cart')} className="w-10 h-10 rounded-full bg-white/10 backdrop-blur-md border border-white/10 flex items-center justify-center text-white relative active:scale-90 transition-all cursor-pointer">
             <ShoppingBag size={20} />
             <span className="absolute top-2 right-2 w-2 h-2 bg-yellow-400 rounded-full border-2 border-deep-purple"></span>
           </button>

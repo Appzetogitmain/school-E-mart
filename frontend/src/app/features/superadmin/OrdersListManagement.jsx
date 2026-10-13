@@ -15,6 +15,7 @@ import {
   CreditCard,
   ExternalLink,
   CheckCircle2,
+  RotateCcw,
 } from 'lucide-react';
 import {
   listOrders,
@@ -24,6 +25,8 @@ import {
   reconcileOrder,
   listPaymentMismatches,
   resolvePaymentMismatch,
+  requestOrderRefund,
+  reinstateCancelledOrder,
 } from '../../../services/ordersApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 import { formatRupee } from '../../../utils/mappers/productMapper';
@@ -227,6 +230,9 @@ const OrdersListManagement = () => {
   const [paymentStatusFilter, setPaymentStatusFilter] = useState(
     searchParams.get('paymentStatus') || ''
   );
+  const [paymentMethodFilter, setPaymentMethodFilter] = useState(
+    searchParams.get('paymentMethod') || ''
+  );
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
 
@@ -256,9 +262,11 @@ const OrdersListManagement = () => {
   useEffect(() => {
     const mapped = STATUS_QUERY_MAP[searchParams.get('status')];
     const payment = searchParams.get('paymentStatus');
+    const pMethod = searchParams.get('paymentMethod');
     if (mapped) setStatusFilter(mapped);
     if (payment) setPaymentStatusFilter(payment);
-    if (mapped || payment) setPage(1);
+    if (pMethod) setPaymentMethodFilter(pMethod);
+    if (mapped || payment || pMethod) setPage(1);
   }, [searchParams]);
 
   const queryParams = useMemo(() => {
@@ -268,13 +276,14 @@ const OrdersListManagement = () => {
     if (statusFilter && statusFilter !== '__pending__') params.status = statusFilter;
     if (statusFilter === '__pending__') params.status = PENDING_STATUSES.join(',');
     if (paymentStatusFilter) params.paymentStatus = paymentStatusFilter;
+    if (paymentMethodFilter) params.paymentMethod = paymentMethodFilter;
     if (search) params.search = search;
     if (fromDate) params.from = fromDate;
     // `to` is inclusive of the whole day the operator picked, not midnight at
     // its start — otherwise a date range silently drops its own last day.
     if (toDate) params.to = `${toDate}T23:59:59.999`;
     return params;
-  }, [page, limit, statusFilter, paymentStatusFilter, search, fromDate, toDate]);
+  }, [page, limit, statusFilter, paymentStatusFilter, paymentMethodFilter, search, fromDate, toDate]);
 
   const loadOrders = useCallback(() => {
     let cancelled = false;
@@ -522,8 +531,8 @@ const OrdersListManagement = () => {
         </div>
 
         {/* FILTERS — all applied by the server */}
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-12 gap-3 text-xs font-bold text-gray-600 select-none">
-          <div className="xl:col-span-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-7 gap-3 text-xs font-bold text-gray-600 select-none">
+          <div>
             <label className="text-[10px] text-gray-400 uppercase tracking-wide block mb-1">From</label>
             <input
               type="date"
@@ -535,7 +544,7 @@ const OrdersListManagement = () => {
               className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500/25 font-bold"
             />
           </div>
-          <div className="xl:col-span-2">
+          <div>
             <label className="text-[10px] text-gray-400 uppercase tracking-wide block mb-1">To</label>
             <input
               type="date"
@@ -549,7 +558,7 @@ const OrdersListManagement = () => {
             />
           </div>
 
-          <div className="xl:col-span-2">
+          <div>
             <label className="text-[10px] text-gray-400 uppercase tracking-wide block mb-1">
               Order status
             </label>
@@ -571,7 +580,7 @@ const OrdersListManagement = () => {
             </select>
           </div>
 
-          <div className="xl:col-span-2">
+          <div>
             <label className="text-[10px] text-gray-400 uppercase tracking-wide block mb-1">
               Payment
             </label>
@@ -592,7 +601,25 @@ const OrdersListManagement = () => {
             </select>
           </div>
 
-          <div className="xl:col-span-3">
+          <div>
+            <label className="text-[10px] text-gray-400 uppercase tracking-wide block mb-1">
+              Payment mode
+            </label>
+            <select
+              value={paymentMethodFilter}
+              onChange={(e) => {
+                setPaymentMethodFilter(e.target.value);
+                setPage(1);
+              }}
+              className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 focus:outline-none cursor-pointer font-bold"
+            >
+              <option value="">All modes</option>
+              <option value="online">Online (Razorpay)</option>
+              <option value="cod">Cash on delivery (COD)</option>
+            </select>
+          </div>
+
+          <div>
             <label className="text-[10px] text-gray-400 uppercase tracking-wide block mb-1">
               Search order number
             </label>
@@ -611,7 +638,7 @@ const OrdersListManagement = () => {
             </div>
           </div>
 
-          <div className="xl:col-span-1">
+          <div>
             <label className="text-[10px] text-gray-400 uppercase tracking-wide block mb-1">Rows</label>
             <select
               value={limit}
@@ -854,6 +881,37 @@ const MismatchRow = ({ mismatch, onResolved }) => {
     }
   };
 
+  const reinstate = async () => {
+    if (!window.confirm(`Reinstate order ${order.orderNumber || ''} to Placed & Paid?`)) return;
+    setBusy(true);
+    setError('');
+    try {
+      await reinstateCancelledOrder(orderId, { note: 'Reinstated by admin after confirming captured payment' });
+      onResolved();
+    } catch (err) {
+      setError(getErrorMessage(err, 'Could not reinstate order'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const refund = async () => {
+    if (!window.confirm(`Initiate Razorpay refund for order ${order.orderNumber || ''}?`)) return;
+    setBusy(true);
+    setError('');
+    try {
+      await requestOrderRefund(orderId, {
+        amountPaise: mismatch.amountCapturedPaise || undefined,
+        reason: 'Admin refund for captured mismatch',
+      });
+      onResolved();
+    } catch (err) {
+      setError(getErrorMessage(err, 'Could not initiate refund'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div className="p-4 bg-white/60 space-y-2">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -873,7 +931,31 @@ const MismatchRow = ({ mismatch, onResolved }) => {
             {mismatch.reconciliation?.detail || 'No detail recorded.'}
           </p>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-2 shrink-0 flex-wrap">
+          {order.orderStatus === 'cancelled' && (
+            <>
+              <button
+                type="button"
+                onClick={reinstate}
+                disabled={busy}
+                className="flex items-center gap-1 text-[11px] font-extrabold border border-blue-400 bg-blue-50 text-blue-700 rounded-lg px-2.5 py-1.5 hover:bg-blue-100 disabled:opacity-50 cursor-pointer"
+                title="Mark order as Placed & Paid so it can be fulfilled"
+              >
+                <CheckCircle2 size={11} />
+                Reinstate Order
+              </button>
+              <button
+                type="button"
+                onClick={refund}
+                disabled={busy}
+                className="flex items-center gap-1 text-[11px] font-extrabold border border-amber-400 bg-amber-50 text-amber-700 rounded-lg px-2.5 py-1.5 hover:bg-amber-100 disabled:opacity-50 cursor-pointer"
+                title="Refund captured money back to parent through Razorpay"
+              >
+                <RotateCcw size={11} />
+                Issue Refund
+              </button>
+            </>
+          )}
           <button
             type="button"
             onClick={recheck}

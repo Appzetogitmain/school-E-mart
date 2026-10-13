@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Cake, Sparkles, Gift, PartyPopper, Users, GraduationCap, ChevronRight, Check } from 'lucide-react';
 import { getTodayBirthdays, wishBirthday } from '../../services/schoolApi';
+import { useSchoolId } from '../../utils/schoolContext';
 import { toAbsoluteUrl } from '../../utils/url';
 import { getErrorMessage } from '../../utils/apiHelpers';
 
@@ -11,6 +12,9 @@ const TodayBirthdaysWidget = ({
   variant = 'dashboard', // 'dashboard' | 'events'
   className = ''
 }) => {
+  const fallbackSchoolId = useSchoolId();
+  const effectiveSchoolId = schoolId || fallbackSchoolId;
+
   const [birthdays, setBirthdays] = useState({ students: [], teachers: [], totalToday: 0 });
   const [loading, setLoading] = useState(true);
   const [wishedMap, setWishedMap] = useState({});
@@ -19,13 +23,13 @@ const TodayBirthdaysWidget = ({
 
   useEffect(() => {
     let active = true;
-    if (!schoolId) {
+    if (!effectiveSchoolId) {
       setLoading(false);
       return;
     }
 
     setLoading(true);
-    getTodayBirthdays(schoolId)
+    getTodayBirthdays(effectiveSchoolId)
       .then((res) => {
         if (!active) return;
         setBirthdays(res || { students: [], teachers: [], totalToday: 0 });
@@ -46,7 +50,7 @@ const TodayBirthdaysWidget = ({
     return () => {
       active = false;
     };
-  }, [schoolId]);
+  }, [effectiveSchoolId]);
 
   const handleWish = async (type, id) => {
     const key = `${type}:${id}`;
@@ -54,8 +58,21 @@ const TodayBirthdaysWidget = ({
     setSendingMap((prev) => ({ ...prev, [key]: true }));
     setWishError('');
     try {
-      await wishBirthday(schoolId, type, id);
+      await wishBirthday(effectiveSchoolId, type, id);
       setWishedMap((prev) => ({ ...prev, [key]: true }));
+      // Keep student in the array marked as wished so it NEVER disappears
+      setBirthdays((prev) => {
+        if (type === 'student') {
+          return {
+            ...prev,
+            students: (prev.students || []).map((s) => (String(s.id) === String(id) ? { ...s, wished: true } : s)),
+          };
+        }
+        return {
+          ...prev,
+          teachers: (prev.teachers || []).map((t) => (String(t.id) === String(id) ? { ...t, wished: true } : t)),
+        };
+      });
     } catch (error) {
       setWishError(getErrorMessage(error, 'Unable to send birthday wish'));
     } finally {
@@ -162,12 +179,18 @@ const TodayBirthdaysWidget = ({
         {/* Student Birthdays */}
         {students.map((student) => {
           const inClass = isClassMatch(student);
-          const isWished = wishedMap[`student:${student.id}`];
+          const isWished = Boolean(wishedMap[`student:${student.id}`] ?? student.wished);
 
           return (
             <div 
               key={`student-${student.id}`}
-              className={`p-3.5 bg-white border ${inClass ? 'border-primary/40 ring-2 ring-primary/10' : 'border-amber-100'} rounded-2xl shadow-sm flex items-center justify-between gap-3 transition-all hover:shadow-md`}
+              className={`p-3.5 bg-white border ${
+                isWished
+                  ? 'border-emerald-200 bg-emerald-50/20'
+                  : inClass 
+                    ? 'border-primary/40 ring-2 ring-primary/10' 
+                    : 'border-amber-100'
+              } rounded-2xl shadow-sm flex items-center justify-between gap-3 transition-all hover:shadow-md`}
             >
               <div className="flex items-center gap-3 min-w-0">
                 <div className="relative shrink-0">
@@ -195,10 +218,15 @@ const TodayBirthdaysWidget = ({
                         In Your Class ⭐
                       </span>
                     )}
+                    {isWished && (
+                      <span className="px-1.5 py-0.2 bg-emerald-100/90 text-emerald-700 rounded-md text-[9px] font-black border border-emerald-200">
+                        Wished ✓
+                      </span>
+                    )}
                   </div>
                   <p className="text-[10px] text-gray-500 font-bold mt-0.5 truncate flex items-center gap-1">
                     <GraduationCap size={11} className="text-amber-500" />
-                    <span>Class {student.classGrade}-{student.section}</span>
+                    <span>Class {student.classGrade || 'N/A'}{student.section ? `-${student.section}` : ''}</span>
                     {student.rollNo && <span>• Roll #{student.rollNo}</span>}
                   </p>
                 </div>
@@ -210,14 +238,18 @@ const TodayBirthdaysWidget = ({
                 disabled={isWished || sendingMap[`student:${student.id}`]}
                 className={`px-3 py-1.5 rounded-xl text-[10px] font-black shrink-0 transition-all flex items-center gap-1 active:scale-95 ${
                   isWished 
-                    ? 'bg-emerald-50 text-emerald-600 border border-emerald-200' 
-                    : 'bg-gradient-to-r from-amber-400 to-rose-400 text-white shadow-sm hover:opacity-95'
+                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-300 font-black cursor-default' 
+                    : sendingMap[`student:${student.id}`]
+                      ? 'bg-amber-100 text-amber-700 border border-amber-200 cursor-wait'
+                      : 'bg-gradient-to-r from-amber-400 to-rose-400 text-white shadow-sm hover:opacity-95'
                 }`}
               >
                 {isWished ? (
                   <>
                     <Check size={12} strokeWidth={3} /> Wished!
                   </>
+                ) : sendingMap[`student:${student.id}`] ? (
+                  <span>Sending…</span>
                 ) : (
                   <>
                     <PartyPopper size={12} /> Wish 🎉
@@ -230,12 +262,16 @@ const TodayBirthdaysWidget = ({
 
         {/* Teacher Birthdays */}
         {teachers.map((teacher) => {
-          const isWished = wishedMap[`teacher:${teacher.id}`];
+          const isWished = Boolean(wishedMap[`teacher:${teacher.id}`] ?? teacher.wished);
 
           return (
             <div 
               key={`teacher-${teacher.id}`}
-              className="p-3.5 bg-white border border-purple-100 rounded-2xl shadow-sm flex items-center justify-between gap-3 transition-all hover:shadow-md"
+              className={`p-3.5 bg-white border ${
+                isWished
+                  ? 'border-emerald-200 bg-emerald-50/20'
+                  : 'border-purple-100'
+              } rounded-2xl shadow-sm flex items-center justify-between gap-3 transition-all hover:shadow-md`}
             >
               <div className="flex items-center gap-3 min-w-0">
                 <div className="relative shrink-0">
@@ -261,10 +297,15 @@ const TodayBirthdaysWidget = ({
                     <span className="px-1.5 py-0.2 bg-purple-50 text-purple-600 rounded-md text-[9px] font-black border border-purple-100">
                       Staff 🎈
                     </span>
+                    {isWished && (
+                      <span className="px-1.5 py-0.2 bg-emerald-100/90 text-emerald-700 rounded-md text-[9px] font-black border border-emerald-200">
+                        Wished ✓
+                      </span>
+                    )}
                   </div>
                   <p className="text-[10px] text-gray-500 font-bold mt-0.5 truncate flex items-center gap-1">
                     <Users size={11} className="text-purple-500" />
-                    <span>{teacher.designation}</span>
+                    <span>{teacher.designation || 'Staff'}</span>
                     {teacher.department && <span>• {teacher.department}</span>}
                   </p>
                 </div>
@@ -276,14 +317,18 @@ const TodayBirthdaysWidget = ({
                 disabled={isWished || sendingMap[`teacher:${teacher.id}`]}
                 className={`px-3 py-1.5 rounded-xl text-[10px] font-black shrink-0 transition-all flex items-center gap-1 active:scale-95 ${
                   isWished 
-                    ? 'bg-emerald-50 text-emerald-600 border border-emerald-200' 
-                    : 'bg-gradient-to-r from-purple-500 to-indigo-500 text-white shadow-sm hover:opacity-95'
+                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-300 font-black cursor-default' 
+                    : sendingMap[`teacher:${teacher.id}`]
+                      ? 'bg-purple-100 text-purple-700 border border-purple-200 cursor-wait'
+                      : 'bg-gradient-to-r from-purple-500 to-indigo-500 text-white shadow-sm hover:opacity-95'
                 }`}
               >
                 {isWished ? (
                   <>
                     <Check size={12} strokeWidth={3} /> Wished!
                   </>
+                ) : sendingMap[`teacher:${teacher.id}`] ? (
+                  <span>Sending…</span>
                 ) : (
                   <>
                     <PartyPopper size={12} /> Wish 🎉

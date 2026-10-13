@@ -160,4 +160,15 @@ describe('admin order list', () => {
     expect(stats.total.valuePaise).toBe(50000);
     expect(stats.paid.valuePaise).toBeLessThan(stats.total.valuePaise);
   });
+
+  describe('paymentMethod filter', () => {
+    test('filters orders by paymentMethod online vs cod', async () => {
+      await makeOrder({ paymentMethod: 'cod', orderStatus: 'placed', paymentStatus: 'pending' });
+      const codOrders = await orderService.listAllOrders({ paymentMethod: 'cod' });
+      const onlineOrders = await orderService.listAllOrders({ paymentMethod: 'online' });
+      expect(codOrders.pagination.total).toBe(1);
+      expect(codOrders.data.every((o) => o.paymentMethod === 'cod')).toBe(true);
+      expect(onlineOrders.data.every((o) => o.paymentMethod === 'online')).toBe(true);
+    });
+  });
 });

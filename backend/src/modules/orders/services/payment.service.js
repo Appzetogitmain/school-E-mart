@@ -267,12 +267,30 @@ const paymentService = {
     // otherwise is how a refund silently failed while the order was marked
     // refunded anyway.
     if (payment.gateway === 'razorpay' && !payment.gatewayPaymentId) {
-      throw new BadRequestError(
-        'This payment has no gateway payment id, so it cannot be refunded automatically. ' +
-          'Reconcile it against Razorpay first.',
-        null,
-        'REFUND_MISSING_GATEWAY_PAYMENT_ID'
-      );
+      if (payment.gatewayOrderId) {
+        try {
+          const list = await paymentGateway.fetchPaymentsForOrder(payment.gatewayOrderId, 'razorpay');
+          const captured = (list || []).find((p) => p.status === 'captured') || (list || [])[0];
+          if (captured && captured.id) {
+            payment.gatewayPaymentId = captured.id;
+            await Payment.findByIdAndUpdate(payment._id, { $set: { gatewayPaymentId: captured.id } });
+          }
+        } catch (fetchErr) {
+          logger.warn('Failed auto-fetching payment id from Razorpay for refund', {
+            paymentId: String(payment._id),
+            gatewayOrderId: payment.gatewayOrderId,
+            error: fetchErr.message,
+          });
+        }
+      }
+      if (!payment.gatewayPaymentId) {
+        throw new BadRequestError(
+          'This payment has no gateway payment id, so it cannot be refunded automatically. ' +
+            'Reconcile it against Razorpay first.',
+          null,
+          'REFUND_MISSING_GATEWAY_PAYMENT_ID'
+        );
+      }
     }
 
     const order = await Order.findById(orderId).lean();

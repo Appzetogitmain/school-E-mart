@@ -52,6 +52,7 @@ export const mapVendorProductForList = (product) => {
     images,
     imgBg: 'bg-purple-100 text-purple-700',
     audience: product?.audience || 'users',
+    gradeTags: Array.isArray(product?.gradeTags) ? product.gradeTags : [],
     raw: product,
   };
 };
@@ -87,6 +88,7 @@ export const mapProductForAdminList = (product) => {
     approvalRaw: mapped.approvalRaw,
     image: product?.images?.[0]?.url || product?.images?.[0] || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?q=80&w=180&auto=format&fit=crop&q=60',
     vendor: product?.vendorName || product?.vendor?.storeName || '—',
+    gradeTags: mapped.gradeTags,
     raw: product,
   };
 };

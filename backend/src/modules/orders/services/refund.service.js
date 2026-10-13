@@ -6,13 +6,19 @@ const paymentRepository = require('../repositories/payment.repository');
 const refundService = {
   async requestRefund(orderId, { amountPaise, reason }, actor) {
     const order = await orderService.getOrder(orderId);
-    if (!['paid', 'authorized', 'partially_paid', 'partially_refunded'].includes(order.paymentStatus)) {
+    const eligiblePaymentStatus = ['paid', 'authorized', 'partially_paid', 'partially_refunded'].includes(order.paymentStatus);
+    const capturedPayment = await paymentRepository.findCapturedForOrder(orderId);
+    if (!eligiblePaymentStatus && !capturedPayment) {
       throw new BadRequestError('Order is not eligible for refund', null, 'REFUND_NOT_ELIGIBLE');
     }
     // actorUserId belongs in the payload, not a trailing options object — it
     // used to be passed as options and so never reached the refund record at all.
+    const targetAmountPaise =
+      amountPaise ||
+      (capturedPayment ? (capturedPayment.amountCapturedPaise || capturedPayment.amountPaise) : undefined);
+
     return paymentService.initiateRefund(orderId, {
-      amountPaise,
+      amountPaise: targetAmountPaise,
       reason,
       actorUserId: actor.userId,
     });

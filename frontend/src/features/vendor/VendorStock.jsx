@@ -14,11 +14,15 @@ const VendorStock = () => {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [activeSegment, setActiveSegment] = useState('All');
+  const [selectedAudience, setSelectedAudience] = useState('All');
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [adjustStockVal, setAdjustStockVal] = useState('');
   const [adjustPriceVal, setAdjustPriceVal] = useState('');
   const [adjustSuccess, setAdjustSuccess] = useState(false);
   const [products, setProducts] = useState([]);
+  const [page, setPage] = useState(1);
+  const [pageSize] = useState(100);
+  const [pagination, setPagination] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -27,19 +31,30 @@ const VendorStock = () => {
     setLoading(true);
     setError('');
     try {
-      const { data } = await listVendorProducts({ limit: 100 });
+      const { data, pagination: pageMeta } = await listVendorProducts({
+        page,
+        limit: pageSize,
+        sort: 'newest',
+        search: searchQuery.trim() || undefined,
+        ...(selectedAudience !== 'All' ? { audience: selectedAudience } : {}),
+      });
       setProducts((data || []).map(mapVendorProductForStock));
+      setPagination(pageMeta);
     } catch (err) {
       setProducts([]);
+      setPagination(null);
       setError(getErrorMessage(err, 'Unable to load inventory'));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [page, pageSize, searchQuery, selectedAudience]);
 
   useEffect(() => {
-    loadProducts();
-  }, [loadProducts]);
+    const handler = setTimeout(() => {
+      loadProducts();
+    }, searchQuery ? 300 : 0);
+    return () => clearTimeout(handler);
+  }, [loadProducts, searchQuery]);
 
   // Set initial input states when drawer is opened
   const handleOpenAdjust = (prod) => {
@@ -82,7 +97,7 @@ const VendorStock = () => {
   }, [products]);
 
   const lowStockCount = useMemo(() => {
-    return products.filter(p => p.stock > 0 && p.stock <= 5).length;
+    return products.filter(p => p.stock > 0 && p.stock <= (p.lowStockThreshold || 5)).length;
   }, [products]);
 
   const outOfStockCount = useMemo(() => {
@@ -105,6 +120,8 @@ const VendorStock = () => {
       let matchesSegment = true;
       if (activeSegment === 'In Stock') {
         matchesSegment = product.stock > 0;
+      } else if (activeSegment === 'Low Stock') {
+        matchesSegment = product.stock > 0 && product.stock <= (product.lowStockThreshold || 5);
       } else if (activeSegment === 'Out of Stock') {
         matchesSegment = product.stock === 0;
       }
@@ -129,6 +146,29 @@ const VendorStock = () => {
         </div>
       </div>
 
+      {/* Audience Tabs — keeps retail (Users) and bulk (Schools) catalogs visibly separate */}
+      <div className="flex items-center gap-2 bg-gray-50 border border-gray-100 rounded-2xl p-1.5 w-fit">
+        {[
+          { key: 'All', label: 'All Products' },
+          { key: 'users', label: 'Users (Retail)' },
+          { key: 'schools', label: 'Schools (Bulk)' },
+          { key: 'both', label: 'Both (Shared)' },
+        ].map((tab) => (
+          <button
+            key={tab.key}
+            type="button"
+            onClick={() => { setPage(1); setSelectedAudience(tab.key); }}
+            className={`px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer ${
+              selectedAudience === tab.key
+                ? 'bg-white text-[#5B3FD6] shadow-sm border border-purple-100'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
       {loading && (
         <div className="flex items-center gap-2 text-xs font-bold text-gray-400">
           <Loader2 size={14} className="animate-spin" /> Loading inventory…
@@ -144,7 +184,12 @@ const VendorStock = () => {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         
         {/* Metric Card 1: Total Inventory */}
-        <div className="bg-white border border-gray-100 rounded-3xl p-5 flex items-center gap-4 shadow-sm hover:shadow-md transition-all">
+        <div 
+          onClick={() => setActiveSegment('All')}
+          className={`bg-white border rounded-3xl p-5 flex items-center gap-4 shadow-sm hover:shadow-md transition-all cursor-pointer ${
+            activeSegment === 'All' ? 'border-[#5B3FD6]/40 ring-2 ring-[#5B3FD6]/10' : 'border-gray-100'
+          }`}
+        >
           <div className="w-12 h-12 bg-gray-50 rounded-2xl flex items-center justify-center text-gray-700 shrink-0 border border-gray-100">
             <Package size={20} />
           </div>
@@ -155,7 +200,12 @@ const VendorStock = () => {
         </div>
 
         {/* Metric Card 2: Low Stock */}
-        <div className="bg-white border border-gray-100 rounded-3xl p-5 flex items-center gap-4 shadow-sm hover:shadow-md transition-all">
+        <div 
+          onClick={() => setActiveSegment('Low Stock')}
+          className={`bg-white border rounded-3xl p-5 flex items-center gap-4 shadow-sm hover:shadow-md transition-all cursor-pointer ${
+            activeSegment === 'Low Stock' ? 'border-amber-400 ring-2 ring-amber-100' : 'border-gray-100'
+          }`}
+        >
           <div className="w-12 h-12 bg-amber-50 rounded-2xl flex items-center justify-center text-amber-500 shrink-0 border border-amber-100/50">
             <AlertTriangle size={20} />
           </div>
@@ -166,7 +216,12 @@ const VendorStock = () => {
         </div>
 
         {/* Metric Card 3: Out of Stock */}
-        <div className="bg-white border border-gray-100 rounded-3xl p-5 flex items-center gap-4 shadow-sm hover:shadow-md transition-all">
+        <div 
+          onClick={() => setActiveSegment('Out of Stock')}
+          className={`bg-white border rounded-3xl p-5 flex items-center gap-4 shadow-sm hover:shadow-md transition-all cursor-pointer ${
+            activeSegment === 'Out of Stock' ? 'border-rose-400 ring-2 ring-rose-100' : 'border-gray-100'
+          }`}
+        >
           <div className="w-12 h-12 bg-rose-50 rounded-2xl flex items-center justify-center text-rose-500 shrink-0 border border-rose-100/50">
             <AlertCircle size={20} />
           </div>
@@ -202,7 +257,10 @@ const VendorStock = () => {
             <input 
               type="text" 
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setPage(1);
+              }}
               placeholder="Search by product name or SKU..."
               className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-[#5B3FD6]/10 focus:border-[#5B3FD6] placeholder-gray-400 font-medium shadow-sm"
             />
@@ -210,7 +268,7 @@ const VendorStock = () => {
 
           {/* Segments filters */}
           <div className="flex bg-gray-50 border border-gray-100 p-1 rounded-xl shrink-0">
-            {['All', 'In Stock', 'Out of Stock'].map((seg) => {
+            {['All', 'In Stock', 'Low Stock', 'Out of Stock'].map((seg) => {
               const isActive = activeSegment === seg;
               return (
                 <button
@@ -266,7 +324,7 @@ const VendorStock = () => {
                     healthText = "OUT OF STOCK";
                     healthStyle = "bg-rose-50 text-rose-600 border-rose-100";
                     bulletStyle = "bg-rose-500";
-                  } else if (prod.stock <= 5) {
+                  } else if (prod.stock <= (prod.lowStockThreshold || 5)) {
                     healthText = "LOW STOCK";
                     healthStyle = "bg-amber-50 text-amber-600 border-amber-100";
                     bulletStyle = "bg-amber-500";
@@ -278,15 +336,24 @@ const VendorStock = () => {
                       {/* Product details info card */}
                       <td className="px-6 py-4.5 max-w-[500px]">
                         <div className="flex items-start gap-3.5">
-                          <div className={`w-9 h-9 rounded-lg ${prod.imgBg} flex items-center justify-center font-black text-sm shrink-0 border border-gray-100 shadow-sm mt-0.5`}>
-                            {prod.name.charAt(0)}
+                          <div className={`w-9 h-9 rounded-lg ${prod.imgBg} flex items-center justify-center font-black text-sm shrink-0 border border-gray-100 shadow-sm mt-0.5 overflow-hidden`}>
+                            {prod.imageUrl ? (
+                              <img src={prod.imageUrl} alt={prod.name} className="w-full h-full object-cover" />
+                            ) : (
+                              prod.name?.charAt(0) || 'P'
+                            )}
                           </div>
                           <div>
                             <p className="font-extrabold text-gray-900 tracking-tight leading-tight hover:text-[#5B3FD6] transition-colors">
                               {prod.name}
                             </p>
-                            <p className="text-[9px] font-bold text-gray-400 mt-1.5 uppercase tracking-wide">
-                              Product Code: {prod.code}
+                            <p className="text-[9px] font-bold text-gray-400 mt-1.5 uppercase tracking-wide flex items-center gap-1.5 flex-wrap">
+                              <span>Code: {prod.code}</span>
+                              {prod.audience && (
+                                <span className="px-1.5 py-0.5 rounded text-[8px] font-black bg-gray-100 text-gray-600">
+                                  {prod.audience === 'schools' ? 'Bulk' : prod.audience === 'both' ? 'Shared' : 'Retail'}
+                                </span>
+                              )}
                             </p>
                           </div>
                         </div>
@@ -336,18 +403,30 @@ const VendorStock = () => {
       </div>
 
       {/* 5. Pagination Footer */}
-      <div className="flex items-center justify-between pt-2">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
         <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">
-          Showing 1 to {filteredProducts.length} of {products.length} entries
+          {pagination?.total
+            ? `Showing ${((page - 1) * pageSize) + 1} to ${Math.min(page * pageSize, pagination.total)} of ${pagination.total} entries`
+            : `Showing 1 to ${filteredProducts.length} of ${products.length} entries`}
         </span>
         <div className="flex items-center gap-1">
-          <button className="px-3 py-1.5 rounded-xl border border-gray-100 text-xs font-bold text-gray-400 hover:bg-gray-50 transition-all cursor-not-allowed">
+          <button
+            type="button"
+            disabled={page <= 1 || loading}
+            onClick={() => setPage((current) => Math.max(1, current - 1))}
+            className="px-3 py-1.5 rounded-xl border border-gray-100 text-xs font-bold text-gray-600 hover:bg-gray-50 transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+          >
             Previous
           </button>
-          <button className="w-8 h-8 rounded-xl bg-[#5B3FD6] text-white text-xs font-bold flex items-center justify-center shadow-md shadow-purple-200">
-            1
+          <button className="min-w-8 h-8 px-2 rounded-xl bg-[#5B3FD6] text-white text-xs font-bold flex items-center justify-center shadow-md shadow-purple-200">
+            {page} / {pagination?.totalPages || 1}
           </button>
-          <button className="px-3 py-1.5 rounded-xl border border-gray-100 text-xs font-bold text-gray-600 hover:bg-gray-50 transition-all">
+          <button
+            type="button"
+            disabled={loading || page >= (pagination?.totalPages || 1)}
+            onClick={() => setPage((current) => current + 1)}
+            className="px-3 py-1.5 rounded-xl border border-gray-100 text-xs font-bold text-gray-600 hover:bg-gray-50 transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+          >
             Next
           </button>
         </div>

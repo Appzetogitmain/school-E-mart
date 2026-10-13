@@ -154,17 +154,24 @@ const ProductDetailsPage = () => {
         </div>
       </div>
 
-      <div className="relative bg-gray-50 aspect-[3/4] overflow-hidden">
+      {/* Product Image Carousel */}
+      <div className="relative bg-gradient-to-b from-gray-50 to-gray-100/60 w-full h-[320px] max-h-[42vh] overflow-hidden flex items-center justify-center pt-16 pb-6 px-4">
         <div
-          className="flex transition-transform duration-500 ease-out h-full"
+          className="flex transition-transform duration-500 ease-out h-full w-full"
           style={{ transform: `translateX(-${activeImage * 100}%)` }}
         >
           {product.images.map((img, idx) => (
-            <img key={idx} src={img} alt={`${product.name} ${idx + 1}`} className="w-full h-full object-cover shrink-0" />
+            <div key={idx} className="w-full h-full shrink-0 flex items-center justify-center p-2">
+              <img
+                src={img}
+                alt={`${product.name} ${idx + 1}`}
+                className="max-h-full max-w-full object-contain drop-shadow-sm select-none"
+              />
+            </div>
           ))}
         </div>
 
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-2">
+        <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5 z-10 bg-white/70 backdrop-blur-sm px-2.5 py-1 rounded-full border border-gray-200/50">
           {product.images.map((_, idx) => (
             <div
               key={idx}
@@ -175,7 +182,7 @@ const ProductDetailsPage = () => {
         </div>
 
         {discount > 0 && (
-          <div className="absolute bottom-6 left-6 bg-red-500 text-white text-[10px] font-black px-3 py-1.5 rounded-full shadow-lg">
+          <div className="absolute bottom-3 left-4 bg-gradient-to-r from-rose-500 to-red-600 text-white text-[10px] font-black px-2.5 py-1 rounded-full shadow-md z-10">
             {discount}% OFF
           </div>
         )}

@@ -121,6 +121,12 @@ router.post(
   validateParams(validators.orderIdParam),
   ordersController.reconcileOrder
 );
+router.post(
+  '/:orderId/reinstate',
+  ...adminOrders,
+  validateParams(validators.orderIdParam),
+  ordersController.reinstateOrder
+);
 
 // Refunds
 router.post(

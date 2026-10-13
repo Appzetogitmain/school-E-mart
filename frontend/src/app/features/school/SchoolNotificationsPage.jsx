@@ -4,10 +4,16 @@ import {
   Bell, Package, ShoppingBag,
   Info, CheckCheck, Trash2,
   Clock, ArrowRight, Building2,
-  Quote, ShieldCheck, Loader2
+  Quote, ShieldCheck, Loader2, Cake
 } from 'lucide-react';
 import SchoolHeader from '../../components/SchoolHeader';
 import { listNotices } from '../../../services/schoolApi';
+import {
+  listNotifications,
+  markNotificationAsRead,
+  markAllNotificationsAsRead,
+  deleteNotification as deleteNotificationApi,
+} from '../../../services/notificationApi';
 import { useSchoolId } from '../../../utils/schoolContext';
 import { useChildInfo } from '../../../utils/parentContext';
 import { getErrorMessage } from '../../../utils/apiHelpers';
@@ -28,27 +34,49 @@ const SchoolNotificationsPage = () => {
       setLoading(true);
       setError('');
 
-      if (!schoolId) {
-        setNotifications([]);
-        setLoading(false);
-        return;
-      }
-
       try {
-        const { data } = await listNotices(schoolId, { limit: 20 });
-        if (!cancelled) {
-          setNotifications(
-            (data || []).map((notice) => ({
-              id: notice._id || notice.id,
-              title: notice.title || 'School Notice',
-              message: notice.body || notice.content || notice.summary || '',
-              type: 'school',
-              isRead: Boolean(notice.isRead || notice.readAt),
-              createdAt: notice.publishDate || notice.audit?.createdAt || notice.publishedAt || notice.createdAt,
-              actionLink: '/school/admin',
-            }))
-          );
-        }
+        const [noticesRes, notifsRes] = await Promise.allSettled([
+          schoolId ? listNotices(schoolId, { limit: 30 }) : Promise.resolve({ data: [] }),
+          listNotifications({ limit: 50 }),
+        ]);
+
+        if (cancelled) return;
+
+        const noticesList =
+          noticesRes.status === 'fulfilled' && noticesRes.value?.data
+            ? (noticesRes.value.data || []).map((notice) => ({
+                id: `notice_${notice._id || notice.id}`,
+                rawId: notice._id || notice.id,
+                source: 'notice',
+                title: notice.title || 'School Notice',
+                message: notice.body || notice.content || notice.summary || '',
+                type: 'school',
+                isRead: Boolean(notice.isRead || notice.readAt),
+                createdAt: notice.publishDate || notice.audit?.createdAt || notice.publishedAt || notice.createdAt,
+                actionLink: '/school/admin',
+              }))
+            : [];
+
+        const notifsList =
+          notifsRes.status === 'fulfilled' && notifsRes.value?.data
+            ? (notifsRes.value.data || []).map((item) => ({
+                id: `notif_${item._id || item.id}`,
+                rawId: item._id || item.id,
+                source: 'in_app',
+                title: item.title || 'Notification',
+                message: item.body || '',
+                type: item.type || 'system',
+                isRead: Boolean(item.isRead),
+                createdAt: item.createdAt,
+                actionLink: item.actionUrl || (item.type === 'birthday' ? '/school/admin' : '/school/admin'),
+              }))
+            : [];
+
+        const combined = [...notifsList, ...noticesList].sort(
+          (a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)
+        );
+
+        setNotifications(combined);
       } catch (err) {
         if (!cancelled) {
           setNotifications([]);
@@ -65,22 +93,46 @@ const SchoolNotificationsPage = () => {
     };
   }, [schoolId]);
 
-  const markAsRead = (id) => {
-    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, isRead: true } : n)));
+  const markAsRead = async (notification) => {
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === notification.id ? { ...n, isRead: true } : n))
+    );
+    if (notification.source === 'in_app' && notification.rawId && !notification.isRead) {
+      try {
+        await markNotificationAsRead(notification.rawId);
+      } catch (e) {
+        // non-blocking
+      }
+    }
   };
 
-  const markAllRead = () => {
+  const markAllRead = async () => {
     setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+    try {
+      await markAllNotificationsAsRead();
+    } catch (e) {
+      // non-blocking
+    }
   };
 
-  const deleteNotification = (e, id) => {
+  const deleteNotification = async (e, notification) => {
     e.stopPropagation();
-    setNotifications((prev) => prev.filter((n) => n.id !== id));
+    setNotifications((prev) => prev.filter((n) => n.id !== notification.id));
+    if (notification.source === 'in_app' && notification.rawId) {
+      try {
+        await deleteNotificationApi(notification.rawId);
+      } catch (e) {
+        // non-blocking
+      }
+    }
   };
 
   const getIcon = (type) => {
     switch (type) {
-      case 'order': return <Package className="text-blue-500" size={20} />;
+      case 'birthday':
+      case 'birthday_alert': return <Cake className="text-amber-500" size={20} />;
+      case 'order':
+      case 'order_update': return <Package className="text-blue-500" size={20} />;
       case 'quote': return <Quote className="text-amber-500" size={20} />;
       case 'admin': return <ShieldCheck className="text-primary" size={20} />;
       case 'wallet': return <Building2 className="text-emerald-500" size={20} />;
@@ -96,7 +148,7 @@ const SchoolNotificationsPage = () => {
   };
 
   const handleNotificationClick = (notification) => {
-    markAsRead(notification.id);
+    markAsRead(notification);
     if (notification.actionLink) {
       navigate(notification.actionLink);
     }
@@ -183,7 +235,7 @@ const SchoolNotificationsPage = () => {
                       </div>
                       <div className="flex items-center gap-3">
                         <button
-                          onClick={(e) => deleteNotification(e, notification.id)}
+                          onClick={(e) => deleteNotification(e, notification)}
                           className="p-1.5 text-gray-300 hover:text-red-500 transition-colors"
                         >
                           <Trash2 size={16} />

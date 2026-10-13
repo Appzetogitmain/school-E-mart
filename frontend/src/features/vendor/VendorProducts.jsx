@@ -18,6 +18,26 @@ import { mapVendorProductForList, resolveImageUrl } from '../../utils/mappers/ve
 const MAX_PRODUCT_IMAGES = 6;
 const PRODUCT_PAGE_SIZE = 100;
 
+const ALL_GRADE_OPTIONS = [
+  'All Grades',
+  'Play Group',
+  'Nursery',
+  'LKG',
+  'UKG',
+  'Class 1',
+  'Class 2',
+  'Class 3',
+  'Class 4',
+  'Class 5',
+  'Class 6',
+  'Class 7',
+  'Class 8',
+  'Class 9',
+  'Class 10',
+  'Class 11',
+  'Class 12',
+];
+
 const VendorProducts = () => {
   const location = useLocation();
 
@@ -46,6 +66,7 @@ const VendorProducts = () => {
   const [newOriginalPrice, setNewOriginalPrice] = useState('');
   const [newStatus, setNewStatus] = useState('PUBLISHED');
   const [newAudience, setNewAudience] = useState('users'); // 'users' (retail) | 'schools' (bulk)
+  const [newGradeTags, setNewGradeTags] = useState(['All Grades']);
   const [newAdded, setNewAdded] = useState(false);
 
   // Real catalog taxonomy + image so the product actually persists.
@@ -104,10 +125,24 @@ const VendorProducts = () => {
   const resetProductForm = () => {
     setNewName(''); setNewDescription(''); setNewBrand(''); setNewCode('');
     setNewVariant(''); setNewStock('35'); setNewPrice('499'); setNewOriginalPrice(''); setNewStatus('PUBLISHED');
-    setNewAudience('users'); setNewHeaderId(''); setNewCategoryId(''); setNewSubcategoryId('');
+    setNewAudience('users'); setNewGradeTags(['All Grades']); setNewHeaderId(''); setNewCategoryId(''); setNewSubcategoryId('');
     setImageAttachmentId(''); setImagePreview('');
     setNewImages([]);
     setNewSizeChart(null);
+  };
+
+  const toggleGradeTag = (grade, currentTags, setter) => {
+    if (grade === 'All Grades') {
+      setter(['All Grades']);
+      return;
+    }
+    const withoutAll = currentTags.filter((g) => g !== 'All Grades');
+    if (withoutAll.includes(grade)) {
+      const remaining = withoutAll.filter((g) => g !== grade);
+      setter(remaining.length ? remaining : ['All Grades']);
+    } else {
+      setter([...withoutAll, grade]);
+    }
   };
 
   const uploadSizeChart = async (event, setter) => {
@@ -227,6 +262,7 @@ const VendorProducts = () => {
         categoryId: newCategoryId,
         subcategoryId: newSubcategoryId || undefined,
         audience: newAudience,
+        gradeTags: newGradeTags,
         pricePaise,
         originalPricePaise: newOriginalPrice && Number(newOriginalPrice) > 0 ? Math.round(Number(newOriginalPrice) * 100) : undefined,
         stock: Number(newStock) || 0,
@@ -265,6 +301,7 @@ const VendorProducts = () => {
   const editImagePreview = editImages[0]?.url || '';
   const [editPublishStatus, setEditPublishStatus] = useState('published');
   const [editAudience, setEditAudience] = useState('users');
+  const [editGradeTags, setEditGradeTags] = useState(['All Grades']);
   const [updating, setUpdating] = useState(false);
 
   const openEditModal = (product) => {
@@ -277,6 +314,7 @@ const VendorProducts = () => {
     setEditStock(product.stock ? product.stock.toString() : '0');
     setEditPublishStatus(product.publishStatus || 'published');
     setEditAudience(product.audience || product.raw?.audience || 'users');
+    setEditGradeTags(product.gradeTags?.length ? product.gradeTags : (product.raw?.gradeTags?.length ? product.raw.gradeTags : ['All Grades']));
     setEditHeaderId(product.raw?.headerId?._id || product.raw?.headerId || '');
     setEditCategoryId(product.raw?.categoryId?._id || product.raw?.categoryId || '');
     setEditSubcategoryId(product.raw?.subcategoryId?._id || product.raw?.subcategoryId || '');
@@ -370,6 +408,7 @@ const VendorProducts = () => {
         stock: Number(editStock) || 0,
         publishStatus: editPublishStatus,
         audience: editAudience,
+        gradeTags: editGradeTags,
         sizeChartAttachmentId: editSizeChart?.attachmentId || null,
       };
       if (editHeaderId) payload.headerId = editHeaderId;
@@ -425,10 +464,32 @@ const VendorProducts = () => {
   const lowStockCount = useMemo(() => products.filter(p => p.stock > 0 && p.stock <= (p.lowStockThreshold || 5)).length, [products]);
   const outOfStockCount = useMemo(() => products.filter(p => p.stock === 0).length, [products]);
 
-  // Real categories present in the vendor's own catalog, not a hardcoded guess.
+  // All categories from master catalog tree and products
   const availableCategories = useMemo(
-    () => ['All', ...new Set(products.map((p) => p.category).filter(Boolean))],
-    [products]
+    () => {
+      const categorySet = new Set();
+      (catTree || []).forEach((header) => {
+        (header?.categories || []).forEach((cat) => {
+          if (cat?.name && typeof cat.name === 'string') {
+            const trimmed = cat.name.trim();
+            if (trimmed) categorySet.add(trimmed);
+          }
+        });
+      });
+      (products || []).forEach((p) => {
+        if (p?.category && typeof p.category === 'string') {
+          const trimmed = p.category.trim();
+          if (trimmed && trimmed !== 'General') {
+            categorySet.add(trimmed);
+          }
+        }
+      });
+      const sorted = Array.from(categorySet).sort((a, b) =>
+        a.localeCompare(b, undefined, { sensitivity: 'base' })
+      );
+      return ['All', ...sorted];
+    },
+    [catTree, products]
   );
 
   // Filtered array logic
@@ -439,7 +500,9 @@ const VendorProducts = () => {
         product.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
         product.header.toLowerCase().includes(searchQuery.toLowerCase());
 
-      const matchesCategory = selectedCategory === 'All' || product.category === selectedCategory;
+      const matchesCategory =
+        selectedCategory === 'All' ||
+        (product.category && product.category.trim().toLowerCase() === selectedCategory.trim().toLowerCase());
       const matchesApproval = selectedApproval === 'All' || product.approval === selectedApproval;
 
       return matchesSearch && matchesCategory && matchesApproval;
@@ -846,6 +909,12 @@ const VendorProducts = () => {
                         </span>
                       </div>
                       <div className="flex justify-between items-center">
+                        <span className="text-gray-400">Target Grades</span>
+                        <span className="text-[#5B3FD6] font-bold text-right max-w-[190px] truncate" title={selectedProduct.gradeTags?.length ? selectedProduct.gradeTags.join(', ') : 'All Grades'}>
+                          {selectedProduct.gradeTags?.length ? selectedProduct.gradeTags.join(', ') : 'All Grades'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
                         <span className="text-gray-400">Header Group</span>
                         <span className="text-gray-800">{selectedProduct.header}</span>
                       </div>
@@ -1010,6 +1079,38 @@ const VendorProducts = () => {
                 </div>
                 <span className="block text-[8px] text-gray-400 font-medium">
                   Users → parent app. Schools → school module. Both → visible in both applications.
+                </span>
+              </div>
+
+              {/* Target Grades / Classes */}
+              <div className="bg-white border border-gray-100 rounded-2xl p-4.5 space-y-2.5 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block">Target Grades</span>
+                  <span className="text-[9px] font-bold text-[#5B3FD6]">
+                    {newGradeTags.includes('All Grades') ? 'All Classes' : `${newGradeTags.length} selected`}
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-1.5 max-h-48 overflow-y-auto p-1 bg-gray-50/50 rounded-xl border border-gray-100">
+                  {ALL_GRADE_OPTIONS.map((g) => {
+                    const isSelected = newGradeTags.includes(g);
+                    return (
+                      <button
+                        key={g}
+                        type="button"
+                        onClick={() => toggleGradeTag(g, newGradeTags, setNewGradeTags)}
+                        className={`px-2.5 py-1 rounded-lg text-[10px] font-black transition-all cursor-pointer ${
+                          isSelected
+                            ? 'bg-[#5B3FD6] text-white shadow-xs'
+                            : 'bg-white border border-gray-200 text-gray-600 hover:border-purple-200 hover:text-[#5B3FD6]'
+                        }`}
+                      >
+                        {g}
+                      </button>
+                    );
+                  })}
+                </div>
+                <span className="block text-[8px] text-gray-400 font-medium">
+                  Select which grades or classes this product is meant for.
                 </span>
               </div>
 
@@ -1443,6 +1544,35 @@ const VendorProducts = () => {
                       >
                         <span className="block text-[11px] font-black">{opt.label}</span>
                         <span className={`block text-[8px] font-bold uppercase tracking-wide ${active ? 'text-white/60' : 'text-gray-400'}`}>{opt.hint}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Target Grades / Classes */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-black text-gray-600 uppercase tracking-wider block">Target Grades / Classes</label>
+                  <span className="text-[10px] font-bold text-[#5B3FD6]">
+                    {editGradeTags.includes('All Grades') ? 'All Classes' : `${editGradeTags.length} selected`}
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-1.5 p-2 bg-gray-50 rounded-xl border border-gray-200 max-h-36 overflow-y-auto">
+                  {ALL_GRADE_OPTIONS.map((g) => {
+                    const isSelected = editGradeTags.includes(g);
+                    return (
+                      <button
+                        key={g}
+                        type="button"
+                        onClick={() => toggleGradeTag(g, editGradeTags, setEditGradeTags)}
+                        className={`px-2.5 py-1 rounded-lg text-[10px] font-black transition-all cursor-pointer ${
+                          isSelected
+                            ? 'bg-[#5B3FD6] text-white shadow-xs'
+                            : 'bg-white border border-gray-200 text-gray-600 hover:border-purple-200 hover:text-[#5B3FD6]'
+                        }`}
+                      >
+                        {g}
                       </button>
                     );
                   })}

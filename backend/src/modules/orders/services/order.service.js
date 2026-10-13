@@ -70,6 +70,7 @@ const stripPaginationMeta = (query = {}) => {
     'scope',
     'status',
     'paymentStatus',
+    'paymentMethod',
     'audience',
     'userId',
     'search',
@@ -400,6 +401,7 @@ const orderService = {
     if (query.vendorId) filter.vendorIds = query.vendorId;
     if (query.schoolId) filter.schoolIdForPickup = query.schoolId;
     if (query.paymentStatus) filter.paymentStatus = query.paymentStatus;
+    if (query.paymentMethod) filter.paymentMethod = query.paymentMethod;
     if (query.search) {
       const or = buildSearchFilter(query.search);
       if (or) filter.$or = or;

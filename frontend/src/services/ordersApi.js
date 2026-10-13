@@ -112,3 +112,13 @@ export const getInvoice = async (orderId) => {
   const response = await apiClient.get(`/orders/${orderId}/invoice`);
   return unwrapData(response)?.invoice;
 };
+
+export const requestOrderRefund = async (orderId, payload = {}) => {
+  const response = await apiClient.post(`/orders/${orderId}/refunds`, payload);
+  return unwrapData(response);
+};
+
+export const reinstateCancelledOrder = async (orderId, payload = {}) => {
+  const response = await apiClient.post(`/orders/${orderId}/reinstate`, payload);
+  return unwrapData(response)?.order;
+};
