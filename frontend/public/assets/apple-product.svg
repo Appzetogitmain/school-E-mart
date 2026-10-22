@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="100%" height="100%">
+  <defs>
+    <linearGradient id="appleGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ff4b4b"/>
+      <stop offset="70%" stop-color="#d61a29"/>
+      <stop offset="100%" stop-color="#9e0c17"/>
+    </linearGradient>
+    <linearGradient id="leafGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4ade80"/>
+      <stop offset="100%" stop-color="#15803d"/>
+    </linearGradient>
+    <radialGradient id="highlight" cx="35%" cy="30%" r="30%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.45"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#0E0E2C" flood-opacity="0.08"/>
+    </filter>
+  </defs>
+
+  <rect width="400" height="400" rx="32" fill="#faf9fe"/>
+
+  <!-- Subtle shadow under apple -->
+  <ellipse cx="200" cy="330" rx="90" ry="16" fill="#0e0e2c" fill-opacity="0.06"/>
+
+  <g filter="url(#shadow)">
+    <!-- Stem -->
+    <path d="M198 140 C196 110, 215 90, 226 78 C222 84, 218 108, 204 142 Z" fill="#6d4323"/>
+
+    <!-- Leaf -->
+    <path d="M206 122 C226 95, 264 96, 276 108 C266 126, 236 136, 206 122 Z" fill="url(#leafGrad)"/>
+
+    <!-- Apple Body -->
+    <path d="M200 152 
+             C172 135, 120 138, 102 180 
+             C82 226, 92 296, 150 322 
+             C176 334, 192 322, 200 322 
+             C208 322, 224 334, 250 322 
+             C308 296, 318 226, 298 180 
+             C280 138, 228 135, 200 152 Z" 
+          fill="url(#appleGrad)"/>
+
+    <!-- Shine / Highlight -->
+    <path d="M140 170 C125 186, 120 216, 122 236 C124 210, 134 186, 154 174 C164 168, 150 160, 140 170 Z" fill="#ffffff" fill-opacity="0.35"/>
+    <ellipse cx="160" cy="190" rx="36" ry="48" fill="url(#highlight)"/>
+  </g>
+</svg>

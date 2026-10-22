@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import {
   Trash2, ArrowLeft, ChevronRight,
@@ -8,6 +8,7 @@ import { useCart } from '../../context/CartContext';
 import QuantitySelector from '../../components/QuantitySelector';
 import { useCheckoutSummary } from '../../../hooks/useCheckoutSummary';
 import useAuthStore from '../../../store/useAuthStore';
+import { PRODUCT_PLACEHOLDER } from '../../../utils/mappers/productMapper';
 
 // Module-level so the reference stays stable across renders.
 const NO_ADDRESS = {};
@@ -15,7 +16,6 @@ const NO_ADDRESS = {};
 const SchoolCartPage = () => {
   const navigate = useNavigate();
   const { cartItems, updateQuantity, removeFromCart, totalQuantity, loading } = useCart();
-  const [showRemoveToast, setShowRemoveToast] = useState(false);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
 
   const localSubtotal = cartItems.reduce((sum, item) => {
@@ -47,8 +47,6 @@ const SchoolCartPage = () => {
 
   const handleRemove = (id) => {
     removeFromCart(id);
-    setShowRemoveToast(true);
-    setTimeout(() => setShowRemoveToast(false), 2000);
   };
 
   if (loading && cartItems.length === 0) {
@@ -94,7 +92,7 @@ const SchoolCartPage = () => {
         {cartItems.map((item) => (
           <div key={item.id} className="bg-white rounded-3xl p-4 shadow-sm border border-gray-50 flex gap-4 relative animate-in slide-in-from-right-4 duration-300">
             <div className="w-24 h-24 bg-gray-50 rounded-2xl overflow-hidden shrink-0">
-              <img src={item.image} alt={item.name} className="w-full h-full object-contain mix-blend-multiply" />
+              <img src={item.image || PRODUCT_PLACEHOLDER} alt={item.name} onError={(event) => { event.currentTarget.onerror = null; event.currentTarget.src = PRODUCT_PLACEHOLDER; }} className="w-full h-full object-contain mix-blend-multiply" />
             </div>
             
             <div className="flex-1 flex flex-col">

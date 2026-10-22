@@ -14,6 +14,8 @@ export const toAbsoluteUrl = (url) => {
   if (/^(https?:|data:|blob:)/i.test(trimmed)) return trimmed;
   // Raw 24-hex ObjectIds (e.g. '6a5f0b42edf09acd3f6b4e91') are database IDs, not file URLs
   if (/^[a-fA-F0-9]{24}$/.test(trimmed)) return '';
+  // Plain words without slashes or file extensions (e.g. alt text like 'Apple', 'front view') are not file paths
+  if (!trimmed.includes('/') && !trimmed.includes('.')) return '';
   const origin = ENV.API_URL.replace(/\/api\/v1\/?$/, '').replace(/\/$/, '');
   return `${origin}${trimmed.startsWith('/') ? '' : '/'}${trimmed}`;
 };

@@ -3,6 +3,7 @@ const cartRepository = require('../repositories/cart.repository');
 const productRepository = require('../repositories/product.repository');
 const variantRepository = require('../repositories/variant.repository');
 const productService = require('./product.service');
+const Product = require('../../../database/models/Product');
 const Kit = require('../../../database/models/Kit');
 const { validateAndNormalizeKitSelections } = require('../utils/kitSelection.util');
 const {
@@ -27,6 +28,28 @@ const assertKitPurchaseWindowOpen = async (kit) => {
 };
 
 const itemKey = (productId, variantId) => `${productId}:${variantId || 'base'}`;
+
+const productImage = (product) =>
+  product?.images?.[0]?.attachmentId?.storageKey || product?.images?.[0]?.url || product?.imageUrl || '';
+
+// Refresh display images in the response as well as for newly added cart lines.
+// Older carts may contain an empty image or the image alt text instead of a URL.
+const withCurrentImages = async (cart) => {
+  const ids = (cart.items || []).map((item) => item.productId);
+  if (!ids.length) return cart;
+  const products = await Product.find({ _id: { $in: ids } })
+    .populate('images.attachmentId', 'storageKey')
+    .lean();
+  const images = new Map(products.map((product) => [String(product._id), productImage(product)]));
+  const data = cart.toObject ? cart.toObject() : cart;
+  return {
+    ...data,
+    items: data.items.map((item) => ({
+      ...item,
+      image: images.get(String(item.productId)) || item.image,
+    })),
+  };
+};
 
 const computeTotals = (items) => {
   const subtotalPaise = items.reduce((sum, item) => sum + item.pricePaise * item.quantity, 0);
@@ -58,6 +81,10 @@ const cartService = {
       });
     }
     return cart;
+  },
+
+  async getCartWithImages(userId, audience) {
+    return withCurrentImages(await this.getOrCreateCart(userId, audience));
   },
 
   async validateCartItems(items) {
@@ -111,7 +138,7 @@ const cartService = {
   async addItem(userId, audience, payload) {
     let product = await productRepository.findOne(
       productRepository.findPublishedFilter({ _id: payload.productId })
-    );
+    ).populate('images.attachmentId', 'storageKey');
     let isKit = false;
     let kitDoc = null;
     if (!product) {
@@ -196,13 +223,11 @@ const cartService = {
         String(item.variantId || '') === String(payload.variantId || '')
     );
 
-    const itemImage = isKit
-      ? product.imageUrl
-      : product.images?.[0]?.url || product.images?.[0]?.alt || product.imageUrl || '';
+    const itemImage = productImage(product);
 
     if (index >= 0) {
       items[index].quantity += payload.quantity;
-      if (!items[index].image && itemImage) {
+      if (itemImage && items[index].image !== itemImage) {
         items[index].image = itemImage;
       }
       if (!items[index].name && product.name) {
@@ -283,7 +308,7 @@ const cartService = {
     const cart = await this.getOrCreateCart(userId, audience);
     await this.validateCartItems(cart.items || []);
     return {
-      ...cart,
+      ...await withCurrentImages(cart),
       itemCount: (cart.items || []).reduce((sum, item) => sum + item.quantity, 0),
     };
   },

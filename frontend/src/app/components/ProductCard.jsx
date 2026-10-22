@@ -5,6 +5,7 @@ import { useCart } from '../context/CartContext';
 import { useWishlist } from '../context/WishlistContext';
 import AuthPrompt from './AuthPrompt';
 import { getMarketplaceAudience } from '../../utils/marketplaceAudience';
+import { PRODUCT_PLACEHOLDER } from '../../utils/mappers/productMapper';
 
 const ProductCard = ({ product, showBuyNow = true }) => {
   const { addToCart, updateQuantity, getProductQuantity } = useCart();
@@ -102,6 +103,7 @@ const ProductCard = ({ product, showBuyNow = true }) => {
           <img
             src={product.image}
             alt={product.name}
+            onError={(event) => { event.currentTarget.onerror = null; event.currentTarget.src = PRODUCT_PLACEHOLDER; }}
             className="max-h-full max-w-full object-contain group-hover:scale-105 transition-transform duration-500 select-none"
           />
         </div>

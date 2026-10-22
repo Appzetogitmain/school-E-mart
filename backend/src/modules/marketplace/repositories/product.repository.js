@@ -34,6 +34,7 @@ class ProductRepository extends BaseRepository {
       'subcategoryId',
       // Owned by buildProductFilter; leaving them here would re-apply them as raw
       // ApiFeatures conditions.
+      'audience',
       'approvalStatus',
       'publishStatus',
     ].forEach((key) => delete featureQuery[key]);
@@ -42,11 +43,15 @@ class ProductRepository extends BaseRepository {
     if (queryString.q && String(queryString.q).trim()) {
       const escaped = String(queryString.q).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       searchFilter = {
-        ...mergedFilter,
-        $or: [
-          { name: { $regex: escaped, $options: 'i' } },
-          { sku: { $regex: escaped, $options: 'i' } },
-          { brand: { $regex: escaped, $options: 'i' } },
+        $and: [
+          mergedFilter,
+          {
+            $or: [
+              { name: { $regex: escaped, $options: 'i' } },
+              { sku: { $regex: escaped, $options: 'i' } },
+              { brand: { $regex: escaped, $options: 'i' } },
+            ],
+          },
         ],
       };
     }

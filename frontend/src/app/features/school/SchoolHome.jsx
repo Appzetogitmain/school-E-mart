@@ -17,6 +17,7 @@ import CategoryEssentials from './CategoryEssentials';
 import VendorSpotlights from './VendorSpotlights';
 import SchoolCaseStudies from './SchoolCaseStudies';
 import ReelsRow from '../parent/ReelsRow';
+import PromoCategoryBanners from '../parent/PromoCategoryBanners';
 import { useDraggableScroll } from '../../hooks/useDraggableScroll';
 import AuthPrompt from '../../components/AuthPrompt';
 import { listStudents, listTeachers, listNotices, listVendors } from '../../../services/schoolApi';
@@ -34,8 +35,6 @@ const SchoolHome = () => {
   const { addToCart } = useCart();
   const notifRef = useDraggableScroll();
   const kitsRef = useDraggableScroll();
-  const catsRef = useDraggableScroll();
-  const bannerRef = useDraggableScroll();
   const reelsRef = useDraggableScroll();
   const [scrolled, setScrolled] = useState(false);
   const [isAuthPromptOpen, setIsAuthPromptOpen] = useState(false);
@@ -176,6 +175,8 @@ const SchoolHome = () => {
       >
         {/* Spacer for Sticky Header */}
         <div className="h-[185px] shrink-0"></div>
+
+        <PromoCategoryBanners audience="school" />
 
         {/* ============================================================== */}
         {/* NEW: DYNAMIC SCHOOL ADMIN PROCUREMENT & OVERVIEW DASHBOARD */}

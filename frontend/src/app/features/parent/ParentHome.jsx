@@ -28,6 +28,7 @@ import ReelsRow from './ReelsRow';
 import { useCategoryTree } from '../../../hooks/useCategoryTree';
 import { useProducts } from '../../../hooks/useProducts';
 import { findHeaderCategory } from '../../../utils/mappers/categoryMapper';
+import { gradeLabelToQuery } from '../../../utils/mappers/productMapper';
 import { toAbsoluteUrl } from '../../../utils/url';
 
 import useAuthStore from '../../../store/useAuthStore';
@@ -50,15 +51,28 @@ const ParentHome = () => {
 
   const isGuest = !localStorage.getItem('childInfo') && !useAuthStore.getState().user;
   const { tree: categoryTree } = useCategoryTree();
-  const { products: essentialProducts, loading: essentialLoading } = useProducts({ limit: 4, sort: 'popular' });
+  const selectedGrade = gradeLabelToQuery(childInfo?.grade);
+  const { products: essentialProducts, loading: essentialLoading } = useProducts(
+    selectedGrade ? { limit: 4, sort: 'popular', grade: selectedGrade } : { limit: 4, sort: 'popular' }
+  );
   const uniformsHeader = findHeaderCategory(categoryTree, 'uniforms');
   const stationeryHeader = findHeaderCategory(categoryTree, 'stationery');
   const { products: uniformProducts } = useProducts(
-    { headerId: uniformsHeader?.id, limit: 2, sort: 'popular' },
+    {
+      headerId: uniformsHeader?.id,
+      limit: 2,
+      sort: 'popular',
+      ...(selectedGrade ? { grade: selectedGrade } : {}),
+    },
     { enabled: Boolean(uniformsHeader?.id) }
   );
   const { products: stationeryProducts } = useProducts(
-    { headerId: stationeryHeader?.id, limit: 2, sort: 'popular' },
+    {
+      headerId: stationeryHeader?.id,
+      limit: 2,
+      sort: 'popular',
+      ...(selectedGrade ? { grade: selectedGrade } : {}),
+    },
     { enabled: Boolean(stationeryHeader?.id) }
   );
 

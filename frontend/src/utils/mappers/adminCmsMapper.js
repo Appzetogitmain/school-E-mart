@@ -22,6 +22,7 @@ export const mapBannerForAdmin = (banner) => {
     mongoId: banner?._id?.toString?.() || banner?.id,
     slug: banner?.title?.toLowerCase?.().replace(/\s+/g, '_') || 'banner',
     category: banner?.position || 'home_top',
+    audience: banner?.targetAudience || 'all',
     orderRank: banner?.displayOrder ?? 0,
     imageUrl,
     targetUrl: banner?.linkUrl || '',
@@ -30,15 +31,7 @@ export const mapBannerForAdmin = (banner) => {
   };
 };
 
-const CATEGORY_TO_AUDIENCE = {
-  All: 'all',
-  Kits: 'parent',
-  Uniforms: 'parent',
-  Stationery: 'parent',
-  Activities: 'parent',
-};
-
-export const mapBannerPayload = ({ slug, category, orderRank, targetUrl, isActive, imageId }) => {
+export const mapBannerPayload = ({ slug, audience, position = 'home_top', orderRank, targetUrl, isActive, imageId }) => {
   const now = new Date();
   const validUntil = new Date(now);
   validUntil.setFullYear(validUntil.getFullYear() + 1);
@@ -51,8 +44,8 @@ export const mapBannerPayload = ({ slug, category, orderRank, targetUrl, isActiv
     title: slug?.trim() || 'promo_banner',
     imageId,
     linkUrl,
-    targetAudience: CATEGORY_TO_AUDIENCE[category] || 'all',
-    position: 'home_top',
+    targetAudience: audience || 'all',
+    position,
     displayOrder: Number.parseInt(orderRank, 10) || 0,
     validFrom: now.toISOString(),
     validUntil: validUntil.toISOString(),

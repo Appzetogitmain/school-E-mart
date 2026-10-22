@@ -322,7 +322,7 @@ const marketplaceController = {
   getCart: asyncHandler(async (req, res) => {
     const audience = marketplaceAccessPolicy.resolveAudience(req.auth, req.query.audience);
     marketplaceAccessPolicy.assertCartAudience(req.auth, audience);
-    const cart = await cartService.getOrCreateCart(req.auth.userId, audience);
+    const cart = await cartService.getCartWithImages(req.auth.userId, audience);
     return success(res, { cart }, 'Cart fetched', undefined, req);
   }),
 

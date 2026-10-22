@@ -1,12 +1,10 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { listPublicBanners } from '../../../services/catalogApi';
-import { getErrorMessage } from '../../../utils/apiHelpers';
 import { toAbsoluteUrl } from '../../../utils/url';
 
-const PromoCategoryBanners = () => {
+const PromoCategoryBanners = ({ audience = 'parent' }) => {
   const [banners, setBanners] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
   const scrollRef = useRef(null);
 
@@ -15,9 +13,8 @@ const PromoCategoryBanners = () => {
 
     const load = async () => {
       setLoading(true);
-      setError('');
       try {
-        const { data } = await listPublicBanners({ limit: 10, audience: 'parent' });
+        const { data } = await listPublicBanners({ limit: 10, audience });
         if (!cancelled) {
           setBanners(
             (data || [])
@@ -31,10 +28,9 @@ const PromoCategoryBanners = () => {
               .filter((b) => b.image)
           );
         }
-      } catch (err) {
+      } catch {
         if (!cancelled) {
           setBanners([]);
-          setError(getErrorMessage(err, 'Unable to load banners'));
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -45,7 +41,7 @@ const PromoCategoryBanners = () => {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [audience]);
 
   const handleScroll = () => {
     if (!scrollRef.current) return;

@@ -13,7 +13,7 @@ import { useCart } from '../../context/CartContext';
 import AuthPrompt from '../../components/AuthPrompt';
 import * as catalogApi from '../../../services/catalogApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
-import { mapProductForCard, mapProductForDetailView } from '../../../utils/mappers/productMapper';
+import { mapProductForCard, mapProductForDetailView, PRODUCT_PLACEHOLDER } from '../../../utils/mappers/productMapper';
 import { getMarketplaceAudience } from '../../../utils/marketplaceAudience';
 
 const ProductDetailsPage = () => {
@@ -165,6 +165,7 @@ const ProductDetailsPage = () => {
               <img
                 src={img}
                 alt={`${product.name} ${idx + 1}`}
+                onError={(event) => { event.currentTarget.onerror = null; event.currentTarget.src = PRODUCT_PLACEHOLDER; }}
                 className="max-h-full max-w-full object-contain drop-shadow-sm select-none"
               />
             </div>

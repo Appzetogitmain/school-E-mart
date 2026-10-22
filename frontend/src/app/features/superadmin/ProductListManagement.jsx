@@ -74,6 +74,7 @@ const ProductListManagement = () => {
   const [editCategoryId, setEditCategoryId] = useState('');
   const [editSubcategoryId, setEditSubcategoryId] = useState('');
   const [editVendorId, setEditVendorId] = useState('');
+  const [editAudience, setEditAudience] = useState('users');
   const [editApprovalStatus, setEditApprovalStatus] = useState('approved');
   const [editImage, setEditImage] = useState('');
   const [editImageFile, setEditImageFile] = useState(null);
@@ -112,7 +113,7 @@ const ProductListManagement = () => {
     try {
       // Admin listing: includes pending/rejected/draft, which the public
       // /catalog/products route deliberately excludes.
-      const { data } = await listAdminProducts({ limit: 100 });
+      const { data } = await listAdminProducts({ limit: 200 });
       setProducts((data || []).map(mapProductForAdminList));
       setError('');
     } catch (err) {
@@ -202,6 +203,7 @@ const ProductListManagement = () => {
     setEditCategoryId(p.categoryId || '');
     setEditSubcategoryId(p.subcategoryId || '');
     setEditVendorId(p.vendorId || '');
+    setEditAudience(p.audience || 'users');
     setEditApprovalStatus(p.approvalRaw || 'pending');
     setEditImage(p.image);
     setEditImageFile(null);
@@ -232,7 +234,8 @@ const ProductListManagement = () => {
       pricePaise: Math.round((parseFloat(editPrice) || 0) * 100),
       stock: parseInt(editStock, 10) || 0,
       sizes: editVariant.trim() ? [editVariant.trim()] : [],
-      gradeTags: editGradeTags,
+      gradeTags: editGradeTags.filter((g) => g !== 'All Grades').length > 0 ? editGradeTags.filter((g) => g !== 'All Grades') : ['All Grades'],
+      audience: editAudience,
     };
     if (editHeaderId) payload.headerId = editHeaderId;
     if (editCategoryId) payload.categoryId = editCategoryId;
@@ -298,7 +301,8 @@ const ProductListManagement = () => {
 
     const matchesTab = activeTab === 'all' || p.approvalRaw === activeTab;
 
-    const matchesCategory = selectedCategory === 'All' || p.categoryId === selectedCategory;
+    const pCatId = typeof p.categoryId === 'object' ? String(p.categoryId?._id || p.categoryId?.id || '') : String(p.categoryId || '');
+    const matchesCategory = selectedCategory === 'All' || pCatId === String(selectedCategory);
 
     const matchesStock = stockFilter === 'All' || p.stockStatus === stockFilter;
 
@@ -530,6 +534,9 @@ const ProductListManagement = () => {
                               {p.gradeTags.slice(0, 2).join(', ')}{p.gradeTags.length > 2 ? ` +${p.gradeTags.length - 2}` : ''}
                             </span>
                           )}
+                          <span className="inline-block mt-0.5 ml-1 text-[8px] font-bold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200">
+                            {p.audience === 'schools' ? 'Bulk only' : p.audience === 'both' ? 'Shared (Both)' : 'Retail only'}
+                          </span>
                         </div>
                       </div>
                     </td>
@@ -876,6 +883,22 @@ const ProductListManagement = () => {
                           return <option key={id} value={id}>{v.storeName || v.name}</option>;
                         })}
                       </select>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider block">Sell To (Target Audience)</label>
+                      <select
+                        value={editAudience}
+                        onChange={(e) => setEditAudience(e.target.value)}
+                        className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-xs font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                      >
+                        <option value="users">Parents only (Retail Storefront)</option>
+                        <option value="schools">Schools only (Institutional Bulk)</option>
+                        <option value="both">Both (Parents &amp; Schools)</option>
+                      </select>
+                      <span className="text-[10px] text-gray-400 font-semibold mt-1 block">
+                        Determines if the product appears in the Parent app, School bulk portal, or both.
+                      </span>
                     </div>
 
                     {/* Target Grades / Classes */}

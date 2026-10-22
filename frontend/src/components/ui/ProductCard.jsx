@@ -82,6 +82,7 @@ const ProductCard = ({
           <img 
             src={image} 
             alt={title} 
+            onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = '/assets/product-placeholder.svg'; }}
             className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
           />
         </div>

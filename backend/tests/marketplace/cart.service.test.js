@@ -6,6 +6,9 @@ const kitsService = require('../../src/modules/academics/services/kits.service')
 const VendorProfile = require('../../src/database/models/VendorProfile');
 const Kit = require('../../src/database/models/Kit');
 const Order = require('../../src/database/models/Order');
+const Attachment = require('../../src/database/models/Attachment');
+const Product = require('../../src/database/models/Product');
+const Cart = require('../../src/database/models/Cart');
 
 describe('cartService', () => {
   let userId;
@@ -61,6 +64,30 @@ describe('cartService', () => {
 
     const cleared = await cartService.clearCart(userId, 'parent');
     expect(cleared.items).toHaveLength(0);
+  });
+
+  test('uses the attachment image for new and existing cart lines', async () => {
+    const attachment = await Attachment.create({
+      ownerUserId: userId,
+      purpose: 'product_image',
+      storageKey: '/uploads/apple.png',
+      mime: 'image/png',
+      sizeBytes: 100,
+    });
+    await Product.updateOne({ _id: productId }, {
+      $set: { images: [{ attachmentId: attachment._id, alt: 'front view' }] },
+    });
+
+    const added = await cartService.addItem(userId, 'parent', { productId, quantity: 1 });
+    expect(added.items[0].image).toBe('/uploads/apple.png');
+
+    // Simulate a cart saved before image attachments were resolved.
+    await Cart.updateOne(
+      { userId, audience: 'parent', 'items.productId': productId },
+      { $set: { 'items.$.image': 'front view' } }
+    );
+    const loaded = await cartService.getCartWithImages(userId, 'parent');
+    expect(loaded.items[0].image).toBe('/uploads/apple.png');
   });
 
   describe('kit purchasability', () => {

@@ -64,4 +64,64 @@ describe('marketplace taxonomy and products', () => {
     const listed = await productService.listProducts({ featured: 'true' }, { publicOnly: true });
     expect(listed.data).toHaveLength(1);
   });
+
+  test('search keeps the selected grade and audience filters', async () => {
+    await productService.createProduct(vendorId, {
+      name: 'Nursery Apple Bag', sku: 'BAG-NURSERY', headerId, categoryId,
+      pricePaise: 10000, stock: 2, gradeTags: ['Nursery'], audience: 'schools',
+    });
+    await productService.createProduct(vendorId, {
+      name: 'Class One Apple Bag', sku: 'BAG-ONE', headerId, categoryId,
+      pricePaise: 10000, stock: 2, gradeTags: ['Class 1'], audience: 'schools',
+    });
+    await productService.createProduct(vendorId, {
+      name: 'Nursery Apple Pencil', sku: 'PENCIL-NURSERY', headerId, categoryId,
+      pricePaise: 10000, stock: 2, gradeTags: ['Nursery'], audience: 'users',
+    });
+
+    const result = await productService.listProducts(
+      { q: 'Apple', grade: 'Nursery', audience: 'schools' },
+      { publicOnly: true }
+    );
+    expect(result.data.map((product) => product.sku)).toEqual(['BAG-NURSERY']);
+    expect(result.pagination.total).toBe(1);
+  });
+  test('products with audience=both are returned to both users and schools storefronts and respect class visibility', async () => {
+    const sharedProduct = await productService.createProduct(vendorId, {
+      name: 'Shared Both Uniform Shirt',
+      sku: 'SHIRT-BOTH-NURSERY',
+      headerId,
+      categoryId,
+      pricePaise: 45000,
+      stock: 50,
+      gradeTags: ['Nursery', 'All Grades'], // Should be normalized to ['Nursery']
+      audience: 'both',
+    });
+
+    expect(sharedProduct.gradeTags).toEqual(['Nursery']);
+
+    // Query from Parent storefront (audience: 'users') with grade: 'Nursery'
+    const parentResult = await productService.listProducts(
+      { grade: 'Nursery', audience: 'users' },
+      { publicOnly: true }
+    );
+    const parentSkus = parentResult.data.map((p) => p.sku);
+    expect(parentSkus).toContain('SHIRT-BOTH-NURSERY');
+
+    // Query from School storefront (audience: 'schools') with grade: 'Nursery'
+    const schoolResult = await productService.listProducts(
+      { grade: 'Nursery', audience: 'schools' },
+      { publicOnly: true }
+    );
+    const schoolSkus = schoolResult.data.map((p) => p.sku);
+    expect(schoolSkus).toContain('SHIRT-BOTH-NURSERY');
+
+    // Query with different grade (grade: 'Class 5') - Nursery product must NOT show up
+    const class5Result = await productService.listProducts(
+      { grade: 'Class 5', audience: 'users' },
+      { publicOnly: true }
+    );
+    const class5Skus = class5Result.data.map((p) => p.sku);
+    expect(class5Skus).not.toContain('SHIRT-BOTH-NURSERY');
+  });
 });

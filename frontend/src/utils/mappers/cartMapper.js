@@ -1,19 +1,15 @@
-import { formatRupee, resolveProductImage } from './productMapper';
-
-const PRODUCT_PLACEHOLDER =
-  'https://images.unsplash.com/photo-1503676260728-1c00da094a0b?q=80&w=400&h=400&fit=crop';
-
-const isUrl = (value) => typeof value === 'string' && /^https?:\/\//i.test(value);
+import { formatRupee, resolveProductImage, PRODUCT_PLACEHOLDER } from './productMapper';
+import { toAbsoluteUrl } from '../url';
 
 const resolveCartItemImage = (item, product) => {
   if (item?.image && typeof item.image === 'string' && item.image.trim().length > 0) {
-    if (!item.image.includes('photo-1523275335684-37898b6baf30')) {
-      return item.image;
+    if (item.image !== PRODUCT_PLACEHOLDER) {
+      return toAbsoluteUrl(item.image);
     }
   }
   if (product) {
     const img = resolveProductImage(product);
-    if (img && !img.includes('photo-1523275335684-37898b6baf30')) return img;
+    if (img && img !== PRODUCT_PLACEHOLDER) return img;
   }
   return null;
 };

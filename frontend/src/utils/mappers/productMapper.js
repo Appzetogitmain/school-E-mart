@@ -1,7 +1,6 @@
 import { toAbsoluteUrl } from '../url';
 
-const PRODUCT_PLACEHOLDER =
-  'https://images.unsplash.com/photo-1503676260728-1c00da094a0b?q=80&w=400&h=400&fit=crop';
+export const PRODUCT_PLACEHOLDER = '/assets/product-placeholder.svg';
 
 export const formatRupee = (paise) => {
   const amount = Number(paise || 0) / 100;
@@ -14,11 +13,23 @@ export const formatRupee = (paise) => {
 
 export const formatRupeeNumber = (paise) => Number(paise || 0) / 100;
 
+export const APPLE_PLACEHOLDER = '/assets/apple-product.svg';
+
+export const resolveProductFallback = (product) => {
+  const name = String(product?.name || '').toLowerCase();
+  const sku = String(product?.sku || '').toLowerCase();
+  if (name.includes('apple') || sku.includes('apple')) {
+    return APPLE_PLACEHOLDER;
+  }
+  return PRODUCT_PLACEHOLDER;
+};
+
 export const resolveProductImage = (product, index = 0) => {
   const images = product?.images || [];
   const entry = images[index] || images[0];
+  const fallback = resolveProductFallback(product);
 
-  if (!entry) return PRODUCT_PLACEHOLDER;
+  if (!entry) return fallback;
   // Product.images entries are { attachmentId: <Attachment ref>, alt }; when
   // populated, attachmentId is the Attachment doc holding the real storageKey.
   const key =
@@ -29,14 +40,15 @@ export const resolveProductImage = (product, index = 0) => {
     entry.imageUrl ||
     (typeof entry.attachmentId === 'string' ? entry.attachmentId : null);
 
-  return toAbsoluteUrl(key) || PRODUCT_PLACEHOLDER;
+  return toAbsoluteUrl(key) || fallback;
 };
 
 export const resolveProductImages = (product) => {
   const images = product?.images || [];
-  if (!images.length) return [PRODUCT_PLACEHOLDER];
+  const fallback = resolveProductFallback(product);
+  if (!images.length) return [fallback];
   const resolved = images.map((_, index) => resolveProductImage(product, index));
-  return resolved.length ? resolved : [PRODUCT_PLACEHOLDER];
+  return resolved.length ? resolved : [fallback];
 };
 
 export const mapProductForCard = (product, meta = {}) => {
@@ -68,6 +80,8 @@ export const mapProductForCard = (product, meta = {}) => {
     ),
     sku: product?.sku,
     stock: product?.stock,
+    audience: product?.audience || 'users',
+    gradeTags: Array.isArray(product?.gradeTags) ? product.gradeTags : [],
   };
 };
 

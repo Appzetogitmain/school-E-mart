@@ -1,8 +1,8 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Search, Filter,
-  ChevronDown, Sparkles,
+  ChevronDown, Sparkles, RotateCcw, X,
   ShoppingBag, Building2
 } from 'lucide-react';
 import ProductCard from '../../components/ProductCard';
@@ -18,25 +18,42 @@ const SchoolProductsPage = () => {
 
   const [activeCategory, setActiveCategory] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortBy] = useState('Recommended');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [availability, setAvailability] = useState('all');
+  const [priceRange, setPriceRange] = useState('all');
+  const [sortBy, setSortBy] = useState('Recommended');
   const { tree } = useCategoryTree();
 
-  const categories = ['All', 'Bulk Uniforms', 'Textbooks', 'Office Supplies', 'Lab Equipment', 'Sports Gear'];
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchQuery.trim()), 250);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  const categories = useMemo(() => ['All', ...(tree || []).map((item) => item.name)], [tree]);
 
   const selectedHeader = useMemo(
-    () => findHeaderByCategoryName(tree, activeCategory === 'Bulk Uniforms' ? 'Uniforms' : activeCategory),
+    () => findHeaderByCategoryName(tree, activeCategory),
     [tree, activeCategory]
   );
 
-  const productQuery = useMemo(() => ({
-    limit: 50,
-    sort: sortKeyFromLabel(sortBy),
-    grade: gradeLabelToQuery(grade),
-    search: searchQuery || undefined,
-    ...(selectedHeader?.id ? { headerId: selectedHeader.id } : {}),
-  }), [grade, searchQuery, sortBy, selectedHeader]);
+  const productQuery = useMemo(() => {
+    const query = {
+      limit: 50,
+      sort: sortKeyFromLabel(sortBy),
+      grade: gradeLabelToQuery(grade),
+      search: debouncedSearch || undefined,
+      ...(selectedHeader?.id ? { headerId: selectedHeader.id } : {}),
+    };
+    if (availability !== 'all') query.availability = availability;
+    if (priceRange === 'under_1000') query.maxPrice = 99999;
+    if (priceRange === '1000_5000') { query.minPrice = 100000; query.maxPrice = 500000; }
+    if (priceRange === 'over_5000') query.minPrice = 500001;
+    return query;
+  }, [grade, debouncedSearch, sortBy, selectedHeader, availability, priceRange]);
 
-  const { products, loading, pagination } = useProducts(productQuery);
+  const { products, loading, pagination, error } = useProducts(productQuery);
+  const hasFilters = availability !== 'all' || priceRange !== 'all' || sortBy !== 'Recommended';
 
   return (
     <div className="min-h-screen bg-gray-50 pb-24 font-outfit">
@@ -68,10 +85,40 @@ const SchoolProductsPage = () => {
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-12 pr-12 py-3.5 bg-white rounded-2xl text-sm shadow-inner outline-none font-medium"
           />
-          <button className="absolute right-4 top-1/2 -translate-y-1/2 text-primary">
+          {searchQuery && (
+            <button type="button" onClick={() => setSearchQuery('')} aria-label="Clear search" className="absolute right-14 top-1/2 -translate-y-1/2 text-gray-500">
+              <X size={16} />
+            </button>
+          )}
+          <button type="button" onClick={() => setFilterOpen((open) => !open)} aria-label="Filter bulk products" aria-expanded={filterOpen} className="absolute right-4 top-1/2 -translate-y-1/2 text-primary">
             <Filter size={18} />
           </button>
         </div>
+        {filterOpen && (
+          <div className="mt-3 rounded-2xl bg-white p-4 space-y-3 shadow-md">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-deep-purple">Filter bulk products</span>
+              {hasFilters && <button type="button" onClick={() => { setAvailability('all'); setPriceRange('all'); setSortBy('Recommended'); }} className="flex items-center gap-1 text-xs text-primary"><RotateCcw size={12} /> Reset</button>}
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <label className="text-xs text-gray-600">Availability
+                <select value={availability} onChange={(e) => setAvailability(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-200 p-2 text-deep-purple">
+                  <option value="all">All products</option><option value="in_stock">In stock</option><option value="out_of_stock">Out of stock</option>
+                </select>
+              </label>
+              <label className="text-xs text-gray-600">Price
+                <select value={priceRange} onChange={(e) => setPriceRange(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-200 p-2 text-deep-purple">
+                  <option value="all">Any price</option><option value="under_1000">Under ₹1,000</option><option value="1000_5000">₹1,000–₹5,000</option><option value="over_5000">Over ₹5,000</option>
+                </select>
+              </label>
+              <label className="text-xs text-gray-600">Sort by
+                <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-200 p-2 text-deep-purple">
+                  <option>Recommended</option><option>Price: Low to High</option><option>Price: High to Low</option><option>Rating</option><option value="newest">Newest</option>
+                </select>
+              </label>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="mt-6 flex gap-3 overflow-x-auto px-6 pb-2 scrollbar-hide">
@@ -89,7 +136,7 @@ const SchoolProductsPage = () => {
       </div>
 
       <div className="px-6 mt-6">
-        {activeCategory === 'All' && !searchQuery && (
+        {activeCategory === 'All' && !searchQuery && !hasFilters && (
           <div className="mb-8 relative overflow-hidden bg-gradient-to-r from-[#ffc107] to-[#ffb300] rounded-3xl p-6 shadow-xl shadow-yellow-100/50 block">
             <div className="absolute top-0 right-0 w-32 h-32 bg-white/20 rounded-full -mr-16 -mt-16 blur-2xl"></div>
             <div className="relative z-10 flex justify-between items-center">
@@ -115,11 +162,15 @@ const SchoolProductsPage = () => {
           <h2 className="text-lg font-bold text-deep-purple -ml-1">
             Bulk Products ({pagination?.total ?? products.length})
           </h2>
-          <button className="text-[10px] font-black text-primary uppercase tracking-widest bg-white px-3 py-1.5 rounded-full border border-gray-100">{sortBy}</button>
+          <button type="button" onClick={() => setFilterOpen((open) => !open)} className="text-[10px] font-black text-primary uppercase tracking-widest bg-white px-3 py-1.5 rounded-full border border-gray-100">{sortBy}</button>
         </div>
 
         {loading ? (
           <p className="text-center text-sm text-gray-400 py-10">Loading products...</p>
+        ) : error ? (
+          <p role="alert" className="text-center text-sm text-red-500 py-10">{error}</p>
+        ) : products.length === 0 ? (
+          <p className="text-center text-sm text-gray-400 py-10">No bulk products match your search or filters.</p>
         ) : (
           <div className="grid grid-cols-2 gap-4">
             {products.map((product) => (

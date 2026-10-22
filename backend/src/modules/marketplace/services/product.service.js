@@ -29,6 +29,21 @@ const ADMIN_PRODUCT_POPULATE = [
   ...PRODUCT_IMAGE_POPULATE,
 ];
 
+const normalizeGradeTags = (tags) => {
+  if (!Array.isArray(tags)) return tags;
+  const filtered = tags
+    .filter((t) => t && typeof t === 'string')
+    .map((t) => t.trim())
+    .filter(Boolean);
+  const withoutAll = filtered.filter(
+    (t) => !['All', 'all', 'All Grades', 'all-grades'].includes(t)
+  );
+  if (withoutAll.length > 0) {
+    return Array.from(new Set(withoutAll));
+  }
+  return filtered.length > 0 ? ['All Grades'] : [];
+};
+
 const productService = {
   async createProduct(vendorId, payload) {
     const slug = await uniqueSlug(Product, payload.name);
@@ -39,6 +54,7 @@ const productService = {
       throw new BadRequestError('Original price cannot be less than selling price', null, 'INVALID_PRICE');
     }
 
+    if (payload.gradeTags) payload.gradeTags = normalizeGradeTags(payload.gradeTags);
     return productRepository.create({
       ...payload,
       vendorId,
@@ -92,6 +108,7 @@ const productService = {
     if (payload.originalPricePaise && payload.pricePaise && payload.originalPricePaise < payload.pricePaise) {
       throw new BadRequestError('Original price cannot be less than selling price', null, 'INVALID_PRICE');
     }
+    if (payload.gradeTags) payload.gradeTags = normalizeGradeTags(payload.gradeTags);
     const product = await productRepository.updateById(productId, { $set: payload });
     if (!product) throw new NotFoundError('Product not found', 'PRODUCT_NOT_FOUND');
     return product;

@@ -1,4 +1,4 @@
-import { formatRupee } from './productMapper';
+import { formatRupee, resolveProductImage } from './productMapper';
 import { paiseToRupees } from './orderMapper';
 import { toAbsoluteUrl } from '../url';
 
@@ -77,17 +77,18 @@ export const mapProductForAdminList = (product) => {
     headerGroup: mapped.header,
     category: mapped.category,
     subcategory: mapped.subcategory,
-    // Raw ids: the edit form has to send ObjectIds back, not display names.
-    headerId: product?.headerId || '',
-    categoryId: product?.categoryId || '',
-    subcategoryId: product?.subcategoryId || '',
-    vendorId: product?.vendorId || '',
+    // Raw ids: normalized as clean string IDs so edit forms and filters match properly
+    headerId: product?.headerId?._id ? String(product.headerId._id) : (product?.headerId ? String(product.headerId) : ''),
+    categoryId: product?.categoryId?._id ? String(product.categoryId._id) : (product?.categoryId ? String(product.categoryId) : ''),
+    subcategoryId: product?.subcategoryId?._id ? String(product.subcategoryId._id) : (product?.subcategoryId ? String(product.subcategoryId) : ''),
+    vendorId: product?.vendorId?._id ? String(product.vendorId._id) : (product?.vendorId ? String(product.vendorId) : ''),
     publishStatus: product?.publishStatus || 'draft',
     stockStatus: mapped.stockStatus === 'low' ? 'Low Stock' : mapped.stockStatus === 'out' ? 'Out of Stock' : 'In Stock',
     approvalStatus: approvalLabels[mapped.approvalRaw] || 'Pending Approval',
     approvalRaw: mapped.approvalRaw,
-    image: product?.images?.[0]?.url || product?.images?.[0] || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?q=80&w=180&auto=format&fit=crop&q=60',
+    image: resolveProductImage(product),
     vendor: product?.vendorName || product?.vendor?.storeName || '—',
+    audience: product?.audience || 'users',
     gradeTags: mapped.gradeTags,
     raw: product,
   };

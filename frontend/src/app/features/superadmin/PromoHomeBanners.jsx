@@ -25,6 +25,7 @@ const PromoHomeBanners = () => {
   // Form Fields
   const [bannerSlug, setBannerSlug] = useState('');
   const [targetCategory, setTargetCategory] = useState('Kits');
+  const [targetAudience, setTargetAudience] = useState('parent');
   const [orderRank, setOrderRank] = useState('0');
   const [targetUrl, setTargetUrl] = useState('');
   const [isActive, setIsActive] = useState(true);
@@ -51,7 +52,8 @@ const PromoHomeBanners = () => {
   }, []);
 
   useEffect(() => {
-    loadBanners();
+    const timer = window.setTimeout(loadBanners, 0);
+    return () => window.clearTimeout(timer);
   }, [loadBanners]);
 
   const handleDeleteBanner = async (banner) => {
@@ -88,6 +90,7 @@ const PromoHomeBanners = () => {
     setEditId(null);
     setBannerSlug('');
     setTargetCategory('Kits');
+    setTargetAudience('parent');
     setOrderRank('0');
     setTargetUrl('');
     setIsActive(true);
@@ -100,7 +103,8 @@ const PromoHomeBanners = () => {
     setIsEditing(true);
     setEditId(banner.id);
     setBannerSlug(banner.slug);
-    setTargetCategory(banner.category || 'Kits');
+    setTargetCategory(categories.includes(banner.category) ? banner.category : 'All');
+    setTargetAudience(banner.audience || 'all');
     setOrderRank(banner.orderRank.toString());
     setTargetUrl(banner.targetUrl);
     setIsActive(banner.status === 'Active');
@@ -159,6 +163,8 @@ const PromoHomeBanners = () => {
         const payload = mapBannerPayload({
           slug: bannerSlug,
           category: targetCategory,
+          audience: targetAudience,
+          position: existingBanner?.category || 'home_top',
           orderRank,
           targetUrl,
           isActive,
@@ -182,6 +188,7 @@ const PromoHomeBanners = () => {
                 ? `${bannerSlug.trim().toLowerCase().replace(/\s+/g, '_')}_${idx + 1}`
                 : bannerSlug,
             category: targetCategory,
+            audience: targetAudience,
             orderRank: startRank + idx,
             targetUrl,
             isActive,
@@ -458,7 +465,10 @@ const PromoHomeBanners = () => {
                 </label>
                 <select
                   value={targetCategory}
-                  onChange={(e) => setTargetCategory(e.target.value)}
+                  onChange={(e) => {
+                    setTargetCategory(e.target.value);
+                    setTargetAudience(e.target.value === 'All' ? 'all' : 'parent');
+                  }}
                   className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-500/25 font-bold cursor-pointer"
                 >
                   {categories.map((c, idx) => (
@@ -466,6 +476,21 @@ const PromoHomeBanners = () => {
                   ))}
                 </select>
                 <span className="block text-[8px] text-gray-400 font-medium">Allows uploading multiple banners for the same category.</span>
+              </div>
+
+              {/* Audience selection */}
+              <div className="space-y-1.5">
+                <label htmlFor="banner-audience" className="block text-gray-400 uppercase tracking-wide text-[9px] font-black">Show banner to</label>
+                <select
+                  id="banner-audience"
+                  value={targetAudience}
+                  onChange={(e) => setTargetAudience(e.target.value)}
+                  className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-500/25 font-bold cursor-pointer"
+                >
+                  <option value="all">Parents and schools</option>
+                  <option value="parent">Parents only</option>
+                  <option value="school">Schools only</option>
+                </select>
               </div>
 
               {/* Banner Slug */}
