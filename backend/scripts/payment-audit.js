@@ -22,7 +22,8 @@ require('dotenv').config();
 const mongoose = require('mongoose');
 
 const args = process.argv.slice(2);
-const RECONCILE = args.includes('--reconcile');
+const RECONCILE = args.includes('--reconcile') || args.includes('--auto-heal') || args.includes('--heal');
+const AUTO_HEAL = args.includes('--auto-heal') || args.includes('--heal');
 const LIMIT = (() => {
   const i = args.indexOf('--limit');
   return i >= 0 ? Number(args[i + 1]) || 50 : 50;
@@ -213,6 +214,52 @@ const PAID_STATES = ['paid', 'partially_paid', 'refunded', 'partially_refunded']
       console.log(`  ${mismatches.length} payment(s) now need a human decision.`);
       for (const m of mismatches) {
         console.log(`    ${m.reconciliation.code}: ${m.reconciliation.detail}`);
+      }
+
+      if (AUTO_HEAL) {
+        heading('AUTO-HEALING: REINSTATING ORDERS & UPDATING LEDGER');
+        let reinstated = 0;
+        for (const m of mismatches) {
+          if (m.reconciliation && m.reconciliation.code === 'CAPTURED_ON_CANCELLED_ORDER' && m.orderId) {
+            const orderId = m.orderId._id || m.orderId;
+            try {
+              await reconciliationService.reinstateCancelledOrder(orderId, {
+                note: 'Auto-reinstated: customer payment confirmed by Razorpay',
+              });
+              console.log(`  ✓ Reinstated order ${m.orderId.orderNumber || orderId} to placed/paid`);
+              reinstated++;
+            } catch (err) {
+              console.log(`  ✗ Failed to reinstate order ${m.orderId.orderNumber || orderId}: ${err.message}`);
+            }
+          }
+        }
+
+        let paidHealed = 0;
+        const settlementService = require('../src/modules/vendor/services/settlement.service');
+        for (const x of moneyNotCredited) {
+          try {
+            await Order.findByIdAndUpdate(x.o._id, {
+              $set: { paymentStatus: 'paid' },
+              $push: {
+                statusHistory: {
+                  status: x.o.orderStatus,
+                  at: new Date(),
+                  note: 'Payment confirmed from captured funds',
+                },
+              },
+            });
+            if (x.o.orderStatus === 'delivered') {
+              for (const vendorId of x.o.vendorIds || []) {
+                await settlementService.recordOrderSettlement(vendorId, x.o._id);
+              }
+            }
+            console.log(`  ✓ Updated order ${x.o.orderNumber} to paid (status: ${x.o.orderStatus})`);
+            paidHealed++;
+          } catch (err) {
+            console.log(`  ✗ Failed to update ${x.o.orderNumber}: ${err.message}`);
+          }
+        }
+        console.log(`\nAuto-heal complete: ${reinstated} cancelled orders reinstated, ${paidHealed} orders marked paid.`);
       }
     }
   } else {
