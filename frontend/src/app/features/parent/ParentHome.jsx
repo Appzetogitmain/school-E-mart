@@ -25,6 +25,7 @@ import RecommendedKits from './RecommendedKits';
 import KitSaleCountdown from '../../components/KitSaleCountdown';
 import PromoCategoryBanners from './PromoCategoryBanners';
 import ReelsRow from './ReelsRow';
+import ParentPrivilegeCard from './ParentPrivilegeCard';
 import { useCategoryTree } from '../../../hooks/useCategoryTree';
 import { useProducts } from '../../../hooks/useProducts';
 import { findHeaderCategory } from '../../../utils/mappers/categoryMapper';
@@ -433,6 +434,9 @@ const ParentHome = () => {
             </div>
           </div>
         )}
+
+        {/* 5% Lifetime Social Privilege Pass Card */}
+        <ParentPrivilegeCard />
 
         {/* Timeline-style Recent Updates Section */}
         {!isGuest && <RecentUpdates />}

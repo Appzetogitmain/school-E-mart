@@ -732,4 +732,11 @@ router.put(
   adminController.updateAdminProfile
 );
 
+// Social Rewards Program
+router.get('/social-rewards/config', ...adminOnly, adminController.getSocialRewardConfig);
+router.put('/social-rewards/config', ...adminOnly, adminController.updateSocialRewardConfig);
+router.get('/social-rewards/requests', ...adminOnly, adminController.getSocialRewardRequests);
+router.patch('/social-rewards/requests/:requestId/approve', ...adminOnly, adminController.approveSocialRewardRequest);
+router.patch('/social-rewards/requests/:requestId/reject', ...adminOnly, adminController.rejectSocialRewardRequest);
+
 module.exports = router;

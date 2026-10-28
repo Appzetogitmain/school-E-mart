@@ -307,8 +307,28 @@ const cartService = {
   async getCartSummary(userId, audience) {
     const cart = await this.getOrCreateCart(userId, audience);
     await this.validateCartItems(cart.items || []);
+    let socialDiscountPaise = 0;
+    let socialDiscountPercent = 0;
+    if (userId) {
+      try {
+        const User = require('../../../database/models/User');
+        const SocialRewardConfig = require('../../../database/models/SocialRewardConfig');
+        const [user, config] = await Promise.all([
+          User.findById(userId).select('hasLifetimeSocialDiscount').lean(),
+          SocialRewardConfig.findById('default').lean(),
+        ]);
+        if (user?.hasLifetimeSocialDiscount && config?.isActive) {
+          socialDiscountPercent = config.discountPercent || 5;
+          socialDiscountPaise = Math.round(((cart.subtotalPaise || 0) * socialDiscountPercent) / 100);
+        }
+      } catch (e) {}
+    }
+    const withImages = await withCurrentImages(cart);
     return {
-      ...await withCurrentImages(cart),
+      ...withImages,
+      socialDiscountPaise,
+      socialDiscountPercent,
+      totalPaise: Math.max(0, (cart.totalPaise || 0) - socialDiscountPaise),
       itemCount: (cart.items || []).reduce((sum, item) => sum + item.quantity, 0),
     };
   },

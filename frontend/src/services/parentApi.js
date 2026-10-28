@@ -93,3 +93,20 @@ export const setActiveChild = async (childProfileId) => {
   const response = await apiClient.post('/users/me/active-child', { childProfileId });
   return response.data?.data;
 };
+
+// 5% Lifetime Social Privilege Reward
+export const getSocialRewardStatus = async () => {
+  const response = await apiClient.get('/users/social-reward/status');
+  return response.data?.data;
+};
+
+export const completeSocialRewardTask = async (platform) => {
+  const response = await apiClient.post('/users/social-reward/task', { platform });
+  return response.data?.data?.request;
+};
+
+export const submitSocialRewardForApproval = async () => {
+  const response = await apiClient.post('/users/social-reward/submit');
+  return response.data?.data?.request;
+};
+

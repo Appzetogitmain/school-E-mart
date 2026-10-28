@@ -287,6 +287,8 @@ export const summaryTotalsToDisplay = (summary) => ({
   subtotal: paiseToRupees(summary?.subtotalPaise),
   tax: paiseToRupees(summary?.taxPaise),
   discount: paiseToRupees(summary?.discountPaise),
+  socialDiscount: paiseToRupees(summary?.socialDiscountPaise),
+  socialDiscountPercent: summary?.socialDiscountPercent || 0,
   deliveryCharge: paiseToRupees(summary?.deliveryChargePaise),
   platformFee: paiseToRupees(summary?.platformFeePaise),
   handlingCharge: paiseToRupees(summary?.handlingChargePaise),

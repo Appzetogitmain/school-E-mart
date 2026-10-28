@@ -559,3 +559,30 @@ export const getSchoolCommissionReport = async (params = {}) => {
   const response = await apiClient.get('/admin/reports/school-commissions', { params });
   return unwrapData(response) || {};
 };
+
+// 5% Lifetime Social Rewards Program
+export const getSocialRewardConfig = async () => {
+  const response = await apiClient.get('/admin/social-rewards/config');
+  return unwrapData(response)?.config;
+};
+
+export const updateSocialRewardConfig = async (payload) => {
+  const response = await apiClient.put('/admin/social-rewards/config', payload);
+  return unwrapData(response)?.config;
+};
+
+export const getSocialRewardRequests = async (params = {}) => {
+  const response = await apiClient.get('/admin/social-rewards/requests', { params });
+  return extractPaginated(response, 'requests');
+};
+
+export const approveSocialRewardRequest = async (requestId) => {
+  const response = await apiClient.patch(`/admin/social-rewards/requests/${requestId}/approve`);
+  return unwrapData(response)?.request;
+};
+
+export const rejectSocialRewardRequest = async (requestId, reason = '') => {
+  const response = await apiClient.patch(`/admin/social-rewards/requests/${requestId}/reject`, { reason });
+  return unwrapData(response)?.request;
+};
+
