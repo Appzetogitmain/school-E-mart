@@ -2,7 +2,7 @@ const express = require('express');
 const usersController = require('../controllers/users.controller');
 const validators = require('../validators/users.validator');
 const { validateBody } = require('../../../middlewares/validation');
-const { protectedRoute } = require('../../../middlewares/auth/guards');
+const { protectedRoute, optionalAuthRoute } = require('../../../middlewares/auth/guards');
 
 const router = express.Router();
 
@@ -14,5 +14,10 @@ router.post(
   validateBody(validators.setActiveChildSchema),
   usersController.setActiveChild
 );
+
+// Social Privilege Reward Program
+router.get('/social-reward/status', ...optionalAuthRoute(), usersController.getSocialRewardStatus);
+router.post('/social-reward/task', ...protectedRoute(), usersController.completeSocialRewardTask);
+router.post('/social-reward/submit', ...protectedRoute(), usersController.submitSocialRewardForApproval);
 
 module.exports = router;

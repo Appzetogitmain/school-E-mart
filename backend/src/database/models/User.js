@@ -42,7 +42,8 @@ const userSchema = new mongoose.Schema({
   mfaEnabled: { type: Boolean, required: true, default: false },
   roleScopes: [{ type: String }],
   tenantSchoolId: { type: mongoose.Schema.Types.ObjectId, ref: 'School' },
-  defaultLocale: { type: String, required: true, default: 'en-IN' }
+  defaultLocale: { type: String, required: true, default: 'en-IN' },
+  hasLifetimeSocialDiscount: { type: Boolean, default: false }
 }, { collection: 'users' });
 
 // Plugins
