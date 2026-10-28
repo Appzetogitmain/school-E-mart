@@ -19,6 +19,7 @@ const lmsGradesService = require('../services/lmsGrades.service');
 const walletService = require('../services/wallet.service');
 const notificationCampaignService = require('../services/notificationCampaign.service');
 const adminProfileService = require('../services/adminProfile.service');
+const socialRewardService = require('../services/socialReward.service');
 
 const actorFrom = (req) => ({ userId: req.auth.userId, role: req.auth.role });
 
@@ -838,6 +839,32 @@ const adminController = {
     const masterKitProductService = require('../services/masterKitProduct.service');
     await masterKitProductService.deleteProduct(req.params.productId);
     return success(res, null, 'Master kit product deleted', undefined, req);
+  }),
+
+  // Social Rewards Program
+  getSocialRewardConfig: asyncHandler(async (req, res) => {
+    const config = await socialRewardService.getConfig();
+    return success(res, { config }, 'Social reward configuration fetched', undefined, req);
+  }),
+
+  updateSocialRewardConfig: asyncHandler(async (req, res) => {
+    const config = await socialRewardService.updateConfig(req.body, req.auth);
+    return success(res, { config }, 'Social reward configuration updated', undefined, req);
+  }),
+
+  getSocialRewardRequests: asyncHandler(async (req, res) => {
+    const { requests, pagination } = await socialRewardService.getAdminRequests(req.query);
+    return paginated(res, { requests }, pagination, 'Social reward requests fetched', req);
+  }),
+
+  approveSocialRewardRequest: asyncHandler(async (req, res) => {
+    const request = await socialRewardService.approveRequest(req.params.requestId, req.auth.userId);
+    return success(res, { request }, 'Social reward request approved', undefined, req);
+  }),
+
+  rejectSocialRewardRequest: asyncHandler(async (req, res) => {
+    const request = await socialRewardService.rejectRequest(req.params.requestId, req.auth.userId, req.body.reason);
+    return success(res, { request }, 'Social reward request rejected', undefined, req);
   }),
 };
 

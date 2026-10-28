@@ -6,8 +6,6 @@ yarn-error.log*
 .pnpm-debug.log*
 
 # Environment Variables
-.env
-.env.local
 .env.development.local
 .env.test.local
 .env.production.local
@@ -17,7 +15,6 @@ dist/
 build/
 
 # Editor / OS
-.vscode/
 .idea/
 .DS_Store
 Thumbs.db
@@ -41,3 +38,4 @@ temp_interactive_push.bat
 # numbers and payment references, so they are generated on demand and never
 # committed.
 reports/
+config.bat

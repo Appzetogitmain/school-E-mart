@@ -17,10 +17,12 @@ import { useCheckoutSummary } from '../../../hooks/useCheckoutSummary';
 import { mapOrderForDetail } from '../../../utils/mappers/orderMapper';
 import GuestCheckoutGate from './GuestCheckoutGate';
 import { isSchoolLinked } from '../../../utils/schoolLinked';
+import { canSyncMarketplaceCart } from '../../../utils/marketplaceAudience';
 
 const CheckoutPage = () => {
   const navigate = useNavigate();
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const canSync = isAuthenticated && canSyncMarketplaceCart();
   const { cartItems, updateQuantity, refreshCart } = useCart();
 
   const [deliveryType, setDeliveryType] = useState('school'); // 'school' | 'home'
@@ -132,7 +134,7 @@ const CheckoutPage = () => {
     addressSource: homeAddressSource,
     schoolIdForPickup: null,
     audience: 'parent',
-    enabled: isAuthenticated && cartItems.length > 0,
+    enabled: canSync && cartItems.length > 0,
   });
 
   const schoolCheckout = useCheckoutSummary({
@@ -141,7 +143,7 @@ const CheckoutPage = () => {
     addressSource: schoolAddressSource,
     schoolIdForPickup,
     audience: 'parent',
-    enabled: isAuthenticated && cartItems.length > 0,
+    enabled: canSync && cartItems.length > 0,
   });
 
   // Bill breakdown / order placement always uses whichever destination is
@@ -562,6 +564,13 @@ const CheckoutPage = () => {
               <span>Items Total</span>
               <span className="font-black text-gray-900">₹{subtotal.toLocaleString()}</span>
             </div>
+
+            {totals.socialDiscount > 0 && (
+              <div className="flex justify-between items-center text-emerald-600 bg-amber-50/80 -mx-2 px-2 py-1.5 rounded-xl border border-amber-200/60">
+                <span className="font-extrabold text-amber-900">✨ 5% Lifetime Social Discount</span>
+                <span className="font-black text-emerald-600">- ₹{totals.socialDiscount.toFixed(2)}</span>
+              </div>
+            )}
 
             {platformFee > 0 && (
               <div className="flex justify-between items-center text-gray-700">

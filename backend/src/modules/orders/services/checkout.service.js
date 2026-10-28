@@ -203,7 +203,7 @@ const checkoutService = {
     return { deliveryChargePaise, platformFeePaise, handlingChargePaise: DEFAULT_HANDLING_CHARGE_PAISE };
   },
 
-  async computeOrderTotals(lineItems, deliveryType = 'home') {
+  async computeOrderTotals(lineItems, deliveryType = 'home', userId = null, couponCode = null) {
     const subtotalPaise = lineItems.reduce((sum, item) => sum + item.pricePaise * item.quantity, 0);
     const taxPaise = lineItems.reduce((sum, item) => sum + item.taxPaise, 0);
     const discountPaise = lineItems.reduce(
@@ -211,15 +211,41 @@ const checkoutService = {
       0
     );
 
+    let socialDiscountPaise = 0;
+    let socialDiscountPercent = 0;
+
+    // 5% Lifetime Social Discount: applies if user is approved, program is active, and no coupon code is used
+    if (userId && !couponCode) {
+      try {
+        const User = require('../../../database/models/User');
+        const SocialRewardConfig = require('../../../database/models/SocialRewardConfig');
+        const [user, config] = await Promise.all([
+          User.findById(userId).select('hasLifetimeSocialDiscount').lean(),
+          SocialRewardConfig.findById('default').lean(),
+        ]);
+
+        if (user?.hasLifetimeSocialDiscount && config?.isActive) {
+          socialDiscountPercent = config.discountPercent || 5;
+          socialDiscountPaise = Math.round((subtotalPaise * socialDiscountPercent) / 100);
+        }
+      } catch (err) {
+        // Fallback: don't break checkout if reward lookup fails
+      }
+    }
+
     const { deliveryChargePaise, platformFeePaise, handlingChargePaise } =
       await this.resolveCharges(subtotalPaise, deliveryType, lineItems);
-    const totalPaise =
-      subtotalPaise + taxPaise + deliveryChargePaise + platformFeePaise + handlingChargePaise;
+    const totalPaise = Math.max(
+      0,
+      subtotalPaise - socialDiscountPaise + taxPaise + deliveryChargePaise + platformFeePaise + handlingChargePaise
+    );
 
     return {
       subtotalPaise,
       taxPaise,
       discountPaise,
+      socialDiscountPaise,
+      socialDiscountPercent,
       deliveryChargePaise,
       platformFeePaise,
       handlingChargePaise,
@@ -267,6 +293,8 @@ const checkoutService = {
         subtotalPaise: 0,
         taxPaise: 0,
         discountPaise: 0,
+        socialDiscountPaise: 0,
+        socialDiscountPercent: 0,
         deliveryChargePaise,
         platformFeePaise,
         handlingChargePaise,
@@ -277,7 +305,7 @@ const checkoutService = {
       };
     }
     const { lineItems } = await this.validateCheckout(userId, audience, payload, true);
-    const totals = await this.computeOrderTotals(lineItems, deliveryType);
+    const totals = await this.computeOrderTotals(lineItems, deliveryType, userId, payload.couponCode);
     const vendorIds = [...new Set(lineItems.map((item) => String(item.vendorId)))];
 
     return {

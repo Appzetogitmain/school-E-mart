@@ -58,13 +58,23 @@ const shouldAttemptTokenRefresh = (url = '') => {
   return Boolean(token || isAuthenticated);
 };
 
-const redirectToLogin = () => {
-  const { portal, logout } = useAuthStore.getState();
-  logout({ callApi: false });
+const redirectToLogin = (url = '') => {
+  const path = getRequestPath(url);
+  const isAdminReq = path.startsWith('/admin') || (typeof window !== 'undefined' && window.location.pathname.startsWith('/superadmin'));
+  const isVendorReq = path.startsWith('/vendor') || (typeof window !== 'undefined' && window.location.pathname.startsWith('/vendor'));
+  const isSchoolReq = path.startsWith('/school') || (typeof window !== 'undefined' && window.location.pathname.startsWith('/school'));
+  
+  const targetPortal = isAdminReq ? 'admin' : (isVendorReq ? 'vendor' : (isSchoolReq ? 'school' : 'parent'));
+  
+  useAuthStore.getState().logout({ callApi: false, portal: targetPortal });
 
-  const loginPath = PORTAL_LOGIN_PATHS[portal] || PORTAL_LOGIN_PATHS.default;
-  if (window.location.pathname !== loginPath) {
-    window.location.href = loginPath;
+  const loginPath = PORTAL_LOGIN_PATHS[targetPortal] || PORTAL_LOGIN_PATHS.default;
+  if (typeof window !== 'undefined' && window.location.pathname !== loginPath) {
+    // Only redirect if current window matches the failed portal
+    const currentIsAdmin = window.location.pathname.startsWith('/superadmin') || window.location.pathname.startsWith('/admin');
+    if ((isAdminReq && currentIsAdmin) || (!isAdminReq && !currentIsAdmin)) {
+      window.location.href = loginPath;
+    }
   }
 };
 
@@ -103,7 +113,8 @@ apiClient.interceptors.request.use(
   (config) => {
     const path = getRequestPath(config.url || '');
     if (!isUnauthenticatedAuthPath(config.url || '') || ALWAYS_ATTACH_TOKEN_PATHS.has(path)) {
-      const token = useAuthStore.getState().token;
+      const state = useAuthStore.getState();
+      const token = state.getEffectiveToken ? state.getEffectiveToken(path) : state.token;
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
       }
@@ -131,7 +142,7 @@ apiClient.interceptors.response.use(
         originalRequest.headers.Authorization = `Bearer ${accessToken}`;
         return apiClient(originalRequest);
       } catch {
-        redirectToLogin();
+        redirectToLogin(originalRequest.url || '');
       }
     }
 

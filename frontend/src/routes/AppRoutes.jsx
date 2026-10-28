@@ -157,6 +157,7 @@ const KitProductsManagement = React.lazy(() => import('../app/features/superadmi
 const SchoolKitsManagement = React.lazy(() => import('../app/features/superadmin/SchoolKitsManagement'));
 const ContactManagement = React.lazy(() => import('../app/features/superadmin/ContactManagement'));
 const CommissionAnalyticsManagement = React.lazy(() => import('../app/features/superadmin/CommissionAnalyticsManagement'));
+const SocialRewardsManagement = React.lazy(() => import('../app/features/superadmin/SocialRewardsManagement'));
 
 
 
@@ -260,6 +261,7 @@ const AppRoutes = () => {
           <Route path="contact-us-settings" element={<ContactManagement />} />
           <Route path="profile" element={<AdminProfileManagement />} />
           <Route path="kit-products" element={<KitProductsManagement />} />
+          <Route path="social-rewards" element={<SocialRewardsManagement />} />
         </Route>
         </Route>
         <Route element={<ProtectedRoute />}>

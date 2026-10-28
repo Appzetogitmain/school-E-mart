@@ -41,9 +41,14 @@ const shutdown = async (signal, exitCode = 0) => {
     if (unpaidOrderSweeperTimer) clearInterval(unpaidOrderSweeperTimer);
     if (paymentReconciliationTimer) clearInterval(paymentReconciliationTimer);
 
-    if (server) {
-      await new Promise((resolve, reject) => {
-        server.close((error) => (error ? reject(error) : resolve()));
+    if (server && server.listening) {
+      await new Promise((resolve) => {
+        server.close((error) => {
+          if (error && error.code !== 'ERR_SERVER_NOT_RUNNING') {
+            logger.warn('Error closing HTTP server during shutdown', { error: error.message });
+          }
+          resolve();
+        });
       });
       logger.info('HTTP server closed');
     }

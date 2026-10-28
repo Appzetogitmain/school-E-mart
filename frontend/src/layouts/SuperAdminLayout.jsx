@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Layers, Box, Users, MapPin, Ticket, Truck,
   ChevronDown, ChevronRight, Search, Bell, User, LogOut, Menu, X, ShieldAlert,
   ArrowLeftRight, Wallet, TrendingUp, Coins, HelpCircle, ShoppingCart, Clock, CheckCircle,
-  FileText, Flag, XCircle, Package, Home, Store, Image, IndianRupee, Video, GraduationCap, School, Phone, MonitorPlay, Hourglass
+  FileText, Flag, XCircle, Package, Home, Store, Image, IndianRupee, Video, GraduationCap, School, Phone, MonitorPlay, Hourglass, Award
 } from 'lucide-react';
 import useAuthStore from '../store/useAuthStore';
 
@@ -216,6 +216,12 @@ const SuperAdminLayout = () => {
       label: 'Home Banners',
       icon: Image,
       path: '/superadmin/promo-home-banners'
+    },
+    {
+      type: 'item',
+      label: '5% Social Rewards',
+      icon: Award,
+      path: '/superadmin/social-rewards'
     },
     {
       type: 'section',

@@ -10,6 +10,8 @@ import useAuthStore from '../../../store/useAuthStore';
 import { useCheckoutSummary } from '../../../hooks/useCheckoutSummary';
 import { PRODUCT_PLACEHOLDER } from '../../../utils/mappers/productMapper';
 
+import { canSyncMarketplaceCart } from '../../../utils/marketplaceAudience';
+
 // Module-level so the reference stays stable across renders.
 const NO_ADDRESS = {};
 
@@ -18,6 +20,7 @@ const CartPage = () => {
   const { cartItems, updateQuantity, removeFromCart, totalQuantity, loading } = useCart();
   const [showRemoveToast, setShowRemoveToast] = useState(false);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const canSync = isAuthenticated && canSyncMarketplaceCart();
 
   const localSubtotal = cartItems.reduce((sum, item) => {
     if (item.pricePaise) return sum + (item.pricePaise / 100) * item.quantity;
@@ -27,21 +30,23 @@ const CartPage = () => {
     return sum + (price * item.quantity);
   }, 0);
 
-  // Fetch real fees from backend when authenticated
+  // Fetch real fees from backend when authenticated parent/school cart can sync
   const { summary, totals, loading: summaryLoading } = useCheckoutSummary({
     deliveryType: 'home',
     paymentMethod: 'online',
     addressSource: NO_ADDRESS,
     audience: 'parent',
-    enabled: isAuthenticated && cartItems.length > 0,
+    enabled: canSync && cartItems.length > 0,
   });
 
-  // `totals` is always a zero-filled object, so only trust it once `summary` has
-  // actually arrived. Without a summary we can only show the item subtotal —
-  // fees are decided by the backend billing config at checkout.
-  const hasSummary = Boolean(summary);
-  const subtotal = hasSummary ? totals.subtotal : localSubtotal;
-  const total = hasSummary ? totals.grandTotal : localSubtotal;
+  // `totals` is only authoritative once `summary` has arrived with items.
+  // If the server cart is empty or the user is not in a syncable role,
+  // rely on localSubtotal and apply known fees.
+  const hasSummary = Boolean(summary && (summary.itemCount > 0 || totals.subtotal > 0));
+  const subtotal = hasSummary && totals.subtotal > 0 ? totals.subtotal : localSubtotal;
+  const total = hasSummary && totals.subtotal > 0
+    ? totals.grandTotal
+    : (localSubtotal + (totals.deliveryCharge || 0) + (totals.platformFee || 0) + (totals.handlingCharge || 0) - (totals.discount || 0) - (totals.socialDiscount || 0));
 
   const handleRemove = (id) => {
     removeFromCart(id);
@@ -152,6 +157,14 @@ const CartPage = () => {
                 <div className="flex justify-between text-xs font-bold">
                   <span className="text-gray-400">Discount</span>
                   <span className="text-green-500">-₹{totals.discount.toLocaleString()}</span>
+                </div>
+              )}
+              {totals.socialDiscount > 0 && (
+                <div className="flex justify-between text-xs font-bold bg-amber-50/80 -mx-2 px-2 py-1.5 rounded-xl border border-amber-200/60">
+                  <span className="text-amber-900 font-black flex items-center gap-1">
+                    <span>✨ 5% Lifetime Social Discount</span>
+                  </span>
+                  <span className="text-emerald-600 font-black">-₹{totals.socialDiscount.toLocaleString()}</span>
                 </div>
               )}
               <div className="flex justify-between text-xs font-bold">
