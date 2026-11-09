@@ -15,7 +15,6 @@ import InstitutionalPackages from './InstitutionalPackages';
 import SchoolCategories from './SchoolCategories';
 import CategoryEssentials from './CategoryEssentials';
 import VendorSpotlights from './VendorSpotlights';
-import SchoolCaseStudies from './SchoolCaseStudies';
 import ReelsRow from '../parent/ReelsRow';
 import PromoCategoryBanners from '../parent/PromoCategoryBanners';
 import { useDraggableScroll } from '../../hooks/useDraggableScroll';
@@ -484,7 +483,6 @@ const SchoolHome = () => {
             </div>
           )}
           <VendorSpotlights />
-          <SchoolCaseStudies reelsRef={reelsRef} />
           <ReelsRow targetApp="school" title="School Reels & Demos" />
         </div>
 

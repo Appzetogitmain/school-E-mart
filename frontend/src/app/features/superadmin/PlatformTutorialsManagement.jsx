@@ -2,11 +2,11 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import ReactDOM from 'react-dom';
 import {
   MonitorPlay, Film, Edit3, Trash2, Eye, Play, X, ChevronRight, CheckCircle,
-  Upload, Image as ImageIcon, Users, GraduationCap, Building2, Globe2, Camera,
+  Upload, Image as ImageIcon, Users, GraduationCap, Building2, Globe2, Camera, Loader2,
 } from 'lucide-react';
 import {
   listTutorials, createTutorial, updateTutorial, deleteTutorial,
-  uploadAdminFile, uploadAdminMedia,
+  uploadAdminFile, uploadAdminMedia, uploadAdminMediaWithProgress,
 } from '../../../services/adminApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 import { mapTutorialForAdmin, mapAdminTutorialToPayload, AUDIENCE_LABELS } from '../../../utils/mappers/tutorialsMapper';
@@ -35,6 +35,7 @@ const PlatformTutorialsManagement = () => {
   const [tutorials, setTutorials] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [audienceFilter, setAudienceFilter] = useState('All');
 
   const [isEditing, setIsEditing] = useState(false);
@@ -89,13 +90,18 @@ const PlatformTutorialsManagement = () => {
     loadTutorials();
   }, [loadTutorials]);
 
-  const uploadFile = async (file, purpose, useMedia = false) => {
+  const uploadFile = async (file, purpose, useMedia = false, onProgress = null) => {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('purpose', purpose);
-    const attachment = useMedia
-      ? await uploadAdminMedia(formData)
-      : await uploadAdminFile(formData);
+    let attachment;
+    if (useMedia) {
+      attachment = onProgress
+        ? await uploadAdminMediaWithProgress(formData, onProgress)
+        : await uploadAdminMedia(formData);
+    } else {
+      attachment = await uploadAdminFile(formData);
+    }
     return attachment?._id || attachment?.id;
   };
 
@@ -111,6 +117,7 @@ const PlatformTutorialsManagement = () => {
     setVideoPreview('');
     setCoverFile(null);
     setCoverPreview('');
+    setUploadProgress(0);
   };
 
   const handleSubmit = async (e) => {
@@ -132,7 +139,9 @@ const PlatformTutorialsManagement = () => {
       let thumbnailId = getAttachmentId(existing?.raw?.thumbnailId);
 
       if (videoFile) {
-        videoId = await uploadFile(videoFile, 'tutorial_video', true);
+        videoId = await uploadFile(videoFile, 'tutorial_video', true, (percent) => {
+          setUploadProgress(percent);
+        });
       }
       if (coverFile) {
         thumbnailId = await uploadFile(coverFile, 'tutorial_thumb', true);
@@ -421,10 +430,29 @@ const PlatformTutorialsManagement = () => {
               <button
                 type="submit"
                 disabled={saving}
-                className="w-full flex items-center justify-center gap-2 bg-[#0B1528] hover:bg-[#15253F] disabled:opacity-60 text-white text-xs font-black uppercase tracking-wider py-3 rounded-xl transition-all shadow-xs"
+                className="w-full flex items-center justify-center gap-2 bg-[#0B1528] hover:bg-[#15253F] disabled:opacity-75 text-white text-xs font-black uppercase tracking-wider py-3.5 rounded-xl transition-all shadow-xs cursor-pointer"
               >
-                {saving ? 'Saving…' : isEditing ? 'Update Tutorial' : 'Upload Tutorial'}
+                {saving ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin text-white" />
+                    {uploadProgress > 0 && uploadProgress < 100
+                      ? `Uploading Video ${uploadProgress}%...`
+                      : 'Processing & Saving...'}
+                  </>
+                ) : isEditing ? (
+                  'Update Tutorial'
+                ) : (
+                  'Upload Tutorial'
+                )}
               </button>
+              {saving && uploadProgress > 0 && uploadProgress < 100 && (
+                <div className="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden">
+                  <div
+                    className="bg-indigo-600 h-full rounded-full transition-all duration-300"
+                    style={{ width: `${uploadProgress}%` }}
+                  />
+                </div>
+              )}
               <button
                 type="button"
                 onClick={resetForm}

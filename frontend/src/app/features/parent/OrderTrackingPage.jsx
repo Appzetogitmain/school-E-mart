@@ -19,6 +19,7 @@ import {
 import { formatRupee } from '../../../utils/mappers/productMapper';
 import useAuthStore from '../../../store/useAuthStore';
 import InvoiceModal from '../../../components/InvoiceModal';
+import { getPaymentStatusLabel } from '../../../utils/paymentStatus';
 
 const OrderTrackingPage = () => {
   const navigate = useNavigate();
@@ -215,7 +216,18 @@ const OrderTrackingPage = () => {
               ? 'PAID ONLINE'
               : `PAY AT DELIVERY: ${formatAmount(orderDetails?.totalAmount)}`}
           </h3>
-          <p className="text-[10px] text-[#FBC02D] font-bold">Payment status: {orderDetails?.raw?.paymentStatus || 'pending'}</p>
+          <p className="text-[10px] text-[#FBC02D] font-bold">
+            Payment status:{' '}
+            {getPaymentStatusLabel({
+              paymentMethod:
+                orderDetails?.raw?.paymentMethod ||
+                (orderDetails?.paymentMethod === 'ONLINE PAYMENT' ? 'online' : 'cod'),
+              paymentStatus: orderDetails?.raw?.paymentStatus || orderDetails?.paymentStatus,
+              orderStatus: orderDetails?.raw?.orderStatus || orderDetails?.orderStatus,
+              walletAmountPaise: orderDetails?.raw?.walletAmountPaise,
+              totalPaise: orderDetails?.raw?.totalPaise,
+            })}
+          </p>
         </div>
 
         <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4">

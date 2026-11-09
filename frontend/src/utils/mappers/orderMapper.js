@@ -245,15 +245,18 @@ export const getOrderStatusStyle = (status = '') => {
   return 'bg-gray-100 text-gray-500 border-gray-200';
 };
 
+// Never invent address details: a missing city/pincode used to become "Indore, 452018" and
+// ended up on real orders. Missing parts stay empty so the server (which fills a school
+// pickup from the school's own record) or the checkout form can deal with them.
 export const buildCheckoutAddress = (source = {}) => ({
   name: source.name || 'Customer',
-  phone: source.phone || '9999999999',
-  line1: source.address || source.line1 || source.schoolAddress || 'Address not provided',
+  phone: source.phone || '',
+  line1: source.address || source.line1 || source.schoolAddress || '',
   line2: source.line2 || '',
-  city: source.city || 'Indore',
-  state: source.state || 'Madhya Pradesh',
+  city: source.city || '',
+  state: source.state || '',
   country: source.country || 'India',
-  pinCode: String(source.pinCode || source.pincode || '452018').slice(0, 6),
+  pinCode: String(source.pinCode || source.pincode || '').slice(0, 6),
   addressType: source.addressType || 'home',
 });
 

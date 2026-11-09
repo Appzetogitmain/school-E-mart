@@ -15,6 +15,7 @@ import * as catalogApi from '../../../services/catalogApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 import { mapProductForCard, mapProductForDetailView, PRODUCT_PLACEHOLDER } from '../../../utils/mappers/productMapper';
 import { getMarketplaceAudience } from '../../../utils/marketplaceAudience';
+import { useChildGrade } from '../../../hooks/useChildGrade';
 
 const ProductDetailsPage = () => {
   const { productId } = useParams();
@@ -36,6 +37,9 @@ const ProductDetailsPage = () => {
 
   const cartQuantity = getProductQuantity(productId);
   const isGuest = !localStorage.getItem('childInfo');
+  // Similar products are limited to the child's class (a Nursery child is not suggested
+  // UKG-only items). The school portal buys in bulk, so grade does not apply there.
+  const childGrade = useChildGrade();
 
   useEffect(() => {
     let cancelled = false;
@@ -46,7 +50,13 @@ const ProductDetailsPage = () => {
       try {
         const [detail, related] = await Promise.all([
           catalogApi.getProduct(productId),
-          catalogApi.getRelatedProducts(productId, { limit: 6 }),
+          // /school/product/:id reuses this page — suggest from the bulk catalogue there
+          catalogApi.getRelatedProducts(productId, {
+            limit: 6,
+            ...(window.location.pathname.startsWith('/school')
+              ? { audience: 'schools' }
+              : { audience: 'users', ...(childGrade ? { grade: childGrade } : {}) }),
+          }),
         ]);
         if (cancelled) return;
         const mapped = mapProductForDetailView(detail);
@@ -67,7 +77,7 @@ const ProductDetailsPage = () => {
     return () => {
       cancelled = true;
     };
-  }, [productId]);
+  }, [productId, childGrade]);
 
   const handleAddToCart = () => {
     if (!product) return;

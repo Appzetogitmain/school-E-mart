@@ -29,7 +29,7 @@ import ParentPrivilegeCard from './ParentPrivilegeCard';
 import { useCategoryTree } from '../../../hooks/useCategoryTree';
 import { useProducts } from '../../../hooks/useProducts';
 import { findHeaderCategory } from '../../../utils/mappers/categoryMapper';
-import { gradeLabelToQuery } from '../../../utils/mappers/productMapper';
+import { normalizeGradeLabel } from '../../../utils/gradeLabel';
 import { toAbsoluteUrl } from '../../../utils/url';
 
 import useAuthStore from '../../../store/useAuthStore';
@@ -52,7 +52,9 @@ const ParentHome = () => {
 
   const isGuest = !localStorage.getItem('childInfo') && !useAuthStore.getState().user;
   const { tree: categoryTree } = useCategoryTree();
-  const selectedGrade = gradeLabelToQuery(childInfo?.grade);
+  // Exact grade tag ("Nursery", "UKG", "Class 5"), so a product made for one class only
+  // shows for that class; undefined (no filter) for guests / unknown class names.
+  const selectedGrade = normalizeGradeLabel(childInfo?.grade);
   const { products: essentialProducts, loading: essentialLoading } = useProducts(
     selectedGrade ? { limit: 4, sort: 'popular', grade: selectedGrade } : { limit: 4, sort: 'popular' }
   );

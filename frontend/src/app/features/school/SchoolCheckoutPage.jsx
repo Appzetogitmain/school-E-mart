@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ChevronLeft, ShoppingBag,
@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
 import { createOrder, confirmPayment } from '../../../services/ordersApi';
+import { getSchool } from '../../../services/schoolApi';
 import { openRazorpayCheckout } from '../../../utils/razorpay';
 import { ENV } from '../../../config/env';
 import useAuthStore from '../../../store/useAuthStore';
@@ -30,14 +31,29 @@ const SchoolCheckoutPage = () => {
     return {
       name: parsed.school || "School",
       address: parsed.schoolAddress || parsed.address || 'Institutional delivery address',
-      city: parsed.city || 'Indore',
-      pinCode: parsed.pinCode || '452018',
+      // No made-up city/pincode: the server stores the school's own address on the order.
+      city: parsed.city || '',
+      pinCode: parsed.pinCode || '',
       adminName: parsed.name || 'Admin Office',
     };
   });
 
   const deliveryType = 'school';
   const schoolIdForPickup = user?.tenantSchoolId || schoolInfo.schoolId;
+
+  // Show the school's real address (from its record) as the pickup point
+  const [schoolRecord, setSchoolRecord] = useState(null);
+  useEffect(() => {
+    if (!schoolIdForPickup) return undefined;
+    let cancelled = false;
+    getSchool(schoolIdForPickup)
+      .then((school) => { if (!cancelled) setSchoolRecord(school); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [schoolIdForPickup]);
+  const pickupAddressText = schoolRecord?.address
+    ? [schoolRecord.address.line1, schoolRecord.address.city, schoolRecord.address.state, schoolRecord.address.pinCode].filter(Boolean).join(', ')
+    : '';
 
   const addressSource = useMemo(
     () => ({
@@ -182,7 +198,7 @@ const SchoolCheckoutPage = () => {
           <div className="p-4">
             <div className="p-4 rounded-2xl border-2 border-primary/20 bg-primary/5">
               <h3 className="font-bold text-deep-purple mb-1">{schoolInfo.adminName}</h3>
-              <p className="text-[11px] text-gray-500 leading-relaxed font-medium">{schoolInfo.address}</p>
+              <p className="text-[11px] text-gray-500 leading-relaxed font-medium">{pickupAddressText || schoolInfo.address}</p>
             </div>
           </div>
         </div>

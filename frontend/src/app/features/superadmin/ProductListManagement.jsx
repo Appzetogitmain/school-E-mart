@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useSearchParams } from 'react-router-dom';
 import {
-  Search, Edit, Trash2, X,
+  Search, Edit, Trash2, X, Copy, CheckCheck, ChevronLeft, ChevronRight,
   Package, CheckCircle, AlertCircle, Check, Filter,
   FileText, Tag, Folder, Image, ChevronDown, UploadCloud, Loader2, Camera
 } from 'lucide-react';
@@ -103,30 +103,46 @@ const ProductListManagement = () => {
   const [vendors, setVendors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState(null);
+  const [copiedId, setCopiedId] = useState(null);
 
   useEffect(() => {
     setStockFilter(searchParams.get('stock') === 'low' ? 'Low Stock' : 'All');
   }, [searchParams]);
 
-  const loadProducts = useCallback(async () => {
+  const handleCopyProductLink = (product) => {
+    const origin = window.location.origin;
+    const path = product.audience === 'schools' ? '/school/product/' : '/user/product/';
+    const productUrl = `${origin}${path}${product.id}`;
+    navigator.clipboard.writeText(productUrl);
+    setCopiedId(product.id);
+    setTimeout(() => {
+      setCopiedId((curr) => (curr === product.id ? null : curr));
+    }, 2000);
+  };
+
+  const loadProducts = useCallback(async (targetPage = page) => {
     setLoading(true);
     try {
       // Admin listing: includes pending/rejected/draft, which the public
-      // /catalog/products route deliberately excludes.
-      const { data } = await listAdminProducts({ limit: 200 });
+      // /catalog/products route deliberately excludes. Backend limits page to max 100.
+      const { data, pagination: pageMeta } = await listAdminProducts({ page: targetPage, limit: 100 });
       setProducts((data || []).map(mapProductForAdminList));
+      setPagination(pageMeta);
       setError('');
     } catch (err) {
       setProducts([]);
+      setPagination(null);
       setError(getErrorMessage(err, 'Unable to load products'));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [page]);
 
   useEffect(() => {
-    loadProducts();
-  }, [loadProducts]);
+    loadProducts(page);
+  }, [page]);
 
   // Taxonomy + vendors back the edit form's dropdowns, which must submit ObjectIds.
   useEffect(() => {
@@ -322,7 +338,7 @@ const ProductListManagement = () => {
 
   // Calculate dynamic stats metrics
   const countByApproval = (value) => products.filter(p => p.approvalRaw === value).length;
-  const totalCount = products.length;
+  const totalCount = pagination?.total ?? products.length;
   const activeCount = countByApproval('approved');
   const lowStockCount = products.filter(p => p.stockStatus === 'Low Stock').length;
   const outOfStockCount = products.filter(p => p.stockStatus === 'Out of Stock').length;
@@ -622,6 +638,24 @@ const ProductListManagement = () => {
                           <X size={12} className="stroke-[3]" />
                         </button>
 
+                        {/* Copy Product Link Button */}
+                        <button
+                          type="button"
+                          onClick={() => handleCopyProductLink(p)}
+                          title={copiedId === p.id ? "Product Link Copied!" : "Copy Product Landing URL"}
+                          className={`w-7 h-7 rounded-xl border flex items-center justify-center transition-all shrink-0 cursor-pointer ${
+                            copiedId === p.id
+                              ? "border-emerald-500 bg-emerald-50 text-emerald-600 scale-105 shadow-xs"
+                              : "border-gray-250/60 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50/50"
+                          }`}
+                        >
+                          {copiedId === p.id ? (
+                            <CheckCheck size={12} className="stroke-[2.5] text-emerald-600" />
+                          ) : (
+                            <Copy size={12} className="stroke-[2.5]" />
+                          )}
+                        </button>
+
                         {/* Edit Button */}
                         <button 
                           onClick={() => openEditModal(p)}
@@ -648,6 +682,38 @@ const ProductListManagement = () => {
             </tbody>
           </table>
         </div>
+
+        {/* Server-side Pagination Bar */}
+        {!loading && !error && (pagination?.total > 0 || visibleProducts.length > 0) && (
+          <div className="mt-5 flex flex-wrap items-center justify-between gap-3 text-xs font-bold text-gray-500 select-none px-2">
+            <span className="tabular-nums">
+              Showing {visibleProducts.length} items on Page {pagination?.page || page} of {pagination?.totalPages || 1} ({pagination?.total ?? products.length} total products)
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                disabled={loading || (pagination ? !pagination.hasPrevPage : page <= 1)}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                className="flex items-center gap-1 border border-gray-250/80 rounded-xl px-3.5 py-2 font-extrabold disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50 cursor-pointer transition-all active:scale-95 text-gray-700 bg-white"
+              >
+                <ChevronLeft size={13} />
+                Previous
+              </button>
+              <span className="px-3 py-1.5 rounded-xl bg-gray-50 border border-gray-200 font-black text-gray-700">
+                {page} / {pagination?.totalPages || 1}
+              </span>
+              <button
+                type="button"
+                disabled={loading || (pagination ? !pagination.hasNextPage : false)}
+                onClick={() => setPage((p) => p + 1)}
+                className="flex items-center gap-1 border border-gray-250/80 rounded-xl px-3.5 py-2 font-extrabold disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50 cursor-pointer transition-all active:scale-95 text-gray-700 bg-white"
+              >
+                Next
+                <ChevronRight size={13} />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 6. VENDOR-PARITY EDIT PRODUCT MODAL PORTAL */}

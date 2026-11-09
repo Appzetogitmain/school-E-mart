@@ -5,6 +5,7 @@ import ProductCard from '../../components/ProductCard';
 import { useCategoryTree } from '../../../hooks/useCategoryTree';
 import { useProducts } from '../../../hooks/useProducts';
 import { useCart } from '../../context/CartContext';
+import { useChildGrade } from '../../../hooks/useChildGrade';
 import {
   buildProductQueryForSubcategory,
   getSubcategoryOptions,
@@ -22,6 +23,13 @@ const SubcategoryPage = () => {
   const [filterOpen, setFilterOpen] = useState(false);
   const [availability, setAvailability] = useState('all');
   const [priceRange, setPriceRange] = useState('all');
+  // A product vendors tagged only for UKG must not be offered to a Nursery child, so the
+  // child's class (or the class a shopper picked) filters the list by default, and a
+  // product made for one class shows only in that class. Guests and classes that are not
+  // one of the standard grade tags see everything.
+  const [classScope, setClassScope] = useState('mine');
+  const childGrade = useChildGrade();
+  const gradeFilter = childGrade && classScope === 'mine' ? childGrade : undefined;
   const { tree, loading: treeLoading } = useCategoryTree();
 
   const taxonomy = useMemo(() => resolveTaxonomyFromParam(tree, categoryId), [tree, categoryId]);
@@ -30,13 +38,14 @@ const SubcategoryPage = () => {
     () => {
       const query = buildProductQueryForSubcategory(taxonomy, activeSub, subcategories);
       if (search.trim()) query.q = search.trim();
+      if (gradeFilter) query.grade = gradeFilter;
       if (availability !== 'all') query.availability = availability;
       if (priceRange === 'under_1000') query.maxPrice = 99999;
       if (priceRange === '1000_5000') { query.minPrice = 100000; query.maxPrice = 500000; }
       if (priceRange === 'over_5000') query.minPrice = 500001;
       return query;
     },
-    [taxonomy, activeSub, subcategories, search, availability, priceRange]
+    [taxonomy, activeSub, subcategories, search, availability, priceRange, gradeFilter]
   );
   const { products, loading: productsLoading, pagination, error } = useProducts(productQuery, {
     mapperKey: 'subcategory',
@@ -238,6 +247,23 @@ const SubcategoryPage = () => {
                   </div>
                 </div>
               </div>
+
+              {childGrade && (
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-500 mb-1">Show products for</label>
+                  <div className="relative">
+                    <select
+                      value={classScope}
+                      onChange={(event) => setClassScope(event.target.value)}
+                      className="w-full appearance-none rounded-xl bg-white border border-gray-200/90 pl-2.5 pr-6 py-1.5 text-xs font-bold text-deep-purple focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary shadow-xs cursor-pointer truncate"
+                    >
+                      <option value="mine">My class ({childGrade})</option>
+                      <option value="all">All classes</option>
+                    </select>
+                    <ChevronDown size={13} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

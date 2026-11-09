@@ -5,6 +5,7 @@ import AppHeader from '../../components/AppHeader';
 import ProductCard from '../../components/ProductCard';
 import { useCategoryTree } from '../../../hooks/useCategoryTree';
 import { useProducts } from '../../../hooks/useProducts';
+import { useChildGrade } from '../../../hooks/useChildGrade';
 import { findHeaderCategory } from '../../../utils/mappers/categoryMapper';
 
 const CategoryPage = () => {
@@ -12,12 +13,15 @@ const CategoryPage = () => {
   const { tree: mainCategories, loading: categoriesLoading } = useCategoryTree();
   const uniformsHeader = findHeaderCategory(mainCategories, 'uniforms');
   const stationeryHeader = findHeaderCategory(mainCategories, 'stationery');
+  // Only the child's class: a Nursery child is not shown UKG-only items in these previews
+  const childGrade = useChildGrade();
+  const gradeQuery = childGrade ? { grade: childGrade } : {};
   const { products: uniformProducts } = useProducts(
-    { headerId: uniformsHeader?.id, limit: 3, sort: 'popular' },
+    { headerId: uniformsHeader?.id, limit: 3, sort: 'popular', ...gradeQuery },
     { enabled: Boolean(uniformsHeader?.id) }
   );
   const { products: stationeryProducts } = useProducts(
-    { headerId: stationeryHeader?.id, limit: 3, sort: 'popular' },
+    { headerId: stationeryHeader?.id, limit: 3, sort: 'popular', ...gradeQuery },
     { enabled: Boolean(stationeryHeader?.id) }
   );
 

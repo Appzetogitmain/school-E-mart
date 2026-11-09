@@ -1,5 +1,6 @@
 import React from 'react';
 import { X, Printer, Building2, User, FileText, AlertCircle, GraduationCap } from 'lucide-react';
+import { getPaymentDisplay } from '../utils/paymentStatus';
 
 const InvoiceModal = ({ isOpen, onClose, invoiceData, loading, error }) => {
   if (!isOpen) return null;
@@ -32,6 +33,15 @@ const InvoiceModal = ({ isOpen, onClose, invoiceData, loading, error }) => {
   const shipping = invoiceData?.shippingAddress || invoiceData?.billingAddress || {};
   const items = invoiceData?.items || [];
   const studentDetails = invoiceData?.studentDetails || invoiceData?.student || {};
+
+  // COD reads as unpaid until delivery, whatever the raw paymentStatus says (see utils/paymentStatus.js)
+  const paymentDisplay = getPaymentDisplay({
+    paymentMethod: invoiceData?.paymentMethod || 'COD',
+    paymentStatus: invoiceData?.paymentStatus,
+    orderStatus: invoiceData?.orderStatus,
+    walletAmountPaise: invoiceData?.walletAmountPaise,
+    totalPaise: invoiceData?.totalPaise,
+  });
 
   const hasStudentDetails = Boolean(studentDetails.studentName || studentDetails.className || studentDetails.classTeacherName || studentDetails.schoolName);
 
@@ -288,10 +298,12 @@ const InvoiceModal = ({ isOpen, onClose, invoiceData, loading, error }) => {
                   </div>
                   <div className="flex justify-between py-1">
                     <span className="text-gray-500">Status:</span>
-                    <span className={`font-bold uppercase text-[10px] px-2 py-0.5 rounded-full ${
-                      invoiceData.paymentStatus === 'paid' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
-                    }`}>
-                      {invoiceData.paymentStatus === 'paid' ? '✅ Paid' : '⏳ Pending'}
+                    <span
+                      data-testid="invoice-payment-status"
+                      className={`font-bold uppercase text-[10px] px-2 py-0.5 rounded-full border ${paymentDisplay.className}`}
+                    >
+                      {paymentDisplay.tone === 'success' ? '✅ ' : paymentDisplay.tone === 'warning' ? '⏳ ' : ''}
+                      {paymentDisplay.label}
                     </span>
                   </div>
                 </div>

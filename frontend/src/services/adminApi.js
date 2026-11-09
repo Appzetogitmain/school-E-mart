@@ -246,6 +246,7 @@ export const updateBanner = async (bannerId, payload) => {
 export const uploadAdminFile = async (formData) => {
   const response = await apiClient.post('/admin/uploads', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 300000, // 5 minutes timeout for document/image uploads
   });
   return unwrapData(response)?.attachment;
 };
@@ -253,6 +254,7 @@ export const uploadAdminFile = async (formData) => {
 export const uploadAdminMedia = async (formData) => {
   const response = await apiClient.post('/admin/uploads/media', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 600000, // 10 minutes timeout for heavy video uploads
   });
   return unwrapData(response)?.attachment;
 };
@@ -463,6 +465,7 @@ export const deleteLmsGrade = async (gradeId) => {
 export const uploadAdminMediaWithProgress = async (formData, onProgress) => {
   const response = await apiClient.post('/admin/uploads/media', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 600000, // 10 minutes timeout for heavy video uploads
     onUploadProgress: (progressEvent) => {
       if (progressEvent.total && onProgress) {
         const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);

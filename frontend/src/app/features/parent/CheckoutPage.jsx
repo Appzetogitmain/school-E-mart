@@ -50,10 +50,12 @@ const CheckoutPage = () => {
   const toAddress = (parsed = {}) => ({
     name: parsed.name || 'Guest',
     phone: parsed.phone || '',
-    address: parsed.address || 'Please update your delivery address in profile',
-    city: parsed.city || 'Indore',
-    state: parsed.state || 'Madhya Pradesh',
-    pinCode: parsed.pinCode || '452018',
+    // No made-up defaults: an address the customer never entered must stay empty so the
+    // order is blocked until they add it (it used to become "Indore, 452018").
+    address: parsed.address || '',
+    city: parsed.city || '',
+    state: parsed.state || '',
+    pinCode: parsed.pinCode || '',
     addressType: parsed.addressType || 'home',
   });
 
@@ -62,6 +64,9 @@ const CheckoutPage = () => {
 
   // Address Modal Form State
   const [editAddressForm, setEditAddressForm] = useState(address);
+  const isHomeAddressComplete = Boolean(
+    address.address?.trim() && address.city?.trim() && address.pinCode?.trim()
+  );
 
   const openAddressModal = () => {
     setEditAddressForm({ ...address });
@@ -192,6 +197,13 @@ const CheckoutPage = () => {
     if (!isAuthenticated) return;
 
     setOrderError('');
+    // Home delivery needs a real address; school pickup uses the school's own address
+    // (the server fills it in), so only home delivery is checked here.
+    if (deliveryType === 'home' && !isHomeAddressComplete) {
+      setOrderError('Please add your delivery address (street, city and pincode) before placing the order.');
+      openAddressModal();
+      return;
+    }
     setIsPlacingOrder(true);
 
     try {
@@ -202,11 +214,12 @@ const CheckoutPage = () => {
         address: {
           name: address.name,
           phone: address.phone,
+          // School pickup: the server replaces this with the school's own address.
           line1: deliveryType === 'school' ? (childInfo.school || 'School Address') : address.address,
           address: deliveryType === 'school' ? (childInfo.school || 'School Address') : address.address,
-          city: address.city || 'Indore',
-          state: address.state || 'Madhya Pradesh',
-          pinCode: address.pinCode || '452018',
+          city: deliveryType === 'school' ? '' : address.city,
+          state: deliveryType === 'school' ? '' : address.state,
+          pinCode: deliveryType === 'school' ? '' : address.pinCode,
           addressType: deliveryType,
         },
         walletAmountPaise,
@@ -379,10 +392,10 @@ const CheckoutPage = () => {
                 </div>
                 <h3 className="text-xs font-black text-gray-900 leading-tight">Home Address</h3>
                 <p className="text-[10px] font-extrabold text-gray-700 mt-0.5 truncate">
-                  {address.name} — {address.city}
+                  {address.name}{address.city ? ` — ${address.city}` : ''}
                 </p>
                 <p className="text-[10px] text-gray-400 font-medium mt-1 leading-normal line-clamp-2">
-                  {address.address}
+                  {address.address || 'Add your delivery address'}
                 </p>
               </div>
               {deliveryType === 'home' && (
@@ -404,7 +417,11 @@ const CheckoutPage = () => {
                 </span>
                 <h4 className="text-xs font-black text-gray-900 mt-0.5">{address.name} ({address.phone})</h4>
                 <p className="text-[11px] font-bold text-gray-500 mt-0.5 leading-snug">
-                  {deliveryType === 'school' ? `${childInfo.school} • ${address.city}, ${address.pinCode}` : `${address.address}, ${address.city}, ${address.state} - ${address.pinCode}`}
+                  {deliveryType === 'school'
+                    ? `${childInfo.school || 'Your school'} (school pickup)`
+                    : isHomeAddressComplete
+                      ? [address.address, address.city, address.state].filter(Boolean).join(', ') + (address.pinCode ? ` - ${address.pinCode}` : '')
+                      : 'No delivery address added yet. Tap Change to add it.'}
                 </p>
               </div>
             </div>

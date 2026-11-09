@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Search, Users, Loader2, GraduationCap, UserPlus, Mail, Send, CheckCircle2, Pencil, X,
-  PhoneCall, Clock, Copy, Check
+  PhoneCall, Clock, Copy, Check, MessageSquare
 } from 'lucide-react';
 import {
   listParents,
@@ -12,12 +12,16 @@ import {
 } from '../../../services/schoolApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 import { useSchoolId } from '../../../utils/schoolContext';
+import { useChildInfo } from '../../../utils/parentContext';
+import { buildParentLoginMessage, buildSmsHref } from '../../../utils/parentLoginMessage';
 
 // View-only directory: parent accounts are created automatically when a
 // student is enrolled with parent details on the Students page.
 const SchoolParentsPage = () => {
   const navigate = useNavigate();
   const schoolId = useSchoolId();
+  const childInfo = useChildInfo();
+  const schoolName = childInfo?.schoolName || (childInfo?.school !== 'Explore Schools' ? childInfo?.school : '') || '';
 
   const [parents, setParents] = useState([]);
   const [stats, setStats] = useState({ totalParents: 0, loggedInParents: 0, neverLoggedInParents: 0 });
@@ -481,13 +485,34 @@ const SchoolParentsPage = () => {
                         </div>
 
                         {phone && (
-                          <a
-                            href={`tel:${phone}`}
-                            className="px-3 py-1 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black inline-flex items-center gap-1 shadow-sm transition-all"
-                          >
-                            <PhoneCall size={11} />
-                            Call
-                          </a>
+                          <div className="flex items-center gap-1.5">
+                            {/* Opens the admin's messaging app with the login steps filled in */}
+                            <a
+                              href={buildSmsHref(
+                                phone,
+                                buildParentLoginMessage({
+                                  parentName: parent.user?.name,
+                                  schoolName,
+                                  phone,
+                                  loginUrl: `${window.location.origin}/user/login`,
+                                }),
+                                navigator.userAgent
+                              )}
+                              data-testid="parent-message-link"
+                              aria-label={`Send login message to ${parent.user?.name || 'parent'}`}
+                              title="Send login message"
+                              className="w-7 h-7 rounded-xl bg-[#3b2d7d] hover:bg-[#2c2160] text-white inline-flex items-center justify-center shadow-sm transition-all"
+                            >
+                              <MessageSquare size={13} />
+                            </a>
+                            <a
+                              href={`tel:${phone}`}
+                              className="px-3 py-1 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black inline-flex items-center gap-1 shadow-sm transition-all"
+                            >
+                              <PhoneCall size={11} />
+                              Call
+                            </a>
+                          </div>
                         )}
                       </div>
 

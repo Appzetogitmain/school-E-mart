@@ -4,6 +4,7 @@ import {
   paiseToRupees,
 } from './orderMapper';
 import { formatRupee } from './productMapper';
+import { getPaymentDisplay } from '../paymentStatus';
 
 export const getVendorOrderStatusStyle = (status = '') => {
   const normalized = String(status).toLowerCase();
@@ -112,6 +113,14 @@ const mapVendorOrderItems = (items = []) =>
 export const mapVendorOrderForList = (order) => {
   const amountPaise = sumVendorItemsPaise(order) || order?.totalPaise || 0;
   const paymentStatus = order?.paymentStatus || 'pending';
+  // COD reads as unpaid until delivered (shared rule, see utils/paymentStatus.js)
+  const paymentDisplay = getPaymentDisplay({
+    paymentMethod: order?.paymentMethod,
+    paymentStatus,
+    orderStatus: order?.orderStatus,
+    walletAmountPaise: order?.walletAmountPaise,
+    totalPaise: order?.totalPaise,
+  });
 
   return {
     id: order?.orderNumber,
@@ -127,8 +136,8 @@ export const mapVendorOrderForList = (order) => {
     studentName: order?.studentName || '—',
     studentGrade: order?.studentGrade || null,
     paymentStatus,
-    paymentStatusFormatted: String(paymentStatus).toUpperCase().replace(/_/g, ' '),
-    paymentStatusColor: getPaymentStatusStyle(paymentStatus),
+    paymentStatusFormatted: paymentDisplay.label,
+    paymentStatusColor: paymentDisplay.className,
     paymentMethod: order?.paymentMethod ? String(order.paymentMethod).toUpperCase() : 'ONLINE',
     phone: order?.address?.phone || '—',
     email: order?.address?.email || '—',

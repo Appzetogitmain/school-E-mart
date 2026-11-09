@@ -24,6 +24,7 @@ import {
   VENDOR_STATUS_FILTER_OPTIONS,
 } from '../../utils/mappers/vendorOrderMapper';
 import InvoiceModal from '../../components/InvoiceModal';
+import { downloadOrdersExcel, downloadOrdersPdf } from '../../utils/ordersExport';
 
 const VendorOrders = () => {
   const [searchParams] = useSearchParams();
@@ -42,6 +43,8 @@ const VendorOrders = () => {
   const [actionLoading, setActionLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [isExportOpen, setIsExportOpen] = useState(false);
+  const [exporting, setExporting] = useState(''); // '' | 'excel' | 'pdf'
+  const [exportNotice, setExportNotice] = useState(null); // { type: 'success' | 'error', text }
   const [invoiceModalOpen, setInvoiceModalOpen] = useState(false);
   const [invoiceData, setInvoiceData] = useState(null);
   const [invoiceLoading, setInvoiceLoading] = useState(false);
@@ -61,17 +64,22 @@ const VendorOrders = () => {
     }
   };
 
+  // The filters shared by the on-screen list and the Excel/PDF export
+  const buildFilterParams = useCallback(
+    () => ({
+      ...(statusFilter ? { status: statusFilter } : {}),
+      ...(searchQuery ? { search: searchQuery } : {}),
+      ...(fromDate ? { from: new Date(fromDate).toISOString() } : {}),
+      ...(toDate ? { to: new Date(`${toDate}T23:59:59`).toISOString() } : {}),
+    }),
+    [fromDate, searchQuery, statusFilter, toDate]
+  );
+
   const loadOrders = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      const params = {
-        limit: 100,
-        ...(statusFilter ? { status: statusFilter } : {}),
-        ...(searchQuery ? { search: searchQuery } : {}),
-        ...(fromDate ? { from: new Date(fromDate).toISOString() } : {}),
-        ...(toDate ? { to: new Date(`${toDate}T23:59:59`).toISOString() } : {}),
-      };
+      const params = { limit: 100, ...buildFilterParams() };
       const { data } = await listVendorOrders(params);
       setOrders((data || []).map(mapVendorOrderForList));
     } catch (err) {
@@ -80,7 +88,46 @@ const VendorOrders = () => {
     } finally {
       setLoading(false);
     }
-  }, [fromDate, searchQuery, statusFilter, toDate]);
+  }, [buildFilterParams]);
+
+  // Exports every order matching the current filters (not just the page on screen),
+  // fetching in pages of 500 (the API maximum).
+  const fetchOrdersForExport = async () => {
+    const all = [];
+    for (let page = 1; page <= 40; page += 1) {
+      const { data, pagination } = await listVendorOrders({ ...buildFilterParams(), limit: 500, page });
+      all.push(...data);
+      if (!pagination?.hasNextPage) break;
+    }
+    return all.map(mapVendorOrderForList);
+  };
+
+  const handleExport = async (format) => {
+    if (exporting) return;
+    setIsExportOpen(false);
+    setExportNotice(null);
+    setExporting(format);
+    try {
+      const rows = await fetchOrdersForExport();
+      if (rows.length === 0) {
+        setExportNotice({ type: 'error', text: 'There are no orders to export for the current filters.' });
+        return;
+      }
+      if (format === 'excel') {
+        downloadOrdersExcel(rows);
+      } else {
+        const filters = [statusFilter && `Status: ${statusFilter}`, fromDate && `From: ${fromDate}`, toDate && `To: ${toDate}`, searchQuery && `Search: ${searchQuery}`]
+          .filter(Boolean)
+          .join(', ');
+        await downloadOrdersPdf(rows, { title: 'Orders Report', subtitle: filters });
+      }
+      setExportNotice({ type: 'success', text: `Exported ${rows.length} order${rows.length === 1 ? '' : 's'} to ${format === 'excel' ? 'Excel' : 'PDF'}.` });
+    } catch (err) {
+      setExportNotice({ type: 'error', text: getErrorMessage(err, 'Export failed. Please try again.') });
+    } finally {
+      setExporting('');
+    }
+  };
 
   useEffect(() => {
     loadOrders();
@@ -181,6 +228,18 @@ const VendorOrders = () => {
   const orderActions = selectedOrder
     ? getVendorOrderActions(selectedOrder.statusRaw || selectedOrder.raw?.orderStatus, selectedOrder)
     : [];
+
+  // Rendered by both the list and the order-detail screen: the "View & Print Tax Invoice"
+  // button lives on the detail screen, which previously had no modal to open.
+  const invoiceModal = (
+    <InvoiceModal
+      isOpen={invoiceModalOpen}
+      onClose={() => setInvoiceModalOpen(false)}
+      invoiceData={invoiceData}
+      loading={invoiceLoading}
+      error={invoiceError}
+    />
+  );
 
   if (selectedOrder) {
     return (
@@ -434,6 +493,7 @@ const VendorOrders = () => {
             </div>
           </div>
         </div>
+        {invoiceModal}
       </div>
     );
   }
@@ -522,22 +582,43 @@ const VendorOrders = () => {
               <button
                 type="button"
                 onClick={() => setIsExportOpen(!isExportOpen)}
-                className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-gray-200 hover:border-[#5B3FD6]/20 bg-white hover:bg-purple-50/30 text-xs font-bold text-gray-700 hover:text-[#5B3FD6] transition-all"
+                disabled={Boolean(exporting)}
+                className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-gray-200 hover:border-[#5B3FD6]/20 bg-white hover:bg-purple-50/30 text-xs font-bold text-gray-700 hover:text-[#5B3FD6] transition-all disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                <Download size={14} /> Export
+                {exporting ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+                {exporting ? 'Exporting...' : 'Export'}
               </button>
               {isExportOpen && (
                 <div className="absolute right-0 mt-2 w-40 bg-white rounded-xl shadow-lg border border-gray-100 p-1.5 z-30">
-                  <button type="button" className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold rounded-lg text-gray-600 hover:bg-gray-50">
+                  <button
+                    type="button"
+                    data-testid="export-excel"
+                    onClick={() => handleExport('excel')}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold rounded-lg text-gray-600 hover:bg-gray-50"
+                  >
                     <FileSpreadsheet size={14} className="text-emerald-600" /> Excel (.xlsx)
                   </button>
-                  <button type="button" className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold rounded-lg text-gray-600 hover:bg-gray-50">
+                  <button
+                    type="button"
+                    data-testid="export-pdf"
+                    onClick={() => handleExport('pdf')}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold rounded-lg text-gray-600 hover:bg-gray-50"
+                  >
                     <FileText size={14} className="text-blue-600" /> PDF Report
                   </button>
                 </div>
               )}
             </div>
           </div>
+          {exportNotice && (
+            <p
+              role="status"
+              data-testid="export-notice"
+              className={`mt-3 text-xs font-bold ${exportNotice.type === 'error' ? 'text-red-600' : 'text-emerald-600'}`}
+            >
+              {exportNotice.text}
+            </p>
+          )}
         </div>
 
         <div className="overflow-x-auto">
@@ -638,13 +719,7 @@ const VendorOrders = () => {
         )}
       </div>
 
-      <InvoiceModal
-        isOpen={invoiceModalOpen}
-        onClose={() => setInvoiceModalOpen(false)}
-        invoiceData={invoiceData}
-        loading={invoiceLoading}
-        error={invoiceError}
-      />
+      {invoiceModal}
     </div>
   );
 };
