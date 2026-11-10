@@ -165,7 +165,12 @@ const PAID_STATES = ['paid', 'partially_paid', 'refunded', 'partially_refunded']
     if (PAID_STATES.includes(o.paymentStatus) && captured < owed && o.paymentMethod !== 'cod') {
       claimsPaidNoMoney.push({ o, captured, owed });
     }
-    if (!PAID_STATES.includes(o.paymentStatus) && owed > 0 && captured >= owed) {
+    // Cash on Delivery is never "money not credited": its Payment row is recorded as
+    // 'captured' at placement even though no cash has moved (the courier collects at the
+    // door), and the order flips to paid only when it is delivered. Treating that row as
+    // real money made --auto-heal mark every pending COD order paid, so invoices and
+    // vendor screens claimed payment that had not been collected.
+    if (o.paymentMethod !== 'cod' && !PAID_STATES.includes(o.paymentStatus) && owed > 0 && captured >= owed) {
       moneyNotCredited.push({ o, captured, owed });
     }
   }
@@ -237,6 +242,8 @@ const PAID_STATES = ['paid', 'partially_paid', 'refunded', 'partially_refunded']
         let paidHealed = 0;
         const settlementService = require('../src/modules/vendor/services/settlement.service');
         for (const x of moneyNotCredited) {
+          // Belt and braces: never auto-mark a COD order paid (see section E above).
+          if (x.o.paymentMethod === 'cod') continue;
           try {
             await Order.findByIdAndUpdate(x.o._id, {
               $set: { paymentStatus: 'paid' },

@@ -30,6 +30,18 @@ describe('vendor order service', () => {
     expect(pagination.total).toBe(1);
   });
 
+  test('searches vendor orders by order number (hyphens/regex characters do not crash)', async () => {
+    const order = await Order.findById(orderId).lean();
+
+    const hit = await vendorOrderService.listOrders(vendorId, { page: 1, limit: 10, search: order.orderNumber.slice(0, 6) });
+    expect(hit.data).toHaveLength(1);
+
+    for (const search of ['NO-SUCH-ORDER-XYZ', 'ORD(', '[a-', '.*']) {
+      const miss = await vendorOrderService.listOrders(vendorId, { page: 1, limit: 10, search });
+      expect(miss.data).toHaveLength(0);
+    }
+  });
+
   test('accepts and processes order workflow', async () => {
     const actor = { userId, role: 'vendor' };
     let order = await vendorOrderService.acceptOrder(vendorId, orderId, actor, 'Accepted');

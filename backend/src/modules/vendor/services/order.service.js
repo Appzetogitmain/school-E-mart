@@ -7,6 +7,9 @@ const ParentProfile = require('../../../database/models/ParentProfile');
 const ChildProfile = require('../../../database/models/ChildProfile');
 const { triggerService } = require('../../../services/notification');
 const { AWAITING_PAYMENT, PAYMENT_FAILED } = require('../../orders/utils/statusMachine');
+// listOrders({ search }) calls this; it was never imported, so every order-number search
+// in the vendor panel failed with a 500.
+const { escapeRegex } = require('../../../utils/string');
 
 // 'pending_payment' is deliberately absent: an unpaid online order is not the vendor's
 // to work on, so every transition out of it is refused here as well as being hidden

@@ -1,4 +1,6 @@
+const mongoose = require('mongoose');
 const { BadRequestError } = require('../../../common/errors');
+const School = require('../../../database/models/School');
 const cartService = require('../../marketplace/services/cart.service');
 const productRepository = require('../../marketplace/repositories/product.repository');
 const variantRepository = require('../../marketplace/repositories/variant.repository');
@@ -253,8 +255,50 @@ const checkoutService = {
     };
   },
 
+  /**
+   * The address that is actually stored on the order.
+   *
+   * Home delivery: whatever the customer entered (validated by validateShipping).
+   * School pickup: the SCHOOL's own address from its record, never what the client sent.
+   * The client used to fill a missing city/pincode with a hard-coded "Indore, 452018", so
+   * every school-pickup order (and vendor/invoice screens) showed an Indore address
+   * whatever the school's real location. Recipient name and phone still come from the
+   * client.
+   */
+  async resolveShippingAddress({ address, deliveryType, schoolIdForPickup }) {
+    if (deliveryType !== 'school') return address;
+    if (!schoolIdForPickup || !mongoose.isValidObjectId(String(schoolIdForPickup))) return address;
+
+    const school = await School.findOne({
+      _id: schoolIdForPickup,
+      'softDelete.isDeleted': { $ne: true },
+    })
+      .select('name address')
+      .lean();
+    if (!school) {
+      throw new BadRequestError('The school selected for pickup was not found', null, 'SCHOOL_PICKUP_INVALID');
+    }
+
+    const schoolAddress = school.address || {};
+    const line1 = [school.name, schoolAddress.line1].filter(Boolean).join(', ');
+    return {
+      ...(address || {}),
+      line1,
+      address: line1,
+      line2: schoolAddress.line2 || '',
+      city: schoolAddress.city || '',
+      state: schoolAddress.state || '',
+      country: schoolAddress.country || 'India',
+      pinCode: schoolAddress.pinCode || '',
+      addressType: 'school',
+    };
+  },
+
   validateShipping({ address, deliveryType, schoolIdForPickup }) {
-    if (!address?.line1 || !address?.city || !address?.pinCode) {
+    // A school pickup is identified by the school itself, so a school record without a
+    // full postal address must not block the order; a home delivery needs the full address.
+    const needsFullAddress = deliveryType !== 'school';
+    if (!address?.line1 || (needsFullAddress && (!address?.city || !address?.pinCode))) {
       throw new BadRequestError('Complete shipping address is required', null, 'ADDRESS_REQUIRED');
     }
     if (deliveryType === 'school' && !schoolIdForPickup) {

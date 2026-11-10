@@ -205,6 +205,7 @@ const productService = {
   },
 
   ADMIN_PRODUCT_POPULATE,
+  PRODUCT_IMAGE_POPULATE,
 };
 
 module.exports = productService;

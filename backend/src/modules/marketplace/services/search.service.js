@@ -9,6 +9,23 @@ const SORT_MAP = {
   bestseller: '-salesCount',
 };
 
+// The one rule for "which products belong to this class". Used by the product list and by
+// related products so every surface agrees:
+//   - a product the vendor tagged for specific classes (e.g. only "UKG") belongs to those
+//     classes ONLY: a Nursery or LKG child never gets it,
+//   - a product with no class tags, or tagged "All Grades", is for every class.
+// Matching is exact (case-insensitive), never a substring: "Nursery" must not match "UKG".
+const buildGradeClauses = (grade) => {
+  const wanted = String(grade).trim();
+  const escaped = wanted.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return [
+    { gradeTags: { $size: 0 } },
+    { gradeTags: { $exists: false } },
+    { gradeTags: { $in: ['All', 'all', 'All Grades', 'all-grades'] } },
+    { gradeTags: { $elemMatch: { $regex: new RegExp(`^${escaped}$`, 'i') } } },
+  ];
+};
+
 const buildProductFilter = (query = {}, { publicOnly = true, vendorId = null } = {}) => {
   const filter = {};
   if (publicOnly) {
@@ -34,16 +51,7 @@ const buildProductFilter = (query = {}, { publicOnly = true, vendorId = null } =
   if (query.categoryId) filter.categoryId = query.categoryId;
   if (query.subcategoryId) filter.subcategoryId = query.subcategoryId;
   if (query.brand) filter.brand = query.brand;
-  if (query.grade) {
-    const escaped = query.grade.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    filter.$or = [
-      { gradeTags: { $size: 0 } },
-      { gradeTags: { $exists: false } },
-      { gradeTags: { $in: ['All', 'all', 'All Grades', 'all-grades'] } },
-      { gradeTags: { $elemMatch: { $regex: new RegExp(`^${escaped}$`, 'i') } } },
-      { gradeTags: query.grade }
-    ];
-  }
+  if (query.grade) filter.$or = buildGradeClauses(query.grade);
   if (query.featured === 'true') filter.gradeTags = { $in: ['featured'] };
   if (query.minPrice || query.maxPrice) {
     filter.pricePaise = {};
@@ -75,5 +83,6 @@ const resolveSort = (sortKey) => SORT_MAP[sortKey] || '-audit.createdAt';
 module.exports = {
   SORT_MAP,
   buildProductFilter,
+  buildGradeClauses,
   resolveSort,
 };

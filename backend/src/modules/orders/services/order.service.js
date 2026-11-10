@@ -83,8 +83,14 @@ const stripPaginationMeta = (query = {}) => {
 const orderService = {
   async createOrder(userId, audience, payload, actor = {}) {
     const summary = await checkoutService.getOrderSummary(userId, audience, payload);
-    checkoutService.validateShipping({
+    // School pickup is stored with the school's own address, not what the client sent
+    const shippingAddress = await checkoutService.resolveShippingAddress({
       address: payload.address,
+      deliveryType: payload.deliveryType || 'home',
+      schoolIdForPickup: payload.schoolIdForPickup,
+    });
+    checkoutService.validateShipping({
+      address: shippingAddress,
       deliveryType: payload.deliveryType || 'home',
       schoolIdForPickup: payload.schoolIdForPickup,
     });
@@ -187,7 +193,7 @@ const orderService = {
             handlingChargePaise: summary.handlingChargePaise,
             totalPaise: summary.totalPaise,
             walletAmountPaise,
-            address: payload.address,
+            address: shippingAddress,
             gstin: payload.gstin,
             deliveryType: payload.deliveryType || 'home',
             schoolIdForPickup: payload.schoolIdForPickup,

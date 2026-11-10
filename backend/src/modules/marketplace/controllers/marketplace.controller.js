@@ -298,12 +298,19 @@ const marketplaceController = {
   }),
 
   getRelatedProducts: asyncHandler(async (req, res) => {
-    const products = await recommendationService.getRelatedProducts(req.params.productId);
+    const products = await recommendationService.getRelatedProducts(req.params.productId, {
+      limit: req.query.limit,
+      audience: req.query.audience,
+      grade: req.query.grade,
+    });
     return success(res, { products }, 'Related products fetched', undefined, req);
   }),
 
   getSimilarProducts: asyncHandler(async (req, res) => {
-    const products = await recommendationService.getSimilarProducts(req.params.productId);
+    const products = await recommendationService.getSimilarProducts(req.params.productId, {
+      limit: req.query.limit,
+      audience: req.query.audience,
+    });
     return success(res, { products }, 'Similar products fetched', undefined, req);
   }),
 
