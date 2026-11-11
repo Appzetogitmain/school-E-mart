@@ -6,6 +6,7 @@ const cartService = require('../services/cart.service');
 const wishlistService = require('../services/wishlist.service');
 const reviewService = require('../services/review.service');
 const recommendationService = require('../services/recommendation.service');
+const { serializeVariants } = require('../utils/variants.util');
 const marketplaceAccessPolicy = require('../policies/marketplaceAccess.policy');
 const cmsService = require('../../admin/services/cms.service');
 const reelsService = require('../../admin/services/reels.service');
@@ -29,6 +30,7 @@ const refId = (ref) => (ref && typeof ref === 'object' ? ref._id : ref) || null;
 
 const mapAdminProduct = (product) => ({
   ...product,
+  variants: serializeVariants(product.variants),
   headerId: refId(product.headerId),
   headerName: product.headerId?.name || null,
   categoryId: refId(product.categoryId),
@@ -179,7 +181,11 @@ const marketplaceController = {
   }),
 
   getProduct: asyncHandler(async (req, res) => {
-    const product = await productService.getProduct(req.params.productId, { publicOnly: true });
+    const productDoc = await productService.getProduct(req.params.productId, { publicOnly: true, withVariants: true });
+    // plain object with the variants as {id, label, sku, pricePaise, originalPricePaise, stock}
+    // (the repository returns lean objects, so there is nothing to convert; keep a toObject fallback for documents)
+    const plain = typeof productDoc.toObject === 'function' ? productDoc.toObject({ flattenMaps: true }) : productDoc;
+    const product = { ...plain, variants: serializeVariants(productDoc.variants) };
     if (req.auth?.userId) {
       const audience = marketplaceAccessPolicy.resolveAudience(req.auth, req.query.audience);
       await recommendationService.recordProductView(req.auth.userId, audience, product._id);
@@ -354,7 +360,7 @@ const marketplaceController = {
       req.auth.userId,
       audience,
       req.params.productId,
-      req.params.variantId,
+      req.params.variantId || req.query.variantId,
       req.body.quantity
     );
     return success(res, { cart }, 'Cart item updated', undefined, req);
@@ -367,7 +373,7 @@ const marketplaceController = {
       req.auth.userId,
       audience,
       req.params.productId,
-      req.params.variantId
+      req.params.variantId || req.query.variantId
     );
     return success(res, { cart }, 'Cart item removed', undefined, req);
   }),

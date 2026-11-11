@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import * as authApi from '../services/authApi';
+import { pickPortalToken, portalFromPathname } from '../utils/portalToken';
 import {
   mapUserForDisplay,
   normalizeUser,
@@ -9,12 +10,7 @@ import {
 
 const getCurrentPortal = () => {
   if (typeof window === 'undefined') return 'parent';
-  const path = window.location.pathname.toLowerCase();
-  if (path.startsWith('/superadmin') || path.startsWith('/admin')) return 'admin';
-  if (path.startsWith('/vendor')) return 'vendor';
-  if (path.startsWith('/school')) return 'school';
-  if (path.startsWith('/teacher')) return 'teacher';
-  return 'parent';
+  return portalFromPathname(window.location.pathname);
 };
 
 const resolvePortalRole = (user, explicitPortal) => {
@@ -153,26 +149,9 @@ const useAuthStore = create(
         set({ token, isAuthenticated: Boolean(token), portalSessions: updatedSessions });
       },
 
-      getEffectiveToken: (requestPath = '') => {
-        const state = get();
-        const sessions = state.portalSessions || {};
-        const path = (requestPath || '').toLowerCase();
-        const currentPortal = getCurrentPortal();
-
-        if (path.startsWith('/admin') || currentPortal === 'admin') {
-          if (sessions.admin?.token) return sessions.admin.token;
-        }
-        if (path.startsWith('/vendor') || currentPortal === 'vendor') {
-          if (sessions.vendor?.token) return sessions.vendor.token;
-        }
-        if (path.startsWith('/school') || currentPortal === 'school') {
-          if (sessions.school?.token) return sessions.school.token;
-        }
-        if (path.startsWith('/teacher') || currentPortal === 'teacher') {
-          if (sessions.teacher?.token) return sessions.teacher.token;
-        }
-        return sessions[currentPortal]?.token || sessions.parent?.token || state.token;
-      },
+      // Strict: a page only ever gets its OWN portal's token (see utils/portalToken.js).
+      // No session for this portal => null => request is unauthenticated => 401 => login page.
+      getEffectiveToken: () => pickPortalToken(get(), getCurrentPortal()),
 
       getEffectiveUser: () => {
         const state = get();

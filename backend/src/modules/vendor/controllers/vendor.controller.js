@@ -10,6 +10,7 @@ const settlementService = require('../services/settlement.service');
 const analyticsService = require('../services/analytics.service');
 const verificationService = require('../services/verification.service');
 const attachmentService = require('../../admin/services/attachment.service');
+const { serializeVariants } = require('../../marketplace/utils/variants.util');
 const vendorAccessPolicy = require('../policies/vendorAccess.policy');
 const productService = require('../../marketplace/services/product.service');
 const rfqService = require('../../rfq/services/rfq.service');
@@ -80,6 +81,7 @@ const vendorController = {
     const { data, pagination } = await vendorProductService.listProducts(vendorId, req.query);
     const products = data.map((p) => ({
       ...p,
+      variants: serializeVariants(p.variants),
       inventory: productService.getInventoryStatus(p),
     }));
     return paginated(res, { products }, pagination, 'Products fetched', req);

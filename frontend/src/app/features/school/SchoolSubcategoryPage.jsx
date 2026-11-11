@@ -101,6 +101,11 @@ const SchoolSubcategoryPage = () => {
   const handleOrderBulk = async (e, product) => {
     e.preventDefault();
     e.stopPropagation();
+    // a product with variants (sizes / packs) needs a choice first: open its page
+    if (product.variantCount > 0) {
+      navigate(`/school/product/${product.id}`);
+      return;
+    }
     setOrderingId(product.id);
     try {
       await addToCart(product);

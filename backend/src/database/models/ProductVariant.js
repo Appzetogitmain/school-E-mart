@@ -10,6 +10,8 @@ const productVariantSchema = new mongoose.Schema({
   },
   sku: { type: String, required: true, unique: true },
   pricePaise: { type: Number, required: true, min: 0 },
+  // MRP / original price for this variant (shows the discount); optional
+  originalPricePaise: { type: Number, min: 0 },
   stock: { type: Number, required: true, min: 0 }
 }, { collection: 'productVariants', timestamps: false });
 

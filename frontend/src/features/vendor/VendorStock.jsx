@@ -8,6 +8,8 @@ import {
 import { listVendorProducts, updateVendorInventory, updateVendorProduct } from '../../services/vendorApi';
 import { getErrorMessage } from '../../utils/apiHelpers';
 import { mapVendorProductForStock } from '../../utils/mappers/vendorProductMapper';
+import { buildVariantsPayload, rowsFromProduct } from '../../utils/variantRows';
+import VariantRowsEditor from './VariantRowsEditor';
 
 const VendorStock = () => {
   const navigate = useNavigate();
@@ -19,6 +21,7 @@ const VendorStock = () => {
   const [adjustStockVal, setAdjustStockVal] = useState('');
   const [adjustPriceVal, setAdjustPriceVal] = useState('');
   const [adjustSuccess, setAdjustSuccess] = useState(false);
+  const [adjustVariants, setAdjustVariants] = useState([]); // rows, only for a product that has variants
   const [products, setProducts] = useState([]);
   const [page, setPage] = useState(1);
   const [pageSize] = useState(100);
@@ -61,6 +64,8 @@ const VendorStock = () => {
     setSelectedProduct(prod);
     setAdjustStockVal(prod.stock.toString());
     setAdjustPriceVal(prod.price.toString());
+    // a product with variants has no single price / stock: each variant is adjusted on its own
+    setAdjustVariants(prod.variants?.length ? rowsFromProduct(prod) : []);
     setAdjustSuccess(false);
   };
 
@@ -71,12 +76,18 @@ const VendorStock = () => {
     setSaving(true);
     setError('');
     try {
-      await updateVendorInventory(selectedProduct.id, {
-        stock: parseInt(adjustStockVal, 10) || 0,
-      });
-      const newPricePaise = Math.round(Number(adjustPriceVal) * 100);
-      if (newPricePaise > 0 && newPricePaise !== selectedProduct.pricePaise) {
-        await updateVendorProduct(selectedProduct.id, { pricePaise: newPricePaise });
+      if (adjustVariants.length) {
+        const info = buildVariantsPayload(adjustVariants);
+        if (info.error) throw new Error(info.error);
+        await updateVendorProduct(selectedProduct.id, { variants: info.variants || [] });
+      } else {
+        await updateVendorInventory(selectedProduct.id, {
+          stock: parseInt(adjustStockVal, 10) || 0,
+        });
+        const newPricePaise = Math.round(Number(adjustPriceVal) * 100);
+        if (newPricePaise > 0 && newPricePaise !== selectedProduct.pricePaise) {
+          await updateVendorProduct(selectedProduct.id, { pricePaise: newPricePaise });
+        }
       }
       await loadProducts();
       setAdjustSuccess(true);
@@ -477,7 +488,10 @@ const VendorStock = () => {
                 </div>
               ) : (
                 <form onSubmit={handleSaveAdjustment} className="space-y-4">
-                  
+                  {adjustVariants.length > 0 ? (
+                    <VariantRowsEditor rows={adjustVariants} onChange={setAdjustVariants} />
+                  ) : (
+                  <>
                   {/* Stock Quantity Input */}
                   <div className="space-y-1">
                     <label className="text-[10px] font-black text-gray-500 uppercase tracking-wider block">Inventory Quantity</label>
@@ -505,6 +519,8 @@ const VendorStock = () => {
                       className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-[#5B3FD6]/10 focus:border-[#5B3FD6] font-semibold"
                     />
                   </div>
+                  </>
+                  )}
 
                   {error && (
                     <div className="rounded-xl border border-red-100 bg-red-50 text-red-600 text-[10px] font-bold px-3.5 py-2.5">

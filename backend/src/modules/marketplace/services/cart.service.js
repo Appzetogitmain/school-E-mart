@@ -6,6 +6,7 @@ const productService = require('./product.service');
 const Product = require('../../../database/models/Product');
 const Kit = require('../../../database/models/Kit');
 const { validateAndNormalizeKitSelections } = require('../utils/kitSelection.util');
+const { variantLabel } = require('../utils/variants.util');
 const {
   getKitPurchaseWindow,
   isKitPurchaseWindowOpen,
@@ -184,6 +185,11 @@ const cartService = {
       }
     }
 
+    // A product with variants (sizes / packs) must be added with the variant chosen: each has its own price and stock
+    if (!payload.variantId && (product.variants || []).length) {
+      throw new BadRequestError('Please choose a variant (size / pack) for this product', null, 'VARIANT_REQUIRED');
+    }
+
     let variant = null;
     let pricePaise = product.pricePaise;
     let stock = product.stock;
@@ -246,9 +252,10 @@ const cartService = {
         image: itemImage,
         sku: variant?.sku || product.sku,
         pricePaise,
-        mrpPaise: product.originalPricePaise || pricePaise,
+        mrpPaise: (variant ? variant.originalPricePaise : product.originalPricePaise) || pricePaise,
         quantity: payload.quantity,
-        size: payload.size || variant?.attributes?.get?.('size'),
+        // for a variant the label comes from the variant itself, never from the client
+        size: variant ? variantLabel(variant) || payload.size : payload.size,
         ...(isKit ? { kitSelections } : {}),
       });
     }

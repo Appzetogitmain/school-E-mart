@@ -14,6 +14,8 @@ import {
 import { getCategoryTree } from '../../services/catalogApi';
 import { getErrorMessage } from '../../utils/apiHelpers';
 import { mapVendorProductForList, resolveImageUrl } from '../../utils/mappers/vendorProductMapper';
+import { buildVariantsPayload, emptyVariantRow, rowsFromProduct } from '../../utils/variantRows';
+import VariantRowsEditor from './VariantRowsEditor';
 
 const MAX_PRODUCT_IMAGES = 6;
 const PRODUCT_PAGE_SIZE = 100;
@@ -60,10 +62,8 @@ const VendorProducts = () => {
   const [newDescription, setNewDescription] = useState('');
   const [newBrand, setNewBrand] = useState('');
   const [newCode, setNewCode] = useState('');
-  const [newVariant, setNewVariant] = useState('');
-  const [newStock, setNewStock] = useState('35');
-  const [newPrice, setNewPrice] = useState('499');
-  const [newOriginalPrice, setNewOriginalPrice] = useState('');
+  // Price / MRP / stock rows: one unnamed row = plain product, named rows = variants (see utils/variantRows.js)
+  const [newVariants, setNewVariants] = useState(() => [emptyVariantRow()]);
   const [newStatus, setNewStatus] = useState('PUBLISHED');
   const [newAudience, setNewAudience] = useState('users'); // 'users' (retail) | 'schools' (bulk)
   const [newGradeTags, setNewGradeTags] = useState(['All Grades']);
@@ -124,7 +124,7 @@ const VendorProducts = () => {
 
   const resetProductForm = () => {
     setNewName(''); setNewDescription(''); setNewBrand(''); setNewCode('');
-    setNewVariant(''); setNewStock('35'); setNewPrice('499'); setNewOriginalPrice(''); setNewStatus('PUBLISHED');
+    setNewVariants([emptyVariantRow()]); setNewStatus('PUBLISHED');
     setNewAudience('users'); setNewGradeTags(['All Grades']); setNewHeaderId(''); setNewCategoryId(''); setNewSubcategoryId('');
     setImageAttachmentId(''); setImagePreview('');
     setNewImages([]);
@@ -240,8 +240,8 @@ const VendorProducts = () => {
     if (!newName.trim()) { setActiveFormTab('General Info'); return setError('Product title is required'); }
     if (!newHeaderId) { setActiveFormTab('Groups'); return setError('Select a header group'); }
     if (!newCategoryId) { setActiveFormTab('Groups'); return setError('Select a category'); }
-    const pricePaise = Math.round(Number(newPrice) * 100);
-    if (!pricePaise || pricePaise < 0) { setActiveFormTab('Item Variants'); return setError('Enter a valid price'); }
+    const priceInfo = buildVariantsPayload(newVariants);
+    if (priceInfo.error) { setActiveFormTab('Item Variants'); return setError(priceInfo.error); }
     if (!newImages.length && !imageAttachmentId) { setActiveFormTab('Photos'); return setError('Upload at least one product image'); }
 
     setPublishing(true);
@@ -263,9 +263,14 @@ const VendorProducts = () => {
         subcategoryId: newSubcategoryId || undefined,
         audience: newAudience,
         gradeTags: newGradeTags,
-        pricePaise,
-        originalPricePaise: newOriginalPrice && Number(newOriginalPrice) > 0 ? Math.round(Number(newOriginalPrice) * 100) : undefined,
-        stock: Number(newStock) || 0,
+        // plain product: its own price / MRP / stock. With variants the server derives those from them.
+        ...(priceInfo.simple
+          ? {
+              pricePaise: priceInfo.simple.pricePaise,
+              originalPricePaise: priceInfo.simple.originalPricePaise || undefined,
+              stock: priceInfo.simple.stock,
+            }
+          : { variants: priceInfo.variants }),
         images: finalImages,
         sizeChartAttachmentId: newSizeChart?.attachmentId || undefined,
         publishStatus: newStatus === 'PUBLISHED' ? 'published' : 'draft',
@@ -289,9 +294,7 @@ const VendorProducts = () => {
   const [editName, setEditName] = useState('');
   const [editBrand, setEditBrand] = useState('');
   const [editDescription, setEditDescription] = useState('');
-  const [editPrice, setEditPrice] = useState('');
-  const [editOriginalPrice, setEditOriginalPrice] = useState('');
-  const [editStock, setEditStock] = useState('');
+  const [editVariants, setEditVariants] = useState(() => [emptyVariantRow()]); // price / MRP / stock rows
   const [editHeaderId, setEditHeaderId] = useState('');
   const [editCategoryId, setEditCategoryId] = useState('');
   const [editSubcategoryId, setEditSubcategoryId] = useState('');
@@ -309,9 +312,7 @@ const VendorProducts = () => {
     setEditName(product.name || '');
     setEditBrand(product.raw?.brand || '');
     setEditDescription(product.raw?.description || '');
-    setEditPrice(product.price ? product.price.toString() : '');
-    setEditOriginalPrice(product.originalPrice ? product.originalPrice.toString() : product.raw?.originalPricePaise ? (product.raw.originalPricePaise / 100).toString() : '');
-    setEditStock(product.stock ? product.stock.toString() : '0');
+    setEditVariants(rowsFromProduct(product));
     setEditPublishStatus(product.publishStatus || 'published');
     setEditAudience(product.audience || product.raw?.audience || 'users');
     setEditGradeTags(product.gradeTags?.length ? product.gradeTags : (product.raw?.gradeTags?.length ? product.raw.gradeTags : ['All Grades']));
@@ -397,15 +398,18 @@ const VendorProducts = () => {
     e.preventDefault();
     if (!editingProduct) return;
     setError('');
+    const priceInfo = buildVariantsPayload(editVariants);
+    if (priceInfo.error) { setError(priceInfo.error); return; }
     setUpdating(true);
     try {
       const payload = {
         name: editName.trim(),
         brand: editBrand.trim() || undefined,
         description: editDescription.trim() || undefined,
-        pricePaise: Math.round(Number(editPrice) * 100),
-        originalPricePaise: editOriginalPrice && Number(editOriginalPrice) > 0 ? Math.round(Number(editOriginalPrice) * 100) : null,
-        stock: Number(editStock) || 0,
+        // plain product: its own price / MRP / stock (and no variants). With variants the server derives them.
+        ...(priceInfo.simple
+          ? { variants: [], pricePaise: priceInfo.simple.pricePaise, originalPricePaise: priceInfo.simple.originalPricePaise, stock: priceInfo.simple.stock }
+          : { variants: priceInfo.variants }),
         publishStatus: editPublishStatus,
         audience: editAudience,
         gradeTags: editGradeTags,
@@ -1197,61 +1201,7 @@ const VendorProducts = () => {
                 {activeFormTab === 'Item Variants' && (
                   <div className="space-y-6">
                     <h3 className="font-extrabold text-sm text-gray-900 border-b border-gray-50 pb-2">Item Specifications & Variants</h3>
-                    
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      
-                      {/* Variant Input */}
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider block">Variant Details (Size, Pack, Color)</label>
-                        <input 
-                          type="text"
-                          value={newVariant}
-                          onChange={(e) => setNewVariant(e.target.value)}
-                          placeholder="e.g. Size 28, Pack of 2"
-                          className="w-full px-4 py-3 bg-gray-50/50 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2"
-                        />
-                      </div>
-
-                      {/* Price Input */}
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider block">Selling Price (₹)</label>
-                        <input 
-                          type="number"
-                          value={newPrice}
-                          onChange={(e) => setNewPrice(e.target.value)}
-                          placeholder="499"
-                          className="w-full px-4 py-3 bg-gray-50/50 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2"
-                        />
-                      </div>
-
-                      {/* MRP / Original Price Input */}
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider block">
-                          MRP / Original Price (₹) <span className="text-gray-400 normal-case font-normal">(optional, for discount badge)</span>
-                        </label>
-                        <input 
-                          type="number"
-                          value={newOriginalPrice}
-                          onChange={(e) => setNewOriginalPrice(e.target.value)}
-                          placeholder="699"
-                          className="w-full px-4 py-3 bg-gray-50/50 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2"
-                        />
-                      </div>
-
-                      {/* Stock Quantity */}
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider block">Opening Inventory Stock</label>
-                        <input 
-                          type="number"
-                          value={newStock}
-                          onChange={(e) => setNewStock(e.target.value)}
-                          placeholder="35"
-                          className="w-full px-4 py-3 bg-gray-50/50 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2"
-                        />
-                      </div>
-
-                    </div>
-
+                    <VariantRowsEditor rows={newVariants} onChange={setNewVariants} />
                   </div>
                 )}
 
@@ -1590,7 +1540,7 @@ const VendorProducts = () => {
                 />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-1 gap-3">
                 <div className="space-y-1.5">
                   <label className="text-[11px] font-black text-gray-600 uppercase tracking-wider block">Brand</label>
                   <input 
@@ -1600,49 +1550,15 @@ const VendorProducts = () => {
                     className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#5B3FD6]/20 focus:border-[#5B3FD6]"
                   />
                 </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-black text-gray-600 uppercase tracking-wider block">Selling Price (₹)</label>
-                  <input 
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={editPrice}
-                    onChange={(e) => setEditPrice(e.target.value)}
-                    required
-                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#5B3FD6]/20 focus:border-[#5B3FD6]"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-black text-gray-600 uppercase tracking-wider block">
-                    MRP / Orig. (₹) <span className="text-gray-400 normal-case font-normal">(optional)</span>
-                  </label>
-                  <input 
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={editOriginalPrice}
-                    onChange={(e) => setEditOriginalPrice(e.target.value)}
-                    placeholder="e.g. 699"
-                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#5B3FD6]/20 focus:border-[#5B3FD6]"
-                  />
-                </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-black text-gray-600 uppercase tracking-wider block">Stock Quantity</label>
-                  <input 
-                    type="number"
-                    min="0"
-                    value={editStock}
-                    onChange={(e) => setEditStock(e.target.value)}
-                    required
-                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#5B3FD6]/20 focus:border-[#5B3FD6]"
-                  />
-                </div>
+              <div className="space-y-2">
+                <label className="text-[11px] font-black text-gray-600 uppercase tracking-wider block">Price, MRP &amp; stock (variants)</label>
+                <VariantRowsEditor rows={editVariants} onChange={setEditVariants} />
+              </div>
 
+
+              <div className="grid grid-cols-1 gap-3">
                 <div className="space-y-1.5">
                   <label className="text-[11px] font-black text-gray-600 uppercase tracking-wider block">Status</label>
                   <select 

@@ -27,6 +27,7 @@ const ProductDetailsPage = () => {
   const [activeImage, setActiveImage] = useState(0);
   const [chartLoadFailed, setChartLoadFailed] = useState(false);
   const [selectedSize, setSelectedSize] = useState('');
+  const [selectedVariantId, setSelectedVariantId] = useState('');
   const [isWishlisted, setIsWishlisted] = useState(false);
   const [isAuthPromptOpen, setIsAuthPromptOpen] = useState(false);
   const [product, setProduct] = useState(null);
@@ -35,7 +36,8 @@ const ProductDetailsPage = () => {
   const [error, setError] = useState(null);
   const [showToast, setShowToast] = useState(false);
 
-  const cartQuantity = getProductQuantity(productId);
+  // quantity of the CHOSEN variant (each variant is its own cart line)
+  const cartQuantity = getProductQuantity(productId, selectedVariantId || undefined);
   const isGuest = !localStorage.getItem('childInfo');
   // Similar products are limited to the child's class (a Nursery child is not suggested
   // UKG-only items). The school portal buys in bulk, so grade does not apply there.
@@ -62,7 +64,10 @@ const ProductDetailsPage = () => {
         const mapped = mapProductForDetailView(detail);
         setProduct(mapped);
         setChartLoadFailed(false);
-        setSelectedSize(mapped.sizes?.[0] || 'One Size');
+        // preselect the first variant that is in stock (or the first one)
+        const firstVariant = mapped.variants?.find((v) => v.stock > 0) || mapped.variants?.[0];
+        setSelectedVariantId(firstVariant?.id || '');
+        setSelectedSize(firstVariant ? firstVariant.label : mapped.sizes?.[0] || 'One Size');
         setSimilarProducts((related || []).map((item) => mapProductForCard(item)));
       } catch (err) {
         if (!cancelled) {
@@ -79,21 +84,47 @@ const ProductDetailsPage = () => {
     };
   }, [productId, childGrade]);
 
+  // --- variants: a product can come in several sizes / packs, each with its own price, MRP and stock ---
+  const variants = product?.variants || [];
+  const hasVariants = variants.length > 0;
+  const activeVariant = hasVariants ? variants.find((v) => v.id === selectedVariantId) || variants[0] : null;
+  const outOfStock = Boolean(activeVariant && activeVariant.stock <= 0);
+  const variantCartFields = activeVariant
+    ? {
+        variantId: activeVariant.id,
+        pricePaise: activeVariant.pricePaise,
+        price: activeVariant.pricePaise / 100,
+        originalPricePaise: activeVariant.originalPricePaise,
+        originalPrice: (activeVariant.originalPricePaise || activeVariant.pricePaise) / 100,
+        stock: activeVariant.stock,
+      }
+    : {};
+
   const handleAddToCart = () => {
     if (!product) return;
     if (isGuest) {
       setIsAuthPromptOpen(true);
       return;
     }
-    addToCart({ ...product, selectedSize });
+    if (outOfStock) return;
+    addToCart({ ...product, ...variantCartFields, selectedSize: activeVariant ? activeVariant.label : selectedSize });
     setShowToast(true);
     setTimeout(() => setShowToast(false), 3000);
   };
 
-  const handleBuyNow = () => {
+  const handleBuyNow = async () => {
     if (isGuest) {
       setIsAuthPromptOpen(true);
       return;
+    }
+    if (outOfStock) return;
+    // Buy Now must buy THIS product (and the chosen variant): add it first unless it is already in the cart
+    if (cartQuantity === 0) {
+      try {
+        await addToCart({ ...product, ...variantCartFields, selectedSize: activeVariant ? activeVariant.label : selectedSize });
+      } catch {
+        return;
+      }
     }
     navigate(`${basePath}/checkout`);
   };
@@ -117,9 +148,11 @@ const ProductDetailsPage = () => {
     );
   }
 
-  const discount = product.originalPrice > product.price
-    ? Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100)
-    : 0;
+  const price = activeVariant ? activeVariant.pricePaise / 100 : product.price;
+  const originalPrice = activeVariant
+    ? (activeVariant.originalPricePaise || activeVariant.pricePaise) / 100
+    : product.originalPrice;
+  const discount = originalPrice > price ? Math.round(((originalPrice - price) / originalPrice) * 100) : 0;
   const sizes = product.sizes?.length ? product.sizes : ['One Size'];
 
   return (
@@ -215,17 +248,17 @@ const ProductDetailsPage = () => {
 
         <div className="space-y-2 mb-8">
           <div className="flex items-baseline gap-3 flex-wrap">
-            <span className="text-3xl font-black text-black">₹{product.price}</span>
-            {product.originalPrice > product.price && (
-              <span className="text-base text-gray-400 line-through font-bold">
-                MRP ₹{product.originalPrice}
+            <span className="text-3xl font-black text-black" data-testid="product-price">₹{price}</span>
+            {originalPrice > price && (
+              <span className="text-base text-gray-400 line-through font-bold" data-testid="product-mrp">
+                MRP ₹{originalPrice}
               </span>
             )}
           </div>
           {discount > 0 && (
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-xs font-black text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-3 py-1 rounded-full inline-flex items-center gap-1 shadow-sm">
-                Save ₹{Math.round(product.originalPrice - product.price).toLocaleString('en-IN')}
+                Save ₹{Math.round(originalPrice - price).toLocaleString('en-IN')}
               </span>
               <span className="text-xs font-black text-rose-600 bg-rose-50 border border-rose-200/60 px-2.5 py-1 rounded-full">
                 {discount}% OFF
@@ -234,6 +267,53 @@ const ProductDetailsPage = () => {
           )}
         </div>
 
+        {hasVariants && (
+          <div className="mb-8" data-testid="variant-chooser">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-bold text-deep-purple">Choose a variant</h3>
+              {activeVariant && (
+                <span
+                  data-testid="variant-stock-note"
+                  className={`text-[10px] font-black uppercase tracking-wider ${
+                    activeVariant.stock <= 0 ? 'text-rose-600' : activeVariant.stock <= 5 ? 'text-amber-600' : 'text-emerald-600'
+                  }`}
+                >
+                  {activeVariant.stock <= 0 ? 'Out of stock' : activeVariant.stock <= 5 ? `Only ${activeVariant.stock} left` : 'In stock'}
+                </span>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-3">
+              {variants.map((variant) => {
+                const selected = activeVariant?.id === variant.id;
+                const soldOut = variant.stock <= 0;
+                return (
+                  <button
+                    key={variant.id}
+                    type="button"
+                    data-testid="variant-chip"
+                    aria-pressed={selected}
+                    onClick={() => {
+                      setSelectedVariantId(variant.id);
+                      setSelectedSize(variant.label);
+                    }}
+                    className={`min-w-[88px] px-4 py-2.5 rounded-2xl flex flex-col items-center justify-center gap-0.5 transition-all border-2 ${
+                      selected
+                        ? 'bg-primary text-white border-primary shadow-lg shadow-primary/20'
+                        : 'bg-white text-deep-purple border-gray-100 hover:border-gray-200'
+                    } ${soldOut ? 'opacity-50' : ''}`}
+                  >
+                    <span className="text-xs font-black">{variant.label}</span>
+                    <span className={`text-[10px] font-bold ${selected ? 'text-white/80' : 'text-gray-400'}`}>
+                      {soldOut ? 'Sold out' : `₹${variant.pricePaise / 100}`}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {!hasVariants && (
         <div className="mb-8">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-bold text-deep-purple">Select Size</h3>
@@ -256,13 +336,16 @@ const ProductDetailsPage = () => {
             ))}
           </div>
         </div>
+        )}
 
         <div className="mb-8 p-4 bg-gray-50 rounded-3xl flex items-center justify-between">
           <h3 className="text-sm font-bold text-deep-purple">Quantity in Cart</h3>
           <QuantitySelector
             quantity={cartQuantity}
-            onIncrease={() => updateQuantity(productId, 1)}
-            onDecrease={() => updateQuantity(productId, -1)}
+            // updateQuantity only changes a line that is already in the cart, so from 0 the "+"
+            // must add the product first (same as the Add to Cart button, incl. the guest login prompt)
+            onIncrease={() => (cartQuantity > 0 ? updateQuantity(productId, 1, activeVariant?.id) : handleAddToCart())}
+            onDecrease={() => { if (cartQuantity > 0) updateQuantity(productId, -1, activeVariant?.id); }}
           />
         </div>
 
@@ -325,9 +408,10 @@ const ProductDetailsPage = () => {
         {cartQuantity === 0 ? (
           <button
             onClick={handleAddToCart}
-            className="flex-1 py-4 bg-primary text-white rounded-2xl text-xs font-black shadow-lg shadow-primary/20 active:scale-95 transition-all flex items-center justify-center gap-2"
+            disabled={outOfStock}
+            className="flex-1 py-4 bg-primary text-white rounded-2xl text-xs font-black shadow-lg shadow-primary/20 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <ShoppingCart size={18} /> Add to Cart
+            <ShoppingCart size={18} /> {outOfStock ? 'Sold out' : 'Add to Cart'}
           </button>
         ) : (
           <button
@@ -339,7 +423,8 @@ const ProductDetailsPage = () => {
         )}
         <button
           onClick={handleBuyNow}
-          className="flex-[1.5] py-4 bg-primary text-white rounded-2xl text-xs font-black shadow-lg shadow-primary/20 active:scale-95 transition-all"
+          disabled={outOfStock}
+          className="flex-[1.5] py-4 bg-primary text-white rounded-2xl text-xs font-black shadow-lg shadow-primary/20 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Buy Now
         </button>

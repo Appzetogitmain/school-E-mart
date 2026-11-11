@@ -34,22 +34,20 @@ export const RoleRoute = ({ allowedRoles, redirectTo }) => {
   let effectiveToken = token;
   let effectiveIsAuth = isAuthenticated;
 
-  if (isCheckingAdmin && portalSessions?.admin?.token) {
-    effectiveUser = portalSessions.admin.user;
-    effectiveToken = portalSessions.admin.token;
-    effectiveIsAuth = true;
-  } else if (isCheckingVendor && portalSessions?.vendor?.token) {
-    effectiveUser = portalSessions.vendor.user;
-    effectiveToken = portalSessions.vendor.token;
-    effectiveIsAuth = true;
-  } else if (isCheckingSchool && portalSessions?.school?.token) {
-    effectiveUser = portalSessions.school.user;
-    effectiveToken = portalSessions.school.token;
-    effectiveIsAuth = true;
-  } else if (isCheckingTeacher && portalSessions?.teacher?.token) {
-    effectiveUser = portalSessions.teacher.user;
-    effectiveToken = portalSessions.teacher.token;
-    effectiveIsAuth = true;
+  // A portal route is only unlocked by that portal's OWN session. It must not fall back
+  // to the global user (which may belong to another portal): the page would open but every
+  // API call would carry the wrong token and fail with 403 "no permission".
+  const portalKey = isCheckingAdmin ? 'admin'
+    : isCheckingVendor ? 'vendor'
+    : isCheckingSchool ? 'school'
+    : isCheckingTeacher ? 'teacher'
+    : null;
+
+  if (portalKey) {
+    const session = portalSessions?.[portalKey];
+    effectiveUser = session?.user ?? null;
+    effectiveToken = session?.token ?? null;
+    effectiveIsAuth = Boolean(session?.token);
   }
 
   if (!effectiveIsAuth || !effectiveToken) {

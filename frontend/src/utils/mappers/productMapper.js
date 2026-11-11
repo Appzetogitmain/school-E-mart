@@ -74,6 +74,19 @@ export const mapProductForCard = (product, meta = {}) => {
     brand: product?.brand || 'School E-Mart Essentials',
     description: product?.description || '',
     sizes: product?.sizes || [],
+    // Variants (e.g. "100ml" / "500ml" with their own price and stock). The product page gets the full
+    // objects; lists only get the ids, so variantCount tells a list card that a choice is needed.
+    variantCount: Array.isArray(product?.variants) ? product.variants.length : 0,
+    variants: (Array.isArray(product?.variants) ? product.variants : [])
+      .filter((v) => v && typeof v === 'object' && v.pricePaise !== undefined)
+      .map((v) => ({
+        id: String(v.id || v._id),
+        label: v.label || '',
+        sku: v.sku,
+        pricePaise: v.pricePaise,
+        originalPricePaise: v.originalPricePaise || null,
+        stock: Number(v.stock ?? 0),
+      })),
     sizeChartUrl: toAbsoluteUrl(product?.sizeChartAttachmentId?.storageKey || product?.sizeChartUrl),
     specs: (product?.specs || []).map((spec) =>
       spec.label ? spec : { label: spec.key, value: spec.value }
@@ -173,6 +186,7 @@ export const mapProductForSubcategoryList = (product) => {
     name: mapped.name,
     price: mapped.price,
     image: mapped.image,
+    variantCount: mapped.variantCount,
   };
 };
 

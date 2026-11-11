@@ -209,7 +209,7 @@ const SchoolCheckoutPage = () => {
           </p>
           <div className="space-y-6">
             {cartItems.map((item) => (
-              <div key={item.id} className="flex gap-4">
+              <div key={`${item.id}:${item.variantId || ''}`} className="flex gap-4">
                 <div className="w-20 h-20 rounded-2xl bg-gray-50 flex items-center justify-center overflow-hidden border border-gray-100">
                   <img src={item.image} alt={item.name} className="w-full h-full object-contain p-2" />
                 </div>
@@ -218,14 +218,14 @@ const SchoolCheckoutPage = () => {
                   <div className="flex items-center justify-between mt-2">
                     <div className="flex items-center bg-gray-50 rounded-full border border-gray-100 px-1 py-1">
                       <button
-                        onClick={() => updateQuantity(item.id, -1)}
+                        onClick={() => updateQuantity(item.id, -1, item.variantId)}
                         className="w-6 h-6 rounded-full bg-white shadow-sm flex items-center justify-center text-gray-400"
                       >
                         <Minus size={12} />
                       </button>
                       <span className="w-8 text-center text-xs font-bold text-deep-purple">{item.quantity}</span>
                       <button
-                        onClick={() => updateQuantity(item.id, 1)}
+                        onClick={() => updateQuantity(item.id, 1, item.variantId)}
                         className="w-6 h-6 rounded-full bg-white shadow-sm flex items-center justify-center text-primary"
                       >
                         <Plus size={12} />

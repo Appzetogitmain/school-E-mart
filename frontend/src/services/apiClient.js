@@ -3,6 +3,7 @@ import { ENV } from '../config/env';
 import useAuthStore from '../store/useAuthStore';
 import { refreshSession } from './authApi';
 import { PORTAL_LOGIN_PATHS } from '../utils/mappers/userMapper';
+import { portalFromPathname } from '../utils/portalToken';
 
 const apiClient = axios.create({
   baseURL: ENV.API_URL,
@@ -54,17 +55,25 @@ const shouldAttemptTokenRefresh = (url = '') => {
     return false;
   }
 
-  const { token, isAuthenticated } = useAuthStore.getState();
-  return Boolean(token || isAuthenticated);
+  // Only refresh a session this portal actually has. Refreshing "whatever cookie is
+  // around" could hand a page another portal's token (e.g. parent token on a school page).
+  return Boolean(useAuthStore.getState().getEffectiveToken?.(getRequestPath(url)));
 };
+
+const currentPagePortal = () =>
+  (typeof window === 'undefined' ? 'parent' : portalFromPathname(window.location.pathname));
 
 const redirectToLogin = (url = '') => {
   const path = getRequestPath(url);
+  const pagePortal = currentPagePortal();
   const isAdminReq = path.startsWith('/admin') || (typeof window !== 'undefined' && window.location.pathname.startsWith('/superadmin'));
   const isVendorReq = path.startsWith('/vendor') || (typeof window !== 'undefined' && window.location.pathname.startsWith('/vendor'));
   const isSchoolReq = path.startsWith('/school') || (typeof window !== 'undefined' && window.location.pathname.startsWith('/school'));
-  
-  const targetPortal = isAdminReq ? 'admin' : (isVendorReq ? 'vendor' : (isSchoolReq ? 'school' : 'parent'));
+
+  // The page's own portal wins (a teacher page must not log the school admin out).
+  const targetPortal = pagePortal !== 'parent'
+    ? pagePortal
+    : (isAdminReq ? 'admin' : (isVendorReq ? 'vendor' : (isSchoolReq ? 'school' : 'parent')));
   
   useAuthStore.getState().logout({ callApi: false, portal: targetPortal });
 
@@ -144,6 +153,16 @@ apiClient.interceptors.response.use(
       } catch {
         redirectToLogin(originalRequest.url || '');
       }
+    } else if (
+      error.response?.status === 401 &&
+      originalRequest &&
+      !isUnauthenticatedAuthPath(originalRequest.url || '') &&
+      currentPagePortal() !== 'parent' &&
+      !useAuthStore.getState().getEffectiveToken?.()
+    ) {
+      // A school/vendor/admin/teacher page with no session of its own: go to that login
+      // instead of showing a confusing error.
+      redirectToLogin(originalRequest.url || '');
     }
 
     // A flaky connection (dropped wifi, cold server) never reaches the

@@ -90,12 +90,15 @@ const checkoutService = {
       let stock = product.stock;
       let pricePaise = product.pricePaise;
       let sku = product.sku;
+      let mrpPaise = product.originalPricePaise || product.pricePaise;
       if (item.variantId) {
         const variant = await variantRepository.findOne({ _id: item.variantId, productId: item.productId });
         if (!variant) throw new BadRequestError('Variant not found', null, 'CART_VARIANT_INVALID');
         stock = variant.stock;
         pricePaise = variant.pricePaise;
         sku = variant.sku;
+        // the variant's own MRP drives its discount, not the product's
+        mrpPaise = variant.originalPricePaise || variant.pricePaise;
       }
 
       if (stock < item.quantity) {
@@ -117,7 +120,7 @@ const checkoutService = {
         image: product.images?.[0]?.alt || item.image,
         variantId: item.variantId,
         pricePaise,
-        mrpPaise: product.originalPricePaise || pricePaise,
+        mrpPaise: mrpPaise || pricePaise,
         quantity: item.quantity,
         size: item.size,
         taxRatePercent: taxRate,
