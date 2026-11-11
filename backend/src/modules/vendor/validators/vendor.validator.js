@@ -76,6 +76,16 @@ const imageSchema = Joi.object({
   alt: Joi.string().trim().max(120).optional(),
 });
 
+// One variant of a product (e.g. "500ml"): own price, MRP and stock. `id` is set when editing an existing one.
+const productVariantSchema = Joi.object({
+  id: objectId.optional(),
+  label: Joi.string().trim().min(1).max(60).required(),
+  pricePaise: Joi.number().integer().min(1).required(),
+  originalPricePaise: Joi.number().integer().min(0).allow(null).optional(),
+  stock: Joi.number().integer().min(0).required(),
+  sku: Joi.string().trim().max(80).optional(),
+});
+
 const createProductSchema = Joi.object({
   name: Joi.string().trim().min(2).max(160).required(),
   sku: Joi.string().trim().required(),
@@ -88,8 +98,10 @@ const createProductSchema = Joi.object({
   // 'schools' (bulk, shown in the School module), or 'both' (shown in both).
   audience: Joi.string().valid('users', 'schools', 'both').default('users'),
   gradeTags: Joi.array().items(Joi.string().trim()).optional(),
-  pricePaise: Joi.number().integer().min(0).required(),
+  // With variants the price and stock come from the variants, so they are only required without them
+  pricePaise: Joi.number().integer().min(0).when('variants', { is: Joi.array().min(1).required(), then: Joi.optional(), otherwise: Joi.required() }),
   originalPricePaise: Joi.number().integer().min(0).optional(),
+  variants: Joi.array().items(productVariantSchema).max(30).optional(),
   taxRatePercent: Joi.number().min(0).max(28).default(0),
   stock: Joi.number().integer().min(0).default(0),
   lowStockThreshold: Joi.number().integer().min(0).default(5),
@@ -103,7 +115,9 @@ const updateProductSchema = createProductSchema.fork(
   ['name', 'sku', 'headerId', 'categoryId', 'images', 'pricePaise', 'originalPricePaise'],
   (s) => s.optional()
 ).fork(['images'], (s) => s.min(0))
-  .fork(['originalPricePaise'], (s) => s.allow(null));
+  .fork(['originalPricePaise'], (s) => s.allow(null))
+  // plain price is optional on update (it is derived when the product has variants)
+  .keys({ pricePaise: Joi.number().integer().min(0).optional() });
 
 const publishStatusSchema = Joi.object({
   publishStatus: Joi.string().valid('draft', 'published').required(),

@@ -37,7 +37,13 @@ export const mapVendorProductForList = (product) => {
     header: product?.headerId?.name || product?.headerName || 'Catalog',
     category: product?.categoryId?.name || product?.categoryName || 'General',
     subcategory: product?.subcategoryId?.name || product?.subcategoryName || '—',
-    variant: product?.sizes?.[0] || 'Standard',
+    // with variants: show them (e.g. "100ml, 500ml" or "4 variants"); otherwise the plain size / Standard
+    variant: Array.isArray(product?.variants) && product.variants.length
+      ? product.variants.length > 2
+        ? `${product.variants.length} variants`
+        : product.variants.map((v) => v.label).filter(Boolean).join(', ')
+      : product?.sizes?.[0] || 'Standard',
+    variants: Array.isArray(product?.variants) ? product.variants : [],
     approval: APPROVAL_LABELS[product?.approvalStatus] || 'Approved',
     approvalRaw: product?.approvalStatus,
     publishStatus: product?.publishStatus,

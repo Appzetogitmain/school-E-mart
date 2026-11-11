@@ -89,12 +89,22 @@ const AppHeader = ({ showSearch = true, scrolled = false, onMenuClick, childInfo
           >
             {/* Inner premium golden-white gradient ring overlay */}
             <div className="absolute inset-[2px] rounded-[14px] bg-gradient-to-tr from-[#FFC933]/15 to-transparent pointer-events-none z-20"></div>
-            {childInfo?.schoolLogo || childInfo?.photo ? (
+            {/* This is the STUDENT's avatar (same photo as the Profile page). The school's logo
+                must not take its place: it used to win over the student's photo here. */}
+            {childInfo?.photo ? (
               <img
-                src={childInfo.schoolLogo || childInfo.photo}
-                alt={childInfo?.school || "School Logo"}
+                src={childInfo.photo}
+                alt={childInfo?.name || "Student"}
                 className="w-full h-full object-cover rounded-xl relative z-10"
               />
+            ) : !isGuest && childInfo?.name ? (
+              // no photo chosen yet: the student's initial, not the school logo
+              <div
+                data-testid="header-avatar-initial"
+                className="w-full h-full rounded-xl bg-[#3B248C]/10 flex items-center justify-center text-[#3B248C] text-2xl font-black relative z-10"
+              >
+                {String(childInfo.name).trim().charAt(0).toUpperCase()}
+              </div>
             ) : isGuest ? (
               // Genuine guest state (no session) — a neutral icon, not a
               // pretend school logo.

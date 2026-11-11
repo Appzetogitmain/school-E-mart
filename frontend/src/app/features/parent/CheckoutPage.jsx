@@ -452,7 +452,7 @@ const CheckoutPage = () => {
               const itemPrice = parsePrice(item);
               const priceToDisplay = itemPrice > 0 ? itemPrice * item.quantity : subtotal;
               return (
-                <div key={item.id} className="py-3 flex items-center justify-between gap-4">
+                <div key={`${item.id}:${item.variantId || ''}`} className="py-3 flex items-center justify-between gap-4">
                   <div className="flex items-center gap-3 min-w-0">
                     <div className="w-14 h-14 rounded-xl bg-gray-50 border border-gray-150 p-1 shrink-0 overflow-hidden flex items-center justify-center">
                       {item.image ? (
@@ -462,7 +462,7 @@ const CheckoutPage = () => {
                       )}
                     </div>
                     <div className="min-w-0">
-                      <h4 className="text-xs font-black text-gray-900 leading-snug truncate">{item.name}</h4>
+                      <h4 className="text-xs font-black text-gray-900 leading-snug truncate">{item.name}{item.variantId && item.size ? ` (${item.size})` : ''}</h4>
                       <span className="text-[10px] font-bold text-gray-400 block mt-0.5">Quantity: {item.quantity}</span>
                     </div>
                   </div>

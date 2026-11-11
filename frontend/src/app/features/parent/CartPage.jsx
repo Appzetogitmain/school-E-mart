@@ -48,8 +48,8 @@ const CartPage = () => {
     ? totals.grandTotal
     : (localSubtotal + (totals.deliveryCharge || 0) + (totals.platformFee || 0) + (totals.handlingCharge || 0) - (totals.discount || 0) - (totals.socialDiscount || 0));
 
-  const handleRemove = (id) => {
-    removeFromCart(id);
+  const handleRemove = (id, variantId) => {
+    removeFromCart(id, variantId);
     setShowRemoveToast(true);
     setTimeout(() => setShowRemoveToast(false), 2000);
   };
@@ -105,7 +105,7 @@ const CartPage = () => {
       <div className="pt-20 px-6 space-y-4">
         {/* Cart Items */}
         {cartItems.map((item) => (
-          <div key={item.id} className="bg-white rounded-3xl p-4 shadow-sm border border-gray-50 flex gap-4 relative animate-in slide-in-from-right-4 duration-300">
+          <div key={`${item.id}:${item.variantId || ''}`} className="bg-white rounded-3xl p-4 shadow-sm border border-gray-50 flex gap-4 relative animate-in slide-in-from-right-4 duration-300">
             <div className="w-24 h-24 bg-gray-50 rounded-2xl overflow-hidden shrink-0">
               <img src={item.image || PRODUCT_PLACEHOLDER} alt={item.name} onError={(event) => { event.currentTarget.onerror = null; event.currentTarget.src = PRODUCT_PLACEHOLDER; }} className="w-full h-full object-contain mix-blend-multiply" />
             </div>
@@ -114,26 +114,26 @@ const CartPage = () => {
               <div className="flex justify-between items-start mb-1">
                 <h3 className="text-sm font-bold text-deep-purple line-clamp-1 pr-6">{item.name}</h3>
                 <button 
-                  onClick={() => handleRemove(item.id)}
+                  onClick={() => handleRemove(item.id, item.variantId)}
                   className="absolute top-4 right-4 text-gray-300 hover:text-red-500 transition-colors"
                 >
                   <Trash2 size={16} />
                 </button>
               </div>
-              <p className="text-[10px] text-gray-400 font-bold uppercase mb-2">Standard Pack</p>
+              <p className="text-[10px] text-gray-400 font-bold uppercase mb-2" data-testid="cart-item-variant">{item.size || 'Standard Pack'}</p>
               
               <div className="mt-auto flex items-center justify-between">
                 <span className="text-base font-black text-black">
-                  ₹{(typeof item.price === 'string' ? parseInt(item.price.replace('₹', '').replace(',', '')) : item.price)}
+                  ₹{item.pricePaise ? item.pricePaise / 100 : (typeof item.price === 'string' ? parseInt(item.price.replace('₹', '').replace(',', '')) : item.price)}
                 </span>
                 <QuantitySelector 
                   quantity={item.quantity}
-                  onIncrease={() => updateQuantity(item.id, 1)}
+                  onIncrease={() => updateQuantity(item.id, 1, item.variantId)}
                   onDecrease={() => {
                     if (item.quantity === 1) {
-                      handleRemove(item.id);
+                      handleRemove(item.id, item.variantId);
                     } else {
-                      updateQuantity(item.id, -1);
+                      updateQuantity(item.id, -1, item.variantId);
                     }
                   }}
                   className="scale-90 origin-right"

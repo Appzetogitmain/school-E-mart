@@ -46,6 +46,11 @@ const ProductCard = ({
     }
     
     if (actionType === 'Add to Cart') {
+      // sizes / packs have their own price and stock: the customer picks one on the product page
+      if (product.variantCount > 0) {
+        navigate((role === 'school' ? '/school' : '/user') + '/product/' + (product.id || product._id));
+        return;
+      }
       setAdding(true);
       try {
         await addToCart(product);

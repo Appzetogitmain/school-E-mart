@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Star, ShoppingCart, Minus, Plus, ShieldCheck, Heart } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { useWishlist } from '../context/WishlistContext';
@@ -8,6 +8,7 @@ import { getMarketplaceAudience } from '../../utils/marketplaceAudience';
 import { PRODUCT_PLACEHOLDER } from '../../utils/mappers/productMapper';
 
 const ProductCard = ({ product, showBuyNow = true }) => {
+  const navigate = useNavigate();
   const { addToCart, updateQuantity, getProductQuantity } = useCart();
   const { toggleWishlist, isInWishlist } = useWishlist();
   const [showToast, setShowToast] = useState(false);
@@ -26,6 +27,11 @@ const ProductCard = ({ product, showBuyNow = true }) => {
     e.stopPropagation();
     if (isGuest) {
       setIsAuthPromptOpen(true);
+      return;
+    }
+    // sizes / packs have their own price and stock: the customer must pick one on the product page
+    if (product.variantCount > 0) {
+      navigate(`${detailBasePath}/product/${product.id}`);
       return;
     }
     addToCart(product);
@@ -153,7 +159,7 @@ const ProductCard = ({ product, showBuyNow = true }) => {
                     onClick={handleAdd}
                     className="w-full py-2.5 bg-golden-yellow text-deep-purple rounded-2xl text-[11px] font-black shadow-lg shadow-yellow-100 active:scale-95 transition-all flex items-center justify-center gap-2 relative z-20 hover:bg-yellow-400"
                   >
-                    <ShoppingCart size={14} /> Add to Cart
+                    <ShoppingCart size={14} /> {product.variantCount > 0 ? 'Select Options' : 'Add to Cart'}
                   </button>
                 ) : (
                   <div 

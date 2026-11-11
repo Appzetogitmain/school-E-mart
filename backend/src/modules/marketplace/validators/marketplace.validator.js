@@ -35,6 +35,8 @@ const cartItemParam = Joi.object({
 
 const audienceQuery = Joi.object({
   audience: Joi.string().valid('parent', 'school').default('parent'),
+  // cart update / remove of a product variant send its id here (the route only has :productId)
+  variantId: objectId.optional(),
 });
 
 const publicBannerQuery = paginationQuery.keys({
