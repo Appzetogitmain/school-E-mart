@@ -626,10 +626,10 @@ const OrdersListManagement = () => {
             <div className="relative">
               <input
                 type="text"
-                placeholder="ORD…"
+                placeholder="Search order #, customer, student…"
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
-                className="w-full bg-white border border-gray-200 rounded-xl pl-9 pr-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500/25"
+                className="w-full bg-white border border-gray-200 rounded-xl pl-9 pr-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500/25 text-xs"
               />
               <Search
                 size={13}

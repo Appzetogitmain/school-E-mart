@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { listPublicReels, likeReel, listReelComments, addReelComment } from '../../../services/catalogApi';
 import { mapPublicReel } from '../../../utils/mappers/adminReelsMapper';
+import { navigateToReelProduct } from '../../../utils/reelNavigation';
 
 const ParentReels = () => {
   const navigate = useNavigate();
@@ -436,7 +437,7 @@ const ParentReels = () => {
           <div 
             onClick={(e) => {
               e.stopPropagation();
-              navigate(`/user/product/${currentReel.product.id}`);
+              navigateToReelProduct(navigate, currentReel.product.url || currentReel.product.id, 'user');
             }}
             className="flex items-center justify-between bg-white/10 backdrop-blur-md border border-white/15 rounded-2xl p-2.5 active:scale-[0.98] transition-all hover:bg-white/15 cursor-pointer shadow-xl shadow-black/20"
           >

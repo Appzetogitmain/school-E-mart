@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { listPublicReels, likeReel, listReelComments, addReelComment } from '../../../services/catalogApi';
 import { mapPublicReel } from '../../../utils/mappers/adminReelsMapper';
+import { navigateToReelProduct } from '../../../utils/reelNavigation';
 
 const SchoolReels = () => {
   const navigate = useNavigate();
@@ -361,7 +362,7 @@ const SchoolReels = () => {
         {/* Linked Product Banner */}
         {currentReel?.product && (
           <div 
-            onClick={() => navigate('/school/categories')}
+            onClick={() => navigateToReelProduct(navigate, currentReel.product.url || currentReel.product.id, 'school')}
             className="bg-white/15 backdrop-blur-xl border border-white/20 p-2.5 rounded-2xl flex items-center justify-between cursor-pointer active:scale-95 transition-transform"
           >
             <div className="flex items-center gap-2.5 min-w-0">

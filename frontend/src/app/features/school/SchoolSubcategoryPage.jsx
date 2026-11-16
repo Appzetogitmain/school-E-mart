@@ -2,18 +2,19 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import {
   Search, ShoppingBag, Star, Filter, Sparkles,
-  RotateCcw, ChevronDown, X
+  RotateCcw, ChevronDown, X, Loader2
 } from 'lucide-react';
 import SchoolHeader from '../../components/SchoolHeader';
 import { useCart } from '../../context/CartContext';
 import { useCategoryTree } from '../../../hooks/useCategoryTree';
-import { useProducts } from '../../../hooks/useProducts';
+import * as catalogApi from '../../../services/catalogApi';
+import { getErrorMessage } from '../../../utils/apiHelpers';
 import {
   buildProductQueryForSubcategory,
   getSubcategoryOptions,
   resolveTaxonomyFromParam,
 } from '../../../utils/mappers/categoryMapper';
-import { sortKeyFromLabel } from '../../../utils/mappers/productMapper';
+import { sortKeyFromLabel, mapProductForSubcategoryList } from '../../../utils/mappers/productMapper';
 
 const SchoolSubcategoryPage = () => {
   const navigate = useNavigate();
@@ -80,9 +81,64 @@ const SchoolSubcategoryPage = () => {
     return query;
   }, [taxonomy, activeSub, subcategories, debouncedSearch, availability, priceRange, sortBy]);
 
-  const { products, pagination, loading: productsLoading, error } = useProducts(productQuery, {
-    mapperKey: 'subcategory',
-  });
+  const [products, setProducts] = useState([]);
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState(null);
+  const [productsLoading, setProductsLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [error, setError] = useState(null);
+
+  // When filters, search or subcategories change, reload page 1 fresh
+  useEffect(() => {
+    let cancelled = false;
+    setProductsLoading(true);
+    setError(null);
+    setPage(1);
+
+    const query = { ...productQuery, page: 1, limit: 50 };
+    catalogApi.listProducts(query)
+      .then(({ data, pagination: pageMeta }) => {
+        if (cancelled) return;
+        setProducts((data || []).map((item) => mapProductForSubcategoryList(item)));
+        setPagination(pageMeta);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setProducts([]);
+          setError(getErrorMessage(err, 'Unable to load products'));
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setProductsLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [productQuery]);
+
+  // Load More Products
+  const handleLoadMore = async () => {
+    if (loadingMore || productsLoading) return;
+    const nextPage = page + 1;
+    setLoadingMore(true);
+
+    try {
+      const query = { ...productQuery, page: nextPage, limit: 50 };
+      const { data, pagination: pageMeta } = await catalogApi.listProducts(query);
+      const newItems = (data || []).map((item) => mapProductForSubcategoryList(item));
+      setProducts((prev) => [...prev, ...newItems]);
+      setPage(nextPage);
+      setPagination(pageMeta);
+    } catch (err) {
+      console.error('Failed to load more products:', err);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  const totalCount = pagination?.total ?? products.length;
+  const hasMore = pagination ? pagination.hasNextPage || products.length < pagination.total : false;
 
   const hasActiveFilters = availability !== 'all' || priceRange !== 'all' || sortBy !== 'Recommended';
 
@@ -362,9 +418,41 @@ const SchoolSubcategoryPage = () => {
               )}
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-6">
-              {products.map((product) => renderProductCard(product))}
-            </div>
+            <>
+              <div className="grid grid-cols-1 gap-6">
+                {products.map((product) => renderProductCard(product))}
+              </div>
+
+              {/* Load More Section */}
+              {hasMore && (
+                <div className="mt-8 flex flex-col items-center gap-2">
+                  <p className="text-xs text-gray-400 font-medium">
+                    Showing {products.length} of {totalCount} products
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleLoadMore}
+                    disabled={loadingMore}
+                    className="w-full max-w-xs py-3.5 px-6 bg-white hover:bg-gray-50 text-deep-purple font-bold text-xs rounded-2xl border border-gray-200 shadow-sm active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
+                  >
+                    {loadingMore ? (
+                      <>
+                        <Loader2 size={16} className="animate-spin text-primary" />
+                        Loading more...
+                      </>
+                    ) : (
+                      <>Load More Products ({totalCount - products.length} remaining)</>
+                    )}
+                  </button>
+                </div>
+              )}
+
+              {!hasMore && products.length > 0 && products.length >= 50 && (
+                <p className="mt-8 text-center text-xs text-gray-400 font-medium">
+                  You've reached the end of the products ({products.length} total)
+                </p>
+              )}
+            </>
           )}
         </div>
       </div>

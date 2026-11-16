@@ -78,6 +78,7 @@ export const mapPublicReel = (reel) => ({
   product: reel?.linkedProduct?.title
     ? {
         id: reel.linkedProduct.url || '#',
+        url: reel.linkedProduct.url || '',
         name: reel.linkedProduct.title,
         image: toAbsoluteUrl(reel.linkedProduct.imageUrl),
         price: `₹${Number(reel.linkedProduct.price || 0).toLocaleString()}`,

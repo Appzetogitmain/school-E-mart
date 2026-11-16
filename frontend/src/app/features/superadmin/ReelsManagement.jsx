@@ -3,7 +3,7 @@ import ReactDOM from 'react-dom';
 import { 
   Video, Film, Plus, Edit3, Trash2, Heart, Eye, Play, X, ChevronRight, CheckCircle, Info, Upload, Image as ImageIcon, ShoppingBag, Globe, EyeOff, Camera, MessageCircle
 } from 'lucide-react';
-import { listVendors, listReels, createReel, updateReel, deleteReel, uploadAdminFile, uploadAdminMedia, listAdminReelComments, deleteAdminReelComment } from '../../../services/adminApi';
+import { listVendors, listReels, createReel, updateReel, deleteReel, uploadAdminFile, uploadAdminMedia, uploadAdminMediaWithProgress, listAdminReelComments, deleteAdminReelComment } from '../../../services/adminApi';
 import { getErrorMessage } from '../../../utils/apiHelpers';
 import { mapReelForAdmin, mapAdminReelToPayload } from '../../../utils/mappers/adminReelsMapper';
 
@@ -17,6 +17,7 @@ const ReelsManagement = () => {
   const [reels, setReels] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(null);
 
   const [stores, setStores] = useState([]);
 
@@ -193,13 +194,19 @@ const ReelsManagement = () => {
       let productImageId = getAttachmentId(existingReel?.raw?.linkedProduct?.imageId);
 
       if (videoFile) {
-        videoId = await uploadFile(videoFile, 'reel_video', true);
+        const formData = new FormData();
+        formData.append('file', videoFile);
+        formData.append('purpose', 'reel_video');
+        const attachment = await uploadAdminMediaWithProgress(formData, (percent) => {
+          setUploadProgress(percent);
+        });
+        videoId = attachment?._id || attachment?.id;
       }
       if (coverFile) {
-        thumbnailId = await uploadFile(coverFile, 'reel_thumb', true);
+        thumbnailId = await uploadFile(coverFile, 'reel_thumb', false);
       }
       if (productFile) {
-        productImageId = await uploadFile(productFile, 'reel_thumb', true);
+        productImageId = await uploadFile(productFile, 'product_image', false);
       }
 
       if (!videoId) {
@@ -239,9 +246,16 @@ const ReelsManagement = () => {
         resetForm();
       }
     } catch (err) {
-      alert(getErrorMessage(err, 'Unable to save reel'));
+      console.error('Reel save error:', err);
+      const msg = getErrorMessage(err, 'Unable to save reel');
+      if (msg === 'Network Error') {
+        alert('Network Error: Failed to upload file to server. Please check that the backend is running and the video file is valid.');
+      } else {
+        alert(msg);
+      }
     } finally {
       setSaving(false);
+      setUploadProgress(null);
     }
   };
 
@@ -604,11 +618,11 @@ const ReelsManagement = () => {
               <div className="space-y-1">
                 <label className="block text-[8px] text-gray-400 uppercase tracking-wider font-bold">Product Landing URL</label>
                 <input
-                  type="url"
-                  placeholder="https://schoolemart.com/products/class-2"
+                  type="text"
+                  placeholder="e.g. /user/product/673... or copied Product Landing URL"
                   value={productUrl}
                   onChange={(e) => setProductUrl(e.target.value)}
-                  className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500/25"
+                  className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500/25 text-xs"
                 />
               </div>
 
@@ -692,7 +706,7 @@ const ReelsManagement = () => {
                 disabled={saving}
                 className="w-full flex items-center justify-center gap-2 bg-[#0B1528] hover:bg-[#15253F] disabled:opacity-60 text-white text-xs font-black uppercase tracking-wider py-3 rounded-xl transition-all shadow-xs"
               >
-                {saving ? 'Saving…' : isEditing ? 'Update Reel Details' : 'Upload Reel'}
+                {saving ? (uploadProgress !== null ? `Uploading Video (${uploadProgress}%)…` : 'Saving…') : isEditing ? 'Update Reel Details' : 'Upload Reel'}
               </button>
 
               <button

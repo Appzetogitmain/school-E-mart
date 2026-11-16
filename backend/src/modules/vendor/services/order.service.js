@@ -89,7 +89,36 @@ const vendorOrderService = {
       if (query.to) filter['audit.createdAt'].$lte = new Date(query.to);
     }
     if (query.search) {
-      filter.orderNumber = { $regex: escapeRegex(query.search), $options: 'i' };
+      const term = String(query.search).trim();
+      const escaped = escapeRegex(term);
+      const rx = { $regex: escaped, $options: 'i' };
+
+      const [matchedUsers, matchedChildren] = await Promise.all([
+        User.find({
+          $or: [{ name: rx }, { email: rx }, { phone: rx }],
+        }).select('_id').lean(),
+        ChildProfile.find({
+          name: rx,
+        }).select('parentUserId').lean(),
+      ]);
+
+      const matchedUserIds = [
+        ...matchedUsers.map((u) => u._id),
+        ...matchedChildren.map((c) => c.parentUserId).filter(Boolean),
+      ];
+
+      const searchConditions = [
+        { orderNumber: rx },
+        { 'address.name': rx },
+        { 'address.phone': rx },
+        { 'address.email': rx },
+      ];
+
+      if (matchedUserIds.length > 0) {
+        searchConditions.push({ userId: { $in: matchedUserIds } });
+      }
+
+      filter.$or = searchConditions;
     }
     // Only paging and sorting are forwarded. The paginator runs every other query key
     // back through ApiFeatures.filter as a raw top-level equality match, and an Order

@@ -217,7 +217,24 @@ const VendorOrders = () => {
     }
   };
 
-  const filteredOrders = useMemo(() => orders, [orders]);
+  const filteredOrders = useMemo(() => {
+    if (!searchQuery.trim()) return orders;
+    const q = searchQuery.trim().toLowerCase();
+    return orders.filter((order) => {
+      const orderNum = (order.id || '').toLowerCase();
+      const parent = (order.parentName || '').toLowerCase();
+      const student = (order.studentName || '').toLowerCase();
+      const phone = (order.phone || '').toLowerCase();
+      const email = (order.email || '').toLowerCase();
+      return (
+        orderNum.includes(q) ||
+        parent.includes(q) ||
+        student.includes(q) ||
+        phone.includes(q) ||
+        email.includes(q)
+      );
+    });
+  }, [orders, searchQuery]);
 
   const paginatedOrders = useMemo(() => {
     const startIndex = (currentPage - 1) * limit;
@@ -573,7 +590,7 @@ const VendorOrders = () => {
                 type="text"
                 value={searchQuery}
                 onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
-                placeholder="Search by order number..."
+                placeholder="Search by order number, customer, student..."
                 className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-[#5B3FD6]/10 focus:border-[#5B3FD6] placeholder-gray-400 font-medium"
               />
             </div>

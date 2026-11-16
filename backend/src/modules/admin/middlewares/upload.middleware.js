@@ -86,35 +86,11 @@ const uploadImage = multer({
   fileFilter: imageFilter,
 }).single('file');
 
-const PlatformSettings = require('../../../database/models/PlatformSettings');
-
-const getMaxMediaSizeBytes = async () => {
-  try {
-    const settings = await PlatformSettings.findById('default').lean();
-    const mb = settings?.lms?.maxVideoSizeMB || 500;
-    return mb * 1024 * 1024;
-  } catch {
-    return 500 * 1024 * 1024;
-  }
-};
-
-const uploadMedia = (req, res, next) => {
-  getMaxMediaSizeBytes()
-    .then((maxBytes) => {
-      multer({
-        storage,
-        limits: { fileSize: maxBytes },
-        fileFilter: mediaFilter,
-      }).single('file')(req, res, next);
-    })
-    .catch(() => {
-      multer({
-        storage,
-        limits: { fileSize: 500 * 1024 * 1024 },
-        fileFilter: mediaFilter,
-      }).single('file')(req, res, next);
-    });
-};
+const uploadMedia = multer({
+  storage,
+  limits: { fileSize: 500 * 1024 * 1024 }, // 500MB
+  fileFilter: mediaFilter,
+}).single('file');
 
 const uploadDocument = multer({
   storage,

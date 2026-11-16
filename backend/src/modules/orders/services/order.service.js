@@ -3,6 +3,8 @@ const logger = require('../../../common/logger');
 const { NotFoundError, BadRequestError } = require('../../../common/errors');
 const Order = require('../../../database/models/Order');
 const OrderShipment = require('../../../database/models/OrderShipment');
+const User = require('../../../database/models/User');
+const ChildProfile = require('../../../database/models/ChildProfile');
 const orderRepository = require('../repositories/order.repository');
 const checkoutService = require('./checkout.service');
 const commissionService = require('./commission.service');
@@ -54,12 +56,38 @@ const buildStatusFilter = (status) => {
  *    or a phone number — which is how support requests actually arrive — got
  *    nothing back, even though the order carries both.
  */
-const buildSearchFilter = (search) => {
+const buildSearchFilter = async (search) => {
   const term = String(search).trim();
   if (!term) return null;
   const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const rx = { $regex: escaped, $options: 'i' };
-  return [{ orderNumber: rx }, { 'address.name': rx }, { 'address.phone': rx }];
+
+  const [matchedUsers, matchedChildren] = await Promise.all([
+    User.find({
+      $or: [{ name: rx }, { email: rx }, { phone: rx }],
+    }).select('_id').lean(),
+    ChildProfile.find({
+      name: rx,
+    }).select('parentUserId').lean(),
+  ]);
+
+  const matchedUserIds = [
+    ...matchedUsers.map((u) => u._id),
+    ...matchedChildren.map((c) => c.parentUserId).filter(Boolean),
+  ];
+
+  const or = [
+    { orderNumber: rx },
+    { 'address.name': rx },
+    { 'address.phone': rx },
+    { 'address.email': rx },
+  ];
+
+  if (matchedUserIds.length > 0) {
+    or.push({ userId: { $in: matchedUserIds } });
+  }
+
+  return or;
 };
 
 const stripPaginationMeta = (query = {}) => {
@@ -363,7 +391,7 @@ const orderService = {
     return order;
   },
 
-  listCustomerOrders(userId, query, { audience } = {}) {
+  async listCustomerOrders(userId, query, { audience } = {}) {
     const filter = { userId };
     if (audience) filter.audience = audience;
     if (query.status) {
@@ -378,7 +406,7 @@ const orderService = {
     }
     if (query.paymentStatus) filter.paymentStatus = query.paymentStatus;
     if (query.search) {
-      const or = buildSearchFilter(query.search);
+      const or = await buildSearchFilter(query.search);
       if (or) filter.$or = or;
     }
     if (query.from || query.to) {
@@ -396,7 +424,7 @@ const orderService = {
    * conditions as the rows beneath them. Building the two separately is how a
    * header ends up claiming a total the table does not show.
    */
-  buildAdminOrderFilter(query = {}) {
+  async buildAdminOrderFilter(query = {}) {
     const filter = {};
     // An unpaid online order is not a sale. It stays out of the operations list and
     // out of every total computed from it unless someone asks for it by name.
@@ -409,7 +437,7 @@ const orderService = {
     if (query.paymentStatus) filter.paymentStatus = query.paymentStatus;
     if (query.paymentMethod) filter.paymentMethod = query.paymentMethod;
     if (query.search) {
-      const or = buildSearchFilter(query.search);
+      const or = await buildSearchFilter(query.search);
       if (or) filter.$or = or;
     }
     if (query.from || query.to) {
@@ -420,9 +448,10 @@ const orderService = {
     return filter;
   },
 
-  listAllOrders(query) {
+  async listAllOrders(query) {
+    const filter = await this.buildAdminOrderFilter(query);
     return orderRepository.paginateOrders(
-      this.buildAdminOrderFilter(query),
+      filter,
       stripPaginationMeta(query)
     );
   },
@@ -432,7 +461,7 @@ const orderService = {
    * cards above the admin order table describe the same set as the table.
    */
   async getAdminOrderStats(query = {}) {
-    const filter = this.buildAdminOrderFilter(query);
+    const filter = await this.buildAdminOrderFilter(query);
     const [byOrderStatus, byPaymentStatus, totals] = await Promise.all([
       Order.aggregate([
         { $match: filter },
@@ -507,7 +536,7 @@ const orderService = {
     };
   },
 
-  listSchoolPickupOrders(schoolId, query) {
+  async listSchoolPickupOrders(schoolId, query) {
     const filter = {};
     // Same rule as the admin list: a school must not be told to expect a delivery for
     // an order nobody has paid for.
@@ -515,7 +544,7 @@ const orderService = {
     filter.orderStatus = pickupStatusFilter || { $nin: [AWAITING_PAYMENT, PAYMENT_FAILED] };
     if (query.paymentStatus) filter.paymentStatus = query.paymentStatus;
     if (query.search) {
-      const or = buildSearchFilter(query.search);
+      const or = await buildSearchFilter(query.search);
       if (or) filter.$or = or;
     }
     if (query.from || query.to) {
