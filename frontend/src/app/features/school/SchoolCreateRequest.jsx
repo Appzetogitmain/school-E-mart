@@ -5,7 +5,9 @@ import {
   Clipboard, Info, Check, ChevronDown, Save,
   ArrowRight, Sparkles, Plus, Edit2, Trash2,
   Upload, Image as ImageIcon, Search, Star,
-  ShieldCheck, Loader2, Camera
+  ShieldCheck, Loader2, Camera, BookOpen,
+  FlaskConical, Trophy, Building, Package,
+  FileText, CheckCircle2
 } from 'lucide-react';
 import { listVendors, getVendorsByIds, uploadSchoolFile } from '../../../services/schoolApi';
 import { createRfq, getSchoolRfq, updateRfq } from '../../../services/rfqApi';
@@ -16,10 +18,7 @@ import { useSchoolId } from '../../../utils/schoolContext';
 import { toAbsoluteUrl } from '../../../utils/url';
 
 // A sane starting point for a new request's deadline — two weeks out, in
-// "yyyy-mm-dd" for the date input. Was previously a hardcoded '2025-12-15',
-// which meant every request created without the school noticing and changing
-// it published with a deadline already in the past: no vendor could ever
-// submit a quote against it.
+// "yyyy-mm-dd" for the date input.
 const defaultDeadlineDate = () => {
   const d = new Date();
   d.setDate(d.getDate() + 14);
@@ -27,8 +26,28 @@ const defaultDeadlineDate = () => {
 };
 
 // Today, for the date input's `min` — blocks picking a past deadline outright
-// rather than relying only on the server to reject it after the fact.
 const todayDateString = () => new Date().toISOString().slice(0, 10);
+
+export const AVAILABLE_CATEGORIES = [
+  { id: 'uniform', label: 'School Uniforms', icon: '👕', desc: 'Uniform sets, sportswear, house dress' },
+  { id: 'books', label: 'Books & Notebooks', icon: '📚', desc: 'Textbooks, workbooks, customized notebooks' },
+  { id: 'stationery', label: 'Stationery & Art', icon: '✏️', desc: 'Classroom & office stationery, art supplies' },
+  { id: 'labs', label: 'Laboratory Equipment', icon: '🔬', desc: 'Science lab apparatus, chemicals, kits' },
+  { id: 'sports', label: 'Sports & Games', icon: '⚽', desc: 'Sports goods, athletics gear, fitness items' },
+  { id: 'furniture', label: 'School Furniture', icon: '🏢', desc: 'Desks, benches, boards, classroom infra' },
+  { id: 'supplies', label: 'Institutional Supplies', icon: '📦', desc: 'Bags, ID cards, belts, bulk school supplies' },
+];
+
+export const AVAILABLE_UOM = [
+  { id: 'pieces', label: 'Pieces (pcs)' },
+  { id: 'sets', label: 'Sets' },
+  { id: 'boxes', label: 'Boxes' },
+  { id: 'packets', label: 'Packets' },
+  { id: 'pairs', label: 'Pairs' },
+  { id: 'kg', label: 'Kilograms (kg)' },
+  { id: 'meters', label: 'Meters' },
+  { id: 'units', label: 'Units' },
+];
 
 const SchoolCreateRequest = () => {
   const navigate = useNavigate();
@@ -45,8 +64,21 @@ const SchoolCreateRequest = () => {
   const [draftLoading, setDraftLoading] = useState(false);
   const [newComponentNames, setNewComponentNames] = useState({}); // { [setId]: '' }
 
-  // STEP 1 STATES (title/notes may be prefilled via query params,
-  // e.g. the "Request Quote" banner on the Supplies category pages)
+  // Requirement Category (uniform vs books, stationery, labs, etc.)
+  const [category, setCategory] = useState(() => {
+    const urlCat = searchParams.get('category');
+    if (urlCat) return urlCat.toLowerCase();
+    const title = searchParams.get('title') || '';
+    if (/book|notebook|diary/i.test(title)) return 'books';
+    if (/stationery|pen|pencil|art/i.test(title)) return 'stationery';
+    if (/lab|science|physics|chem/i.test(title)) return 'labs';
+    if (/sport|game|fitness/i.test(title)) return 'sports';
+    if (/furniture|bench|desk|board/i.test(title)) return 'furniture';
+    if (/supply|supplies|bag|kit/i.test(title)) return 'supplies';
+    return 'uniform';
+  });
+
+  // STEP 1 STATES (title/notes may be prefilled via query params)
   const [requestTitle, setRequestTitle] = useState(() => (draftId ? '' : searchParams.get('title') || ''));
   const [academicYear, setAcademicYear] = useState('');
   const [requiredDate, setRequiredDate] = useState('');
@@ -84,7 +116,11 @@ const SchoolCreateRequest = () => {
     { id: 'class-8', label: 'Class 8' },
   ];
 
+  // STEP 2 STATES
+  // For uniform category:
   const [uniformSets, setUniformSets] = useState([]);
+  // For non-uniform categories (books, stationery, labs, sports, furniture, supplies):
+  const [items, setItems] = useState([]);
 
   useEffect(() => {
     if (!schoolId || !draftId) return;
@@ -110,6 +146,14 @@ const SchoolCreateRequest = () => {
 
           if (rfq.quotationDeadline) {
             setDeadlineDate(rfq.quotationDeadline.slice(0, 10));
+          }
+          if (rfq.category) {
+            setCategory(rfq.category.toLowerCase());
+          }
+          if (rfq.meta?.items && Array.isArray(rfq.meta.items)) {
+            setItems(rfq.meta.items.map((it, idx) => ({ ...it, id: idx + 1 })));
+          } else if (rfq.items && Array.isArray(rfq.items) && rfq.category?.toLowerCase() !== 'uniform') {
+            setItems(rfq.items.map((it, idx) => ({ ...it, id: idx + 1 })));
           }
           if (rfq.meta?.uniformSets) {
             // The server's uniformSetSchema doesn't persist a client-side
@@ -184,6 +228,7 @@ const SchoolCreateRequest = () => {
     try {
       const payload = buildCreateRfqPayload({
         requestTitle,
+        category,
         academicYear,
         requiredDate,
         deadlineDate,
@@ -192,6 +237,7 @@ const SchoolCreateRequest = () => {
         specialInstructions,
         additionalNotes,
         uniformSets,
+        items,
         vendors,
         status: 'open',
       });
@@ -219,9 +265,16 @@ const SchoolCreateRequest = () => {
     if (!academicYear) return 'Academic year is required';
     if (!requiredDate) return 'Required by date is required';
     if (!selectedClasses.length) return 'Select at least one class';
-    if (!uniformSets.length) return 'Add at least one uniform set';
-    if (!uniformSets.some((set) => (parseInt(set.boysQty, 10) || 0) + (parseInt(set.girlsQty, 10) || 0) > 0)) {
-      return 'Enter quantity for at least one uniform set';
+    if (category === 'uniform') {
+      if (!uniformSets.length) return 'Add at least one uniform set';
+      if (!uniformSets.some((set) => (parseInt(set.boysQty, 10) || 0) + (parseInt(set.girlsQty, 10) || 0) > 0)) {
+        return 'Enter quantity for at least one uniform set';
+      }
+    } else {
+      if (!items.length) return 'Add at least one item requirement';
+      if (!items.some((it) => it.name?.trim() && Number(it.quantity) > 0)) {
+        return 'Enter valid name and quantity for at least one item';
+      }
     }
     if (!vendors.some((v) => v.checked)) return 'Select at least one vendor';
     if (!deadlineDate) return 'Quotation submission deadline is required';
@@ -337,6 +390,7 @@ const SchoolCreateRequest = () => {
     try {
       const payload = buildCreateRfqPayload({
         requestTitle,
+        category,
         academicYear,
         requiredDate,
         deadlineDate,
@@ -345,6 +399,7 @@ const SchoolCreateRequest = () => {
         specialInstructions,
         additionalNotes,
         uniformSets,
+        items,
         vendors,
         status: 'draft',
       });
@@ -475,8 +530,105 @@ const SchoolCreateRequest = () => {
     }
   };
 
+  const handleAddGenericItem = () => {
+    const newId = items.length > 0 ? Math.max(...items.map((i) => i.id || 0)) + 1 : 1;
+    const newItem = {
+      id: newId,
+      name: '',
+      specifications: '',
+      quantity: '1',
+      uom: 'pieces',
+      images: [
+        { label: 'Sample / Reference Image', file: null, preview: null, attachmentId: null }
+      ],
+    };
+    setItems((prev) => [...prev, newItem]);
+  };
+
+  const handleUpdateGenericItem = (itemId, patch) => {
+    setItems((prev) => prev.map((item) => (item.id === itemId ? { ...item, ...patch } : item)));
+  };
+
+  const handleRemoveGenericItem = (itemId) => {
+    setItems((prev) => prev.filter((item) => item.id !== itemId));
+  };
+
+  const handleGenericItemImageUpload = async (itemId, file) => {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file');
+      return;
+    }
+    if (!schoolId) {
+      alert('School context is missing. Please log in again.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setItems((prev) =>
+        prev.map((item) => {
+          if (item.id !== itemId) return item;
+          return {
+            ...item,
+            images: [{ label: 'Sample / Reference Image', preview: reader.result, uploading: true, uploadError: false }],
+          };
+        })
+      );
+    };
+    reader.readAsDataURL(file);
+
+    try {
+      const attachment = await uploadSchoolFile(schoolId, file, 'rfq_attachment');
+      setItems((prev) =>
+        prev.map((item) => {
+          if (item.id !== itemId) return item;
+          return {
+            ...item,
+            images: [
+              {
+                label: 'Sample / Reference Image',
+                preview: item.images?.[0]?.preview,
+                attachmentId: attachment?._id || attachment?.id,
+                uploading: false,
+                uploadError: false,
+              },
+            ],
+          };
+        })
+      );
+    } catch (err) {
+      setItems((prev) =>
+        prev.map((item) => {
+          if (item.id !== itemId) return item;
+          return {
+            ...item,
+            images: [{ label: 'Sample / Reference Image', preview: null, uploading: false, uploadError: true }],
+          };
+        })
+      );
+      alert(getErrorMessage(err, 'Unable to upload sample image — please try again.'));
+    }
+  };
+
+  const handleRemoveGenericItemImage = (itemId) => {
+    setItems((prev) =>
+      prev.map((item) => {
+        if (item.id !== itemId) return item;
+        return {
+          ...item,
+          images: [{ label: 'Sample / Reference Image', file: null, preview: null, attachmentId: null }],
+        };
+      })
+    );
+  };
+
   const handleHelpClick = () => {
-    alert('Uniform Request Help:\n\nStep 1: Enter basic information about the request (academic year, required date, applicable classes).\n\nStep 2: Add specific uniform sets (Regular, Sports, Winter, etc.), configure quantities, check required items, and upload reference design images.');
+    alert(
+      category === 'uniform'
+        ? 'Uniform Request Help:\n\nStep 1: Enter basic information (academic year, required date, applicable classes).\n\nStep 2: Add specific uniform sets, configure quantities, check components, and upload design photos.'
+        : 'Quotation Request Help:\n\nStep 1: Enter request details (title, category, academic year, required date).\n\nStep 2: Add specific items required, quantities, units of measure, and specifications.\n\nStep 3: Select vendors to invite for quotes.'
+    );
   };
 
   return (
@@ -566,18 +718,18 @@ const SchoolCreateRequest = () => {
             <div>
               <h1 className="text-xl font-black leading-tight">
                 {currentStep === 1 
-                  ? 'New Uniform Request' 
+                  ? (category === 'uniform' ? 'New Uniform Request' : 'New Quotation Request') 
                   : currentStep === 2 
-                    ? 'Uniform Sets' 
+                    ? (category === 'uniform' ? 'Uniform Sets' : 'Required Items') 
                     : currentStep === 3 
                       ? 'Invite Vendors' 
                       : 'Review Your Request'}
               </h1>
               <span className="text-[12px] text-purple-200 font-bold block mt-1">
                 {currentStep === 1 
-                  ? 'Create a new uniform requirement' 
+                  ? (category === 'uniform' ? 'Create a new uniform requirement' : 'Create a new bulk quotation requirement') 
                   : currentStep === 2 
-                    ? 'Add the different uniform sets required in your school' 
+                    ? (category === 'uniform' ? 'Add the different uniform sets required in your school' : 'Add the specific products, quantities and specifications required') 
                     : currentStep === 3 
                       ? 'Select vendors to invite for this request' 
                       : 'Please review all details before sending the request to vendors.'}
@@ -620,7 +772,9 @@ const SchoolCreateRequest = () => {
             }`}>
               {currentStep > 2 ? <Check size={14} className="stroke-[3.5]" /> : '2'}
             </div>
-            <span className="text-[9px] font-black text-white uppercase tracking-wider">Sets</span>
+            <span className="text-[9px] font-black text-white uppercase tracking-wider">
+              {category === 'uniform' ? 'Sets' : 'Items'}
+            </span>
           </div>
 
           <div className={`h-0.5 flex-1 mx-2 -mt-5 transition-colors ${currentStep > 2 ? 'bg-emerald-500' : 'bg-white/20'}`} />
@@ -680,8 +834,51 @@ const SchoolCreateRequest = () => {
                   Request Details
                 </h3>
                 <p className="text-[10px] text-gray-400 font-bold mt-0.5">
-                  Provide the basic details for your uniform requirement.
+                  {category === 'uniform'
+                    ? 'Provide the basic details for your uniform requirement.'
+                    : 'Provide the basic details for your quotation requirement.'}
                 </p>
+              </div>
+            </div>
+
+            {/* Requirement Category Selector */}
+            <div className="space-y-2.5">
+              <label className="text-[12px] font-black text-gray-500 uppercase tracking-wider block">
+                Requirement Category <span className="text-red-500">*</span>
+              </label>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
+                {AVAILABLE_CATEGORIES.map((cat) => {
+                  const isSelected = category === cat.id;
+                  return (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      onClick={() => setCategory(cat.id)}
+                      className={`p-3 rounded-2xl border text-left transition-all flex flex-col justify-between gap-1.5 cursor-pointer ${
+                        isSelected
+                          ? 'border-[#3b2d7d] bg-[#3b2d7d]/5 ring-2 ring-[#3b2d7d]/20 shadow-sm'
+                          : 'border-gray-200 bg-white hover:bg-gray-50/80 hover:border-gray-300'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between w-full">
+                        <span className="text-lg">{cat.icon}</span>
+                        {isSelected && (
+                          <div className="w-4 h-4 rounded-full bg-[#3b2d7d] text-white flex items-center justify-center">
+                            <Check size={10} className="stroke-[3]" />
+                          </div>
+                        )}
+                      </div>
+                      <div>
+                        <span className={`text-xs font-black block leading-tight ${isSelected ? 'text-[#3b2d7d]' : 'text-gray-800'}`}>
+                          {cat.label}
+                        </span>
+                        <span className="text-[9px] text-gray-400 font-semibold line-clamp-1 mt-0.5">
+                          {cat.desc}
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
@@ -852,7 +1049,7 @@ const SchoolCreateRequest = () => {
       )}
 
       {/* STEP 2 RENDERING - UNIFORM SETS */}
-      {currentStep === 2 && (
+      {currentStep === 2 && category === 'uniform' && (
         <div className="px-6 py-6 space-y-6">
           {/* Header & Add Button */}
           <div className="flex items-center justify-between gap-3 bg-white p-5 border border-gray-200/80 rounded-[2rem] shadow-sm">
@@ -1174,6 +1371,210 @@ const SchoolCreateRequest = () => {
         </div>
       )}
 
+      {/* STEP 2 RENDERING - NON-UNIFORM ITEMS (BOOKS, STATIONERY, LABS, SPORTS, ETC.) */}
+      {currentStep === 2 && category !== 'uniform' && (
+        <div className="px-6 py-6 space-y-6">
+          {/* Header & Add Button */}
+          <div className="flex items-center justify-between gap-3 bg-white p-5 border border-gray-200/80 rounded-[2rem] shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-purple-50 text-[#3b2d7d] flex items-center justify-center shrink-0">
+                <Sparkles size={18} />
+              </div>
+              <div>
+                <h3 className="text-sm font-black text-deep-purple">
+                  {AVAILABLE_CATEGORIES.find((c) => c.id === category)?.label || 'Requirement Items'}
+                </h3>
+                <span className="text-[9.5px] text-gray-400 font-bold block mt-0.5">
+                  Add the items, quantities, and specifications needed
+                </span>
+              </div>
+            </div>
+            <button 
+              type="button"
+              onClick={handleAddGenericItem}
+              className="px-3.5 py-2.5 border-2 border-[#3b2d7d] text-[#3b2d7d] hover:bg-purple-50/30 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all shadow-sm active:scale-95 cursor-pointer"
+            >
+              <Plus size={14} className="stroke-[3]" />
+              Add Item
+            </button>
+          </div>
+
+          {/* List of Generic Items */}
+          {items.length === 0 ? (
+            <div className="text-center py-12 px-4 bg-white border border-dashed border-gray-200 rounded-[2.2rem]">
+              <Package size={36} className="text-gray-300 mx-auto mb-2" />
+              <p className="text-xs font-black text-gray-700">No items added yet</p>
+              <p className="text-[10px] text-gray-400 font-bold mt-1">Tap &quot;Add Item&quot; to define products and supplies needed for this quotation.</p>
+              <button
+                type="button"
+                onClick={handleAddGenericItem}
+                className="mt-4 px-5 py-2.5 bg-[#3b2d7d] text-white rounded-xl text-xs font-black inline-flex items-center gap-2 shadow-md hover:bg-[#2b2061] active:scale-95 transition-all cursor-pointer"
+              >
+                <Plus size={14} className="stroke-[3]" />
+                Add First Item
+              </button>
+            </div>
+          ) : (
+            items.map((item, itemIdx) => {
+              const fileInputId = `generic-item-image-${item.id}`;
+              const sampleImg = item.images?.[0];
+              const previewSrc = sampleImg?.preview || (sampleImg?.url ? toAbsoluteUrl(sampleImg.url) : null);
+
+              return (
+                <div 
+                  key={item.id}
+                  className="bg-white border border-gray-200/80 rounded-[2.2rem] p-6 shadow-sm space-y-5 relative overflow-hidden animate-in fade-in slide-in-from-top-3 duration-300"
+                >
+                  {/* Card Title & Header Actions */}
+                  <div className="flex items-center justify-between gap-2.5 border-b border-gray-100 pb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-[#3b2d7d] text-white text-[12px] font-black flex items-center justify-center shadow-md shrink-0">
+                        {itemIdx + 1}
+                      </div>
+                      <h4 className="text-sm font-black text-deep-purple">
+                        {item.name?.trim() ? item.name : `Item #${itemIdx + 1}`}
+                      </h4>
+                    </div>
+
+                    <button 
+                      type="button"
+                      onClick={() => handleRemoveGenericItem(item.id)}
+                      className="w-9 h-9 bg-red-50 text-red-500 hover:bg-red-100/70 border border-red-100 rounded-xl flex items-center justify-center transition-all active:scale-90 cursor-pointer"
+                      title="Remove Item"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+
+                  {/* Item Name Input */}
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-black text-gray-500 uppercase tracking-wider block">
+                      Item Name <span className="text-red-500">*</span>
+                    </label>
+                    <input 
+                      type="text"
+                      value={item.name}
+                      onChange={(e) => handleUpdateGenericItem(item.id, { name: e.target.value })}
+                      placeholder="e.g. Class 10 NCERT Mathematics Book, A4 Spiral Notebook 200pg"
+                      className="w-full px-4 py-3 bg-white border border-gray-200 rounded-2xl text-xs font-bold text-deep-purple focus:outline-none focus:border-[#3b2d7d]/50 transition-colors placeholder:text-gray-300"
+                    />
+                  </div>
+
+                  {/* Quantity & Unit of Measure */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-black text-gray-500 uppercase tracking-wider block">
+                        Quantity Required <span className="text-red-500">*</span>
+                      </label>
+                      <input 
+                        type="number"
+                        min="1"
+                        value={item.quantity}
+                        onChange={(e) => handleUpdateGenericItem(item.id, { quantity: e.target.value })}
+                        placeholder="e.g. 500"
+                        className="w-full px-4 py-3 bg-white border border-gray-200 rounded-2xl text-xs font-bold text-deep-purple focus:outline-none focus:border-[#3b2d7d]/50 transition-colors placeholder:text-gray-300"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-black text-gray-500 uppercase tracking-wider block">
+                        Unit of Measure (UOM)
+                      </label>
+                      <div className="relative flex items-center">
+                        <select 
+                          value={item.uom || 'pieces'}
+                          onChange={(e) => handleUpdateGenericItem(item.id, { uom: e.target.value })}
+                          className="w-full pl-4 pr-8 py-3 bg-white border border-gray-200 rounded-2xl text-xs font-bold text-deep-purple focus:outline-none focus:border-[#3b2d7d]/50 transition-colors appearance-none cursor-pointer"
+                        >
+                          {AVAILABLE_UOM.map((u) => (
+                            <option key={u.id} value={u.id}>
+                              {u.label}
+                            </option>
+                          ))}
+                        </select>
+                        <ChevronDown size={14} className="absolute right-3.5 text-gray-400 pointer-events-none" />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Specifications & Notes */}
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-black text-gray-500 uppercase tracking-wider block">
+                      Specifications & Details <span className="text-gray-400 font-bold text-[9px] lowercase">(optional)</span>
+                    </label>
+                    <textarea 
+                      value={item.specifications}
+                      onChange={(e) => handleUpdateGenericItem(item.id, { specifications: e.target.value })}
+                      placeholder="e.g. 70 GSM paper quality, customized school emblem on front cover, hardcover binding"
+                      rows={2}
+                      className="w-full px-4 py-3 bg-white border border-gray-200 rounded-2xl text-xs font-bold text-deep-purple focus:outline-none focus:border-[#3b2d7d]/50 transition-colors placeholder:text-gray-300 resize-none"
+                    />
+                  </div>
+
+                  {/* Sample / Reference Photo Upload */}
+                  <div className="space-y-2 pt-1 border-t border-gray-100">
+                    <label className="text-[11px] font-black text-gray-500 uppercase tracking-wider block">
+                      Sample / Reference Photo <span className="text-gray-400 font-bold text-[9px] lowercase">(optional)</span>
+                    </label>
+                    
+                    <div className="flex items-center gap-4">
+                      <input 
+                        type="file"
+                        id={fileInputId}
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleGenericItemImageUpload(item.id, file);
+                        }}
+                      />
+                      
+                      {previewSrc ? (
+                        <div className="relative w-24 h-24 rounded-2xl overflow-hidden border border-gray-200 group bg-gray-50 shrink-0">
+                          <img src={previewSrc} alt="Sample" className="w-full h-full object-cover" />
+                          {sampleImg?.uploading && (
+                            <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center text-white">
+                              <Loader2 size={16} className="animate-spin" />
+                              <span className="text-[8px] font-bold mt-1">Uploading...</span>
+                            </div>
+                          )}
+                          {!sampleImg?.uploading && (
+                            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                              <label htmlFor={fileInputId} className="p-1.5 bg-white text-gray-700 rounded-lg hover:bg-gray-100 cursor-pointer shadow-sm">
+                                <Upload size={13} />
+                              </label>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveGenericItemImage(item.id)}
+                                className="p-1.5 bg-red-500 text-white rounded-lg hover:bg-red-600 cursor-pointer shadow-sm"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <label 
+                          htmlFor={fileInputId}
+                          className="w-24 h-24 border-2 border-dashed border-gray-200 hover:border-[#3b2d7d]/50 bg-gray-50/60 hover:bg-purple-50/20 rounded-2xl flex flex-col items-center justify-center gap-1.5 cursor-pointer transition-all shrink-0 text-center p-2"
+                        >
+                          <Camera size={18} className="text-gray-400" />
+                          <span className="text-[8.5px] font-black text-gray-500 leading-tight">Attach Photo</span>
+                        </label>
+                      )}
+
+                      <div className="text-[10px] text-gray-400 font-medium leading-relaxed">
+                        Attach a sample photo, product specification sheet, or book cover to help vendors quote accurately.
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      )}
+
       {/* STEP 3 RENDERING - INVITE VENDORS */}
       {currentStep === 3 && (
         <div className="px-6 py-6 space-y-6">
@@ -1418,6 +1819,13 @@ const SchoolCreateRequest = () => {
 
             <div className="space-y-3.5 pt-1 text-xs">
               <div className="flex items-start gap-4">
+                <span className="w-24 text-gray-400 font-bold shrink-0">Category</span>
+                <span className="text-deep-purple font-black flex items-center gap-1.5">
+                  <span>{AVAILABLE_CATEGORIES.find((c) => c.id === category)?.icon}</span>
+                  <span>{AVAILABLE_CATEGORIES.find((c) => c.id === category)?.label || category}</span>
+                </span>
+              </div>
+              <div className="flex items-start gap-4">
                 <span className="w-24 text-gray-400 font-bold shrink-0">Request Title</span>
                 <span className="text-deep-purple font-black">{requestTitle || '—'}</span>
               </div>
@@ -1446,72 +1854,133 @@ const SchoolCreateRequest = () => {
             </div>
           </div>
 
-          {/* Card 2: Uniform Sets */}
-          <div className="bg-white border border-gray-200/80 rounded-[2.2rem] p-6 shadow-sm space-y-5 relative">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-purple-50 text-[#3b2d7d] flex items-center justify-center">
-                  <ImageIcon size={16} />
+          {/* Card 2: Uniform Sets (when category is uniform) */}
+          {category === 'uniform' && (
+            <div className="bg-white border border-gray-200/80 rounded-[2.2rem] p-6 shadow-sm space-y-5 relative">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-purple-50 text-[#3b2d7d] flex items-center justify-center">
+                    <ImageIcon size={16} />
+                  </div>
+                  <h3 className="text-sm font-black text-deep-purple">Uniform Sets ({uniformSets.length})</h3>
                 </div>
-                <h3 className="text-sm font-black text-deep-purple">Uniform Sets ({uniformSets.length})</h3>
+                <button 
+                  type="button"
+                  onClick={() => { setCurrentStep(2); window.scrollTo(0, 0); }}
+                  className="px-3.5 py-1.5 bg-gray-50 border border-gray-200 rounded-xl text-[10px] font-black text-[#3b2d7d] hover:bg-purple-50/50 transition-all flex items-center gap-1 uppercase active:scale-95"
+                >
+                  <Edit2 size={10} />
+                  Edit
+                </button>
               </div>
-              <button 
-                type="button"
-                onClick={() => { setCurrentStep(2); window.scrollTo(0, 0); }}
-                className="px-3.5 py-1.5 bg-gray-50 border border-gray-200 rounded-xl text-[10px] font-black text-[#3b2d7d] hover:bg-purple-50/50 transition-all flex items-center gap-1 uppercase active:scale-95"
-              >
-                <Edit2 size={10} />
-                Edit
-              </button>
+
+              <div className="space-y-4 pt-1">
+                {uniformSets.map((set, idx) => (
+                  <div key={set.id} className="bg-gray-50/70 border border-gray-200/80 rounded-2.5xl p-4.5 space-y-3.5">
+                    <div className="flex items-center justify-between gap-3 flex-wrap">
+                      <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-full bg-[#3b2d7d] text-white text-[10px] font-black flex items-center justify-center">
+                          {idx + 1}
+                        </div>
+                        <span className="text-xs font-black text-deep-purple">{set.name}</span>
+                      </div>
+                      <span className="px-2 py-0.5 bg-purple-50 text-[8px] font-black text-[#3b2d7d] rounded-lg border border-purple-100 uppercase shrink-0">
+                        {set.type}
+                      </span>
+                    </div>
+
+                    {/* Boys and Girls Stats */}
+                    <div className="grid grid-cols-2 gap-3 text-xs bg-white p-3 rounded-xl border border-gray-150">
+                      <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-lg bg-indigo-50 text-indigo-500 flex items-center justify-center shrink-0">
+                          <Users size={12} />
+                        </div>
+                        <div>
+                          <span className="text-[8px] text-gray-400 font-bold block leading-none">BOYS</span>
+                          <span className="text-[10px] font-black text-deep-purple mt-0.5 block">{set.boysQty || '0'} Students</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-lg bg-rose-50 text-rose-500 flex items-center justify-center shrink-0">
+                          <Users size={12} />
+                        </div>
+                        <div>
+                          <span className="text-[8px] text-rose-400 font-bold block leading-none">GIRLS</span>
+                          <span className="text-[10px] font-black text-deep-purple mt-0.5 block">{set.girlsQty || '0'} Students</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="text-[11px] leading-relaxed">
+                      <span className="text-gray-400 font-bold">Components ({set.components.filter(c => c.checked).length}): </span>
+                      <span className="text-deep-purple font-semibold">
+                        {set.components.filter(c => c.checked).map(c => c.label).join(', ') || 'None selected'}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
+          )}
 
-            <div className="space-y-4 pt-1">
-              {uniformSets.map((set, idx) => (
-                <div key={set.id} className="bg-gray-50/70 border border-gray-200/80 rounded-2.5xl p-4.5 space-y-3.5">
-                  <div className="flex items-center justify-between gap-3 flex-wrap">
-                    <div className="flex items-center gap-2">
-                      <div className="w-6 h-6 rounded-full bg-[#3b2d7d] text-white text-[10px] font-black flex items-center justify-center">
-                        {idx + 1}
-                      </div>
-                      <span className="text-xs font-black text-deep-purple">{set.name}</span>
-                    </div>
-                    <span className="px-2 py-0.5 bg-purple-50 text-[8px] font-black text-[#3b2d7d] rounded-lg border border-purple-100 uppercase shrink-0">
-                      {set.type}
-                    </span>
+          {/* Card 2: Required Items (when category is non-uniform) */}
+          {category !== 'uniform' && (
+            <div className="bg-white border border-gray-200/80 rounded-[2.2rem] p-6 shadow-sm space-y-5 relative">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-purple-50 text-[#3b2d7d] flex items-center justify-center">
+                    <Package size={16} />
                   </div>
-
-                  {/* Boys and Girls Stats */}
-                  <div className="grid grid-cols-2 gap-3 text-xs bg-white p-3 rounded-xl border border-gray-150">
-                    <div className="flex items-center gap-2">
-                      <div className="w-6 h-6 rounded-lg bg-indigo-50 text-indigo-500 flex items-center justify-center shrink-0">
-                        <Users size={12} />
-                      </div>
-                      <div>
-                        <span className="text-[8px] text-gray-400 font-bold block leading-none">BOYS</span>
-                        <span className="text-[10px] font-black text-deep-purple mt-0.5 block">{set.boysQty || '0'} Students</span>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-6 h-6 rounded-lg bg-rose-50 text-rose-500 flex items-center justify-center shrink-0">
-                        <Users size={12} />
-                      </div>
-                      <div>
-                        <span className="text-[8px] text-rose-400 font-bold block leading-none">GIRLS</span>
-                        <span className="text-[10px] font-black text-deep-purple mt-0.5 block">{set.girlsQty || '0'} Students</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="text-[11px] leading-relaxed">
-                    <span className="text-gray-400 font-bold">Components ({set.components.filter(c => c.checked).length}): </span>
-                    <span className="text-deep-purple font-semibold">
-                      {set.components.filter(c => c.checked).map(c => c.label).join(', ') || 'None selected'}
-                    </span>
-                  </div>
+                  <h3 className="text-sm font-black text-deep-purple">Required Items ({items.length})</h3>
                 </div>
-              ))}
+                <button 
+                  type="button"
+                  onClick={() => { setCurrentStep(2); window.scrollTo(0, 0); }}
+                  className="px-3.5 py-1.5 bg-gray-50 border border-gray-200 rounded-xl text-[10px] font-black text-[#3b2d7d] hover:bg-purple-50/50 transition-all flex items-center gap-1 uppercase active:scale-95 cursor-pointer"
+                >
+                  <Edit2 size={10} />
+                  Edit
+                </button>
+              </div>
+
+              <div className="space-y-3 pt-1">
+                {items.length === 0 ? (
+                  <p className="text-xs text-gray-400 font-bold italic py-2">No items added</p>
+                ) : (
+                  items.map((it, idx) => (
+                    <div key={it.id || idx} className="bg-gray-50/70 border border-gray-200/80 rounded-2.5xl p-4 space-y-2">
+                      <div className="flex items-center justify-between gap-3 flex-wrap">
+                        <div className="flex items-center gap-2">
+                          <div className="w-6 h-6 rounded-full bg-[#3b2d7d] text-white text-[10px] font-black flex items-center justify-center">
+                            {idx + 1}
+                          </div>
+                          <span className="text-xs font-black text-deep-purple">{it.name || 'Untitled Item'}</span>
+                        </div>
+                        <span className="px-2.5 py-0.5 bg-purple-50 text-[10px] font-black text-[#3b2d7d] rounded-lg border border-purple-100 uppercase">
+                          {it.quantity} {it.uom || 'pieces'}
+                        </span>
+                      </div>
+
+                      {it.specifications && (
+                        <p className="text-[11px] text-gray-500 font-medium pl-8 leading-relaxed">
+                          {it.specifications}
+                        </p>
+                      )}
+                      {(it.images?.[0]?.preview || it.images?.[0]?.url) && (
+                        <div className="pl-8 pt-1">
+                          <img
+                            src={it.images[0].preview || toAbsoluteUrl(it.images[0].url)}
+                            alt="Sample"
+                            className="w-14 h-14 rounded-xl object-cover border border-gray-200"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Card 3: Vendors Invited */}
           <div className="bg-white border border-gray-200/80 rounded-[2.2rem] p-6 shadow-sm space-y-5 relative">

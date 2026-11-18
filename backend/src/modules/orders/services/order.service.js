@@ -216,6 +216,8 @@ const orderService = {
             subtotalPaise: summary.subtotalPaise,
             taxPaise: summary.taxPaise,
             discountPaise: summary.discountPaise,
+            socialDiscountPaise: summary.socialDiscountPaise || 0,
+            socialDiscountPercent: summary.socialDiscountPercent || 0,
             platformFeePaise: summary.platformFeePaise,
             deliveryChargePaise: summary.deliveryChargePaise,
             handlingChargePaise: summary.handlingChargePaise,

@@ -68,6 +68,8 @@ const orderSchema = new mongoose.Schema({
   subtotalPaise: { type: Number, required: true, min: 0 },
   taxPaise: { type: Number, required: true, min: 0 },
   discountPaise: { type: Number, required: true, min: 0, default: 0 },
+  socialDiscountPaise: { type: Number, required: true, min: 0, default: 0 },
+  socialDiscountPercent: { type: Number, required: true, min: 0, default: 0 },
   platformFeePaise: { type: Number, required: true, min: 0, default: 0 },
   deliveryChargePaise: { type: Number, required: true, min: 0, default: 0 },
   handlingChargePaise: { type: Number, required: true, min: 0, default: 0 },

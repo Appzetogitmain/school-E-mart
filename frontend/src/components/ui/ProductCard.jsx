@@ -63,8 +63,19 @@ const ProductCard = ({
         setAdding(false);
       }
     } else if (actionType === 'Bulk Quote') {
+      const prodName = title || product.name || '';
+      const mapProductToCategory = (name = '') => {
+        if (/uniform|dress|shirt|trouser|skirt/i.test(name)) return 'uniform';
+        if (/book|notebook|diary|textbook/i.test(name)) return 'books';
+        if (/stationery|pen|pencil|art|craft|folder/i.test(name)) return 'stationery';
+        if (/lab|science|physics|chem|bio|beaker/i.test(name)) return 'labs';
+        if (/sport|game|fitness|ball|bat/i.test(name)) return 'sports';
+        if (/furniture|bench|desk|board/i.test(name)) return 'furniture';
+        return 'supplies';
+      };
       const qParams = new URLSearchParams({
-        title: `Bulk Quote Request - ${title || product.name || ''}`,
+        title: `Bulk Quote Request - ${prodName}`,
+        category: mapProductToCategory(prodName),
       });
       if (product.id || product._id) {
         qParams.set('productId', String(product.id || product._id));

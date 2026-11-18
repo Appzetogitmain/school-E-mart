@@ -12,6 +12,8 @@ import {
 import { getErrorMessage } from '../../../utils/apiHelpers';
 
 const rupees = (paise) => (Number(paise) || 0) / 100;
+// 15 -> "15", 12.5 -> "12.5", 3.3333 -> "3.33" (no trailing zeros)
+const pct = (value) => String(Math.round((Number(value) || 0) * 100) / 100);
 
 const TXN_DESC = {
   kit_commission_credit: 'Kit commission credit',
@@ -259,6 +261,19 @@ const SchoolWallet = () => {
                   <span className="font-extrabold text-sm text-white">₹{retailEarnings.toFixed(2)}</span>
                 </div>
               </div>
+            </div>
+
+            {/* Commission rates the school currently earns (set by the platform) */}
+            <div
+              data-testid="commission-rates"
+              className="bg-white/10 backdrop-blur-md rounded-2xl px-3.5 py-2.5 text-xs flex items-center justify-between gap-3"
+            >
+              <span className="text-[9px] font-black uppercase tracking-wider text-indigo-200/80">Your commission rates</span>
+              <span className="font-extrabold text-white text-[13px]">
+                Kit {pct(summary?.commissionRates?.kitPercent)}%
+                <span className="text-indigo-200/60 mx-1.5">•</span>
+                Marketplace {pct(summary?.commissionRates?.retailPercent)}%
+              </span>
             </div>
 
             {/* App Action Buttons Bar */}
@@ -594,6 +609,12 @@ const SchoolWallet = () => {
                             <p className="text-xs font-bold text-gray-800 truncate mt-0.5">
                               {t.description || TXN_DESC[t.transactionType] || '—'}
                             </p>
+                            {t.baseAmountPaise > 0 && t.commissionPercent != null ? (
+                              <p data-testid="commission-breakdown" className="text-[10px] font-semibold text-gray-500 mt-0.5">
+                                {t.orderNumber ? `Order ${t.orderNumber} · ` : ''}
+                                Sale ₹{rupees(t.baseAmountPaise).toFixed(2)} × {pct(t.commissionPercent)}% = ₹{rupees(t.amountPaise).toFixed(2)}
+                              </p>
+                            ) : null}
                           </div>
                         </div>
 

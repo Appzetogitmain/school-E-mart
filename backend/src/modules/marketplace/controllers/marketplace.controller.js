@@ -55,7 +55,7 @@ const mapPublicBanner = (banner) => ({
   link: banner.linkUrl || null,
   targetAudience: banner.targetAudience,
   position: banner.position,
-  placement: banner.position === 'home_top' ? 'main' : banner.position,
+  placement: banner.position === 'home_top' ? 'main' : banner.position === 'home_side' ? 'side' : banner.position,
   displayOrder: banner.displayOrder,
   status: banner.status,
   isActive: banner.status === 'active',
@@ -214,7 +214,9 @@ const marketplaceController = {
     } else {
       vendorId = await marketplaceAccessPolicy.resolveVendorId(req.auth);
     }
-    const product = await productService.createProduct(vendorId, req.body);
+    const body = { ...req.body };
+    if (!marketplaceAccessPolicy.isCatalogAdmin(req.auth)) delete body.isFeatured;
+    const product = await productService.createProduct(vendorId, body);
     return created(res, { product }, 'Product created', req);
   }),
 
@@ -229,6 +231,8 @@ const marketplaceController = {
       // entirely, or reassign it to another vendor.
       delete payload.approvalStatus;
       delete payload.vendorId;
+      // Featuring a product on the home page is an admin decision, not the vendor's.
+      delete payload.isFeatured;
     }
 
     const updated = await productService.updateProduct(req.params.productId, payload);

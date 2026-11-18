@@ -21,6 +21,8 @@ const productSchema = new mongoose.Schema({
     default: 'users'
   },
   gradeTags: [{ type: String }],
+  // Shown in the "Featured" section of the storefront home page. Admin-only switch.
+  isFeatured: { type: Boolean, default: false },
   pricePaise: { type: Number, required: true, min: 0 },
   originalPricePaise: { type: Number, min: 0 },
   taxRatePercent: { type: mongoose.Schema.Types.Decimal128, required: true, default: 0, min: 0, max: 28 },

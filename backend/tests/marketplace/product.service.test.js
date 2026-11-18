@@ -51,7 +51,7 @@ describe('marketplace taxonomy and products', () => {
       publishStatus: 'published',
       stock: 10,
       lowStockThreshold: 5,
-      gradeTags: ['featured'],
+      gradeTags: [], isFeatured: true,
     });
 
     expect(product.slug).toBeTruthy();

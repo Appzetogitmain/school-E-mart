@@ -67,18 +67,28 @@ const serializeQuote = (quote, vendor = null) => {
  * neither the school (resuming a draft) nor an invited vendor sees a dead id.
  */
 const withResolvedImageUrls = (meta, attachmentUrlMap) => {
-  if (!meta?.uniformSets?.length || !attachmentUrlMap) return meta;
+  if (!meta || !attachmentUrlMap) return meta;
 
-  return {
-    ...meta,
-    uniformSets: meta.uniformSets.map((set) => ({
+  const result = { ...meta };
+  if (Array.isArray(meta.uniformSets)) {
+    result.uniformSets = meta.uniformSets.map((set) => ({
       ...set,
       images: (set.images || []).map((img) => ({
         ...img,
         url: img.attachmentId ? attachmentUrlMap.get(String(img.attachmentId)) || null : null,
       })),
-    })),
-  };
+    }));
+  }
+  if (Array.isArray(meta.items)) {
+    result.items = meta.items.map((item) => ({
+      ...item,
+      images: (item.images || []).map((img) => ({
+        ...img,
+        url: img.attachmentId ? attachmentUrlMap.get(String(img.attachmentId)) || null : null,
+      })),
+    }));
+  }
+  return result;
 };
 
 /** Lightweight order summary attached to the school's own RFQ view — just

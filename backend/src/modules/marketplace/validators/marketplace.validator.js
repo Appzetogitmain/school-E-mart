@@ -41,7 +41,7 @@ const audienceQuery = Joi.object({
 
 const publicBannerQuery = paginationQuery.keys({
   audience: Joi.string().valid('parent', 'school', 'all').default('parent'),
-  position: Joi.string().valid('home_top', 'home_middle', 'category_top', 'cart').optional(),
+  position: Joi.string().valid('home_top', 'home_side', 'home_middle', 'category_top', 'cart').optional(),
   isActive: Joi.string().valid('true', 'false').optional(),
 });
 
@@ -137,6 +137,10 @@ const createProductSchema = Joi.object({
   publishStatus: Joi.string().valid('draft', 'published').optional(),
   approvalStatus: Joi.string().valid('pending', 'approved', 'rejected').optional(),
   vendorId: objectId.optional(),
+  isFeatured: Joi.boolean().optional(),
+  // Who the product is sold to. It used to be missing here, so the validator silently dropped it and every
+  // product stayed "users" no matter what the vendor/admin picked.
+  audience: Joi.string().valid('users', 'schools', 'both').optional(),
 });
 
 const updateProductSchema = createProductSchema.fork(

@@ -228,6 +228,26 @@ const invoiceService = {
       subtotalPaise: Number(order.subtotalPaise || 0),
       taxPaise: Number(order.taxPaise || 0),
       discountPaise: Number(order.discountPaise || 0),
+      socialDiscountPaise: (function() {
+        if (Number(order.socialDiscountPaise) > 0) return Number(order.socialDiscountPaise);
+        const sub = Number(order.subtotalPaise || 0);
+        const tot = Number(order.totalPaise || 0);
+        const chg = Number(order.taxPaise || 0) + Number(order.deliveryChargePaise || 0) + Number(order.platformFeePaise || 0) + Number(order.handlingChargePaise || 0);
+        if (sub > 0 && Math.abs((sub + chg - tot) - Math.round(sub * 0.05)) <= 1) {
+          return sub + chg - tot;
+        }
+        return 0;
+      })(),
+      socialDiscountPercent: (function() {
+        if (Number(order.socialDiscountPercent) > 0) return Number(order.socialDiscountPercent);
+        const sub = Number(order.subtotalPaise || 0);
+        const tot = Number(order.totalPaise || 0);
+        const chg = Number(order.taxPaise || 0) + Number(order.deliveryChargePaise || 0) + Number(order.platformFeePaise || 0) + Number(order.handlingChargePaise || 0);
+        if (sub > 0 && Math.abs((sub + chg - tot) - Math.round(sub * 0.05)) <= 1) {
+          return 5;
+        }
+        return 0;
+      })(),
       deliveryChargePaise: Number(order.deliveryChargePaise || 0),
       platformFeePaise: Number(order.platformFeePaise || 0),
       handlingChargePaise: Number(order.handlingChargePaise || 0),

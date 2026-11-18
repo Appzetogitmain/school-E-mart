@@ -99,6 +99,13 @@ export const mapOrderForDetail = (order) => {
       : '',
     city: order?.address?.city || '',
     subtotal: paiseToRupees(order?.subtotalPaise),
+    socialDiscount: paiseToRupees(
+      order?.socialDiscountPaise ||
+      (Number(order?.subtotalPaise || 0) > 0 &&
+       Math.abs((Number(order?.subtotalPaise || 0) + Number(order?.deliveryChargePaise || 0) - Number(order?.totalPaise || 0)) - Math.round(Number(order?.subtotalPaise || 0) * 0.05)) <= 1
+        ? Math.round(Number(order?.subtotalPaise || 0) * 0.05)
+        : 0)
+    ),
     shipping: paiseToRupees(order?.deliveryChargePaise),
     handling: paiseToRupees(order?.handlingChargePaise),
     platformFee: paiseToRupees(order?.platformFeePaise),

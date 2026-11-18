@@ -13,7 +13,7 @@ const promoBannerSchema = new mongoose.Schema({
   },
   position: {
     type: String,
-    enum: ['home_top', 'home_middle', 'category_top', 'cart'],
+    enum: ['home_top', 'home_side', 'home_middle', 'category_top', 'cart'],
     required: true
   },
   displayOrder: { type: Number, default: 0 },

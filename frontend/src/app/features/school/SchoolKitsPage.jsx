@@ -37,9 +37,17 @@ const mapKit = (k) => {
     mrp: k.mrpPaise ? ((k.mrpPaise || 0) / 100).toFixed(0) : null,
     vendorName,
     salesCount: k.salesCount || 0,
+    purchasedCount: k.coverage?.purchasedCount ?? (k.salesCount || 0),
+    // For class-targeted kits, align the "Sold" count with actual covered students
+    // so that (displaySold + pendingCount === eligibleCount) always adds up cleanly
+    displaySold: (k.coverage?.eligibleCount > 0 && k.coverage?.purchasedCount !== undefined)
+      ? k.coverage.purchasedCount
+      : (k.salesCount || 0),
     // How many students this kit is for still don't have it, and whether the
     // admin's sale window has already taken it off the parent app.
-    pendingCount: k.coverage?.pendingCount || 0,
+    pendingCount: k.coverage?.pendingCount !== undefined
+      ? k.coverage.pendingCount
+      : Math.max(0, (k.coverage?.eligibleCount || 0) - (k.coverage?.purchasedCount ?? (k.salesCount || 0))),
     eligibleCount: k.coverage?.eligibleCount || 0,
     saleEndsAt: k.purchaseWindow?.endsAt || null,
     saleExpired: Boolean(k.purchaseWindow?.expired),
@@ -379,7 +387,7 @@ const SchoolKitsPage = () => {
                     className="inline-flex items-center gap-1 text-[10px] font-black text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-full px-2 py-0.5 hover:bg-emerald-100 transition-all"
                   >
                     <ShoppingBag size={10} />
-                    {kit.salesCount} Sold
+                    {kit.displaySold} Sold
                   </button>
 
                   {kit.eligibleCount > 0 && (
@@ -687,7 +695,7 @@ const SchoolKitsPage = () => {
                   className="flex-1 sm:flex-initial px-4 py-2.5 bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 font-black rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95 shadow-xs"
                 >
                   <ShoppingBag size={13} />
-                  <span>Sales ({selectedKit.salesCount})</span>
+                  <span>Sales ({selectedKit.displaySold ?? selectedKit.salesCount})</span>
                 </button>
               </div>
 

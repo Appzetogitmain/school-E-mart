@@ -21,11 +21,8 @@ const YoutubeIcon = ({ size = 20, className = '' }) => (
   </svg>
 );
 
-const COUNTDOWN_SECONDS = 6;
-
 const SocialRewardModal = ({ isOpen, onClose, rewardData, onRefresh }) => {
-  const [activeTimerPlatform, setActiveTimerPlatform] = useState(null);
-  const [timerSeconds, setTimerSeconds] = useState(0);
+  const [savingPlatform, setSavingPlatform] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [localTasks, setLocalTasks] = useState({
@@ -44,21 +41,6 @@ const SocialRewardModal = ({ isOpen, onClose, rewardData, onRefresh }) => {
     }
   }, [rewardData]);
 
-  // Countdown timer effect
-  useEffect(() => {
-    let interval = null;
-    if (activeTimerPlatform && timerSeconds > 0) {
-      interval = setInterval(() => {
-        setTimerSeconds((prev) => prev - 1);
-      }, 1000);
-    } else if (activeTimerPlatform && timerSeconds === 0) {
-      // Timer finished -> complete task on backend
-      handleCompleteTask(activeTimerPlatform);
-      setActiveTimerPlatform(null);
-    }
-    return () => clearInterval(interval);
-  }, [activeTimerPlatform, timerSeconds]);
-
   if (!isOpen) return null;
 
   const urls = rewardData?.urls || {};
@@ -66,8 +48,8 @@ const SocialRewardModal = ({ isOpen, onClose, rewardData, onRefresh }) => {
   const hasLifetimeSocialDiscount = Boolean(rewardData?.hasLifetimeSocialDiscount);
   const allTasksCompleted = localTasks.instagram && localTasks.youtube && localTasks.google;
 
-  const handleTaskClick = (platform, url) => {
-    if (localTasks[platform] || activeTimerPlatform) return;
+  const handleTaskClick = async (platform, url) => {
+    if (localTasks[platform] || savingPlatform) return;
     setError('');
 
     // Open target social platform in a new tab
@@ -75,18 +57,16 @@ const SocialRewardModal = ({ isOpen, onClose, rewardData, onRefresh }) => {
       window.open(url, '_blank', 'noopener,noreferrer');
     }
 
-    // Start 6-second verification countdown
-    setActiveTimerPlatform(platform);
-    setTimerSeconds(COUNTDOWN_SECONDS);
-  };
-
-  const handleCompleteTask = async (platform) => {
+    // Immediately record task completion on backend without fragile timers
+    setSavingPlatform(platform);
     try {
       await completeSocialRewardTask(platform);
       setLocalTasks((prev) => ({ ...prev, [platform]: true }));
       if (onRefresh) onRefresh();
     } catch (err) {
       setError(getErrorMessage(err, 'Failed to record task completion'));
+    } finally {
+      setSavingPlatform(null);
     }
   };
 
@@ -146,7 +126,7 @@ const SocialRewardModal = ({ isOpen, onClose, rewardData, onRefresh }) => {
               <div>
                 <div className="font-bold text-sm">🟡 Under Admin Review</div>
                 <div className="text-xs text-amber-700 mt-0.5">
-                  Your request has been submitted to admin. Our team verifies submissions promptly and activates your 5% discount pass shortly.
+                  Aapki request Admin ke paas review me hai, Admin approve karte hi 5% discount active ho jayega.
                 </div>
               </div>
             </div>
@@ -187,14 +167,14 @@ const SocialRewardModal = ({ isOpen, onClose, rewardData, onRefresh }) => {
                 <span className="flex items-center gap-1 text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-200">
                   <Check size={14} strokeWidth={3} /> Done
                 </span>
-              ) : activeTimerPlatform === 'instagram' ? (
+              ) : savingPlatform === 'instagram' ? (
                 <span className="flex items-center gap-1.5 text-xs font-bold text-purple-600 bg-purple-50 px-3 py-1.5 rounded-xl border border-purple-200 animate-pulse">
-                  <Loader2 size={13} className="animate-spin" /> Verifying ({timerSeconds}s)
+                  <Loader2 size={13} className="animate-spin" /> Verifying...
                 </span>
               ) : (
                 <button
                   onClick={() => handleTaskClick('instagram', urls.instagram)}
-                  disabled={Boolean(activeTimerPlatform) || status === 'approved' || status === 'pending_approval'}
+                  disabled={Boolean(savingPlatform) || status === 'approved' || status === 'pending_approval'}
                   className="px-4 py-1.5 rounded-xl bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-700 hover:to-purple-700 text-white text-xs font-bold shadow-sm transition disabled:opacity-40"
                 >
                   Follow
@@ -218,14 +198,14 @@ const SocialRewardModal = ({ isOpen, onClose, rewardData, onRefresh }) => {
                 <span className="flex items-center gap-1 text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-200">
                   <Check size={14} strokeWidth={3} /> Done
                 </span>
-              ) : activeTimerPlatform === 'youtube' ? (
+              ) : savingPlatform === 'youtube' ? (
                 <span className="flex items-center gap-1.5 text-xs font-bold text-purple-600 bg-purple-50 px-3 py-1.5 rounded-xl border border-purple-200 animate-pulse">
-                  <Loader2 size={13} className="animate-spin" /> Verifying ({timerSeconds}s)
+                  <Loader2 size={13} className="animate-spin" /> Verifying...
                 </span>
               ) : (
                 <button
                   onClick={() => handleTaskClick('youtube', urls.youtube)}
-                  disabled={Boolean(activeTimerPlatform) || status === 'approved' || status === 'pending_approval'}
+                  disabled={Boolean(savingPlatform) || status === 'approved' || status === 'pending_approval'}
                   className="px-4 py-1.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold shadow-sm transition disabled:opacity-40"
                 >
                   Subscribe
@@ -249,14 +229,14 @@ const SocialRewardModal = ({ isOpen, onClose, rewardData, onRefresh }) => {
                 <span className="flex items-center gap-1 text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-200">
                   <Check size={14} strokeWidth={3} /> Done
                 </span>
-              ) : activeTimerPlatform === 'google' ? (
+              ) : savingPlatform === 'google' ? (
                 <span className="flex items-center gap-1.5 text-xs font-bold text-purple-600 bg-purple-50 px-3 py-1.5 rounded-xl border border-purple-200 animate-pulse">
-                  <Loader2 size={13} className="animate-spin" /> Verifying ({timerSeconds}s)
+                  <Loader2 size={13} className="animate-spin" /> Verifying...
                 </span>
               ) : (
                 <button
                   onClick={() => handleTaskClick('google', urls.google)}
-                  disabled={Boolean(activeTimerPlatform) || status === 'approved' || status === 'pending_approval'}
+                  disabled={Boolean(savingPlatform) || status === 'approved' || status === 'pending_approval'}
                   className="px-4 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-sm transition disabled:opacity-40"
                 >
                   Review
@@ -270,7 +250,7 @@ const SocialRewardModal = ({ isOpen, onClose, rewardData, onRefresh }) => {
             <div className="pt-2">
               <button
                 onClick={handleSubmitForApproval}
-                disabled={!allTasksCompleted || submitting || Boolean(activeTimerPlatform)}
+                disabled={!allTasksCompleted || submitting || Boolean(savingPlatform)}
                 className={`w-full py-3.5 px-6 rounded-2xl font-black text-sm flex items-center justify-center gap-2 transition shadow-lg ${
                   allTasksCompleted
                     ? 'bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white shadow-amber-500/25 active:scale-[0.98]'

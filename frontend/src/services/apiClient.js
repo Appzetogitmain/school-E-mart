@@ -3,7 +3,7 @@ import { ENV } from '../config/env';
 import useAuthStore from '../store/useAuthStore';
 import { refreshSession } from './authApi';
 import { PORTAL_LOGIN_PATHS } from '../utils/mappers/userMapper';
-import { portalFromPathname } from '../utils/portalToken';
+import { portalFromPathname, roleMatchesPortal } from '../utils/portalToken';
 
 const apiClient = axios.create({
   baseURL: ENV.API_URL,
@@ -93,6 +93,10 @@ const tryRefreshToken = async () => {
   if (!refreshPromise) {
     refreshPromise = refreshSession()
       .then((data) => {
+        // The refresh cookie is shared by all portals; do not adopt another portal's login.
+        if (!roleMatchesPortal(data.user?.role, currentPagePortal())) {
+          throw new Error('REFRESHED_SESSION_BELONGS_TO_ANOTHER_PORTAL');
+        }
         useAuthStore.getState().setToken(data.accessToken);
         if (data.user) {
           useAuthStore.getState().setUser(data.user);

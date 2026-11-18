@@ -34,7 +34,12 @@ const schoolLedgerSchema = new mongoose.Schema({
     kind: { type: String, required: true }, // 'Order', 'PayoutRequest', etc.
     id: { type: mongoose.Schema.Types.ObjectId, required: true }
   },
-  description: { type: String }
+  description: { type: String },
+  // What a commission credit was calculated from, so the school can verify it:
+  // orderNumber, the sale value the % was applied to, and the % itself.
+  orderNumber: { type: String },
+  baseAmountPaise: { type: Number },
+  commissionPercent: { type: Number }
 }, { collection: 'schoolLedgers', timestamps: false });
 
 schoolLedgerSchema.plugin(auditPlugin);

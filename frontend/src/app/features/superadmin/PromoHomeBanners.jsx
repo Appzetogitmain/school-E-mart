@@ -26,6 +26,8 @@ const PromoHomeBanners = () => {
   const [bannerSlug, setBannerSlug] = useState('');
   const [targetCategory, setTargetCategory] = useState('Kits');
   const [targetAudience, setTargetAudience] = useState('parent');
+  // Where on the home page the banner appears: home_top = big carousel, home_side = right-hand banners
+  const [placement, setPlacement] = useState('home_top');
   const [orderRank, setOrderRank] = useState('0');
   const [targetUrl, setTargetUrl] = useState('');
   const [isActive, setIsActive] = useState(true);
@@ -91,6 +93,7 @@ const PromoHomeBanners = () => {
     setBannerSlug('');
     setTargetCategory('Kits');
     setTargetAudience('parent');
+    setPlacement('home_top');
     setOrderRank('0');
     setTargetUrl('');
     setIsActive(true);
@@ -105,6 +108,7 @@ const PromoHomeBanners = () => {
     setBannerSlug(banner.slug);
     setTargetCategory(categories.includes(banner.category) ? banner.category : 'All');
     setTargetAudience(banner.audience || 'all');
+    setPlacement(banner.category === 'home_side' ? 'home_side' : 'home_top');
     setOrderRank(banner.orderRank.toString());
     setTargetUrl(banner.targetUrl);
     setIsActive(banner.status === 'Active');
@@ -164,7 +168,10 @@ const PromoHomeBanners = () => {
           slug: bannerSlug,
           category: targetCategory,
           audience: targetAudience,
-          position: existingBanner?.category || 'home_top',
+          // keep other positions (cart / category banners) as they are; only home placements are switchable
+          position: ['home_top', 'home_side'].includes(existingBanner?.category) || !existingBanner?.category
+            ? placement
+            : existingBanner.category,
           orderRank,
           targetUrl,
           isActive,
@@ -189,6 +196,7 @@ const PromoHomeBanners = () => {
                 : bannerSlug,
             category: targetCategory,
             audience: targetAudience,
+            position: placement,
             orderRank: startRank + idx,
             targetUrl,
             isActive,
@@ -272,7 +280,7 @@ const PromoHomeBanners = () => {
               {/* Category tag overlay on top left */}
               <div className="absolute top-3 left-3 flex gap-1.5 select-none">
                 <span className="bg-indigo-600 text-white text-[8px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full shadow border border-white/10">
-                  {b.category || 'All'}
+                  {{ home_top: 'Main', home_side: 'Side', home_middle: 'Middle', category_top: 'Category', cart: 'Cart' }[b.category] || b.category || 'All'}
                 </span>
                 
                 <span className={`px-2.5 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider border ${
@@ -476,6 +484,21 @@ const PromoHomeBanners = () => {
                   ))}
                 </select>
                 <span className="block text-[8px] text-gray-400 font-medium">Allows uploading multiple banners for the same category.</span>
+              </div>
+
+              {/* Placement on the home page */}
+              <div className="space-y-1.5">
+                <label htmlFor="banner-placement" className="block text-gray-400 uppercase tracking-wide text-[9px] font-black">Banner position on home page *</label>
+                <select
+                  id="banner-placement"
+                  value={placement}
+                  onChange={(e) => setPlacement(e.target.value)}
+                  className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-500/25 font-bold cursor-pointer"
+                >
+                  <option value="home_top">Main banner (big slider)</option>
+                  <option value="home_side">Side banner (right side)</option>
+                </select>
+                <span className="block text-[8px] text-gray-400 font-medium">Main = rotating big banner. Side = the smaller banners shown on the right.</span>
               </div>
 
               {/* Audience selection */}

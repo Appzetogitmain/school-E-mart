@@ -15,7 +15,9 @@ const ProductShowcase = ({ role = 'parent' }) => {
       setLoading(true);
       setError('');
       try {
-        const { data } = await listFeaturedProducts({ limit: 8 });
+        // The home page can be previewed as a school (?role=school) from a non-/school URL, so say
+        // explicitly which catalogue to use instead of guessing from the address bar.
+        const { data } = await listFeaturedProducts({ limit: 8, audience: role === 'school' ? 'schools' : 'users' });
         if (!cancelled) {
           setProducts((data || []).map((p) => mapProductForMarketingCard(p)));
         }

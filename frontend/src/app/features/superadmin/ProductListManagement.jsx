@@ -76,6 +76,7 @@ const ProductListManagement = () => {
   const [editVendorId, setEditVendorId] = useState('');
   const [editAudience, setEditAudience] = useState('users');
   const [editApprovalStatus, setEditApprovalStatus] = useState('approved');
+  const [editFeatured, setEditFeatured] = useState(false);
   const [editImage, setEditImage] = useState('');
   const [editImageFile, setEditImageFile] = useState(null);
   const [editImagePreview, setEditImagePreview] = useState('');
@@ -221,6 +222,7 @@ const ProductListManagement = () => {
     setEditVendorId(p.vendorId || '');
     setEditAudience(p.audience || 'users');
     setEditApprovalStatus(p.approvalRaw || 'pending');
+    setEditFeatured(Boolean(p.isFeatured));
     setEditImage(p.image);
     setEditImageFile(null);
     setEditImagePreview('');
@@ -252,6 +254,7 @@ const ProductListManagement = () => {
       sizes: editVariant.trim() ? [editVariant.trim()] : [],
       gradeTags: editGradeTags.filter((g) => g !== 'All Grades').length > 0 ? editGradeTags.filter((g) => g !== 'All Grades') : ['All Grades'],
       audience: editAudience,
+      isFeatured: editFeatured,
     };
     if (editHeaderId) payload.headerId = editHeaderId;
     if (editCategoryId) payload.categoryId = editCategoryId;
@@ -767,6 +770,21 @@ const ProductListManagement = () => {
                     );
                   })}
                 </div>
+
+                {/* Featured: shows this product in "Featured products" on the storefront home page */}
+                <label className="flex items-start gap-2.5 border-t border-gray-200/80 pt-4 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    data-testid="featured-toggle"
+                    checked={editFeatured}
+                    onChange={(e) => setEditFeatured(e.target.checked)}
+                    className="mt-0.5 w-4 h-4 accent-indigo-600"
+                  />
+                  <span>
+                    <span className="text-[11px] font-black text-gray-800 block">Featured on home page</span>
+                    <span className="text-[9px] text-gray-400 font-semibold block">Shown in the Featured section (product must be approved and published)</span>
+                  </span>
+                </label>
 
                 {/* Status select for approvals */}
                 <div className="border-t border-gray-200/80 pt-4 mt-auto space-y-2">

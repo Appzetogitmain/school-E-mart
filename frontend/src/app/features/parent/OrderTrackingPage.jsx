@@ -285,6 +285,12 @@ const OrderTrackingPage = () => {
               <span>Subtotal</span>
               <span className="text-gray-500">{formatAmount(orderDetails?.subtotal)}</span>
             </div>
+            {Number(orderDetails?.socialDiscount) > 0 && (
+              <div className="flex justify-between text-xs font-bold uppercase tracking-widest text-emerald-600">
+                <span>✨ 5% Lifetime Social Discount</span>
+                <span>-{formatAmount(orderDetails?.socialDiscount)}</span>
+              </div>
+            )}
             <div className="flex justify-between text-xs font-bold uppercase tracking-widest text-gray-400">
               <span>Shipping</span>
               <span className="text-gray-500">{formatAmount(orderDetails?.shipping)}</span>

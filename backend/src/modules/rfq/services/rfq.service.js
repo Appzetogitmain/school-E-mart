@@ -98,11 +98,17 @@ const loadRfqForVendor = async (rfqId, vendorId, { allowExistingQuote = false } 
   return rfq;
 };
 
-/** Every reference-image attachment id a uniform-set request carries — used both to persist the RFQ's flat `attachments` list and to resolve display URLs. */
-const deriveAttachmentIds = (uniformSets = []) => {
+/** Every reference-image attachment id a request carries — used both to persist the RFQ's flat `attachments` list and to resolve display URLs. */
+const deriveAttachmentIds = (uniformSets = [], items = []) => {
   const ids = [];
-  uniformSets.forEach((set) => {
+  (uniformSets || []).forEach((set) => {
     (set.images || []).forEach((img) => {
+      const id = toObjectId(img.attachmentId);
+      if (id) ids.push(id);
+    });
+  });
+  (items || []).forEach((item) => {
+    (item.images || []).forEach((img) => {
       const id = toObjectId(img.attachmentId);
       if (id) ids.push(id);
     });
@@ -118,6 +124,11 @@ const buildAttachmentUrlMap = async (rfqOrRfqs) => {
     (rfq?.attachments || []).forEach((id) => ids.add(String(id)));
     (rfq?.meta?.uniformSets || []).forEach((set) => {
       (set.images || []).forEach((img) => {
+        if (img.attachmentId) ids.add(String(img.attachmentId));
+      });
+    });
+    (rfq?.meta?.items || []).forEach((item) => {
+      (item.images || []).forEach((img) => {
         if (img.attachmentId) ids.add(String(img.attachmentId));
       });
     });
@@ -148,10 +159,29 @@ const enrichQuotesWithVendors = async (quotes = []) => {
 const rfqService = {
   async createRfq(schoolId, payload) {
     const isDraft = payload.status === 'draft';
-    const items = buildUniformItems(payload.uniformSets || []);
+    const category = payload.category ? String(payload.category).trim().toLowerCase() : (payload.uniformSets?.length ? 'uniform' : 'supplies');
+    const isUniform = category === 'uniform';
+
+    let items = [];
+    if (!isUniform && Array.isArray(payload.items) && payload.items.length) {
+      items = payload.items.map((it) => ({
+        name: it.name,
+        specifications: it.specifications || '',
+        quantity: Number(it.quantity) || 1,
+        uom: it.uom || 'pieces',
+      }));
+    } else {
+      items = buildUniformItems(payload.uniformSets || []);
+    }
 
     if (!isDraft && !items.length) {
-      throw new BadRequestError('At least one uniform set with quantity is required', null, 'RFQ_ITEMS_REQUIRED');
+      throw new BadRequestError(
+        isUniform
+          ? 'At least one uniform set with quantity is required'
+          : 'At least one item requirement with quantity is required',
+        null,
+        'RFQ_ITEMS_REQUIRED'
+      );
     }
 
     const invitedVendorIds = (payload.invitedVendorIds || []).map(toObjectId).filter(Boolean);
@@ -182,20 +212,22 @@ const rfqService = {
     const docWithoutNumber = {
       schoolId,
       title: payload.title,
-      category: 'uniform',
+      category,
       description: descriptionParts.join('\n') || payload.title,
-      items: items.length ? items : [{ name: payload.title, quantity: 1, uom: 'sets' }],
+      items: items.length ? items : [{ name: payload.title, quantity: 1, uom: isUniform ? 'sets' : 'units' }],
       academicYear: payload.academicYear || null,
       classes: payload.classes || [],
       totalStudents: payload.totalStudents ? Number(payload.totalStudents) : null,
       targetDeliveryDate: payload.requiredDate || null,
       quotationDeadline: payload.quotationDeadline || null,
       invitedVendorIds,
-      attachments: deriveAttachmentIds(payload.uniformSets || []),
+      attachments: deriveAttachmentIds(payload.uniformSets || [], payload.items || []),
       status,
       publishedAt: status === 'open' ? new Date() : null,
       meta: {
+        category,
         uniformSets: payload.uniformSets || [],
+        items: payload.items || [],
         additionalNotes: payload.additionalNotes || '',
       },
     };
@@ -240,13 +272,26 @@ const rfqService = {
     }
 
     const isDraft = payload.status === 'draft';
-    const items = buildUniformItems(payload.uniformSets || []);
+    const category = payload.category ? String(payload.category).trim().toLowerCase() : (existing.category || (payload.uniformSets?.length ? 'uniform' : 'supplies'));
+    const isUniform = category === 'uniform';
+
+    let items = [];
+    if (!isUniform && payload.items !== undefined && Array.isArray(payload.items) && payload.items.length) {
+      items = payload.items.map((it) => ({
+        name: it.name,
+        specifications: it.specifications || '',
+        quantity: Number(it.quantity) || 1,
+        uom: it.uom || 'pieces',
+      }));
+    } else if (payload.uniformSets !== undefined) {
+      items = buildUniformItems(payload.uniformSets || []);
+    }
 
     // A quote's items[].rfqItemIndex is a positional index into rfq.items,
     // fixed at the moment the vendor submitted. Letting the school add, remove,
-    // or reorder uniform sets after that would silently point existing quotes'
-    // line items at the wrong (or a nonexistent) uniform set.
-    if (payload.uniformSets) {
+    // or reorder items/uniform sets after that would silently point existing quotes'
+    // line items at the wrong line item.
+    if (payload.uniformSets || payload.items) {
       const quoteCount = await Quote.countDocuments({ rfqId, 'softDelete.isDeleted': { $ne: true } });
       if (quoteCount > 0) {
         throw new BadRequestError(
@@ -258,12 +303,18 @@ const rfqService = {
     }
 
     // Falls back to what's already stored so this check can't be bypassed by
-    // simply leaving `uniformSets` out of a save that flips status to 'open'.
-    const effectiveItems = payload.uniformSets !== undefined
+    // simply leaving `uniformSets`/`items` out of a save that flips status to 'open'.
+    const effectiveItems = (payload.items !== undefined || payload.uniformSets !== undefined)
       ? items
-      : buildUniformItems(existing.meta?.uniformSets || []);
+      : (existing.items?.length ? existing.items : buildUniformItems(existing.meta?.uniformSets || []));
     if (!isDraft && !effectiveItems.length) {
-      throw new BadRequestError('At least one uniform set with quantity is required', null, 'RFQ_ITEMS_REQUIRED');
+      throw new BadRequestError(
+        isUniform
+          ? 'At least one uniform set with quantity is required'
+          : 'At least one item requirement with quantity is required',
+        null,
+        'RFQ_ITEMS_REQUIRED'
+      );
     }
 
     const invitedVendorIds = payload.invitedVendorIds ? (payload.invitedVendorIds || []).map(toObjectId).filter(Boolean) : undefined;
@@ -291,6 +342,7 @@ const rfqService = {
 
     const updateData = {
       title: payload.title,
+      category,
       academicYear: payload.academicYear,
       classes: payload.classes,
       totalStudents: payload.totalStudents ? Number(payload.totalStudents) : undefined,
@@ -304,10 +356,18 @@ const rfqService = {
     if (payload.title || payload.specialInstructions || payload.additionalNotes || payload.academicYear || payload.classes) {
       updateData.description = descriptionParts.join('\n');
     }
+    if (payload.category) {
+      updateData['meta.category'] = category;
+    }
     if (payload.uniformSets) {
       updateData['meta.uniformSets'] = payload.uniformSets;
       updateData.items = items.length ? items : [{ name: payload.title || 'Uniform Request', quantity: 1, uom: 'sets' }];
-      updateData.attachments = deriveAttachmentIds(payload.uniformSets);
+      updateData.attachments = deriveAttachmentIds(payload.uniformSets, payload.items || existing.meta?.items || []);
+    }
+    if (payload.items) {
+      updateData['meta.items'] = payload.items;
+      updateData.items = items.length ? items : [{ name: payload.title || 'Supplies Request', quantity: 1, uom: 'pieces' }];
+      updateData.attachments = deriveAttachmentIds(payload.uniformSets || existing.meta?.uniformSets || [], payload.items);
     }
     if (payload.status === 'open') {
       updateData.publishedAt = new Date();

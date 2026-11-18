@@ -69,11 +69,15 @@ const ParentPrivilegeCard = () => {
                   <CheckCircle2 size={13} className="stroke-[3]" /> 5% Discount Active
                 </span>
               ) : isPending ? (
-                <span className="bg-amber-500/90 text-amber-950 px-3 py-1 rounded-full flex items-center gap-1 shadow-sm border border-amber-300 animate-pulse">
-                  <Clock size={13} /> Pending Approval
+                <span className="bg-amber-500/90 text-amber-950 px-3 py-1 rounded-full flex items-center gap-1 shadow-sm border border-amber-300 animate-pulse font-black">
+                  <Clock size={13} /> Under Admin Review
+                </span>
+              ) : completedCount === 3 ? (
+                <span className="bg-amber-400 text-purple-950 px-3 py-1 rounded-full flex items-center gap-1 shadow-sm font-black group-hover:bg-amber-300 transition-colors animate-pulse">
+                  <Sparkles size={12} /> Submit For Approval
                 </span>
               ) : completedCount > 0 ? (
-                <span className="bg-purple-900/80 text-amber-300 px-3 py-1 rounded-full flex items-center gap-1 border border-amber-400/40">
+                <span className="bg-purple-900/80 text-amber-300 px-3 py-1 rounded-full flex items-center gap-1 border border-amber-400/40 font-bold">
                   <Sparkles size={13} /> {pendingCount} Task{pendingCount > 1 ? 's' : ''} Pending
                 </span>
               ) : (

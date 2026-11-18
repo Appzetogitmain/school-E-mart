@@ -21,7 +21,7 @@ const paginationQuery = Joi.object({
   paymentStatus: Joi.string().trim().optional(),
   audience: Joi.string().valid('all', 'parent', 'school', 'vendor').optional(),
   category: Joi.string().trim().optional(),
-  position: Joi.string().valid('home_top', 'home_middle', 'category_top', 'cart').optional(),
+  position: Joi.string().valid('home_top', 'home_side', 'home_middle', 'category_top', 'cart').optional(),
 });
 
 const analyticsQuery = paginationQuery.keys({
@@ -135,7 +135,7 @@ const bannerSchema = Joi.object({
   imageId: objectId.required(),
   linkUrl: Joi.string().trim().uri().optional(),
   targetAudience: Joi.string().valid('all', 'parent', 'school').default('all'),
-  position: Joi.string().valid('home_top', 'home_middle', 'category_top', 'cart').required(),
+  position: Joi.string().valid('home_top', 'home_side', 'home_middle', 'category_top', 'cart').required(),
   displayOrder: Joi.number().integer().min(0).default(0),
   validFrom: Joi.date().iso().required(),
   validUntil: Joi.date().iso().required(),

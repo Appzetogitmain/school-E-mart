@@ -44,3 +44,18 @@ test('empty state is safe', () => {
   assert.equal(pickPortalToken({}, 'school'), null);
   assert.equal(pickPortalToken(undefined, 'parent'), null);
 });
+
+import { roleMatchesPortal } from './portalToken.js';
+
+test('REGRESSION: a refreshed session of another role is never adopted by a portal', () => {
+  assert.equal(roleMatchesPortal('admin', 'admin'), true);
+  assert.equal(roleMatchesPortal('school', 'admin'), false); // admin page, refresh cookie belongs to a school login
+  assert.equal(roleMatchesPortal('parent', 'admin'), false);
+  assert.equal(roleMatchesPortal('parent', 'school'), false);
+  assert.equal(roleMatchesPortal('school', 'school'), true);
+  assert.equal(roleMatchesPortal('teacher', 'teacher'), true);
+  assert.equal(roleMatchesPortal('vendor', 'school'), false);
+  assert.equal(roleMatchesPortal('parent', 'parent'), true);
+  assert.equal(roleMatchesPortal('user', 'parent'), true);
+  assert.equal(roleMatchesPortal(undefined, 'admin'), true);
+});

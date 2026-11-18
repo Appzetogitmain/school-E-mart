@@ -53,17 +53,19 @@ export const mapSchoolRfqForList = (rfq) => {
     id: rfq._id,
     rfqNumber: rfq.rfqNumber,
     title: rfq.title,
+    category: rfq.category || 'uniform',
     ...statusMeta,
     // Raw backend status ('open' | 'reviewing' | 'awarded' | 'closed' | 'cancelled'),
     // for logic that needs the real state machine rather than the display label —
     // e.g. deciding whether "Cancel Request" applies.
     rawStatus: rfq.status,
-    iconType: 'uniform',
-    iconBg: 'bg-purple-50',
+    iconType: (rfq.category || 'uniform').toLowerCase(),
+    iconBg: (rfq.category || 'uniform').toLowerCase() === 'uniform' ? 'bg-purple-50' : 'bg-amber-50',
     deadline: formatDisplayDate(rfq.quotationDeadline),
     vendorsInvited: rfq.invitedCount || rfq.invitedVendorIds?.length || 0,
     quotesReceived: rfq.quoteCount || 0,
     createdDate: formatDisplayDate(rfq.createdAt),
+    items: rfq.items || [],
     quotes: (rfq.quotes || []).map(mapSchoolQuoteForCompare),
     orderId: rfq.orderId || null,
     // Present only once awarded — drives the "pay advance" / "pay remaining
@@ -175,24 +177,27 @@ export const mapVendorRfqForList = (rfq) => {
       qty: item.quantity,
       estPrice: 0,
     })),
-    // Reference images the school attached per uniform set (design/logo/fabric
-    // photos) — flattened so the vendor's bid drawer can show a simple gallery.
-    referenceImages: (rfq.meta?.uniformSets || []).flatMap((set) =>
-      (set.images || [])
-        .filter((img) => img.url)
-        .map((img) => ({ setName: set.name, label: img.label, url: img.url }))
-    ),
+    // Reference images the school attached per uniform set or item (design/logo/sample photos)
+    // flattened so the vendor's bid drawer can show a simple gallery.
+    referenceImages: [
+      ...(rfq.meta?.uniformSets || []).flatMap((set) =>
+        (set.images || [])
+          .filter((img) => img.url)
+          .map((img) => ({ setName: set.name, label: img.label, url: img.url }))
+      ),
+      ...(rfq.meta?.items || []).flatMap((item) =>
+        (item.images || [])
+          .filter((img) => img.url)
+          .map((img) => ({ setName: item.name, label: img.label || 'Sample', url: img.url }))
+      ),
+    ],
     vendorQuote: rfq.vendorQuote,
     ...statusMeta,
     raw: rfq,
   };
 };
 
-// Strip the wizard's local-only fields (raw File objects, base64 previews,
-// upload-in-progress flags) down to what the server actually stores — just
-// the label and the uploaded attachment's id. An image still mid-upload (or
-// one that failed) has no attachmentId yet and is dropped rather than sent
-// as a dead placeholder.
+// Strip the wizard's local-only fields down to what the server actually stores.
 const serializeUniformSets = (uniformSets = []) =>
   uniformSets.map((set) => ({
     id: set.id,
@@ -206,8 +211,21 @@ const serializeUniformSets = (uniformSets = []) =>
       .map((img) => ({ label: img.label, attachmentId: img.attachmentId })),
   }));
 
+const serializeItems = (items = []) =>
+  items.map((item) => ({
+    id: item.id,
+    name: item.name,
+    specifications: item.specifications || '',
+    quantity: Number(item.quantity) || 1,
+    uom: item.uom || 'pieces',
+    images: (item.images || [])
+      .filter((img) => img.attachmentId)
+      .map((img) => ({ label: img.label || 'Reference Image', attachmentId: img.attachmentId })),
+  }));
+
 export const buildCreateRfqPayload = ({
   requestTitle,
+  category = 'uniform',
   academicYear,
   requiredDate,
   deadlineDate,
@@ -216,10 +234,12 @@ export const buildCreateRfqPayload = ({
   specialInstructions,
   additionalNotes,
   uniformSets,
+  items,
   vendors,
   status = 'open',
 }) => ({
   title: requestTitle,
+  category,
   academicYear: academicYear || undefined,
   requiredDate: requiredDate || undefined,
   quotationDeadline: deadlineDate || undefined,
@@ -227,7 +247,8 @@ export const buildCreateRfqPayload = ({
   totalStudents: totalStudents || undefined,
   specialInstructions: specialInstructions || undefined,
   additionalNotes: additionalNotes || undefined,
-  uniformSets: serializeUniformSets(uniformSets),
-  invitedVendorIds: vendors.filter((v) => v.checked).map((v) => v.id),
+  uniformSets: category === 'uniform' ? serializeUniformSets(uniformSets) : undefined,
+  items: category !== 'uniform' ? serializeItems(items) : undefined,
+  invitedVendorIds: (vendors || []).filter((v) => v.checked).map((v) => v.id),
   status,
 });

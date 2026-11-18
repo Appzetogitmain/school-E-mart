@@ -70,7 +70,8 @@ const Hero = ({ role = 'parent' }) => {
           .filter((b) => b.image);
 
         if (!cancelled) {
-          setMainBanners(mapped.filter((b) => b.placement !== 'side'));
+          // Only home banners belong here; cart / category banners must not leak into the hero.
+          setMainBanners(mapped.filter((b) => b.placement === 'main'));
           setSideBanners(mapped.filter((b) => b.placement === 'side'));
         }
       } catch {

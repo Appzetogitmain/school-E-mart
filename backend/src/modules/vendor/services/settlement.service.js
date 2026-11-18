@@ -55,8 +55,9 @@ const settlementService = {
           const isKit = Boolean(item.kitId);
           const type = isKit ? 'kit_commission_credit' : 'retail_commission_credit';
           const key = `${item.schoolId}:${type}`;
-          const current = schoolMap.get(key) || { schoolId: item.schoolId, amountPaise: 0, transactionType: type, isKit };
+          const current = schoolMap.get(key) || { schoolId: item.schoolId, amountPaise: 0, baseAmountPaise: 0, transactionType: type, isKit };
           current.amountPaise += itemSchool;
+          current.baseAmountPaise += line; // the sale value the school's % was applied to
           schoolMap.set(key, current);
         }
       }
@@ -74,7 +75,7 @@ const settlementService = {
     return { adminPaise: commissionPaise, schoolPaise: 0, vendorEarningPaise, schoolBreakdown: [] };
   },
 
-  async creditSchoolLedger(schoolId, amountPaise, orderId, orderNumber, transactionType = 'kit_commission_credit', customDescription = null) {
+  async creditSchoolLedger(schoolId, amountPaise, orderId, orderNumber, transactionType = 'kit_commission_credit', customDescription = null, details = {}) {
     // Summed, not read off the newest row: two kit sales settling together would
     // otherwise both start from the same balance and one would be lost.
     const [current] = await SchoolLedger.aggregate([
@@ -92,6 +93,14 @@ const settlementService = {
       balancePaise,
       reference: { kind: 'Order', id: orderId },
       description: customDescription || defaultDesc,
+      orderNumber,
+      ...(details.baseAmountPaise > 0
+        ? {
+            baseAmountPaise: details.baseAmountPaise,
+            // exact rate actually applied (a mixed order can blend several rates)
+            commissionPercent: Math.round((amountPaise / details.baseAmountPaise) * 10000) / 100,
+          }
+        : {}),
     });
   },
 
@@ -173,7 +182,9 @@ const settlementService = {
           entry.amountPaise,
           orderId,
           order.orderNumber,
-          entry.transactionType || 'kit_commission_credit'
+          entry.transactionType || 'kit_commission_credit',
+          null,
+          { baseAmountPaise: entry.baseAmountPaise }
         );
       }
     }

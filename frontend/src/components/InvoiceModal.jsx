@@ -45,6 +45,14 @@ const InvoiceModal = ({ isOpen, onClose, invoiceData, loading, error }) => {
 
   const hasStudentDetails = Boolean(studentDetails.studentName || studentDetails.className || studentDetails.classTeacherName || studentDetails.schoolName);
 
+  const socialDiscountPaise = Number(
+    invoiceData?.socialDiscountPaise ||
+    (Number(invoiceData?.subtotalPaise || 0) > 0 &&
+     Math.abs((Number(invoiceData?.subtotalPaise || 0) + Number(invoiceData?.taxPaise || 0) + Number(invoiceData?.deliveryChargePaise || 0) + Number(invoiceData?.platformFeePaise || 0) + Number(invoiceData?.handlingChargePaise || 0) - Number(invoiceData?.totalPaise || 0)) - Math.round(Number(invoiceData?.subtotalPaise || 0) * 0.05)) <= 1
+      ? (Number(invoiceData?.subtotalPaise || 0) + Number(invoiceData?.taxPaise || 0) + Number(invoiceData?.deliveryChargePaise || 0) + Number(invoiceData?.platformFeePaise || 0) + Number(invoiceData?.handlingChargePaise || 0) - Number(invoiceData?.totalPaise || 0))
+      : 0)
+  );
+
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto animate-in fade-in duration-200 print:bg-white print:p-0 print:block">
       {/* Print CSS Rules to fit invoice receipt cleanly on a single A4 page without cropping */}
@@ -75,6 +83,8 @@ const InvoiceModal = ({ isOpen, onClose, invoiceData, loading, error }) => {
             box-shadow: none !important;
             border: none !important;
             font-size: 11px !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
           }
           .print-hidden-bar {
             display: none !important;
@@ -313,6 +323,12 @@ const InvoiceModal = ({ isOpen, onClose, invoiceData, loading, error }) => {
                     <span>Subtotal</span>
                     <span className="font-bold">{formatCurrency(invoiceData.subtotalPaise)}</span>
                   </div>
+                  {socialDiscountPaise > 0 && (
+                    <div className="flex justify-between text-emerald-700 font-semibold bg-emerald-50/90 px-2 py-0.5 rounded-md border border-emerald-100">
+                      <span>✨ 5% Lifetime Social Discount</span>
+                      <span>-{formatCurrency(socialDiscountPaise)}</span>
+                    </div>
+                  )}
                   {Number(invoiceData.taxPaise) > 0 && (
                     <div className="flex justify-between text-gray-600">
                       <span>Total Tax (GST)</span>

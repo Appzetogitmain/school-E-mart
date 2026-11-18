@@ -6,6 +6,7 @@ const uniformSetImageSchema = Joi.object({
 });
 
 const uniformSetSchema = Joi.object({
+  id: Joi.alternatives().try(Joi.string(), Joi.number()).optional(),
   name: Joi.string().trim().max(120).required(),
   type: Joi.string().trim().max(60).optional(),
   boysQty: Joi.alternatives().try(Joi.number().min(0), Joi.string().trim()).optional(),
@@ -35,8 +36,23 @@ const futureDeadlineWhenLive = Joi.date().when('status', {
   otherwise: Joi.date().min('now').messages(futureDeadlineMessage).optional(),
 });
 
+const generalItemSchema = Joi.object({
+  id: Joi.alternatives().try(Joi.string(), Joi.number()).optional(),
+  name: Joi.string().trim().min(1).max(200).required(),
+  specifications: Joi.string().trim().max(1000).allow('', null).optional(),
+  quantity: Joi.number().min(1).required(),
+  uom: Joi.string().trim().max(50).default('pieces'),
+  images: Joi.array().items(
+    Joi.object({
+      label: Joi.string().trim().allow('', null).optional(),
+      attachmentId: schemas.objectId.optional(),
+    })
+  ).optional(),
+});
+
 const createRfqSchema = Joi.object({
   title: Joi.string().trim().min(3).max(100).required(),
+  category: Joi.string().trim().max(100).optional(),
   academicYear: Joi.string().trim().max(20).optional(),
   requiredDate: Joi.date().optional(),
   quotationDeadline: futureDeadlineWhenLive,
@@ -44,6 +60,7 @@ const createRfqSchema = Joi.object({
   totalStudents: Joi.alternatives().try(Joi.number().min(0), Joi.string().trim()).optional(),
   specialInstructions: Joi.string().trim().max(500).optional(),
   additionalNotes: Joi.string().trim().max(300).optional(),
+  items: Joi.array().items(generalItemSchema).min(1).optional(),
   uniformSets: Joi.array().items(uniformSetSchema).min(1).optional(),
   invitedVendorIds: Joi.array().items(schemas.objectId).min(1).optional(),
   status: Joi.string().valid('draft', 'open').default('open'),
@@ -51,6 +68,7 @@ const createRfqSchema = Joi.object({
 
 const updateRfqSchema = Joi.object({
   title: Joi.string().trim().min(3).max(100).optional(),
+  category: Joi.string().trim().max(100).optional(),
   academicYear: Joi.string().trim().max(20).optional(),
   requiredDate: Joi.date().optional().allow(null, ''),
   quotationDeadline: futureDeadlineWhenLive.allow(null, ''),
@@ -58,6 +76,7 @@ const updateRfqSchema = Joi.object({
   totalStudents: Joi.alternatives().try(Joi.number().min(0), Joi.string().trim()).optional().allow(null, ''),
   specialInstructions: Joi.string().trim().max(500).optional().allow(null, ''),
   additionalNotes: Joi.string().trim().max(300).optional().allow(null, ''),
+  items: Joi.array().items(generalItemSchema).min(1).optional(),
   uniformSets: Joi.array().items(uniformSetSchema).min(1).optional(),
   invitedVendorIds: Joi.array().items(schemas.objectId).min(1).optional(),
   // 'cancelled' added: see rfqService.updateRfq — status is the only way a live

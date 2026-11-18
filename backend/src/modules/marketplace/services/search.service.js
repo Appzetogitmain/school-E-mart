@@ -52,7 +52,7 @@ const buildProductFilter = (query = {}, { publicOnly = true, vendorId = null } =
   if (query.subcategoryId) filter.subcategoryId = query.subcategoryId;
   if (query.brand) filter.brand = query.brand;
   if (query.grade) filter.$or = buildGradeClauses(query.grade);
-  if (query.featured === 'true') filter.gradeTags = { $in: ['featured'] };
+  if (query.featured === 'true') filter.isFeatured = true;
   if (query.minPrice || query.maxPrice) {
     filter.pricePaise = {};
     if (query.minPrice) filter.pricePaise.$gte = Number(query.minPrice);

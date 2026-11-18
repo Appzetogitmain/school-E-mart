@@ -32,3 +32,23 @@ export const pickPortalToken = (state = {}, currentPortal = 'parent') => {
   }
   return null;
 };
+
+const PORTAL_ROLES = {
+  admin: ['admin', 'super_admin'],
+  vendor: ['vendor'],
+  school: ['school', 'school_admin'],
+  teacher: ['teacher'],
+  parent: ['parent', 'user'],
+};
+
+/**
+ * The browser has ONE refresh cookie shared by every portal. Refreshing an expired admin token
+ * therefore returns whoever logged in last (a parent, a school...). Adopting that identity as the
+ * admin session makes every admin call fail with 403 "no permission" and every page show 0.
+ * A refreshed session is only usable if its role belongs to the portal that asked for it.
+ */
+export const roleMatchesPortal = (role, portal) => {
+  if (!role) return true; // nothing to compare against: keep the old behaviour
+  const allowed = PORTAL_ROLES[portal];
+  return !allowed || allowed.includes(String(role).toLowerCase());
+};

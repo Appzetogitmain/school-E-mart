@@ -262,8 +262,20 @@ const SchoolSubcategoryPage = () => {
               <h2 className="text-deep-purple text-xl font-black leading-tight mb-4">Special Rates for {taxonomy.title}</h2>
               <button
                 onClick={() => {
+                  const mapTaxonomyToCategory = (title = '') => {
+                    if (/uniform|dress|wear/i.test(title)) return 'uniform';
+                    if (/book|notebook|diary|textbook/i.test(title)) return 'books';
+                    if (/stationery|pen|pencil|art|craft/i.test(title)) return 'stationery';
+                    if (/lab|science|physics|chem|bio/i.test(title)) return 'labs';
+                    if (/sport|game|fitness|athletics/i.test(title)) return 'sports';
+                    if (/furniture|bench|desk|board|infra/i.test(title)) return 'furniture';
+                    return 'supplies';
+                  };
+
+                  const cat = mapTaxonomyToCategory(taxonomy.title);
                   const params = new URLSearchParams({
                     title: `Bulk Quote Request - ${taxonomy.title}`,
+                    category: cat,
                   });
                   if (activeSub && activeSub !== 'All') {
                     params.set('notes', `Requesting bulk quotation for ${activeSub} (${taxonomy.title}).`);

@@ -18,6 +18,16 @@ import { useSchoolId } from '../../../utils/schoolContext';
 import { openRazorpayCheckout } from '../../../utils/razorpay';
 import { ENV } from '../../../config/env';
 
+const getCategoryIcon = (category) => {
+  const cat = String(category || '').toLowerCase();
+  if (cat.includes('book') || cat.includes('notebook')) return <BookOpen size={20} className="text-amber-600" />;
+  if (cat.includes('lab') || cat.includes('science')) return <FlaskConical size={20} className="text-teal-600" />;
+  if (cat.includes('sport') || cat.includes('game')) return <Trophy size={20} className="text-indigo-600" />;
+  if (cat.includes('furniture') || cat.includes('infra')) return <Building size={20} className="text-blue-600" />;
+  if (cat.includes('stationery') || cat.includes('supplies')) return <FileText size={20} className="text-purple-600" />;
+  return <Shirt size={20} className="text-[#3b2d7d]" />;
+};
+
 const SchoolQuotationsPage = () => {
   const navigate = useNavigate();
   const schoolId = useSchoolId();
@@ -336,7 +346,7 @@ const SchoolQuotationsPage = () => {
             {/* Header info row inside requirement card */}
             <div className="flex items-center gap-4">
               <div className={`w-12 h-12 rounded-2xl ${req.iconBg} flex items-center justify-center shrink-0`}>
-                <Shirt size={20} className="text-[#3b2d7d]" />
+                {getCategoryIcon(req.category)}
               </div>
               <div className="min-w-0 pr-4">
                 <h3 className="text-xs font-black text-deep-purple leading-tight block hover:text-[#3b2d7d] cursor-pointer">

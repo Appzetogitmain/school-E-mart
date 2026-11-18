@@ -96,6 +96,7 @@ export const mapProductForAdminList = (product) => {
     vendor: product?.vendorName || product?.vendor?.storeName || '—',
     audience: product?.audience || 'users',
     gradeTags: mapped.gradeTags,
+    isFeatured: Boolean(product?.isFeatured),
     raw: product,
   };
 };

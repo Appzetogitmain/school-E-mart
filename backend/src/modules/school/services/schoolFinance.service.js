@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const SchoolLedger = require('../../../database/models/SchoolLedger');
 const PayoutRequest = require('../../../database/models/PayoutRequest');
 const School = require('../../../database/models/School');
+const Order = require('../../../database/models/Order');
 const { executePaginatedQuery } = require('../../../repositories');
 const { BadRequestError, NotFoundError } = require('../../../common/errors');
 const { encryptAccountNumber, maskAccountNumber } = require('../../vendor/utils/bank');
@@ -36,6 +37,61 @@ const computeBalance = async (schoolId) => {
   return rows[0]?.total || 0;
 };
 
+const COMMISSION_TYPES = new Set(['kit_commission_credit', 'retail_commission_credit']);
+
+/**
+ * Works out which order lines a ledger credit came from: lines of this school, of the same kind
+ * (kit vs marketplace) that carried a school %, grouped per vendor (settlement credits one vendor
+ * at a time). Returns the group whose commission adds up to the credited amount.
+ */
+const deriveFromOrder = (row, order, schoolId) => {
+  const isKit = row.transactionType === 'kit_commission_credit';
+  const lines = (order.items || []).filter(
+    (it) =>
+      String(it.schoolId) === String(schoolId) &&
+      Boolean(it.kitId) === isKit &&
+      Number(it.commission?.schoolPercent) > 0
+  );
+  const byVendor = new Map();
+  for (const it of lines) {
+    const key = String(it.vendorId);
+    const g = byVendor.get(key) || { base: 0, commission: 0 };
+    g.base += it.lineTotalPaise || 0;
+    g.commission += Math.round(((it.lineTotalPaise || 0) * Number(it.commission.schoolPercent)) / 100);
+    byVendor.set(key, g);
+  }
+  const groups = [...byVendor.values()];
+  const all = groups.reduce((a, g) => ({ base: a.base + g.base, commission: a.commission + g.commission }), { base: 0, commission: 0 });
+  const match = groups.find((g) => g.commission === row.amountPaise) || (all.commission === row.amountPaise ? all : null);
+  if (!match || !match.base) return null;
+  return {
+    baseAmountPaise: match.base,
+    commissionPercent: Math.round((row.amountPaise / match.base) * 10000) / 100,
+  };
+};
+
+/**
+ * Rows written before the ledger stored its working (order number, sale value, %) are filled in from
+ * the order itself, so older credits show the same breakdown as new ones. If an order can no longer
+ * be matched to the credited amount the row is returned as it was rather than showing a guess.
+ */
+const enrichCommissionRows = async (schoolId, rows) => {
+  const needing = rows.filter(
+    (r) => COMMISSION_TYPES.has(r.transactionType) && r.reference?.kind === 'Order' && !(r.baseAmountPaise > 0)
+  );
+  if (!needing.length) return rows;
+  const orders = await Order.find({ _id: { $in: needing.map((r) => r.reference.id) } })
+    .select('orderNumber items.schoolId items.kitId items.vendorId items.lineTotalPaise items.commission')
+    .lean();
+  const byId = new Map(orders.map((o) => [String(o._id), o]));
+  return rows.map((r) => {
+    if (!needing.includes(r)) return r;
+    const order = byId.get(String(r.reference.id));
+    if (!order) return r;
+    return { ...r, orderNumber: r.orderNumber || order.orderNumber, ...(deriveFromOrder(r, order, schoolId) || {}) };
+  });
+};
+
 const schoolFinanceService = {
   /**
    * Mirrors the vendor earnings summary: total kit commission earned, paid out,
@@ -43,7 +99,7 @@ const schoolFinanceService = {
    * in-flight payout requests.
    */
   async getEarningsSummary(schoolId) {
-    const [kitCredits, retailCredits, payouts, balance, pendingPayouts] = await Promise.all([
+    const [kitCredits, retailCredits, payouts, balance, pendingPayouts, schoolDoc] = await Promise.all([
       sumByType(schoolId, 'kit_commission_credit'),
       sumByType(schoolId, 'retail_commission_credit'),
       sumByType(schoolId, 'payout_debit'),
@@ -59,12 +115,19 @@ const schoolFinanceService = {
         },
         { $group: { _id: null, total: { $sum: '$amountPaise' } } },
       ]),
+      School.findById(schoolId).select('commission').lean(),
     ]);
 
     const availableBalancePaise = balance;
     const pendingSettlementPaise = pendingPayouts[0]?.total || 0;
 
     return {
+      // The % the school currently earns (set by the platform). Orders already placed keep the % they
+      // were placed with, which each transaction shows.
+      commissionRates: {
+        kitPercent: Number(schoolDoc?.commission?.kitPercent) || 0,
+        retailPercent: Number(schoolDoc?.commission?.retailPercent) || 0,
+      },
       kitEarningsPaise: kitCredits,
       retailEarningsPaise: retailCredits,
       totalEarningsPaise: kitCredits + retailCredits,
@@ -75,10 +138,12 @@ const schoolFinanceService = {
     };
   },
 
-  listTransactions(schoolId, query = {}) {
+  async listTransactions(schoolId, query = {}) {
     const filter = { schoolId };
     if (query.transactionType) filter.transactionType = query.transactionType;
-    return executePaginatedQuery(SchoolLedger, filter, query, { defaultSort: '-audit.createdAt' });
+    const result = await executePaginatedQuery(SchoolLedger, filter, query, { defaultSort: '-audit.createdAt' });
+    result.data = await enrichCommissionRows(schoolId, result.data);
+    return result;
   },
 
   listPayoutRequests(schoolId, query = {}) {
