@@ -12,9 +12,15 @@ const both = {
 test('portal is derived from the page URL (teacher is not school)', () => {
   assert.equal(portalFromPathname('/school/admin'), 'school');
   assert.equal(portalFromPathname('/school/teacher/dashboard'), 'teacher');
+  assert.equal(portalFromPathname('/school/teacher'), 'teacher');
   assert.equal(portalFromPathname('/superadmin/dashboard'), 'admin');
   assert.equal(portalFromPathname('/vendor/products'), 'vendor');
   assert.equal(portalFromPathname('/user/home'), 'parent');
+});
+
+test('BUG REGRESSION: school admin teacher management routes stay in the school portal', () => {
+  assert.equal(portalFromPathname('/school/teacher-approvals'), 'school');
+  assert.equal(portalFromPathname('/school/teacher-assignments'), 'school');
 });
 
 test('BUG REGRESSION: school page without a school session never gets the parent token', () => {

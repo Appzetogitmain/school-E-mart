@@ -9,7 +9,14 @@ export const portalFromPathname = (pathname = '') => {
   const path = String(pathname).toLowerCase();
   if (path.startsWith('/superadmin') || path.startsWith('/admin')) return 'admin';
   if (path.startsWith('/vendor')) return 'vendor';
-  if (path.startsWith('/school/teacher') || path.startsWith('/teacher')) return 'teacher';
+  if (
+    path === '/school/teacher' ||
+    path.startsWith('/school/teacher/') ||
+    path === '/teacher' ||
+    path.startsWith('/teacher/')
+  ) {
+    return 'teacher';
+  }
   if (path.startsWith('/school')) return 'school';
   return 'parent';
 };
