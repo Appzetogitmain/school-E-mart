@@ -158,14 +158,22 @@ const reportsService = {
     // 2. Fetch live Vendors
     const vendors = await VendorProfile.find({ ...activeFilter }).lean();
 
+    // Optional date range (from/to as YYYY-MM-DD; `to` is inclusive)
+    const orderMatch = {
+      'softDelete.isDeleted': { $ne: true },
+      orderStatus: { $ne: 'cancelled' },
+    };
+    const fromDate = query.from ? new Date(query.from) : null;
+    const toDate = query.to ? new Date(query.to) : null;
+    if (toDate && !Number.isNaN(toDate.getTime())) toDate.setUTCHours(23, 59, 59, 999);
+    const createdAtRange = {};
+    if (fromDate && !Number.isNaN(fromDate.getTime())) createdAtRange.$gte = fromDate;
+    if (toDate && !Number.isNaN(toDate.getTime())) createdAtRange.$lte = toDate;
+    if (Object.keys(createdAtRange).length) orderMatch.createdAt = createdAtRange;
+
     // 3. Aggregate all non-cancelled orders for overall commission calculation
     const allOrderItems = await Order.aggregate([
-      {
-        $match: {
-          'softDelete.isDeleted': { $ne: true },
-          orderStatus: { $ne: 'cancelled' },
-        },
-      },
+      { $match: orderMatch },
       {
         $lookup: {
           from: 'users',
@@ -179,6 +187,7 @@ const reportsService = {
         $project: {
           orderNumber: 1,
           audience: 1,
+          createdAt: 1,
           vendorId: '$items.vendorId',
           schoolId: {
             $ifNull: [
@@ -277,13 +286,21 @@ const reportsService = {
       if (item.schoolId) {
         const sid = String(item.schoolId);
         if (!schoolStatsMap.has(sid)) {
-          schoolStatsMap.set(sid, { orderNumbers: new Set(), salesPaise: 0, adminPaise: 0, schoolPaise: 0 });
+          schoolStatsMap.set(sid, { orderNumbers: new Set(), salesPaise: 0, adminPaise: 0, schoolPaise: 0, orderLines: [] });
         }
         const sStat = schoolStatsMap.get(sid);
         if (item.orderNumber) sStat.orderNumbers.add(item.orderNumber);
         sStat.salesPaise += subtotal;
         sStat.adminPaise += adminAmt;
         sStat.schoolPaise += schoolAmt;
+        sStat.orderLines.push({
+          orderNumber: item.orderNumber || '—',
+          date: item.createdAt || null,
+          channel: item.isKit ? 'Kit' : 'Retail',
+          schoolPercent: schoolP,
+          salesPaise: subtotal,
+          schoolPaise: schoolAmt,
+        });
       }
 
       // Vendor accumulator
@@ -303,7 +320,18 @@ const reportsService = {
     // Process Schools List
     let enrichedSchools = schools.map((s) => {
       const sid = String(s._id);
-      const st = schoolStatsMap.get(sid) || { orderNumbers: new Set(), salesPaise: 0, adminPaise: 0, schoolPaise: 0 };
+      const st = schoolStatsMap.get(sid) || { orderNumbers: new Set(), salesPaise: 0, adminPaise: 0, schoolPaise: 0, orderLines: [] };
+      const orders = [...st.orderLines]
+        .sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0))
+        .slice(0, 200)
+        .map((l) => ({
+          orderNumber: l.orderNumber,
+          date: l.date,
+          channel: l.channel,
+          schoolPercent: l.schoolPercent,
+          salesRupees: (l.salesPaise / 100).toFixed(2),
+          schoolCommissionRupees: (l.schoolPaise / 100).toFixed(2),
+        }));
       return {
         _id: s._id,
         id: s._id,
@@ -323,6 +351,7 @@ const reportsService = {
           adminCommissionRupees: (st.adminPaise / 100).toFixed(2),
           schoolCommissionRupees: (st.schoolPaise / 100).toFixed(2),
         },
+        orders,
       };
     });
 

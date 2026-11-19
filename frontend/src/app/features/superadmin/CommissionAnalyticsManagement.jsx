@@ -31,6 +31,9 @@ const CommissionAnalyticsManagement = () => {
   const [error, setError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [isGuideOpen, setIsGuideOpen] = useState(false);
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
+  const [selectedSchool, setSelectedSchool] = useState(null);
 
   // Profit Split Calculator local state
   const [calcPrice, setCalcPrice] = useState(1000);
@@ -41,14 +44,17 @@ const CommissionAnalyticsManagement = () => {
     setLoading(true);
     setError('');
     try {
-      const data = await getComprehensiveCommissionReport({ search: searchQuery });
+      const params = { search: searchQuery };
+      if (fromDate) params.from = fromDate;
+      if (toDate) params.to = toDate;
+      const data = await getComprehensiveCommissionReport(params);
       setReport(data || null);
     } catch (err) {
       setError(getErrorMessage(err, 'Failed to load commission & revenue analytics'));
     } finally {
       setLoading(false);
     }
-  }, [searchQuery]);
+  }, [searchQuery, fromDate, toDate]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -156,7 +162,7 @@ const CommissionAnalyticsManagement = () => {
         <div className="bg-white rounded-[2.2rem] p-5 shadow-sm border border-gray-150 flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between text-gray-400 text-[10px] font-black uppercase tracking-widest">
-              <span className="flex items-center gap-1.5 text-purple-600"><Building2 size={14} /> School Earnings</span>
+              <span className="flex items-center gap-1.5 text-purple-600"><Building2 size={14} /> School Commission</span>
               <span className="px-2 py-0.5 bg-purple-50 text-purple-700 rounded-full font-extrabold">{overview.effectiveSplit?.schoolPercent || '0'}% avg</span>
             </div>
             <h3 className="text-2xl font-black text-gray-900 mt-2 tracking-tight">
@@ -315,9 +321,27 @@ const CommissionAnalyticsManagement = () => {
                 className="w-full pl-11 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-xs font-bold text-gray-800 focus:outline-none focus:border-indigo-500 transition-all"
               />
             </div>
-            <span className="text-xs font-bold text-gray-400">
-              Showing <strong className="text-gray-900 font-black">{filteredSchools.length}</strong> partner schools
-            </span>
+            <div className="flex flex-wrap items-center gap-2 text-xs font-bold text-gray-500">
+              <label className="flex items-center gap-1.5">
+                From
+                <input type="date" value={fromDate} max={toDate || undefined} onChange={(e) => setFromDate(e.target.value)}
+                  className="px-2 py-1.5 bg-gray-50 border border-gray-200 rounded-xl text-xs" />
+              </label>
+              <label className="flex items-center gap-1.5">
+                To
+                <input type="date" value={toDate} min={fromDate || undefined} onChange={(e) => setToDate(e.target.value)}
+                  className="px-2 py-1.5 bg-gray-50 border border-gray-200 rounded-xl text-xs" />
+              </label>
+              {(fromDate || toDate) && (
+                <button type="button" onClick={() => { setFromDate(''); setToDate(''); }}
+                  className="px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-xl text-[10px] font-black uppercase">
+                  Clear
+                </button>
+              )}
+              <span className="text-gray-400">
+                Showing <strong className="text-gray-900 font-black">{filteredSchools.length}</strong> schools
+              </span>
+            </div>
           </div>
 
           <div className="overflow-x-auto rounded-2xl border border-gray-100">
@@ -329,8 +353,8 @@ const CommissionAnalyticsManagement = () => {
                   <th className="py-3.5 px-4 text-center">Configured Rates</th>
                   <th className="py-3.5 px-4 text-center">Orders</th>
                   <th className="py-3.5 px-4 text-right">Gross GMV Sales</th>
-                  <th className="py-3.5 px-4 text-right">School Earned Share</th>
-                  <th className="py-3.5 px-4 text-right">Admin Cut From School</th>
+                  <th className="py-3.5 px-4 text-right">School Commission (₹)</th>
+                  <th className="py-3.5 px-4 text-center">Details</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 font-bold text-gray-700">
@@ -371,17 +395,74 @@ const CommissionAnalyticsManagement = () => {
                         <span className="px-2.5 py-1 bg-gray-100 rounded-xl font-black text-xs">{s.metrics.ordersCount}</span>
                       </td>
                       <td className="py-3.5 px-4 text-right font-black text-gray-900">₹{s.metrics.salesRupees}</td>
-                      <td className="py-3.5 px-4 text-right font-bold text-purple-700">₹{s.metrics.schoolCommissionRupees}</td>
                       <td className="py-3.5 px-4 text-right font-black text-emerald-700">
                         <span className="px-2.5 py-1 bg-emerald-50 text-emerald-800 border border-emerald-200/80 rounded-xl">
-                          ₹{s.metrics.adminCommissionRupees}
+                          ₹{s.metrics.schoolCommissionRupees}
                         </span>
+                      </td>
+                      <td className="py-3.5 px-4 text-center">
+                        <button type="button" onClick={() => setSelectedSchool(s)}
+                          className="px-3 py-1.5 bg-gray-100 hover:bg-purple-50 hover:text-purple-700 text-gray-600 rounded-xl font-black text-[10px] uppercase transition-all">
+                          View Orders
+                        </button>
                       </td>
                     </tr>
                   ))
                 )}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* School order-wise commission breakdown */}
+      {selectedSchool && (
+        <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4" onClick={() => setSelectedSchool(null)}>
+          <div className="bg-white rounded-[2rem] max-w-2xl w-full max-h-[85vh] overflow-hidden shadow-2xl flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-[#0B1528] text-white p-5">
+              <h3 className="text-base font-black">{selectedSchool.name}</h3>
+              <p className="text-xs text-gray-300 mt-1">
+                Total school commission: <strong className="text-emerald-300">₹{selectedSchool.metrics.schoolCommissionRupees}</strong>
+                {' '}• {selectedSchool.metrics.ordersCount} orders
+                {(fromDate || toDate) ? ` • ${fromDate || '…'} to ${toDate || '…'}` : ''}
+              </p>
+            </div>
+            <div className="overflow-auto p-4">
+              {(selectedSchool.orders || []).length === 0 ? (
+                <p className="py-10 text-center text-sm font-bold text-gray-400">No orders in this period.</p>
+              ) : (
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="text-gray-400 text-[10px] font-black uppercase tracking-wider border-b border-gray-100">
+                      <th className="py-2 px-2">Order</th>
+                      <th className="py-2 px-2">Date</th>
+                      <th className="py-2 px-2">Type</th>
+                      <th className="py-2 px-2 text-right">Sale</th>
+                      <th className="py-2 px-2 text-center">Rate</th>
+                      <th className="py-2 px-2 text-right">School Commission</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 font-bold text-gray-700">
+                    {selectedSchool.orders.map((o, i) => (
+                      <tr key={`${o.orderNumber}-${i}`}>
+                        <td className="py-2 px-2 font-mono">{o.orderNumber}</td>
+                        <td className="py-2 px-2">{o.date ? new Date(o.date).toLocaleDateString() : '—'}</td>
+                        <td className="py-2 px-2">{o.channel}</td>
+                        <td className="py-2 px-2 text-right">₹{o.salesRupees}</td>
+                        <td className="py-2 px-2 text-center">{o.schoolPercent}%</td>
+                        <td className="py-2 px-2 text-right text-emerald-700 font-black">₹{o.schoolCommissionRupees}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+              {selectedSchool.orders?.length >= 200 && (
+                <p className="text-[10px] text-gray-400 mt-2">Showing latest 200 entries.</p>
+              )}
+            </div>
+            <button type="button" onClick={() => setSelectedSchool(null)} className="m-4 py-2.5 bg-[#0B1528] text-white font-black text-xs rounded-2xl">
+              Close
+            </button>
           </div>
         </div>
       )}

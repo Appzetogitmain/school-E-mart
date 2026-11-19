@@ -1,4 +1,4 @@
-import { toAbsoluteUrl } from '../url';
+import { toAbsoluteUrl } from '../url.js';
 
 export const normalizeUser = (user) => {
   if (!user) return null;
@@ -49,12 +49,21 @@ export const buildChildInfoFromUser = (user, existing = {}) => {
   const profile = normalized?.profile || {};
   const childProfile = user?.childProfile || normalized?.childProfile || {};
 
+  // Check if existing cache belongs to a different user session
+  const normPhone = normalized?.phone ? String(normalized.phone).replace(/\D/g, '') : '';
+  const existPhone = existing?.phone ? String(existing.phone).replace(/\D/g, '') : '';
+  const isDifferentUser = Boolean(
+    (existPhone && normPhone && existPhone !== normPhone) ||
+    (existing?.userId && normalized?.id && String(existing.userId) !== String(normalized.id))
+  );
+  const baseExisting = isDifferentUser ? {} : (existing || {});
+
   const role =
     normalized?.role === 'school'
       ? 'school'
       : normalized?.role === 'teacher'
         ? 'teacher'
-        : existing.role || 'parent';
+        : baseExisting.role || 'parent';
 
   // A linked parent shows the STUDENT name; an unlinked/guest customer (no
   // child) shows their own name. Never let a LINKED parent fall back to the
@@ -65,31 +74,61 @@ export const buildChildInfoFromUser = (user, existing = {}) => {
     role === 'parent'
       ? hasChild
         ? childProfile.name
-        : normalized?.name || existing.name || 'Guest'
-      : childProfile.name || normalized?.name || existing.name || 'Guest';
+        : normalized?.name || baseExisting.name || (user ? 'Customer' : 'Guest')
+      : childProfile.name || normalized?.name || baseExisting.name || 'Guest';
+
+  // If the user is an unlinked parent/customer (no child linked in backend),
+  // NEVER inherit student-specific properties (photo, grade, rollNo, studentId, schoolRefNo)
+  // from stale localStorage cache (e.g. from previous student sessions).
+  if (role === 'parent' && !hasChild) {
+    return {
+      userId: normalized?.id || baseExisting.userId || null,
+      name: displayName,
+      role: 'parent',
+      phone: normalized?.phone || baseExisting.phone || '',
+      email: normalized?.email || baseExisting.email || '',
+      refId: normalized?.refId || baseExisting.refId,
+      school: profile.schoolName || profile.school?.name || profile.storeName || (baseExisting.school && !baseExisting.studentId ? baseExisting.school : 'Explore Schools'),
+      schoolLogo: toAbsoluteUrl(profile.schoolLogo || profile.school?.logoUrl) || (baseExisting.schoolLogo && !baseExisting.studentId ? baseExisting.schoolLogo : ''),
+      grade: profile.grade || (baseExisting.grade && !baseExisting.studentId ? baseExisting.grade : 'Select Grade'),
+      schoolId: normalized?.tenantSchoolId || profile.schoolId || (baseExisting.schoolId && !baseExisting.studentId ? baseExisting.schoolId : null),
+      schoolRefNo: null,
+      rollNo: null,
+      studentId: null,
+      altPhone: profile.altPhone || baseExisting.altPhone || '',
+      address: profile.address || baseExisting.address || '',
+      pinCode: profile.pinCode || baseExisting.pinCode || '',
+      city: profile.city || baseExisting.city || '',
+      state: profile.state || baseExisting.state || '',
+      country: profile.country || baseExisting.country || 'India',
+      photo: toAbsoluteUrl(profile.avatarUrl) || '',
+      progress: undefined,
+    };
+  }
 
   return {
-    ...existing,
+    ...baseExisting,
+    userId: normalized?.id || baseExisting.userId || null,
     name: displayName,
     role,
-    phone: normalized?.phone || existing.phone || '',
-    email: normalized?.email || existing.email || '',
-    refId: normalized?.refId || existing.refId,
-    school: childProfile.schoolName || profile.schoolName || profile.school?.name || existing.school || profile.storeName || 'Explore Schools',
-    schoolLogo: toAbsoluteUrl(childProfile.schoolLogo || profile.schoolLogo || profile.school?.logoUrl) || existing.schoolLogo || '',
-    grade: childProfile.grade || existing.grade || profile.grade || 'Select Grade',
-    schoolId: childProfile.schoolId || normalized?.tenantSchoolId || profile.schoolId || existing.schoolId,
-    schoolRefNo: childProfile.schoolRefNo || existing.schoolRefNo || null,
-    rollNo: childProfile.rollNo || existing.rollNo || null,
-    studentId: childProfile.studentId || existing.studentId || null,
-    altPhone: profile.altPhone || existing.altPhone || '',
-    address: profile.address || existing.address || '',
-    pinCode: profile.pinCode || existing.pinCode || '',
-    city: profile.city || existing.city || '',
-    state: profile.state || existing.state || '',
-    country: profile.country || existing.country || 'India',
-    photo: toAbsoluteUrl(childProfile.avatarUrl || childProfile.photo || profile.avatarUrl) || existing.photo || '',
-    progress: existing.progress,
+    phone: normalized?.phone || baseExisting.phone || '',
+    email: normalized?.email || baseExisting.email || '',
+    refId: normalized?.refId || baseExisting.refId,
+    school: childProfile.schoolName || profile.schoolName || profile.school?.name || baseExisting.school || profile.storeName || 'Explore Schools',
+    schoolLogo: toAbsoluteUrl(childProfile.schoolLogo || profile.schoolLogo || profile.school?.logoUrl) || baseExisting.schoolLogo || '',
+    grade: childProfile.grade || baseExisting.grade || profile.grade || 'Select Grade',
+    schoolId: childProfile.schoolId || normalized?.tenantSchoolId || profile.schoolId || baseExisting.schoolId,
+    schoolRefNo: childProfile.schoolRefNo || baseExisting.schoolRefNo || null,
+    rollNo: childProfile.rollNo || baseExisting.rollNo || null,
+    studentId: childProfile.studentId || baseExisting.studentId || null,
+    altPhone: profile.altPhone || baseExisting.altPhone || '',
+    address: profile.address || baseExisting.address || '',
+    pinCode: profile.pinCode || baseExisting.pinCode || '',
+    city: profile.city || baseExisting.city || '',
+    state: profile.state || baseExisting.state || '',
+    country: profile.country || baseExisting.country || 'India',
+    photo: toAbsoluteUrl(childProfile.avatarUrl || childProfile.photo || profile.avatarUrl) || baseExisting.photo || '',
+    progress: baseExisting.progress,
   };
 };
 

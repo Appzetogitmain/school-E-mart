@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronDown, Bell, Package, Search, Filter, Menu, Hash, GraduationCap } from 'lucide-react';
+import { ChevronDown, Bell, Package, Search, Filter, Menu, Hash, GraduationCap, User } from 'lucide-react';
 import AuthPrompt from './AuthPrompt';
 import { useChildInfo } from '../../utils/parentContext';
+import { isSchoolLinked } from '../../utils/schoolLinked';
 
 const AppHeader = ({ showSearch = true, scrolled = false, onMenuClick, childInfo: propChildInfo, transparentAtTop = false }) => {
   const navigate = useNavigate();
@@ -11,6 +12,7 @@ const AppHeader = ({ showSearch = true, scrolled = false, onMenuClick, childInfo
 
   const childInfo = propChildInfo || internalChildInfo;
   const isGuest = !childInfo || childInfo.name === "Guest" || !localStorage.getItem('childInfo');
+  const isLinked = isSchoolLinked(childInfo);
 
   const getInitials = (name) => {
     if (isGuest) return "G";
@@ -94,16 +96,20 @@ const AppHeader = ({ showSearch = true, scrolled = false, onMenuClick, childInfo
             {childInfo?.photo ? (
               <img
                 src={childInfo.photo}
-                alt={childInfo?.name || "Student"}
+                alt={childInfo?.name || (isLinked ? "Student" : "User")}
                 className="w-full h-full object-cover rounded-xl relative z-10"
               />
             ) : !isGuest && childInfo?.name ? (
-              // no photo chosen yet: the student's initial, not the school logo
+              // no photo chosen yet: student initial or customer icon/initial
               <div
                 data-testid="header-avatar-initial"
                 className="w-full h-full rounded-xl bg-[#3B248C]/10 flex items-center justify-center text-[#3B248C] text-2xl font-black relative z-10"
               >
-                {String(childInfo.name).trim().charAt(0).toUpperCase()}
+                {isLinked ? (
+                  String(childInfo.name).trim().charAt(0).toUpperCase()
+                ) : (
+                  <User size={26} className="text-[#3B248C]" />
+                )}
               </div>
             ) : isGuest ? (
               // Genuine guest state (no session) — a neutral icon, not a
@@ -128,7 +134,7 @@ const AppHeader = ({ showSearch = true, scrolled = false, onMenuClick, childInfo
               <p className="text-[12px] font-bold text-white/80 leading-none drop-shadow-[0_1px_2px_rgba(0,0,0,0.05)] mt-0.5">
                 Welcome to School E-Mart
               </p>
-            ) : (
+            ) : isLinked ? (
               <>
                 <div className="flex items-center gap-2 text-[12px] leading-none mt-0.5">
                   {/* Class glass badge */}
@@ -146,6 +152,19 @@ const AppHeader = ({ showSearch = true, scrolled = false, onMenuClick, childInfo
                   <GraduationCap size={14} className="text-[#FFC933] shrink-0" />
                   <span className="truncate max-w-[150px]">
                     {childInfo.school || <span className="inline-block h-2.5 w-20 bg-white/20 rounded animate-pulse align-middle" />}
+                  </span>
+                </p>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center gap-2 text-[12px] leading-none mt-0.5">
+                  <span className="bg-white/15 px-2 py-0.5 rounded-md border border-white/10 font-bold text-white/95 drop-shadow-[0_1px_2px_rgba(0,0,0,0.1)]">
+                    Customer Account
+                  </span>
+                </div>
+                <p className="text-[11px] font-bold text-white/70 flex items-center gap-1.5 leading-none drop-shadow-[0_1px_2px_rgba(0,0,0,0.05)] mt-1">
+                  <span className="truncate max-w-[170px]">
+                    {childInfo.school && childInfo.school !== 'Explore Schools' ? childInfo.school : 'Welcome to School E-Mart'}
                   </span>
                 </p>
               </>

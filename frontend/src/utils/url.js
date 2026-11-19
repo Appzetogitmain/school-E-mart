@@ -1,4 +1,4 @@
-import { ENV } from '../config/env';
+import { ENV } from '../config/env.js';
 
 // Uploaded files are stored on the backend's local disk and referenced by
 // server-relative paths like `/uploads/<file>` (see backend/src/utils/fileStorage.js).

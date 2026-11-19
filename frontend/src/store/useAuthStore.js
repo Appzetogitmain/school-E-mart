@@ -95,6 +95,13 @@ const useAuthStore = create(
           } catch {
             // Best-effort FCM cleanup
           }
+          try {
+            localStorage.removeItem('childInfo');
+            localStorage.removeItem('wishlist');
+            window.dispatchEvent(new Event('storage'));
+          } catch {
+            // Best-effort storage cleanup
+          }
         }
 
         const updatedSessions = { ...(get().portalSessions || {}) };
